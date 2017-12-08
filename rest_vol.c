@@ -27,30 +27,20 @@
 /* XXX: Attempt to eliminate all use of globals/static variables */
 /* XXX: Create a table of all the hard-coded JSON keys used so these can be modified in the future if desired */
 
-#define H5A_FRIEND      /* Suppress error about including H5Apkg */
-#define H5D_FRIEND      /* Suppress error about including H5Dpkg */
-#define H5F_FRIEND      /* Suppress error about including H5Fpkg */
-#define H5G_FRIEND      /* Suppress error about including H5Gpkg */
-#define H5I_FRIEND      /* Suppress error about including H5Ipkg */
-#define H5L_FRIEND      /* Suppress error about including H5Lpkg */
-#define H5O_FRIEND      /* Suppress error about including H5Opkg */
-#define H5R_FRIEND      /* Suppress error about including H5Rpkg */
-#define H5T_FRIEND      /* Suppress error about including H5Tpkg */
+#define H5F_FRIEND /* XXX: Temporarily needed for include H5Fpkg.h */
+#define H5O_FRIEND /* XXX: Temporarily needed for including H5Opkg.h */
 
 #include <libgen.h>
-#include "H5private.h"       /* Generic Functions     */
-#include "H5Apkg.h"          /* Attribute package     */
-#include "H5Dpkg.h"          /* Dataset package       */
-#include "H5Fpkg.h"          /* File package          */
-#include "H5Gpkg.h"          /* Group package         */
-#include "H5Ipkg.h"          /* Identifier package    */
-#include "H5Lpkg.h"          /* Link package          */
-#include "H5Opkg.h"          /* Object header package */
-#include "H5Rpkg.h"          /* Reference package     */
-#include "H5Tpkg.h"          /* Datatype package      */
-#include "H5VLprivate.h"     /* VOL plugins           */
+#include "H5private.h"       /* Generic Functions */
+#include "H5Fpkg.h"          /* XXX: Temporarily needed */
+#include "H5Opkg.h"          /* XXX: Temporarily needed */
+#include "H5Ppublic.h"       /* Property Lists    */
+#include "H5Spublic.h"       /* Dataspaces        */
+#include "H5VLpublic.h"      /* VOL plugins       */
+#include "H5Eprivate.h"      /* XXX: Temporarily needed */
+#include "H5VLprivate.h"     /* XXX: Temporarily needed */
 #include "rest_vol_public.h"
-#include "rest_vol.h"        /* REST VOL plugin       */
+#include "rest_vol.h"        /* REST VOL plugin   */
 
 /* Macro to handle various HTTP response codes */
 #define HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value)                                     \
@@ -537,7 +527,7 @@ H5VL_rest_init(void)
     FUNC_ENTER_NOAPI(FAIL)
 
     /* Register the REST VOL plugin, if it isn't already registered */
-    if (NULL == H5I_object_verify(H5VL_REST_g, H5I_VOL)) {
+    if (NULL == H5Iobject_verify(H5VL_REST_g, H5I_VOL)) {
         if ((H5VL_REST_g = H5VL_register((const H5VL_class_t *) &H5VL_rest_g, sizeof(H5VL_class_t), TRUE)) < 0)
             HGOTO_ERROR(H5E_ATOM, H5E_CANTINSERT, FAIL, "can't create ID for REST VOL plugin")
     } /* end if */
@@ -640,14 +630,13 @@ done:
 herr_t
 H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const char *password)
 {
-    H5P_genplist_t *plist;
-    size_t          URL_len = 0;
-    herr_t          ret_value;
+    size_t URL_len = 0;
+    herr_t ret_value;
 
     FUNC_ENTER_API(FAIL)
     H5TRACE4("e", "i*s*s*s", fapl_id, URL, username, password);
 
-    HDassert(URL && "must specify a base URL");
+    assert(URL && "must specify a base URL");
 
     if (H5VL_REST_g < 0)
         HGOTO_ERROR(H5E_VOL, H5E_UNINITIALIZED, FAIL, "REST VOL plugin not initialized")
@@ -655,10 +644,7 @@ H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const
     if (H5P_DEFAULT == fapl_id)
         HGOTO_ERROR(H5E_PLIST, H5E_BADVALUE, FAIL, "can't set REST VOL plugin for default property list")
 
-    if (NULL == (plist = H5P_object_verify(fapl_id, H5P_FILE_ACCESS)))
-        HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a file access property list")
-
-    if ((ret_value = H5P_set_vol(plist, H5VL_REST_g, NULL)) < 0)
+    if ((ret_value = H5Pset_vol(fapl_id, H5VL_REST_g, NULL)) < 0)
         HGOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't set REST VOL plugin in FAPL")
 
     /* Save a copy of the base URL being worked on so that operations like
@@ -924,11 +910,11 @@ H5VL_rest_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_
     printf("  - Parent Object Type: %d\n", parent->obj_type);
 #endif
 
-    HDassert((H5I_FILE == parent->obj_type
-            || H5I_GROUP == parent->obj_type
-            || H5I_DATATYPE == parent->obj_type
-            || H5I_DATASET == parent->obj_type)
-            && "parent object not a group, datatype or dataset");
+    assert((H5I_FILE == parent->obj_type
+          || H5I_GROUP == parent->obj_type
+          || H5I_DATATYPE == parent->obj_type
+          || H5I_DATASET == parent->obj_type)
+          && "parent object not a group, datatype or dataset");
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -972,7 +958,7 @@ H5VL_rest_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_
     attr_name_len = strlen(attr_name);
     if (NULL == (new_attribute->u.attribute.attr_name = (char *) rest_malloc(attr_name_len + 1)))
         HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute name")
-    HDmemcpy(new_attribute->u.attribute.attr_name, attr_name, attr_name_len);
+    memcpy(new_attribute->u.attribute.attr_name, attr_name, attr_name_len);
     new_attribute->u.attribute.attr_name[attr_name_len] = '\0';
 
     /* Form the request body to give the new Attribute its properties */
@@ -1160,11 +1146,11 @@ H5VL_rest_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_na
     printf("  - Parent Object Type: %d\n", parent->obj_type);
 #endif
 
-    HDassert((H5I_FILE == parent->obj_type
-            || H5I_GROUP == parent->obj_type
-            || H5I_DATATYPE == parent->obj_type
-            || H5I_DATASET == parent->obj_type)
-            && "parent object not a group, datatype or dataset");
+    assert((H5I_FILE == parent->obj_type
+          || H5I_GROUP == parent->obj_type
+          || H5I_DATATYPE == parent->obj_type
+          || H5I_DATASET == parent->obj_type)
+          && "parent object not a group, datatype or dataset");
 
     /* XXX: Eventually implement H5Aopen_by_idx() */
     if (loc_params.type == H5VL_OBJECT_BY_IDX)
@@ -1273,7 +1259,7 @@ H5VL_rest_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_na
     /* Copy the attribute's name */
     if (NULL == (attribute->u.attribute.attr_name = (char *) rest_malloc(attr_name_len + 1)))
         HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute name")
-    HDmemcpy(attribute->u.attribute.attr_name, attr_name, attr_name_len);
+    memcpy(attribute->u.attribute.attr_name, attr_name, attr_name_len);
     attribute->u.attribute.attr_name[attr_name_len] = '\0';
 
     /* Set up an ACPL for the attribute so that H5Aget_create_plist() will function correctly */
@@ -1340,8 +1326,8 @@ H5VL_rest_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED 
 
     FUNC_ENTER_NOAPI_NOINIT
 
-    HDassert(buf);
-    HDassert(H5I_ATTR == attribute->obj_type && "not an attribute");
+    assert(buf);
+    assert(H5I_ATTR == attribute->obj_type && "not an attribute");
 
 #ifdef PLUGIN_DEBUG
     printf("Recieved Attribute read call with following parameters:\n");
@@ -1441,7 +1427,7 @@ H5VL_rest_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED 
 
     CURL_PERFORM(curl, H5E_ATTR, H5E_READERROR, FAIL);
 
-    HDmemcpy(buf, response_buffer.buffer, (size_t) file_select_npoints * dtype_size);
+    memcpy(buf, response_buffer.buffer, (size_t) file_select_npoints * dtype_size);
 
 done:
 #ifdef PLUGIN_DEBUG
@@ -1492,8 +1478,8 @@ H5VL_rest_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_
 
     FUNC_ENTER_NOAPI_NOINIT
 
-    HDassert(buf);
-    HDassert(H5I_ATTR == attribute->obj_type && "not an attribute");
+    assert(buf);
+    assert(H5I_ATTR == attribute->obj_type && "not an attribute");
 
     /* Check for write access */
     if (!(attribute->domain->u.file.intent & H5F_ACC_RDWR))
@@ -2024,7 +2010,7 @@ H5VL_rest_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUS
     printf("  - Attribute Domain path: %s\n", _attr->domain->u.file.filepath_name);
 #endif
 
-    HDassert(H5I_ATTR == _attr->obj_type && "not an attribute");
+    assert(H5I_ATTR == _attr->obj_type && "not an attribute");
 
     if (_attr->u.attribute.attr_name)
         rest_free(_attr->u.attribute.attr_name);
@@ -2091,8 +2077,8 @@ H5VL_rest_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params
     printf("  - Parent Object type: %d\n\n", parent->obj_type);
 #endif
 
-    HDassert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
-            && "parent object not a file or group");
+    assert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
+          && "parent object not a file or group");
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -2295,8 +2281,8 @@ H5VL_rest_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, 
     printf("  - Parent object type: %d\n", parent->obj_type);
 #endif
 
-    HDassert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
-            && "parent object not a file or group");
+    assert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
+          && "parent object not a file or group");
 
     /* Allocate and setup internal Datatype struct */
     if (NULL == (datatype = (H5VL_rest_object_t *) rest_malloc(sizeof(*datatype))))
@@ -2372,7 +2358,7 @@ H5VL_rest_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t H5_ATTR_UN
     printf("  - Datatype File: %s\n\n", dtype->domain->u.file.filepath_name);
 #endif
 
-    HDassert(H5I_DATATYPE == dtype->obj_type && "not a datatype");
+    assert(H5I_DATATYPE == dtype->obj_type && "not a datatype");
 
     switch (get_type) {
         case H5VL_DATATYPE_GET_BINARY:
@@ -2436,7 +2422,7 @@ H5VL_rest_datatype_close(void *dt, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UN
     printf("  - URI: %s\n\n", _dtype->URI);
 #endif
 
-    HDassert(H5I_DATATYPE == _dtype->obj_type && "not a datatype");
+    assert(H5I_DATATYPE == _dtype->obj_type && "not a datatype");
 
     if (_dtype->u.datatype.dtype_id >= 0 && H5Tclose(_dtype->u.datatype.dtype_id) < 0)
         HDONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
@@ -2471,7 +2457,6 @@ H5VL_rest_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params,
 {
     H5VL_rest_object_t *parent = (H5VL_rest_object_t *) obj;
     H5VL_rest_object_t *new_dataset = NULL;
-    H5P_genplist_t     *plist = NULL;
     curl_off_t          create_request_body_len = 0;
     size_t              host_header_len = 0;
     hid_t               space_id, type_id;
@@ -2492,8 +2477,8 @@ H5VL_rest_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params,
     printf("  - Parent Object Type: %d\n\n", parent->obj_type);
 #endif
 
-    HDassert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
-            && "parent object not a file or group");
+    assert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
+          && "parent object not a file or group");
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -2584,12 +2569,9 @@ H5VL_rest_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params,
     if (H5VL_rest_parse_response(response_buffer.buffer, NULL, new_dataset->URI, H5VL_rest_copy_object_URI_parse_callback) < 0)
         HGOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL, "can't parse new dataset's URI")
 
-    if (NULL == (plist = (H5P_genplist_t *) H5I_object(dcpl_id)))
-        HGOTO_ERROR(H5E_ATOM, H5E_BADATOM, NULL, "can't get dataset creation property list")
-
-    if (H5P_get(plist, H5VL_PROP_DSET_TYPE_ID, &type_id) < 0)
+    if (H5Pget(dcpl_id, H5VL_PROP_DSET_TYPE_ID, &type_id) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get property list value for dataset's datatype ID")
-    if (H5P_get(plist, H5VL_PROP_DSET_SPACE_ID, &space_id) < 0)
+    if (H5Pget(dcpl_id, H5VL_PROP_DSET_SPACE_ID, &space_id) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get property list value for dataset's dataspace ID")
 
     if ((new_dataset->u.dataset.dtype_id = H5Tcopy(type_id)) < 0)
@@ -2666,8 +2648,8 @@ H5VL_rest_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, c
     printf("  - Parent Object Type: %d\n", parent->obj_type);
 #endif
 
-    HDassert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
-            && "parent object not a file or group");
+    assert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
+          && "parent object not a file or group");
 
     /* Allocate and setup internal Dataset struct */
     if (NULL == (dataset = (H5VL_rest_object_t *) rest_malloc(sizeof(*dataset))))
@@ -2761,8 +2743,8 @@ H5VL_rest_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
     FUNC_ENTER_NOAPI_NOINIT
 
-    HDassert(buf);
-    HDassert(H5I_DATASET == dataset->obj_type && "not a dataset");
+    assert(buf);
+    assert(H5I_DATASET == dataset->obj_type && "not a dataset");
 
 #ifdef PLUGIN_DEBUG
     printf("Received Dataset read call with following parameters:\n");
@@ -2825,7 +2807,7 @@ H5VL_rest_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
     if ((file_select_npoints = H5Sget_select_npoints(file_space_id)) < 0)
         HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
-    HDassert((mem_select_npoints == file_select_npoints) && "memory selection num points != file selection num points");
+    assert((mem_select_npoints == file_select_npoints) && "memory selection num points != file selection num points");
 
 
     /* Determine whether it's possible to send the data as a binary blob instead of a JSON array */
@@ -3000,8 +2982,8 @@ H5VL_rest_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
     FUNC_ENTER_NOAPI_NOINIT
 
-    HDassert(buf);
-    HDassert(H5I_DATASET == dataset->obj_type && "not a dataset");
+    assert(buf);
+    assert(H5I_DATASET == dataset->obj_type && "not a dataset");
 
     /* Check for write access */
     if (!(dataset->domain->u.file.intent & H5F_ACC_RDWR))
@@ -3076,7 +3058,7 @@ H5VL_rest_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
     if ((file_select_npoints = H5Sget_select_npoints(file_space_id)) < 0)
         HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
-    HDassert((mem_select_npoints == file_select_npoints) && "memory selection num points != file selection num points");
+    assert((mem_select_npoints == file_select_npoints) && "memory selection num points != file selection num points");
 
     /* Setup the size of the data being transferred and the data buffer itself (for non-simple
      * types like object references or variable length types)
@@ -3195,7 +3177,7 @@ H5VL_rest_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUS
     printf("  - Dataset File: %s\n\n", dset->domain->u.file.filepath_name);
 #endif
 
-    HDassert(H5I_DATASET == dset->obj_type && "not a dataset");
+    assert(H5I_DATASET == dset->obj_type && "not a dataset");
 
     switch (get_type) {
         /* H5Dget_access_plist */
@@ -3293,7 +3275,7 @@ H5VL_rest_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
     printf("  - Dataset File: %s\n\n", dset->domain->u.file.filepath_name);
 #endif
 
-    HDassert(H5I_DATASET == dset->obj_type && "not a dataset");
+    assert(H5I_DATASET == dset->obj_type && "not a dataset");
 
     /* Check for write access */
     if (!(dset->domain->u.file.intent & H5F_ACC_RDWR))
@@ -3362,7 +3344,7 @@ H5VL_rest_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_U
     printf("  - URI: %s\n\n", _dset->URI);
 #endif
 
-    HDassert(H5I_DATASET == _dset->obj_type && "not a dataset");
+    assert(H5I_DATASET == _dset->obj_type && "not a dataset");
 
     if (_dset->u.dataset.dtype_id >= 0 && H5Tclose(_dset->u.dataset.dtype_id) < 0)
         HDONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
@@ -3843,7 +3825,7 @@ H5VL_rest_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_
     printf("  - File Pathname: %s\n\n", file->domain->u.file.filepath_name);
 #endif
 
-    HDassert(H5I_FILE == file->obj_type && "not a file");
+    assert(H5I_FILE == file->obj_type && "not a file");
 
     /* Setup the "Host: " header */
     host_header_len = strlen(file->domain->u.file.filepath_name) + strlen(host_string) + 1;
@@ -3906,7 +3888,7 @@ H5VL_rest_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_
 
     FUNC_ENTER_NOAPI_NOINIT
 
-    HDassert(H5I_FILE == file->obj_type && "not a file");
+    assert(H5I_FILE == file->obj_type && "not a file");
 
 #ifdef PLUGIN_DEBUG
     printf("Received file optional call with following parameters:\n");
@@ -3986,7 +3968,7 @@ H5VL_rest_file_close(void *file, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
     printf("  - DXPL: %ld\n\n", dxpl_id);
 #endif
 
-    HDassert(H5I_FILE == _file->obj_type && "not a file");
+    assert(H5I_FILE == _file->obj_type && "not a file");
 
     if (_file->u.file.filepath_name)
         rest_free(_file->u.file.filepath_name);
@@ -4053,8 +4035,8 @@ H5VL_rest_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, c
     printf("  - Parent Object Type: %d\n\n", parent->obj_type);
 #endif
 
-    HDassert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
-            && "parent object not a file or group");
+    assert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
+          && "parent object not a file or group");
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -4235,7 +4217,7 @@ H5VL_rest_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, con
     printf("  - Parent Object Type: %d\n", parent->obj_type);
 #endif
 
-    HDassert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
+    assert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
             && "parent object not a file or group");
 
     /* Allocate and setup internal Group struct */
@@ -4307,9 +4289,9 @@ H5VL_rest_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED d
     printf("  - Group File: %s\n", group->domain->u.file.filepath_name);
 #endif
 
-    HDassert(( H5I_GROUP == group->obj_type
-            || H5I_FILE == group->obj_type)
-            && "not a group");
+    assert(( H5I_GROUP == group->obj_type
+          || H5I_FILE == group->obj_type)
+          && "not a group");
 
     curl_perform = H5VL_GROUP_GET_INFO == get_type;
 
@@ -4429,7 +4411,7 @@ H5VL_rest_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUS
     printf("  - DXPL: %ld\n\n", dxpl_id);
 #endif
 
-    HDassert(H5I_GROUP == _grp->obj_type && "not a group");
+    assert(H5I_GROUP == _grp->obj_type && "not a group");
 
     if (_grp->u.group.gcpl_id >= 0) {
         if (_grp->u.group.gcpl_id != H5P_GROUP_CREATE_DEFAULT && H5Pclose(_grp->u.group.gcpl_id) < 0)
@@ -4459,7 +4441,6 @@ H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_p
 {
     H5VL_rest_object_t *new_link_loc_obj = (H5VL_rest_object_t *) obj;
     H5VL_loc_params_t   hard_link_target_obj_loc_params;
-    H5P_genplist_t     *lcpl = NULL;
     curl_off_t          create_request_body_len = 0;
     size_t              create_request_nalloc = 0;
     size_t              host_header_len = 0;
@@ -4479,17 +4460,14 @@ H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_p
     printf("  - Link_loc obj type: %d\n", loc_params.obj_type);
 #endif
 
-    if (NULL == (lcpl = (H5P_genplist_t *) H5I_object(lcpl_id)))
-        HGOTO_ERROR(H5E_ATOM, H5E_BADATOM, FAIL, "can't find object for ID")
-
     /* Since the usage of the H5L_SAME_LOC macro for hard link creation may cause new_link_loc_obj to
      * be NULL, do some special-case handling for the Hard Link creation case
      */
     if (H5VL_LINK_CREATE_HARD == create_type) {
         /* Pre-fetch the target object's relevant information in the case of hard link creation */
-        if (H5P_get(lcpl, H5VL_PROP_LINK_TARGET, &hard_link_target_obj) < 0)
+        if (H5Pget(lcpl_id, H5VL_PROP_LINK_TARGET, &hard_link_target_obj) < 0)
             HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's target object")
-        if (H5P_get(lcpl, H5VL_PROP_LINK_TARGET_LOC_PARAMS, &hard_link_target_obj_loc_params) < 0)
+        if (H5Pget(lcpl_id, H5VL_PROP_LINK_TARGET_LOC_PARAMS, &hard_link_target_obj_loc_params) < 0)
             HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's target object loc params")
 
         /* If link_loc_new_obj was NULL, H5L_SAME_LOC was specified as the new link's loc_id.
@@ -4500,9 +4478,9 @@ H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_p
     } /* end if */
 
     /* Validate loc_id and check for write access on the file */
-    HDassert((H5I_FILE == new_link_loc_obj->obj_type || H5I_GROUP == new_link_loc_obj->obj_type)
-            && "link location object not a file or group");
-    HDassert(loc_params.loc_data.loc_by_name.name);
+    assert((H5I_FILE == new_link_loc_obj->obj_type || H5I_GROUP == new_link_loc_obj->obj_type)
+          && "link location object not a file or group");
+    assert(loc_params.loc_data.loc_by_name.name);
 
     if (!(new_link_loc_obj->domain->u.file.intent & H5F_ACC_RDWR))
         HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
@@ -4579,7 +4557,7 @@ H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_p
         {
             const char *link_target;
 
-            if (H5P_get(lcpl, H5VL_PROP_LINK_TARGET_NAME, &link_target) < 0)
+            if (H5Pget(lcpl_id, H5VL_PROP_LINK_TARGET_NAME, &link_target) < 0)
                 HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's target")
 
             /* XXX: Check to make sure that a soft link is being created in the same file as
@@ -4612,7 +4590,7 @@ H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_p
             size_t      link_target_buf_size;
             void       *link_target_buf;
 
-            if (H5P_get(lcpl, H5VL_PROP_LINK_TYPE, &link_type) < 0)
+            if (H5Pget(lcpl_id, H5VL_PROP_LINK_TYPE, &link_type) < 0)
                 HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's type")
 
             /* XXX: For now, no support for user-defined links, beyond external links */
@@ -4620,9 +4598,9 @@ H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_p
                 HGOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "unsupported link type")
 
             /* Retrieve the buffer containing the external link's information */
-            if (H5P_get(lcpl, H5VL_PROP_LINK_UDATA_SIZE, &link_target_buf_size) < 0)
+            if (H5Pget(lcpl_id, H5VL_PROP_LINK_UDATA_SIZE, &link_target_buf_size) < 0)
                 HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for external link's information buffer size")
-            if (H5P_get(lcpl, H5VL_PROP_LINK_UDATA, &link_target_buf) < 0)
+            if (H5Pget(lcpl_id, H5VL_PROP_LINK_UDATA, &link_target_buf) < 0)
                 HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for external link's information buffer")
 
             /* The first byte of the link_target_buf contains the external link's version
@@ -4919,8 +4897,8 @@ H5VL_rest_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_speci
     printf("  - Link URI: %s\n", loc_obj->URI);
 #endif
 
-    HDassert((H5I_FILE == loc_obj->obj_type || H5I_GROUP == loc_obj->obj_type)
-                && "parent object not a file or group");
+    assert((H5I_FILE == loc_obj->obj_type || H5I_GROUP == loc_obj->obj_type)
+              && "parent object not a file or group");
 
 
     switch (specific_type) {
@@ -5116,11 +5094,11 @@ H5VL_rest_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opene
     printf("  - Parent Object Type: %d\n", parent->obj_type);
 #endif
 
-    HDassert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
+    assert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
                 && "parent object not a file or group");
 
     /* XXX: Currently only opening objects by name is supported */
-    HDassert(H5VL_OBJECT_BY_NAME == loc_params.type && "loc_params type not H5VL_OBJECT_BY_NAME");
+    assert(H5VL_OBJECT_BY_NAME == loc_params.type && "loc_params type not H5VL_OBJECT_BY_NAME");
 
     /* Retrieve the type of object being dealt with by querying the server */
     search_ret = H5VL_rest_find_object_by_path(parent, loc_params.loc_data.loc_by_name.name, &obj_type, NULL, NULL, NULL);
@@ -5369,11 +5347,11 @@ H5VL_rest_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_
 
     FUNC_ENTER_NOAPI_NOINIT
 
-    HDassert(( H5I_FILE == theobj->obj_type
-            || H5I_DATATYPE == theobj->obj_type
-            || H5I_DATASET == theobj->obj_type
-            || H5I_GROUP == theobj->obj_type)
-            && "not a group, dataset or datatype");
+    assert(( H5I_FILE == theobj->obj_type
+          || H5I_DATATYPE == theobj->obj_type
+          || H5I_DATASET == theobj->obj_type
+          || H5I_GROUP == theobj->obj_type)
+          && "not a group, dataset or datatype");
 
 #ifdef PLUGIN_DEBUG
     printf("Received object optional call with following parameters:\n");
@@ -5448,7 +5426,7 @@ H5VL_rest_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_
             if (H5VL_rest_parse_response(response_buffer.buffer, NULL, &attr_count, H5VL_rest_retrieve_attribute_count_callback) < 0)
                 HGOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "can't retrieve object attribute count")
 
-            HDassert(attr_count >= 0);
+            assert(attr_count >= 0);
             obj_info->num_attrs = (hsize_t) attr_count;
 
             break;
@@ -5514,7 +5492,7 @@ write_data_callback(void *buffer, size_t size, size_t nmemb, void H5_ATTR_UNUSED
 #endif
     } /* end while */
 
-    HDmemcpy(response_buffer.curr_buf_ptr, buffer, data_size);
+    memcpy(response_buffer.curr_buf_ptr, buffer, data_size);
     response_buffer.curr_buf_ptr += data_size;
     *response_buffer.curr_buf_ptr = '\0';
 
@@ -5624,7 +5602,7 @@ H5VL_rest_parse_response(char *HTTP_response, void *callback_data_in, void *call
 
     FUNC_ENTER_NOAPI_NOINIT
 
-    HDassert(HTTP_response);
+    assert(HTTP_response);
 
     if (parse_callback && parse_callback(HTTP_response, callback_data_in, callback_data_out) < 0)
         HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "can't perform callback operation")
@@ -6292,11 +6270,11 @@ H5VL_rest_find_object_by_path(H5VL_rest_object_t *parent_obj, const char *obj_pa
 
     FUNC_ENTER_NOAPI_NOINIT
 
-    HDassert(parent_obj);
-    HDassert(obj_path);
-    HDassert(target_object_type);
-    HDassert((H5I_FILE == parent_obj->obj_type || H5I_GROUP == parent_obj->obj_type)
-            && "parent object not a file or group");
+    assert(parent_obj);
+    assert(obj_path);
+    assert(target_object_type);
+    assert((H5I_FILE == parent_obj->obj_type || H5I_GROUP == parent_obj->obj_type)
+          && "parent object not a file or group");
 
     /* XXX: Try to better organize the unknown object type case */
     /* XXX: support for url-encoding link names */
@@ -7576,7 +7554,7 @@ H5VL_rest_convert_string_to_datatype(const char *type)
             /* Copy the "type" substring into the temporary buffer, wrapping it in enclosing braces to ensure that the
              * string-to-datatype conversion function can correctly process the string
              */
-            HDmemcpy(tmp_cmpd_type_buffer + 1, type_section_ptr, type_section_len);
+            memcpy(tmp_cmpd_type_buffer + 1, type_section_ptr, type_section_len);
             tmp_cmpd_type_buffer[0] = '{'; tmp_cmpd_type_buffer[type_section_len + 1] = '}';
             tmp_cmpd_type_buffer[type_section_len + 2] = '\0';
 
@@ -8068,7 +8046,7 @@ H5VL_rest_parse_datatype(char *type, hbool_t need_truncate)
 
     FUNC_ENTER_NOAPI_NOINIT
 
-    HDassert(type);
+    assert(type);
 
     if (need_truncate) {
         size_t  substring_len;
@@ -8121,7 +8099,7 @@ H5VL_rest_parse_datatype(char *type, hbool_t need_truncate)
         if (NULL == (type_string = (char *) rest_malloc(substring_len + 3)))
             HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for \"type\" subsection")
 
-        HDmemcpy(type_string + 1, type_section_ptr, substring_len);
+        memcpy(type_string + 1, type_section_ptr, substring_len);
 
         /* Wrap the "type" substring in braces and NULL terminate it */
         type_string[0] = '{'; type_string[substring_len + 1] = '}';
@@ -8172,7 +8150,7 @@ H5VL_rest_parse_dataspace(char *space)
 
     FUNC_ENTER_NOAPI_NOINIT
 
-    HDassert(space);
+    assert(space);
 
     if (NULL == (parse_tree = yajl_tree_parse(space, NULL, 0)))
         HGOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "JSON parse tree creation failed")
@@ -8492,7 +8470,7 @@ H5VL_rest_convert_dataspace_selection_to_string(hid_t space_id, char **selection
 
     FUNC_ENTER_NOAPI_NOINIT
 
-    HDassert(selection_string);
+    assert(selection_string);
 
     out_string_len = DATASPACE_SELECTION_STRING_DEFAULT_SIZE;
     if (NULL == (out_string = (char *) rest_malloc(out_string_len)))
@@ -8503,7 +8481,7 @@ H5VL_rest_convert_dataspace_selection_to_string(hid_t space_id, char **selection
     /* Ensure that the buffer is NUL-terminated */
     *out_string_curr_pos = '\0';
 
-    if (NULL == H5I_object_verify(space_id, H5I_DATASPACE))
+    if (NULL == H5Iobject_verify(space_id, H5I_DATASPACE))
         HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "not a dataspace")
 
     if ((ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
@@ -8801,9 +8779,9 @@ H5VL_rest_setup_dataset_create_request_body(void *parent_obj, const char *name, 
 
     FUNC_ENTER_NOAPI_NOINIT
 
-    HDassert(create_request_body);
-    HDassert((H5I_FILE == pobj->obj_type || H5I_GROUP == pobj->obj_type)
-                && "parent object not a file or group");
+    assert(create_request_body);
+    assert((H5I_FILE == pobj->obj_type || H5I_GROUP == pobj->obj_type)
+              && "parent object not a file or group");
 
     /* Get the type ID */
     if (H5Pget(dcpl, H5VL_PROP_DSET_TYPE_ID, &type_id) < 0)
@@ -9492,7 +9470,7 @@ H5VL_rest_parse_dataset_creation_properties(hid_t dcpl, char **creation_properti
 
             if ((ndims = H5Pget_chunk(dcpl, H5O_LAYOUT_NDIMS, chunk_dims)) < 0)
                 HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve dataset chunk dimensionality")
-            HDassert(ndims > 0 && "no chunk dimensionality specified");
+            assert(ndims > 0 && "no chunk dimensionality specified");
 
             if (NULL == (chunk_dims_string = (char *) rest_malloc((size_t) ((ndims * MAX_NUM_LENGTH) + ndims + 3))))
                 HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for chunk dimensionality string")
