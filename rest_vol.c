@@ -49,8 +49,8 @@
 #include "H5Rpkg.h"          /* Reference package     */
 #include "H5Tpkg.h"          /* Datatype package      */
 #include "H5VLprivate.h"     /* VOL plugins           */
-#include "H5VLrest_public.h"
-#include "H5VLrest.h"        /* REST VOL plugin       */
+#include "rest_vol_public.h"
+#include "rest_vol.h"        /* REST VOL plugin       */
 
 /* Macro to handle various HTTP response codes */
 #define HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value)                                     \

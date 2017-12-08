@@ -20,8 +20,8 @@
  * Purpose: The public header file for the REST VOL plugin.
  */
 
-#ifndef H5VLrest_public_H
-#define H5VLrest_public_H
+#ifndef rest_vol_public_H
+#define rest_vol_public_H
 
 #include <curl/curl.h>
 #include <yajl/yajl_tree.h>

@@ -20,14 +20,14 @@
  * Purpose: The private header file for the REST VOL plugin.
  */
 
-#ifndef H5VLrest_H
-#define H5VLrest_H
+#ifndef rest_vol_H
+#define rest_vol_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include "H5VLrest_public.h"
+#include "rest_vol_public.h"
 
 #define HDF5_VOL_REST_VERSION 1                    /* Version number of the REST VOL plugin */
 

@@ -26,7 +26,7 @@
 
 #include "hdf5.h"
 #include "h5test.h"
-#include "H5VLrest_public.h"
+#include "rest_vol_public.h"
 
 #define ARRAY_LENGTH(array) sizeof(array) / sizeof(array[0])
 
