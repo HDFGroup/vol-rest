@@ -653,7 +653,7 @@ test_setup_plugin(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl = h5_fileaccess()) < 0)
+    if ((fapl = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -695,7 +695,7 @@ test_create_file(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl = h5_fileaccess()) < 0)
+    if ((fapl = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -802,7 +802,7 @@ test_get_existing_file_info(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -850,7 +850,7 @@ test_nonexistent_file(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -895,7 +895,7 @@ test_get_file_intent(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -1005,7 +1005,7 @@ test_get_file_name(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -1065,7 +1065,7 @@ test_file_reopen(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -1117,7 +1117,7 @@ test_unused_file_API_calls(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -1195,7 +1195,7 @@ test_file_property_lists(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -1388,7 +1388,7 @@ test_create_group_invalid_loc_id(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -1431,7 +1431,7 @@ test_create_group_under_root(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -1485,7 +1485,7 @@ test_create_group_under_existing_group(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -1549,7 +1549,7 @@ test_get_existing_group_info(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -1609,7 +1609,7 @@ test_nonexistent_group(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -1678,7 +1678,7 @@ test_group_property_lists(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -1862,7 +1862,7 @@ test_create_attribute_on_root(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -1977,7 +1977,7 @@ test_create_attribute_on_dataset(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -2116,7 +2116,7 @@ test_create_attribute_on_datatype(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -2266,7 +2266,7 @@ test_get_existing_attribute_info(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -2377,7 +2377,7 @@ test_get_attribute_name(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -2519,7 +2519,7 @@ test_create_attribute_with_space_in_name(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -2610,7 +2610,7 @@ test_delete_attribute(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -2722,7 +2722,7 @@ test_write_attribute(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -2836,7 +2836,7 @@ test_read_attribute(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -2980,7 +2980,7 @@ test_get_number_attributes(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -3110,7 +3110,7 @@ test_attribute_property_lists(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -3333,7 +3333,7 @@ test_create_dataset_under_root(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -3398,7 +3398,7 @@ test_create_anonymous_dataset(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -3477,7 +3477,7 @@ test_create_dataset_under_existing_group(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -3559,7 +3559,7 @@ test_create_dataset_predefined_types(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -3661,7 +3661,7 @@ test_create_dataset_string_types(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -3805,7 +3805,7 @@ test_create_dataset_compound_types(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -3951,7 +3951,7 @@ test_create_dataset_enum_types(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -4104,7 +4104,7 @@ test_create_dataset_array_types(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -4343,7 +4343,7 @@ test_create_dataset_shapes(void)
 
     srand((unsigned) time(NULL));
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -4452,7 +4452,7 @@ test_create_dataset_creation_properties(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -4782,7 +4782,7 @@ test_write_dataset_small_all(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -4905,7 +4905,7 @@ test_write_dataset_small_hyperslab(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -5016,7 +5016,7 @@ test_write_dataset_small_point_selection(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -5163,7 +5163,7 @@ test_read_dataset_small_all(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -5264,7 +5264,7 @@ test_read_dataset_small_hyperslab(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -5377,7 +5377,7 @@ test_read_dataset_small_point_selection(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -5527,7 +5527,7 @@ test_write_dataset_data_verification(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -5687,7 +5687,7 @@ test_dataset_property_lists(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -6017,7 +6017,7 @@ test_create_hard_link(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl = h5_fileaccess()) < 0)
+    if ((fapl = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -6118,7 +6118,7 @@ test_create_hard_link_same_loc(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -6266,7 +6266,7 @@ test_create_soft_link_existing_absolute(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl = h5_fileaccess()) < 0)
+    if ((fapl = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -6398,7 +6398,7 @@ test_create_external_link(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl = h5_fileaccess()) < 0)
+    if ((fapl = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -6510,7 +6510,7 @@ test_copy_link(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -6679,7 +6679,7 @@ test_move_link(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -6889,7 +6889,7 @@ test_create_committed_datatype(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -6957,7 +6957,7 @@ test_create_anonymous_committed_datatype(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -7049,7 +7049,7 @@ test_create_dataset_with_committed_type(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -7176,7 +7176,7 @@ test_create_attribute_with_committed_type(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -7286,7 +7286,7 @@ test_delete_committed_type(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -7411,7 +7411,7 @@ test_datatype_property_lists(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -7581,7 +7581,7 @@ test_open_dataset_generically(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -7662,7 +7662,7 @@ test_open_group_generically(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -7733,7 +7733,7 @@ test_open_datatype_generically(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -7822,7 +7822,7 @@ test_create_obj_ref(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -7883,7 +7883,7 @@ test_write_dataset_w_obj_refs(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -8080,7 +8080,7 @@ test_read_dataset_w_obj_refs(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -8328,7 +8328,7 @@ test_write_dataset_w_obj_refs_empty_data(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -8455,7 +8455,7 @@ test_unused_object_API_calls(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -8521,7 +8521,7 @@ test_open_link_without_leading_slash(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -8626,7 +8626,7 @@ test_object_creation_by_absolute_path(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -8795,7 +8795,7 @@ test_absolute_vs_relative_path(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -9009,7 +9009,7 @@ test_double_init_free(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -9054,7 +9054,7 @@ test_url_encoding(void)
     if (H5VLrest_init() < 0)
         TEST_ERROR
 
-    if ((fapl_id = h5_fileaccess()) < 0)
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
         TEST_ERROR
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
@@ -9188,8 +9188,6 @@ main( int argc, char** argv )
 {
     size_t i;
     int    nerrors;
-
-    h5_reset();
 
     printf("Test parameters:\n\n");
     printf("  - URL: %s\n", URL);
