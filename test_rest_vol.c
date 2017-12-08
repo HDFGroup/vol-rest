@@ -20,22 +20,58 @@
  */
 
 /* XXX: Eliminate all test inter-dependencies */
-
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include "hdf5.h"
-#include "h5test.h"
 #include "rest_vol_public.h"
 
 #define ARRAY_LENGTH(array) sizeof(array) / sizeof(array[0])
 
+/* Macros for error handling */
+/* Use FUNC to safely handle variations of C99 __func__ keyword handling */
+#ifdef H5_HAVE_C99_FUNC
+#define FUNC __func__
+#elif defined(H5_HAVE_FUNCTION)
+#define FUNC __FUNCTION__
+#else
+#error "We need __func__ or __FUNCTION__ to test function names!"
+#endif
+
+/*
+ * Print the current location on the standard output stream.
+ */
+#define AT()     printf ("   at %s:%d in %s()...\n",        \
+        __FILE__, __LINE__, FUNC);
+
+/*
+ * The name of the test is printed by saying TESTING("something") which will
+ * result in the string `Testing something' being flushed to standard output.
+ * If a test passes, fails, or is skipped then the PASSED(), H5_FAILED(), or
+ * SKIPPED() macro should be called.  After H5_FAILED() or SKIPPED() the caller
+ * should print additional information to stdout indented by at least four
+ * spaces.  If the h5_errors() is used for automatic error handling then
+ * the H5_FAILED() macro is invoked automatically when an API function fails.
+ */
+#define TESTING(S)  {printf("Testing %-62s", S); fflush(stdout);}
+#define PASSED()    {puts("PASSED"); fflush(stdout);}
+#define H5_FAILED() {puts("*FAILED*"); fflush(stdout);}
+#define SKIPPED()   {puts(" - SKIPPED -"); fflush(stdout);}
+#define TEST_ERROR  {H5_FAILED(); AT(); goto error;}
+
+
+/* The HSDS endpoint and authentication information */
 #define URL getenv("HSDS_ENDPOINT")
 #define USERNAME "test_user1"
 #define PASSWORD "test"
 
 #define FILENAME "/home/test_user1/new_file"
 
+/* The names of a set of container groups which hold objects
+ * created by each of the different types of tests
+ */
 #define GROUP_TEST_GROUP_NAME         "group_tests"
 #define ATTRIBUTE_TEST_GROUP_NAME     "attribute_tests"
 #define DATASET_TEST_GROUP_NAME       "dataset_tests"
@@ -3841,7 +3877,7 @@ test_create_dataset_compound_types(void)
         num_subtypes = (size_t) (rand() % DATASET_COMPOUND_TYPE_TEST_MAX_SUBTYPES) + 1;
 
         for (j = 0; j < num_subtypes; j++)
-            type_pool[j] = FAIL;
+            type_pool[j] = -1;
 
         /* Allocate a Compound Datatype large enough to hold "num_subtypes" types, each of
          * which can be "MAX_SUBTYPE_SIZE" bytes at most
@@ -3886,7 +3922,7 @@ test_create_dataset_compound_types(void)
         }
 
         for (j = 0; j < num_subtypes; j++)
-            if (type_pool[j] != FAIL && H5Tclose(type_pool[j]) < 0)
+            if (type_pool[j] >= 0 && H5Tclose(type_pool[j]) < 0)
                 TEST_ERROR
         if (H5Tclose(compound_type) < 0)
             TEST_ERROR
