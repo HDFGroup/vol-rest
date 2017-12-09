@@ -18,7 +18,12 @@
  *              February, 2017
  *
  * Purpose: An implementation of a VOL plugin to access HDF5 data in a
- *          REST-oriented manner
+ *          REST-oriented manner.
+ *
+ *          Due to specialized improvements needed for performance reasons
+ *          and otherwise, this VOL plugin is currently only supported for
+ *          use with the HSDS server
+ *          XXX: Add link to HSDS
  */
 /* XXX: Implement _iterate functions */
 /* XXX: Add support for the _by_idx and _by_name functions. In particular to not segfault when certain parameters to main functions are NULL */
@@ -30,7 +35,6 @@
 #define H5F_FRIEND /* XXX: Temporarily needed for include H5Fpkg.h */
 #define H5O_FRIEND /* XXX: Temporarily needed for including H5Opkg.h */
 
-#include <libgen.h>
 #include "H5private.h"       /* Generic Functions */
 #include "H5Fpkg.h"          /* XXX: Temporarily needed */
 #include "H5Opkg.h"          /* XXX: Temporarily needed */
@@ -143,8 +147,8 @@ CURL_PERFORM_INTERNAL(curl_ptr, FALSE, H5E_NONE_MAJOR, H5E_NONE_MINOR, ret_value
 while (target_size > buffer_len) {                                                                          \
     char *tmp_realloc;                                                                                      \
                                                                                                             \
-    if (NULL == (tmp_realloc = (char *) rest_realloc(buffer, 2 * buffer_len))) {                            \
-        rest_free(buffer); buffer = NULL;                                                                   \
+    if (NULL == (tmp_realloc = (char *) RV_realloc(buffer, 2 * buffer_len))) {                              \
+        RV_free(buffer); buffer = NULL;                                                                     \
         HGOTO_ERROR(ERR_MAJOR, H5E_CANTALLOC, ret_value, "can't allocate space")                            \
     } /* end if */                                                                                          \
                                                                                                             \
@@ -200,7 +204,7 @@ do {                                                                            
 /*
  * The vol identification number.
  */
-static hid_t H5VL_REST_g = -1;
+static hid_t REST_g = -1;
 
 /*
  * The CURL pointer used for all cURL operations.
@@ -240,198 +244,198 @@ static struct {
 const char * const  host_string = "Host: ";
 
 /* Internal initialization/termination functions which are called by
- * the public functions H5VLrest_init() and H5VLrest_term() */
-static herr_t H5VL_rest_init(void);
-static herr_t H5VL_rest_term(hid_t vtpl_id);
+ * the public functions RVinit() and RVterm() */
+static herr_t RV_init(void);
+static herr_t RV_term(hid_t vtpl_id);
 
 /* Internal malloc/free functions to track memory usage for debugging purposes */
-static void *rest_malloc(size_t size);
-static void *rest_calloc(size_t size);
-static void *rest_realloc(void *mem, size_t size);
-static void *rest_free(void *mem);
+static void *RV_malloc(size_t size);
+static void *RV_calloc(size_t size);
+static void *RV_realloc(void *mem, size_t size);
+static void *RV_free(void *mem);
 
 /* REST VOL Attribute callbacks */
-static void  *H5VL_rest_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req);
-static void  *H5VL_rest_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, hid_t aapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_rest_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req);
-static herr_t H5VL_rest_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void **req);
-static herr_t H5VL_rest_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_rest_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_rest_attr_close(void *attr, hid_t dxpl_id, void **req);
+static void  *RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req);
+static void  *RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, hid_t aapl_id, hid_t dxpl_id, void **req);
+static herr_t RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req);
+static herr_t RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void **req);
+static herr_t RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t RV_attr_close(void *attr, hid_t dxpl_id, void **req);
 
 /* REST VOL Dataset callbacks */
-static void  *H5VL_rest_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req);
-static void  *H5VL_rest_dataset_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_rest_dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id,
-                                       hid_t file_space_id, hid_t dxpl_id, void *buf, void **req);
-static herr_t H5VL_rest_dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id,
-                                      hid_t file_space_id, hid_t dxpl_id, const void *buf, void **req);
-static herr_t H5VL_rest_dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_rest_dataset_specific(void *dset, H5VL_dataset_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_rest_dataset_close(void *dset, hid_t dxpl_id, void **req);
+static void  *RV_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req);
+static void  *RV_dataset_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req);
+static herr_t RV_dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id,
+                              hid_t file_space_id, hid_t dxpl_id, void *buf, void **req);
+static herr_t RV_dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id,
+                               hid_t file_space_id, hid_t dxpl_id, const void *buf, void **req);
+static herr_t RV_dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t RV_dataset_specific(void *dset, H5VL_dataset_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t RV_dataset_close(void *dset, hid_t dxpl_id, void **req);
 
 /* REST VOL Datatype callbacks */
-static void  *H5VL_rest_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req);
-static void  *H5VL_rest_datatype_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_rest_datatype_get(void *dt, H5VL_datatype_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_rest_datatype_close(void *dt, hid_t dxpl_id, void **req);
+static void  *RV_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t type_id, hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req);
+static void  *RV_datatype_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t tapl_id, hid_t dxpl_id, void **req);
+static herr_t RV_datatype_get(void *dt, H5VL_datatype_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t RV_datatype_close(void *dt, hid_t dxpl_id, void **req);
 
 /* REST VOL File callbacks */
-static void  *H5VL_rest_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req);
-static void  *H5VL_rest_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_rest_file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_rest_file_specific(void *file, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_rest_file_optional(void *file, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_rest_file_close(void *file, hid_t dxpl_id, void **req);
+static void  *RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req);
+static void  *RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req);
+static herr_t RV_file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t RV_file_specific(void *file, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t RV_file_optional(void *file, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t RV_file_close(void *file, hid_t dxpl_id, void **req);
 
 /* REST VOL Group callbacks */
-static void  *H5VL_rest_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
-static void  *H5VL_rest_group_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_rest_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_rest_group_close(void *grp, hid_t dxpl_id, void **req);
+static void  *RV_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
+static void  *RV_group_open(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req);
+static herr_t RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t RV_group_close(void *grp, hid_t dxpl_id, void **req);
 
 /* REST VOL Link callbacks */
-static herr_t H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj,
-                                    H5VL_loc_params_t loc_params, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_rest_link_copy(void *src_obj, H5VL_loc_params_t loc_params1,
-                                  void *dst_obj, H5VL_loc_params_t loc_params2,
-                                  hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_rest_link_move(void *src_obj, H5VL_loc_params_t loc_params1,
-                                  void *dst_obj, H5VL_loc_params_t loc_params2,
-                                  hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_rest_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_rest_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t RV_link_create(H5VL_link_create_type_t create_type, void *obj,
+                             H5VL_loc_params_t loc_params, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
+static herr_t RV_link_copy(void *src_obj, H5VL_loc_params_t loc_params1,
+                           void *dst_obj, H5VL_loc_params_t loc_params2,
+                           hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
+static herr_t RV_link_move(void *src_obj, H5VL_loc_params_t loc_params1,
+                           void *dst_obj, H5VL_loc_params_t loc_params2,
+                           hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
+static herr_t RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
 
 /* REST VOL Object callbacks */
-static void  *H5VL_rest_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req);
-static herr_t H5VL_rest_object_copy(void *src_obj, H5VL_loc_params_t loc_params1, const char *src_name,
-                                    void *dst_obj, H5VL_loc_params_t loc_params2, const char *dst_name,
-                                    hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req);
-static herr_t H5VL_rest_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_rest_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-static herr_t H5VL_rest_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
+static void  *RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type, hid_t dxpl_id, void **req);
+static herr_t RV_object_copy(void *src_obj, H5VL_loc_params_t loc_params1, const char *src_name,
+                             void *dst_obj, H5VL_loc_params_t loc_params2, const char *dst_name,
+                             hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req);
+static herr_t RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t RV_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
 
 /* cURL write function callback */
 static size_t write_data_callback(void *buffer, size_t size, size_t nmemb, void *userp);
 
 /* Alternate, more portable version of the basename function which doesn't modify its argument */
-static const char *get_basename(const char *path);
+static const char *RV_basename(const char *path);
 
 /* Alternate, more portable version of the dirname function which doesn't modify its argument */
-static char *get_dirname(const char *path);
+static char *RV_dirname(const char *path);
 
 /* H5Dscatter() callback for dataset reads */
 static herr_t dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *op_data);
 
 /* Helper function to parse an HTTP response according to the parse callback function */
-static herr_t H5VL_rest_parse_response(char *HTTP_response, void *callback_data_in, void *callback_data_out, herr_t (*parse_callback)(char *, void *, void *));
+static herr_t RV_parse_response(char *HTTP_response, void *callback_data_in, void *callback_data_out, herr_t (*parse_callback)(char *, void *, void *));
 
 /* Set of callbacks for H5VL_rest_parse_response() */
-static herr_t H5VL_rest_copy_object_URI_parse_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
-static herr_t H5VL_rest_get_link_type_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
-static herr_t H5VL_rest_retrieve_attribute_count_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
-static herr_t H5VL_rest_get_group_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
-static herr_t H5VL_rest_parse_dataset_creation_properties_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out);
+static herr_t RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_get_link_type_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_retrieve_attribute_count_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_get_group_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out);
 
 /* Helper function to find an object given a starting object to search from and a path */
-static htri_t H5VL_rest_find_object_by_path(H5VL_rest_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
+static htri_t RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
        herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in, void *callback_data_out);
 
 /* Conversion functions to convert a JSON-format string to an HDF5 Datatype or vice versa */
-static const char *H5VL_rest_convert_predefined_datatype_to_string(hid_t type_id);
-static herr_t      H5VL_rest_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested);
-static hid_t       H5VL_rest_convert_string_to_datatype(const char *type);
+static const char *RV_convert_predefined_datatype_to_string(hid_t type_id);
+static herr_t      RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested);
+static hid_t       RV_convert_string_to_datatype(const char *type);
 
 /* Conversion function to convert one or more rest_obj_ref_t objects into a binary buffer for data transfer */
-static herr_t H5VL_rest_convert_obj_refs_to_buffer(const rest_obj_ref_t *ref_array, size_t ref_array_len, char **buf_out, size_t *buf_out_len);
-static herr_t H5VL_rest_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len, rest_obj_ref_t **buf_out, size_t *buf_out_len);
+static herr_t RV_convert_obj_refs_to_buffer(const RV_obj_ref_t *ref_array, size_t ref_array_len, char **buf_out, size_t *buf_out_len);
+static herr_t RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len, RV_obj_ref_t **buf_out, size_t *buf_out_len);
 
 /* Helper function to parse a JSON string representing an HDF5 Datatype and
  * setup an hid_t for the Datatype
  */
-static hid_t H5VL_rest_parse_datatype(char *type, hbool_t need_truncate);
+static hid_t RV_parse_datatype(char *type, hbool_t need_truncate);
 
 /* Helper function to parse a JSON string representing an HDF5 Dataspace and
  * setup an hid_t for the Dataspace */
-static hid_t H5VL_rest_parse_dataspace(char *space);
+static hid_t RV_parse_dataspace(char *space);
 
 /* Helper function to interpret a dataspace's shape and convert it into JSON */
-static herr_t H5VL_rest_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **maxdims_body);
+static herr_t RV_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **maxdims_body);
 
 /* Helper function to convert a selection within an HDF5 Dataspace into a JSON-format string */
-static herr_t H5VL_rest_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string, size_t *selection_string_len, hbool_t req_param);
+static herr_t RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string, size_t *selection_string_len, hbool_t req_param);
 
 /* Helper functions for creating a Dataset */
-static herr_t H5VL_rest_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t dcpl, char **create_request_body, size_t *create_request_body_len);
-static herr_t H5VL_rest_parse_dataset_creation_properties(hid_t dcpl_id, char **creation_properties_body, size_t *creation_properties_body_len);
+static herr_t RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t dcpl, char **create_request_body, size_t *create_request_body_len);
+static herr_t RV_parse_dataset_creation_properties(hid_t dcpl_id, char **creation_properties_body, size_t *creation_properties_body_len);
 
 static H5VL_class_t H5VL_rest_g = {
-    HDF5_VOL_REST_VERSION,            /* Version number                 */
-    H5_VOL_REST_CLS_VAL,              /* Plugin value                   */
-    "REST",                           /* Plugin name                    */
-    NULL,                             /* Plugin initialization function */
-    H5VL_rest_term,                   /* Plugin termination function    */
-    0,                                /* Plugin info FAPL size          */
-    NULL,                             /* Plugin FAPL copy function      */
-    NULL,                             /* Plugin FAPL free function      */
+    HDF5_VOL_REST_VERSION,     /* Version number                 */
+    H5_VOL_REST_CLS_VAL,       /* Plugin value                   */
+    "REST",                    /* Plugin name                    */
+    NULL,                      /* Plugin initialization function */
+    RV_term,                   /* Plugin termination function    */
+    0,                         /* Plugin info FAPL size          */
+    NULL,                      /* Plugin FAPL copy function      */
+    NULL,                      /* Plugin FAPL free function      */
     {
-        H5VL_rest_attr_create,        /* Attribute create function      */
-        H5VL_rest_attr_open,          /* Attribute open function        */
-        H5VL_rest_attr_read,          /* Attribute read function        */
-        H5VL_rest_attr_write,         /* Attribute write function       */
-        H5VL_rest_attr_get,           /* Attribute get function         */
-        H5VL_rest_attr_specific,      /* Attribute specific function    */
-        NULL,                         /* Attribute optional function    */
-        H5VL_rest_attr_close          /* Attribute close function       */
+        RV_attr_create,        /* Attribute create function      */
+        RV_attr_open,          /* Attribute open function        */
+        RV_attr_read,          /* Attribute read function        */
+        RV_attr_write,         /* Attribute write function       */
+        RV_attr_get,           /* Attribute get function         */
+        RV_attr_specific,      /* Attribute specific function    */
+        NULL,                  /* Attribute optional function    */
+        RV_attr_close          /* Attribute close function       */
     },
     {
-        H5VL_rest_dataset_create,     /* Dataset create function        */
-        H5VL_rest_dataset_open,       /* Dataset open function          */
-        H5VL_rest_dataset_read,       /* Dataset read function          */
-        H5VL_rest_dataset_write,      /* Dataset write function         */
-        H5VL_rest_dataset_get,        /* Dataset get function           */
-        H5VL_rest_dataset_specific,   /* Dataset specific function      */
-        NULL,                         /* Dataset optional function      */
-        H5VL_rest_dataset_close       /* Dataset close function         */
+        RV_dataset_create,     /* Dataset create function        */
+        RV_dataset_open,       /* Dataset open function          */
+        RV_dataset_read,       /* Dataset read function          */
+        RV_dataset_write,      /* Dataset write function         */
+        RV_dataset_get,        /* Dataset get function           */
+        RV_dataset_specific,   /* Dataset specific function      */
+        NULL,                  /* Dataset optional function      */
+        RV_dataset_close       /* Dataset close function         */
     },
     {
-        H5VL_rest_datatype_commit,    /* Datatype commit function       */
-        H5VL_rest_datatype_open,      /* Datatype open function         */
-        H5VL_rest_datatype_get,       /* Datatype get function          */
-        NULL,                         /* Datatype specific function     */
-        NULL,                         /* Datatype optional function     */
-        H5VL_rest_datatype_close      /* Datatype close function        */
+        RV_datatype_commit,    /* Datatype commit function       */
+        RV_datatype_open,      /* Datatype open function         */
+        RV_datatype_get,       /* Datatype get function          */
+        NULL,                  /* Datatype specific function     */
+        NULL,                  /* Datatype optional function     */
+        RV_datatype_close      /* Datatype close function        */
     },
     {
-        H5VL_rest_file_create,        /* File create function           */
-        H5VL_rest_file_open,          /* File open function             */
-        H5VL_rest_file_get,           /* File get function              */
-        H5VL_rest_file_specific,      /* File specific function         */
-        H5VL_rest_file_optional,      /* File optional function         */
-        H5VL_rest_file_close          /* File close function            */
+        RV_file_create,        /* File create function           */
+        RV_file_open,          /* File open function             */
+        RV_file_get,           /* File get function              */
+        RV_file_specific,      /* File specific function         */
+        RV_file_optional,      /* File optional function         */
+        RV_file_close          /* File close function            */
     },
     {
-        H5VL_rest_group_create,       /* Group create function          */
-        H5VL_rest_group_open,         /* Group open function            */
-        H5VL_rest_group_get,          /* Group get function             */
-        NULL,                         /* Group specific function        */
-        NULL,                         /* Group optional function        */
-        H5VL_rest_group_close         /* Group close function           */
+        RV_group_create,       /* Group create function          */
+        RV_group_open,         /* Group open function            */
+        RV_group_get,          /* Group get function             */
+        NULL,                  /* Group specific function        */
+        NULL,                  /* Group optional function        */
+        RV_group_close         /* Group close function           */
     },
     {
-        H5VL_rest_link_create,        /* Link create function           */
-        H5VL_rest_link_copy,          /* Link copy function             */
-        H5VL_rest_link_move,          /* Link move function             */
-        H5VL_rest_link_get,           /* Link get function              */
-        H5VL_rest_link_specific,      /* Link specific function         */
-        NULL                          /* Link optional function         */
+        RV_link_create,        /* Link create function           */
+        RV_link_copy,          /* Link copy function             */
+        RV_link_move,          /* Link move function             */
+        RV_link_get,           /* Link get function              */
+        RV_link_specific,      /* Link specific function         */
+        NULL                   /* Link optional function         */
     },
     {
-        H5VL_rest_object_open,        /* Object open function           */
-        H5VL_rest_object_copy,        /* Object copy function           */
-        H5VL_rest_object_get,         /* Object get function            */
-        H5VL_rest_object_specific,    /* Object specific function       */
-        H5VL_rest_object_optional     /* Object optional function       */
+        RV_object_open,        /* Object open function           */
+        RV_object_copy,        /* Object copy function           */
+        RV_object_get,         /* Object get function            */
+        RV_object_specific,    /* Object specific function       */
+        RV_object_optional     /* Object optional function       */
     },
     {
         NULL,
@@ -443,7 +447,7 @@ static H5VL_class_t H5VL_rest_g = {
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VLrest_init
+ * Function:    RVinit
  *
  * Purpose:     Initialize the REST VOL plugin by initializing cURL and
  *              then registering the plugin with the library
@@ -454,7 +458,7 @@ static H5VL_class_t H5VL_rest_g = {
  *              March, 2017
  */
 herr_t
-H5VLrest_init(void)
+RVinit(void)
 {
     herr_t ret_value = SUCCEED;
 
@@ -462,7 +466,7 @@ H5VLrest_init(void)
     H5TRACE0("e","");
 
     /* Check if already initialized */
-    if (H5VL_REST_g >= 0)
+    if (REST_g >= 0)
         HGOTO_DONE(SUCCEED)
 
 #ifdef TRACK_MEM_USAGE
@@ -479,7 +483,7 @@ H5VLrest_init(void)
         HGOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't set cURL error buffer")
 
     /* Allocate buffer for cURL to write responses to */
-    if (NULL == (response_buffer.buffer = (char *) rest_malloc(CURL_RESPONSE_BUFFER_DEFAULT_SIZE)))
+    if (NULL == (response_buffer.buffer = (char *) RV_malloc(CURL_RESPONSE_BUFFER_DEFAULT_SIZE)))
         HGOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate cURL response buffer")
     response_buffer.buffer_size = CURL_RESPONSE_BUFFER_DEFAULT_SIZE;
     response_buffer.curr_buf_ptr = response_buffer.buffer;
@@ -493,24 +497,24 @@ H5VLrest_init(void)
 #endif
 
     /* Register the plugin with the library */
-    if (H5VL_rest_init() < 0)
+    if (RV_init() < 0)
         HGOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't initialize REST VOL plugin")
 
 done:
     /* Cleanup if REST VOL plugin initialization failed */
     if (ret_value < 0) {
         if (response_buffer.buffer)
-            rest_free(response_buffer.buffer);
+            RV_free(response_buffer.buffer);
 
         curl_easy_cleanup(curl);
     } /* end if */
 
     FUNC_LEAVE_API(ret_value)
-} /* end H5VLrest_init() */
+} /* end RVinit() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_init
+ * Function:    RV_init
  *
  * Purpose:     Register the REST VOL plugin with the library
  *
@@ -520,25 +524,25 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_init(void)
+RV_init(void)
 {
     herr_t ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI(FAIL)
 
     /* Register the REST VOL plugin, if it isn't already registered */
-    if (NULL == H5Iobject_verify(H5VL_REST_g, H5I_VOL)) {
-        if ((H5VL_REST_g = H5VL_register((const H5VL_class_t *) &H5VL_rest_g, sizeof(H5VL_class_t), TRUE)) < 0)
+    if (H5I_VOL != H5Iget_type(REST_g)) {
+        if ((REST_g = H5VL_register((const H5VL_class_t *) &H5VL_rest_g, sizeof(H5VL_class_t), TRUE)) < 0)
             HGOTO_ERROR(H5E_ATOM, H5E_CANTINSERT, FAIL, "can't create ID for REST VOL plugin")
     } /* end if */
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_init() */
+} /* end RV_init() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VLrest_term
+ * Function:    RVterm
  *
  * Purpose:     Shut down the REST VOL plugin
  *
@@ -548,23 +552,23 @@ done:
  *              March, 2017
  */
 herr_t
-H5VLrest_term(void)
+RVterm(void)
 {
     herr_t ret_value = SUCCEED;
 
     FUNC_ENTER_API(FAIL)
     H5TRACE0("e","");
 
-    if (H5VL_rest_term(-1) < 0)
+    if (RV_term(-1) < 0)
         HGOTO_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close REST VOL plugin")
 
 done:
     FUNC_LEAVE_API(ret_value)
-} /* end H5VLrest_term() */
+} /* end RVterm() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_term
+ * Function:    RV_term
  *
  * Purpose:     Shut down the REST VOL plugin
  *
@@ -574,7 +578,7 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_term(hid_t H5_ATTR_UNUSED vtpl_id)
+RV_term(hid_t H5_ATTR_UNUSED vtpl_id)
 {
     herr_t ret_value = SUCCEED;
 
@@ -586,11 +590,11 @@ H5VL_rest_term(hid_t H5_ATTR_UNUSED vtpl_id)
 
     /* Free base URL */
     if (base_URL)
-        base_URL = (char *) rest_free(base_URL);
+        base_URL = (char *) RV_free(base_URL);
 
     /* Free memory for cURL response buffer */
     if (response_buffer.buffer)
-        response_buffer.buffer = (char *) rest_free(response_buffer.buffer);
+        response_buffer.buffer = (char *) RV_free(response_buffer.buffer);
 
     /* Allow cURL to clean up */
     if (curl) {
@@ -599,7 +603,7 @@ H5VL_rest_term(hid_t H5_ATTR_UNUSED vtpl_id)
     } /* end if */
 
     /* Reset ID */
-    H5VL_REST_g = -1;
+    REST_g = -1;
 
 #ifdef TRACK_MEM_USAGE
     /* Check for allocated memory */
@@ -613,7 +617,7 @@ done:
 #endif
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_term() */
+} /* end RV_term() */
 
 
 /*-------------------------------------------------------------------------
@@ -638,13 +642,13 @@ H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const
 
     assert(URL && "must specify a base URL");
 
-    if (H5VL_REST_g < 0)
+    if (REST_g < 0)
         HGOTO_ERROR(H5E_VOL, H5E_UNINITIALIZED, FAIL, "REST VOL plugin not initialized")
 
     if (H5P_DEFAULT == fapl_id)
         HGOTO_ERROR(H5E_PLIST, H5E_BADVALUE, FAIL, "can't set REST VOL plugin for default property list")
 
-    if ((ret_value = H5Pset_vol(fapl_id, H5VL_REST_g, NULL)) < 0)
+    if ((ret_value = H5Pset_vol(fapl_id, REST_g, NULL)) < 0)
         HGOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't set REST VOL plugin in FAPL")
 
     /* Save a copy of the base URL being worked on so that operations like
@@ -652,7 +656,7 @@ H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const
      * off of the base URL supplied.
      */
     URL_len = strlen(URL);
-    if (NULL == (base_URL = (char *) rest_malloc(URL_len + 1)))
+    if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
         HGOTO_ERROR(H5E_ARGS, H5E_CANTALLOC, FAIL, "can't allocate space for necessary base URL")
 
     strncpy(base_URL, URL, URL_len);
@@ -674,25 +678,25 @@ done:
 
 
 const char *
-H5VLrest_get_uri(hid_t obj_id)
+RVget_uri(hid_t obj_id)
 {
-    H5VL_rest_object_t *VOL_obj;
+    RV_object_t *VOL_obj;
     char               *ret_value = NULL;
 
     FUNC_ENTER_API(NULL)
     H5TRACE1("e", "i", obj_id);
 
-    if (NULL == (VOL_obj = (H5VL_rest_object_t *) H5VL_object(obj_id)))
+    if (NULL == (VOL_obj = (RV_object_t *) H5VL_object(obj_id)))
         HGOTO_ERROR(H5E_VOL, H5E_CANTGET, NULL, "invalid identifier")
     ret_value = VOL_obj->URI;
 
 done:
     FUNC_LEAVE_API((const char *) ret_value)
-} /* end H5VLrest_get_uri() */
+} /* end RVget_uri() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    rest_malloc
+ * Function:    RV_malloc
  *
  * Purpose:     Similar to the C89 version of malloc().
  *
@@ -709,7 +713,7 @@ done:
  *              Nov 8, 2017
  */
 static void *
-rest_malloc(size_t size)
+RV_malloc(size_t size)
 {
     void *ret_value = NULL;
 
@@ -732,11 +736,11 @@ rest_malloc(size_t size)
         ret_value = NULL;
 
     return ret_value;
-} /* end rest_malloc() */
+} /* end RV_malloc() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    rest_calloc
+ * Function:    RV_calloc
  *
  * Purpose:     Similar to the C89 version of calloc(), except this
  *              routine just takes a 'size' parameter.
@@ -755,7 +759,7 @@ rest_malloc(size_t size)
  *              Nov 8, 2017
  */
 static void *
-rest_calloc(size_t size)
+RV_calloc(size_t size)
 {
     void *ret_value = NULL;
 
@@ -771,11 +775,11 @@ rest_calloc(size_t size)
         ret_value = NULL;
 
     return ret_value;
-} /* end rest_calloc() */
+} /* end RV_calloc() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    rest_realloc
+ * Function:    RV_realloc
  *
  * Purpose:     Similar semantics as C89's realloc(). Specifically, the
  *              following calls are equivalent:
@@ -795,7 +799,7 @@ rest_calloc(size_t size)
  *              Nov 8, 2017
  */
 static void *
-rest_realloc(void *mem, size_t size)
+RV_realloc(void *mem, size_t size)
 {
     void *ret_value = NULL;
 
@@ -807,15 +811,15 @@ rest_realloc(void *mem, size_t size)
 
                 memcpy(&block_size, (char *) mem - sizeof(block_size), sizeof(block_size));
 
-                ret_value = rest_malloc(size);
+                ret_value = RV_malloc(size);
                 memcpy(ret_value, mem, MIN(size, block_size));
                 rest_free(mem);
             } /* end if */
             else
-                ret_value = rest_malloc(size);
+                ret_value = RV_malloc(size);
         } /* end if */
         else
-            ret_value = rest_free(mem);
+            ret_value = RV_free(mem);
 #else
         ret_value = realloc(mem, size);
 
@@ -825,11 +829,11 @@ rest_realloc(void *mem, size_t size)
     } /* end if */
 
     return ret_value;
-} /* end rest_realloc() */
+} /* end RV_realloc() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    rest_free
+ * Function:    RV_free
  *
  * Purpose:     Just like free(3) except null pointers are allowed as
  *              arguments, and the return value (always NULL) can be
@@ -844,7 +848,7 @@ rest_realloc(void *mem, size_t size)
  *              Nov 8, 2017
  */
 static void *
-rest_free(void *mem)
+RV_free(void *mem)
 {
     if (mem) {
 #ifdef TRACK_MEM_USAGE
@@ -860,7 +864,7 @@ rest_free(void *mem)
     } /* end if */
 
     return NULL;
-} /* end rest_free() */
+} /* end RV_free() */
 
 /****************************************
  *         VOL plugin callbacks         *
@@ -868,37 +872,37 @@ rest_free(void *mem)
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_attr_create
+ * Function:    RV_attr_create
  *
  * Purpose:     Creates an HDF5 attribute by making the appropriate REST
  *              API call to the server and allocating an internal memory
  *              struct object for the attribute.
  *
- * Return:      Pointer to an H5VL_rest_object_t struct corresponding to
- *              the created attribute on success/NULL on failure
+ * Return:      Pointer to an RV_object_t struct corresponding to the
+ *              created attribute on success/NULL on failure
  *
  * Programmer:  Frank Willmore, Jordan Henderson
  *              September, 2017
  */
 static void *
-H5VL_rest_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, hid_t acpl_id,
-                      hid_t H5_ATTR_UNUSED aapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, hid_t acpl_id,
+               hid_t H5_ATTR_UNUSED aapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *parent = (H5VL_rest_object_t *) obj;
-    H5VL_rest_object_t *new_attribute = NULL;
-    curl_off_t          create_request_body_len = 0;
-    size_t              create_request_nalloc = 0;
-    size_t              host_header_len = 0;
-    size_t              datatype_body_len = 0;
-    size_t              attr_name_len = 0;
-    hid_t               type_id, space_id;
-    char               *host_header = NULL;
-    char               *create_request_body = NULL;
-    char               *datatype_body = NULL;
-    char               *shape_body = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    char               *url_encoded_attr_name = NULL;
-    void               *ret_value = NULL;
+    RV_object_t *parent = (RV_object_t *) obj;
+    RV_object_t *new_attribute = NULL;
+    curl_off_t   create_request_body_len = 0;
+    size_t       create_request_nalloc = 0;
+    size_t       host_header_len = 0;
+    size_t       datatype_body_len = 0;
+    size_t       attr_name_len = 0;
+    hid_t        type_id, space_id;
+    char        *host_header = NULL;
+    char        *create_request_body = NULL;
+    char        *datatype_body = NULL;
+    char        *shape_body = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    char        *url_encoded_attr_name = NULL;
+    void        *ret_value = NULL;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -921,7 +925,7 @@ H5VL_rest_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_
         HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file")
 
     /* Allocate and setup internal Attribute struct */
-    if (NULL == (new_attribute = (H5VL_rest_object_t *) rest_malloc(sizeof(*new_attribute))))
+    if (NULL == (new_attribute = (RV_object_t *) RV_malloc(sizeof(*new_attribute))))
         HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate attribute object")
 
     new_attribute->obj_type = H5I_ATTR;
@@ -956,7 +960,7 @@ H5VL_rest_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_
 
     /* Copy the attribute's name */
     attr_name_len = strlen(attr_name);
-    if (NULL == (new_attribute->u.attribute.attr_name = (char *) rest_malloc(attr_name_len + 1)))
+    if (NULL == (new_attribute->u.attribute.attr_name = (char *) RV_malloc(attr_name_len + 1)))
         HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute name")
     memcpy(new_attribute->u.attribute.attr_name, attr_name, attr_name_len);
     new_attribute->u.attribute.attr_name[attr_name_len] = '\0';
@@ -964,16 +968,16 @@ H5VL_rest_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_
     /* Form the request body to give the new Attribute its properties */
 
     /* Form the Datatype portion of the Attribute create request */
-    if (H5VL_rest_convert_datatype_to_string(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
+    if (RV_convert_datatype_to_string(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
         HGOTO_ERROR(H5E_ATTR, H5E_CANTCONVERT, NULL, "can't convert datatype to string representation")
 
     /* If the Dataspace of the Attribute was specified, convert it to JSON. Otherwise, use defaults */
     if (H5P_DEFAULT != space_id)
-        if (H5VL_rest_convert_dataspace_shape_to_string(space_id, &shape_body, NULL) < 0)
+        if (RV_convert_dataspace_shape_to_string(space_id, &shape_body, NULL) < 0)
             HGOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL, "can't parse Attribute shape parameters")
 
     create_request_nalloc = strlen(datatype_body) + (shape_body ? strlen(shape_body) : 0) + 4;
-    if (NULL == (create_request_body = (char *) rest_malloc(create_request_nalloc)))
+    if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
         HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute create request body")
 
     if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc,
@@ -986,7 +990,7 @@ H5VL_rest_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_
 
     /* Setup the "Host: " header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -1082,19 +1086,19 @@ done:
 #endif
 
     if (create_request_body)
-        rest_free(create_request_body);
+        RV_free(create_request_body);
     if (datatype_body)
-        rest_free(datatype_body);
+        RV_free(datatype_body);
     if (shape_body)
-        rest_free(shape_body);
+        RV_free(shape_body);
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
     if (url_encoded_attr_name)
         curl_free(url_encoded_attr_name);
 
     /* Clean up allocated attribute object if there was an issue */
     if (new_attribute && !ret_value)
-        if (H5VL_rest_attr_close(new_attribute, FAIL, NULL) < 0)
+        if (RV_attr_close(new_attribute, FAIL, NULL) < 0)
             HDONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, NULL, "can't close attribute")
 
     /* Reset cURL custom request to prevent issues with future requests */
@@ -1107,35 +1111,35 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_attr_create() */
+} /* end RV_attr_create() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_attr_open
+ * Function:    RV_attr_open
  *
  * Purpose:     Opens an existing HDF5 attribute object by retrieving its
  *              URI, dataspace and datatype info from the server and
  *              allocating an internal memory struct object for the
  *              attribute.
  *
- * Return:      Pointer to an H5VL_rest_object_t struct corresponding to
- *              the opened attribute on success/NULL on failure
+ * Return:      Pointer to an RV_object_t struct corresponding to the
+ *              opened attribute on success/NULL on failure
  *
  * Programmer:  Frank Willmore, Jordan Henderson
  *              September, 2017
  */
 static void *
-H5VL_rest_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
-                    hid_t H5_ATTR_UNUSED aapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
+             hid_t H5_ATTR_UNUSED aapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *parent = (H5VL_rest_object_t *) obj;
-    H5VL_rest_object_t *attribute = NULL;
-    size_t              attr_name_len = 0;
-    size_t              host_header_len = 0;
-    char               *host_header = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    char               *url_encoded_attr_name = NULL;
-    void               *ret_value = NULL;
+    RV_object_t *parent = (RV_object_t *) obj;
+    RV_object_t *attribute = NULL;
+    size_t       attr_name_len = 0;
+    size_t       host_header_len = 0;
+    char        *host_header = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    char        *url_encoded_attr_name = NULL;
+    void        *ret_value = NULL;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -1157,7 +1161,7 @@ H5VL_rest_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_na
         HGOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL, "opening an attribute by index is currently unsupported")
 
     /* Allocate and setup internal Attribute struct */
-    if (NULL == (attribute = (H5VL_rest_object_t *) rest_malloc(sizeof(*attribute))))
+    if (NULL == (attribute = (RV_object_t *) RV_malloc(sizeof(*attribute))))
         HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate attribute object")
 
     attribute->obj_type = H5I_ATTR;
@@ -1172,7 +1176,7 @@ H5VL_rest_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_na
 
     /* Setup the "Host: " header */
     host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -1249,15 +1253,15 @@ H5VL_rest_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_na
     CURL_PERFORM(curl, H5E_ATTR, H5E_CANTGET, NULL);
 
     /* Set up a Dataspace for the opened Attribute */
-    if ((attribute->u.attribute.space_id = H5VL_rest_parse_dataspace(response_buffer.buffer)) < 0)
+    if ((attribute->u.attribute.space_id = RV_parse_dataspace(response_buffer.buffer)) < 0)
         HGOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't parse attribute dataspace")
 
     /* Set up a Datatype for the opened Attribute */
-    if ((attribute->u.attribute.dtype_id = H5VL_rest_parse_datatype(response_buffer.buffer, TRUE)) < 0)
+    if ((attribute->u.attribute.dtype_id = RV_parse_datatype(response_buffer.buffer, TRUE)) < 0)
         HGOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't parse attribute datatype")
 
     /* Copy the attribute's name */
-    if (NULL == (attribute->u.attribute.attr_name = (char *) rest_malloc(attr_name_len + 1)))
+    if (NULL == (attribute->u.attribute.attr_name = (char *) RV_malloc(attr_name_len + 1)))
         HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute name")
     memcpy(attribute->u.attribute.attr_name, attr_name, attr_name_len);
     attribute->u.attribute.attr_name[attr_name_len] = '\0';
@@ -1281,13 +1285,13 @@ done:
 #endif
 
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
     if (url_encoded_attr_name)
         curl_free(url_encoded_attr_name);
 
     /* Clean up allocated attribute object if there was an issue */
     if (attribute && !ret_value)
-        if (H5VL_rest_attr_close(attribute, FAIL, NULL) < 0)
+        if (RV_attr_close(attribute, FAIL, NULL) < 0)
             HDONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, NULL, "can't close attribute")
 
     if (curl_headers) {
@@ -1296,11 +1300,11 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_attr_open() */
+} /* end RV_attr_open() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_attr_read
+ * Function:    RV_attr_read
  *
  * Purpose:     Reads an entire HDF5 attribute from the server.
  *
@@ -1310,19 +1314,19 @@ done:
  *              November, 2017
  */
 static herr_t
-H5VL_rest_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *attribute = (H5VL_rest_object_t *) attr;
-    H5T_class_t         dtype_class;
-    hssize_t            file_select_npoints;
-    hbool_t             is_transfer_binary = FALSE;
-    htri_t              is_variable_str;
-    size_t              dtype_size;
-    size_t              host_header_len = 0;
-    char               *host_header = NULL;
-    char               *url_encoded_attr_name = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *attribute = (RV_object_t *) attr;
+    H5T_class_t  dtype_class;
+    hssize_t     file_select_npoints;
+    hbool_t      is_transfer_binary = FALSE;
+    htri_t       is_variable_str;
+    size_t       dtype_size;
+    size_t       host_header_len = 0;
+    char        *host_header = NULL;
+    char        *url_encoded_attr_name = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -1351,7 +1355,7 @@ H5VL_rest_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED 
 
     /* Setup the "Host: " header */
     host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -1436,7 +1440,7 @@ done:
 #endif
 
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
     if (url_encoded_attr_name)
         curl_free(url_encoded_attr_name);
 
@@ -1446,11 +1450,11 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_attr_read() */
+} /* end RV_attr_read() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_attr_write
+ * Function:    RV_attr_write
  *
  * Purpose:     Writes an entire HDF5 attribute on the server.
  *
@@ -1460,21 +1464,21 @@ done:
  *              November, 2017
  */
 static herr_t
-H5VL_rest_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *attribute = (H5VL_rest_object_t *) attr;
-    H5T_class_t         dtype_class;
-    hssize_t            file_select_npoints;
-    hbool_t             is_transfer_binary = FALSE;
-    htri_t              is_variable_str;
-    size_t              dtype_size;
-    size_t              write_body_len = 0;
-    size_t              host_header_len = 0;
-    char               *host_header = NULL;
-    char               *write_body = NULL;
-    char               *url_encoded_attr_name = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *attribute = (RV_object_t *) attr;
+    H5T_class_t  dtype_class;
+    hssize_t     file_select_npoints;
+    hbool_t      is_transfer_binary = FALSE;
+    htri_t       is_variable_str;
+    size_t       dtype_size;
+    size_t       write_body_len = 0;
+    size_t       host_header_len = 0;
+    char        *host_header = NULL;
+    char        *write_body = NULL;
+    char        *url_encoded_attr_name = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -1513,7 +1517,7 @@ H5VL_rest_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_
 
     /* Setup the "Host: " header */
     host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -1600,9 +1604,9 @@ done:
 #endif
 
     if (write_body)
-        rest_free(write_body);
+        RV_free(write_body);
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
     if (url_encoded_attr_name)
         curl_free(url_encoded_attr_name);
 
@@ -1616,11 +1620,11 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_attr_write() */
+} /* end RV_attr_write() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_attr_get
+ * Function:    RV_attr_get
  *
  * Purpose:     Performs a "GET" operation on an HDF5 attribute, such as
  *              calling the H5Aget_info routine.
@@ -1631,10 +1635,10 @@ done:
  *              November, 2017
  */
 static herr_t
-H5VL_rest_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    H5VL_rest_object_t *_obj = (H5VL_rest_object_t *) obj;
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *_obj = (RV_object_t *) obj;
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -1744,11 +1748,11 @@ H5VL_rest_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxp
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_attr_get() */
+} /* end RV_attr_get() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_attr_specific
+ * Function:    RV_attr_specific
  *
  * Purpose:     Performs a plugin-specific operation on an HDF5 attribute,
  *              such as calling H5Adelete
@@ -1759,15 +1763,15 @@ done:
  *              November, 2017
  */
 static herr_t
-H5VL_rest_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t specific_type,
-                        hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t specific_type,
+                 hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    H5VL_rest_object_t *loc_obj = (H5VL_rest_object_t *) obj;
-    size_t              host_header_len = 0;
-    char               *host_header = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    char               *url_encoded_attr_name = NULL;
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *loc_obj = (RV_object_t *) obj;
+    size_t       host_header_len = 0;
+    char        *host_header = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    char        *url_encoded_attr_name = NULL;
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -1782,7 +1786,7 @@ H5VL_rest_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_speci
 
     /* Setup the "Host: " header */
     host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -1964,7 +1968,7 @@ H5VL_rest_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_speci
 
 done:
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
 
     /* In case a custom DELETE request was made, reset the request to NULL
      * to prevent any possible future issues with requests
@@ -1981,11 +1985,11 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_attr_specific() */
+} /* end RV_attr_specific() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_attr_close
+ * Function:    RV_attr_close
  *
  * Purpose:     Closes an HDF5 attribute by freeing the memory allocated
  *              for its internal memory struct object. There is no
@@ -1997,10 +2001,10 @@ done:
  *              September, 2017
  */
 static herr_t
-H5VL_rest_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *_attr = (H5VL_rest_object_t *) attr;
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *_attr = (RV_object_t *) attr;
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -2013,7 +2017,7 @@ H5VL_rest_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUS
     assert(H5I_ATTR == _attr->obj_type && "not an attribute");
 
     if (_attr->u.attribute.attr_name)
-        rest_free(_attr->u.attribute.attr_name);
+        RV_free(_attr->u.attribute.attr_name);
 
     if (_attr->u.attribute.dtype_id >= 0 && H5Tclose(_attr->u.attribute.dtype_id) < 0)
         HDONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
@@ -2025,43 +2029,43 @@ H5VL_rest_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUS
             HDONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close ACPL")
     } /* end if */
 
-    rest_free(_attr);
+    RV_free(_attr);
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_attr_close() */
+} /* end RV_attr_close() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_datatype_commit
+ * Function:    RV_datatype_commit
  *
  * Purpose:     Commits the given HDF5 datatype into the file structure of
  *              the given HDF5 file object and allocates an internal memory
  *              struct object for the datatype.
  *
- * Return:      Pointer to H5VL_rest_object_t struct corresponding to the
+ * Return:      Pointer to RV_object_t struct corresponding to the
  *              newly-committed datatype on success/NULL on failure
  *
  * Programmer:  Jordan Henderson
  *              August, 2017
  */
 static void *
-H5VL_rest_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name, hid_t type_id,
-                          hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name, hid_t type_id,
+                   hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *parent = (H5VL_rest_object_t *) obj;
-    H5VL_rest_object_t *new_datatype = NULL;
-    curl_off_t          commit_request_len = 0;
-    size_t              commit_request_nalloc = 0;
-    size_t              host_header_len = 0;
-    size_t              datatype_body_len = 0;
-    size_t              link_body_len = 0;
-    char               *host_header = NULL;
-    char               *commit_request_body = NULL;
-    char               *datatype_body = NULL;
-    char               *link_body = NULL;
-    char               *path_dirname = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    void               *ret_value = NULL;
+    RV_object_t *parent = (RV_object_t *) obj;
+    RV_object_t *new_datatype = NULL;
+    curl_off_t   commit_request_len = 0;
+    size_t       commit_request_nalloc = 0;
+    size_t       host_header_len = 0;
+    size_t       datatype_body_len = 0;
+    size_t       link_body_len = 0;
+    char        *host_header = NULL;
+    char        *commit_request_body = NULL;
+    char        *datatype_body = NULL;
+    char        *link_body = NULL;
+    char        *path_dirname = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    void        *ret_value = NULL;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -2085,7 +2089,7 @@ H5VL_rest_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params
         HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file")
 
     /* Allocate and setup internal Datatype struct */
-    if (NULL == (new_datatype = (H5VL_rest_object_t *) rest_malloc(sizeof(*new_datatype))))
+    if (NULL == (new_datatype = (RV_object_t *) RV_malloc(sizeof(*new_datatype))))
         HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate datatype object")
 
     new_datatype->obj_type = H5I_DATATYPE;
@@ -2104,7 +2108,7 @@ H5VL_rest_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params
         new_datatype->u.datatype.tcpl_id = H5P_DATATYPE_CREATE_DEFAULT;
 
     /* Convert the datatype into JSON to be used in the request body */
-    if (H5VL_rest_convert_datatype_to_string(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
+    if (RV_convert_datatype_to_string(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
         HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert datatype to string representation")
 
     /* If this is not a H5Tcommit_anon call, create a link for the Datatype
@@ -2112,7 +2116,7 @@ H5VL_rest_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params
     if (name) {
         hbool_t            empty_dirname;
         char               target_URI[URI_MAX_LENGTH];
-        const char * const link_basename = get_basename(name);
+        const char * const link_basename = RV_basename(name);
         const char * const link_body_format = "\"link\": {"
                                                   "\"id\": \"%s\", "
                                                   "\"name\": \"%s\""
@@ -2121,7 +2125,7 @@ H5VL_rest_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params
         /* In case the user specified a path which contains multiple groups on the way to the
          * one which the datatype will ultimately be linked under, extract out the path to the
          * final group in the chain */
-        if (NULL == (path_dirname = get_dirname(name)))
+        if (NULL == (path_dirname = RV_dirname(name)))
             HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, NULL, "invalid pathname for datatype link")
         empty_dirname = !strcmp(path_dirname, "");
 
@@ -2137,13 +2141,13 @@ H5VL_rest_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params
             H5I_type_t obj_type = H5I_GROUP;
             htri_t     search_ret;
 
-            search_ret = H5VL_rest_find_object_by_path(parent, path_dirname, &obj_type, H5VL_rest_copy_object_URI_parse_callback, NULL, target_URI);
+            search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
             if (!search_ret || search_ret < 0)
                 HGOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate target for dataset link")
         } /* end if */
 
         link_body_len = strlen(link_body_format) + strlen(link_basename) + (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
-        if (NULL == (link_body = (char *) rest_malloc(link_body_len)))
+        if (NULL == (link_body = (char *) RV_malloc(link_body_len)))
             HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for datatype link body")
 
         /* Form the Datatype Commit Link portion of the commit request using the above format
@@ -2153,7 +2157,7 @@ H5VL_rest_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params
 
     /* Form the request body to commit the Datatype */
     commit_request_nalloc = datatype_body_len + (link_body ? link_body_len + 2 : 0) + 3;
-    if (NULL == (commit_request_body = (char *) rest_malloc(commit_request_nalloc)))
+    if (NULL == (commit_request_body = (char *) RV_malloc(commit_request_nalloc)))
         HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for datatype commit request body")
 
     if ((commit_request_len = snprintf(commit_request_body, commit_request_nalloc,
@@ -2166,7 +2170,7 @@ H5VL_rest_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params
 
     /* Setup the "Host: " header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -2204,7 +2208,7 @@ H5VL_rest_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params
     CURL_PERFORM(curl, H5E_DATATYPE, H5E_BADVALUE, NULL);
 
     /* Store the newly-committed Datatype's URI */
-    if (H5VL_rest_parse_response(response_buffer.buffer, NULL, new_datatype->URI, H5VL_rest_copy_object_URI_parse_callback) < 0)
+    if (RV_parse_response(response_buffer.buffer, NULL, new_datatype->URI, RV_copy_object_URI_callback) < 0)
         HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, NULL, "can't parse committed datatype's URI")
 
     ret_value = (void *) new_datatype;
@@ -2224,19 +2228,19 @@ done:
 #endif
 
     if (path_dirname)
-        rest_free(path_dirname);
+        RV_free(path_dirname);
     if (commit_request_body)
-        rest_free(commit_request_body);
+        RV_free(commit_request_body);
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
     if (datatype_body)
-        rest_free(datatype_body);
+        RV_free(datatype_body);
     if (link_body)
-        rest_free(link_body);
+        RV_free(link_body);
 
     /* Clean up allocated datatype object if there was an issue */
     if (new_datatype && !ret_value)
-        if (H5VL_rest_datatype_close(new_datatype, FAIL, NULL) < 0)
+        if (RV_datatype_close(new_datatype, FAIL, NULL) < 0)
             HDONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, NULL, "can't close datatype")
 
     if (curl_headers) {
@@ -2245,31 +2249,31 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_datatype_commit() */
+} /* end RV_datatype_commit() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_datatype_open
+ * Function:    RV_datatype_open
  *
  * Purpose:     Opens an existing HDF5 committed datatype by retrieving its
  *              URI and datatype info from the server and setting up an
  *              internal memory struct object for the datatype.
  *
- * Return:      Pointer to H5VL_rest_object_t struct corresponding to the
- *              opened committed datatype on success/NULL on failure
+ * Return:      Pointer to RV_object_t struct corresponding to the opened
+ *              committed datatype on success/NULL on failure
  *
  * Programmer:  Jordan Henderson
  *              August, 2017
  */
 static void *
-H5VL_rest_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name,
-                        hid_t tapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+RV_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name,
+                 hid_t tapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *parent = (H5VL_rest_object_t *) obj;
-    H5VL_rest_object_t *datatype = NULL;
-    H5I_type_t          obj_type = H5I_DATATYPE;
-    htri_t              search_ret;
-    void               *ret_value = NULL;
+    RV_object_t *parent = (RV_object_t *) obj;
+    RV_object_t *datatype = NULL;
+    H5I_type_t   obj_type = H5I_DATATYPE;
+    htri_t       search_ret;
+    void        *ret_value = NULL;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -2285,7 +2289,7 @@ H5VL_rest_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, 
           && "parent object not a file or group");
 
     /* Allocate and setup internal Datatype struct */
-    if (NULL == (datatype = (H5VL_rest_object_t *) rest_malloc(sizeof(*datatype))))
+    if (NULL == (datatype = (RV_object_t *) RV_malloc(sizeof(*datatype))))
         HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate datatype object")
 
     datatype->obj_type = H5I_DATATYPE;
@@ -2294,12 +2298,12 @@ H5VL_rest_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, 
     datatype->u.datatype.tcpl_id = FAIL;
 
     /* Locate the named Datatype */
-    search_ret = H5VL_rest_find_object_by_path(parent, name, &obj_type, H5VL_rest_copy_object_URI_parse_callback, NULL, datatype->URI);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_callback, NULL, datatype->URI);
     if (!search_ret || search_ret < 0)
         HGOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't locate datatype by path")
 
     /* Set up the actual datatype by converting the string representation into an hid_t */
-    if ((datatype->u.datatype.dtype_id = H5VL_rest_parse_datatype(response_buffer.buffer, TRUE)) < 0)
+    if ((datatype->u.datatype.dtype_id = RV_parse_datatype(response_buffer.buffer, TRUE)) < 0)
         HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, NULL, "can't parse dataset's datatype")
 
     /* Set up a TCPL for the datatype so that H5Tget_create_plist() will function correctly.
@@ -2324,15 +2328,15 @@ done:
 
     /* Clean up allocated datatype object if there was an issue */
     if (datatype && !ret_value)
-        if (H5VL_rest_datatype_close(datatype, FAIL, NULL) < 0)
+        if (RV_datatype_close(datatype, FAIL, NULL) < 0)
             HDONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, NULL, "can't close datatype")
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_datatype_open() */
+} /* end RV_datatype_open() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_datatype_get
+ * Function:    RV_datatype_get
  *
  * Purpose:     Performs a "GET" operation on an HDF5 committed datatype,
  *              such as calling the H5Tget_create_plist routine.
@@ -2343,11 +2347,11 @@ done:
  *              August, 2017
  */
 static herr_t
-H5VL_rest_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
-                       void H5_ATTR_UNUSED **req, va_list arguments)
+RV_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
+                void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    H5VL_rest_object_t *dtype = (H5VL_rest_object_t *) obj;
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *dtype = (RV_object_t *) obj;
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -2393,11 +2397,11 @@ H5VL_rest_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t H5_ATTR_UN
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_datatype_get() */
+} /* end RV_datatype_get() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_datatype_close
+ * Function:    RV_datatype_close
  *
  * Purpose:     Closes an HDF5 committed datatype by freeing the memory
  *              allocated for its associated internal memory struct object.
@@ -2410,10 +2414,10 @@ done:
  *              August, 2017
  */
 static herr_t
-H5VL_rest_datatype_close(void *dt, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_datatype_close(void *dt, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *_dtype = (H5VL_rest_object_t *) dt;
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *_dtype = (RV_object_t *) dt;
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -2432,38 +2436,38 @@ H5VL_rest_datatype_close(void *dt, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UN
             HDONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close TCPL")
     } /* end if */
 
-    rest_free(_dtype);
+    RV_free(_dtype);
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_datatype_close() */
+} /* end RV_datatype_close() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_dataset_create
+ * Function:    RV_dataset_create
  *
  * Purpose:     Creates an HDF5 dataset by making the appropriate REST API
  *              call to the server and allocating an internal memory struct
  *              object for the dataset.
  *
- * Return:      Pointer to an H5VL_rest_object_t struct corresponding to
- *              the newly-created dataset on success/NULL on failure
+ * Return:      Pointer to an RV_object_t struct corresponding to the
+ *              newly-created dataset on success/NULL on failure
  *
  * Programmer:  Jordan Henderson
  *              March, 2017
  */
 static void *
-H5VL_rest_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name, hid_t dcpl_id,
-                         hid_t dapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name, hid_t dcpl_id,
+                  hid_t dapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *parent = (H5VL_rest_object_t *) obj;
-    H5VL_rest_object_t *new_dataset = NULL;
-    curl_off_t          create_request_body_len = 0;
-    size_t              host_header_len = 0;
-    hid_t               space_id, type_id;
-    char               *host_header = NULL;
-    char               *create_request_body = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    void               *ret_value = NULL;
+    RV_object_t *parent = (RV_object_t *) obj;
+    RV_object_t *new_dataset = NULL;
+    curl_off_t   create_request_body_len = 0;
+    size_t       host_header_len = 0;
+    hid_t        space_id, type_id;
+    char        *host_header = NULL;
+    char        *create_request_body = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    void        *ret_value = NULL;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -2485,7 +2489,7 @@ H5VL_rest_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params,
         HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file")
 
     /* Allocate and setup internal Dataset struct */
-    if (NULL == (new_dataset = (H5VL_rest_object_t *) rest_malloc(sizeof(*new_dataset))))
+    if (NULL == (new_dataset = (RV_object_t *) RV_malloc(sizeof(*new_dataset))))
         HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate dataset object")
 
     new_dataset->obj_type = H5I_DATASET;
@@ -2519,7 +2523,7 @@ H5VL_rest_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params,
     {
         size_t tmp_len = 0;
 
-        if (H5VL_rest_setup_dataset_create_request_body(obj, name, dcpl_id, &create_request_body, &tmp_len) < 0)
+        if (RV_setup_dataset_create_request_body(obj, name, dcpl_id, &create_request_body, &tmp_len) < 0)
             HGOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL, "can't parse dataset creation parameters")
 
         /* XXX: unsafe cast */
@@ -2528,7 +2532,7 @@ H5VL_rest_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params,
 
     /* Setup the "Host: " header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -2566,7 +2570,7 @@ H5VL_rest_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params,
     CURL_PERFORM(curl, H5E_DATASET, H5E_CANTCREATE, NULL);
 
     /* Store the newly-created dataset's URI */
-    if (H5VL_rest_parse_response(response_buffer.buffer, NULL, new_dataset->URI, H5VL_rest_copy_object_URI_parse_callback) < 0)
+    if (RV_parse_response(response_buffer.buffer, NULL, new_dataset->URI, RV_copy_object_URI_callback) < 0)
         HGOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL, "can't parse new dataset's URI")
 
     if (H5Pget(dcpl_id, H5VL_PROP_DSET_TYPE_ID, &type_id) < 0)
@@ -2597,13 +2601,13 @@ done:
 #endif
 
     if (create_request_body)
-        rest_free(create_request_body);
+        RV_free(create_request_body);
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
 
     /* Clean up allocated dataset object if there was an issue */
     if (new_dataset && !ret_value)
-        if (H5VL_rest_dataset_close(new_dataset, FAIL, NULL) < 0)
+        if (RV_dataset_close(new_dataset, FAIL, NULL) < 0)
             HDONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, NULL, "can't close dataset")
 
     if (curl_headers) {
@@ -2612,31 +2616,31 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_dataset_create() */
+} /* end RV_dataset_create() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_dataset_open
+ * Function:    RV_dataset_open
  *
  * Purpose:     Opens an existing HDF5 dataset by retrieving its URI,
  *              dataspace and datatype info from the server and allocating
  *              an internal memory struct object for the dataset.
  *
- * Return:      Pointer to an H5VL_rest_object_t struct corresponding to
+ * Return:      Pointer to an RV_object_t struct corresponding to
  *              the opened dataset on success/NULL on failure
  *
  * Programmer:  Jordan Henderson
  *              March, 2017
  */
 static void *
-H5VL_rest_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name,
-                       hid_t dapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+RV_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name,
+                hid_t dapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *parent = (H5VL_rest_object_t *) obj;
-    H5VL_rest_object_t *dataset = NULL;
-    H5I_type_t          obj_type = H5I_DATASET;
-    htri_t              search_ret;
-    void               *ret_value = NULL;
+    RV_object_t *parent = (RV_object_t *) obj;
+    RV_object_t *dataset = NULL;
+    H5I_type_t   obj_type = H5I_DATASET;
+    htri_t       search_ret;
+    void        *ret_value = NULL;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -2652,7 +2656,7 @@ H5VL_rest_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, c
           && "parent object not a file or group");
 
     /* Allocate and setup internal Dataset struct */
-    if (NULL == (dataset = (H5VL_rest_object_t *) rest_malloc(sizeof(*dataset))))
+    if (NULL == (dataset = (RV_object_t *) RV_malloc(sizeof(*dataset))))
         HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate dataset object")
 
     dataset->obj_type = H5I_DATASET;
@@ -2663,16 +2667,16 @@ H5VL_rest_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, c
     dataset->u.dataset.dcpl_id = FAIL;
 
     /* Locate the Dataset */
-    search_ret = H5VL_rest_find_object_by_path(parent, name, &obj_type, H5VL_rest_copy_object_URI_parse_callback, NULL, dataset->URI);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_callback, NULL, dataset->URI);
     if (!search_ret || search_ret < 0)
         HGOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate dataset by path")
 
     /* Set up a Dataspace for the opened Dataset */
-    if ((dataset->u.dataset.space_id = H5VL_rest_parse_dataspace(response_buffer.buffer)) < 0)
+    if ((dataset->u.dataset.space_id = RV_parse_dataspace(response_buffer.buffer)) < 0)
         HGOTO_ERROR(H5E_DATASET, H5E_CANTGET, NULL, "can't parse dataset dataspace")
 
     /* Set up a Datatype for the opened Dataset */
-    if ((dataset->u.dataset.dtype_id = H5VL_rest_parse_datatype(response_buffer.buffer, TRUE)) < 0)
+    if ((dataset->u.dataset.dtype_id = RV_parse_datatype(response_buffer.buffer, TRUE)) < 0)
         HGOTO_ERROR(H5E_DATASET, H5E_CANTGET, NULL, "can't parse dataset datatype")
 
     /* Set up a DAPL for the dataset so that H5Dget_access_plist() will function correctly */
@@ -2684,7 +2688,7 @@ H5VL_rest_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, c
         HGOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create DCPL for dataset")
 
     /* Set any necessary creation properties on the DCPL setup for the dataset */
-    if (H5VL_rest_parse_response(response_buffer.buffer, NULL, &dataset->u.dataset.dcpl_id, H5VL_rest_parse_dataset_creation_properties_callback) < 0)
+    if (RV_parse_response(response_buffer.buffer, NULL, &dataset->u.dataset.dcpl_id, RV_parse_dataset_creation_properties_callback) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't parse dataset's creation properties")
 
     ret_value = (void *) dataset;
@@ -2703,15 +2707,15 @@ done:
 
     /* Clean up allocated dataset object if there was an issue */
     if (dataset && !ret_value)
-        if (H5VL_rest_dataset_close(dataset, FAIL, NULL) < 0)
+        if (RV_dataset_close(dataset, FAIL, NULL) < 0)
             HDONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, NULL, "can't close dataset")
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_dataset_open() */
+} /* end RV_dataset_open() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_dataset_read
+ * Function:    RV_dataset_read
  *
  * Purpose:     Reads data from an HDF5 dataset according to the given
  *              memory dataspace by making the appropriate REST API call to
@@ -2723,23 +2727,23 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
-                       hid_t file_space_id, hid_t dxpl_id, void *buf, void H5_ATTR_UNUSED **req)
+RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
+                hid_t file_space_id, hid_t dxpl_id, void *buf, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *dataset = (H5VL_rest_object_t *) obj;
-    H5S_sel_type        sel_type = H5S_SEL_ALL;
-    H5T_class_t         dtype_class;
-    hssize_t            mem_select_npoints, file_select_npoints;
-    hbool_t             is_transfer_binary = FALSE;
-    htri_t              is_variable_str;
-    size_t              read_data_size;
-    size_t              selection_body_len = 0;
-    size_t              host_header_len = 0;
-    char               *host_header = NULL;
-    char               *selection_body = NULL;
-    void               *obj_ref_buf = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    herr_t              ret_value = SUCCEED;
+    H5S_sel_type  sel_type = H5S_SEL_ALL;
+    RV_object_t  *dataset = (RV_object_t *) obj;
+    H5T_class_t   dtype_class;
+    hssize_t      mem_select_npoints, file_select_npoints;
+    hbool_t       is_transfer_binary = FALSE;
+    htri_t        is_variable_str;
+    size_t        read_data_size;
+    size_t        selection_body_len = 0;
+    size_t        host_header_len = 0;
+    char         *host_header = NULL;
+    char         *selection_body = NULL;
+    void         *obj_ref_buf = NULL;
+    char          request_url[URL_MAX_LENGTH];
+    herr_t        ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -2797,7 +2801,7 @@ H5VL_rest_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         if (H5S_SEL_ERROR == (sel_type = H5Sget_select_type(file_space_id)))
             HGOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type")
 
-        if (H5VL_rest_convert_dataspace_selection_to_string(file_space_id, &selection_body, &selection_body_len,
+        if (RV_convert_dataspace_selection_to_string(file_space_id, &selection_body, &selection_body_len,
                 (H5S_SEL_POINTS == sel_type) ? FALSE : TRUE) < 0)
             HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't convert dataspace selection to string representation")
     } /* end else */
@@ -2825,7 +2829,7 @@ H5VL_rest_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
     /* Setup the "Host: " header */
     host_header_len = strlen(dataset->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -2859,7 +2863,7 @@ H5VL_rest_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
          */
 
         /* Ensure we have enough space to add the enclosing '{' and '}' */
-        if (NULL == (selection_body = (char *) rest_realloc(selection_body, selection_body_len + 3)))
+        if (NULL == (selection_body = (char *) RV_realloc(selection_body, selection_body_len + 3)))
             HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't reallocate space for point selection body")
 
         /* Shift the whole string down by a byte */
@@ -2919,8 +2923,8 @@ H5VL_rest_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     else {
         if (H5T_STD_REF_OBJ == mem_type_id) {
             /* Convert the received binary buffer into a buffer of rest_obj_ref_t's */
-            if (H5VL_rest_convert_buffer_to_obj_refs(response_buffer.buffer, (size_t) file_select_npoints,
-                    (rest_obj_ref_t **) &obj_ref_buf, &read_data_size) < 0)
+            if (RV_convert_buffer_to_obj_refs(response_buffer.buffer, (size_t) file_select_npoints,
+                    (RV_obj_ref_t **) &obj_ref_buf, &read_data_size) < 0)
                 HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert ref string/s to object ref array")
 
             memcpy(buf, obj_ref_buf, read_data_size);
@@ -2935,11 +2939,11 @@ done:
 #endif
 
     if (obj_ref_buf)
-        rest_free(obj_ref_buf);
+        RV_free(obj_ref_buf);
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
     if (selection_body)
-        rest_free(selection_body);
+        RV_free(selection_body);
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
@@ -2947,11 +2951,11 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_dataset_read() */
+} /* end RV_dataset_read() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_dataset_write
+ * Function:    RV_dataset_write
  *
  * Purpose:     Writes data to an HDF5 dataset according to the given
  *              memory dataspace by making the appropriate REST API call to
@@ -2963,22 +2967,22 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
-                        hid_t file_space_id, hid_t dxpl_id, const void *buf, void H5_ATTR_UNUSED **req)
+RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
+                 hid_t file_space_id, hid_t dxpl_id, const void *buf, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *dataset = (H5VL_rest_object_t *) obj;
-    H5S_sel_type        sel_type = H5S_SEL_ALL;
-    H5T_class_t         dtype_class;
-    hssize_t            mem_select_npoints, file_select_npoints;
-    hbool_t             is_transfer_binary = FALSE;
-    htri_t              is_variable_str;
-    size_t              host_header_len = 0;
-    size_t              write_body_len = 0;
-    char               *selection_body = NULL;
-    char               *host_header = NULL;
-    char               *write_body = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    herr_t              ret_value = SUCCEED;
+    H5S_sel_type  sel_type = H5S_SEL_ALL;
+    RV_object_t  *dataset = (RV_object_t *) obj;
+    H5T_class_t   dtype_class;
+    hssize_t      mem_select_npoints, file_select_npoints;
+    hbool_t       is_transfer_binary = FALSE;
+    htri_t        is_variable_str;
+    size_t        host_header_len = 0;
+    size_t        write_body_len = 0;
+    char         *selection_body = NULL;
+    char         *host_header = NULL;
+    char         *write_body = NULL;
+    char          request_url[URL_MAX_LENGTH];
+    herr_t        ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -3049,7 +3053,7 @@ H5VL_rest_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         if (H5S_SEL_ERROR == (sel_type = H5Sget_select_type(file_space_id)))
             HGOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type")
 
-        if (H5VL_rest_convert_dataspace_selection_to_string(file_space_id, &selection_body, NULL, is_transfer_binary) < 0)
+        if (RV_convert_dataspace_selection_to_string(file_space_id, &selection_body, NULL, is_transfer_binary) < 0)
             HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't convert dataspace to string representation")
     } /* end else */
 
@@ -3074,7 +3078,7 @@ H5VL_rest_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     else {
         if (H5T_STD_REF_OBJ == mem_type_id) {
             /* Convert the buffer of rest_obj_ref_t's to a binary buffer */
-            if (H5VL_rest_convert_obj_refs_to_buffer((const rest_obj_ref_t *) buf, (size_t) file_select_npoints, &write_body, &write_body_len) < 0)
+            if (RV_convert_obj_refs_to_buffer((const RV_obj_ref_t *) buf, (size_t) file_select_npoints, &write_body, &write_body_len) < 0)
                 HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert object ref/s to ref string/s")
             buf = write_body;
         } /* end if */
@@ -3083,7 +3087,7 @@ H5VL_rest_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
     /* Setup the "Host: " header */
     host_header_len = strlen(dataset->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -3131,11 +3135,11 @@ done:
 #endif
 
     if (selection_body)
-        rest_free(selection_body);
+        RV_free(selection_body);
     if (write_body)
-        rest_free(write_body);
+        RV_free(write_body);
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
 
     /* Reset cURL custom request to prevent issues with future requests */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
@@ -3147,11 +3151,11 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_dataset_write() */
+} /* end RV_dataset_write() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_dataset_get
+ * Function:    RV_dataset_get
  *
  * Purpose:     Performs a "GET" operation on an HDF5 dataset, such as
  *              calling the H5Dget_type routine.
@@ -3162,11 +3166,11 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
-                      void H5_ATTR_UNUSED **req, va_list arguments)
+RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
+               void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    H5VL_rest_object_t *dset = (H5VL_rest_object_t *) obj;
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *dset = (RV_object_t *) obj;
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -3242,11 +3246,11 @@ H5VL_rest_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUS
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_dataset_get() */
+} /* end RV_dataset_get() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_dataset_specific
+ * Function:    RV_dataset_specific
  *
  * Purpose:     Performs a plugin-specific operation on an HDF5 dataset,
  *              such as calling the H5Dset_extent routine.
@@ -3257,14 +3261,14 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
-                          hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
+                    hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    H5VL_rest_object_t *dset = (H5VL_rest_object_t *) obj;
-    size_t              host_header_len = 0;
-    char               *host_header = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *dset = (RV_object_t *) obj;
+    size_t       host_header_len = 0;
+    char        *host_header = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -3283,7 +3287,7 @@ H5VL_rest_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
 
     /* Setup the "Host: " header */
     host_header_len = strlen(dset->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -3308,7 +3312,7 @@ H5VL_rest_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
 
 done:
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
@@ -3316,11 +3320,11 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_dataset_specific() */
+} /* end RV_dataset_specific() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_dataset_close
+ * Function:    RV_dataset_close
  *
  * Purpose:     Closes an HDF5 dataset by freeing the memory allocated for
  *              its internal memory struct object. There is no interation
@@ -3332,10 +3336,10 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *_dset = (H5VL_rest_object_t *) dset;
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *_dset = (RV_object_t *) dset;
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -3361,34 +3365,34 @@ H5VL_rest_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_U
             HDONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close DCPL")
     } /* end if */
 
-    rest_free(_dset);
+    RV_free(_dset);
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_dataset_close() */
+} /* end RV_dataset_close() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_file_create
+ * Function:    RV_file_create
  *
  * Purpose:     Creates an HDF5 file by making the appropriate REST API
  *              call to the server and allocating an internal memory struct
  *              object for the file.
  *
- * Return:      Pointer to an H5VL_rest_object_t struct corresponding to
- *              the newly-created file on success/NULL on failure
+ * Return:      Pointer to an RV_object_t struct corresponding to the
+ *              newly-created file on success/NULL on failure
  *
  * Programmer:  Jordan Henderson
  *              March, 2017
  */
 static void *
-H5VL_rest_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
-                      hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
+               hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *new_file = NULL;
-    size_t              name_length;
-    size_t              host_header_len = 0;
-    char               *host_header = NULL;
-    void               *ret_value = NULL;
+    RV_object_t *new_file = NULL;
+    size_t       name_length;
+    size_t       host_header_len = 0;
+    char        *host_header = NULL;
+    void        *ret_value = NULL;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -3402,7 +3406,7 @@ H5VL_rest_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fap
 #endif
 
     /* Allocate and setup internal File struct */
-    if (NULL == (new_file = (H5VL_rest_object_t *) rest_malloc(sizeof(*new_file))))
+    if (NULL == (new_file = (RV_object_t *) RV_malloc(sizeof(*new_file))))
         HGOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate file object")
 
     new_file->obj_type = H5I_FILE;
@@ -3441,7 +3445,7 @@ H5VL_rest_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fap
 
     /* Copy the path name into the new file object */
     name_length = strlen(name);
-    if (NULL == (new_file->u.file.filepath_name = (char *) rest_malloc(name_length + 1)))
+    if (NULL == (new_file->u.file.filepath_name = (char *) RV_malloc(name_length + 1)))
         HGOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath name")
 
     strncpy(new_file->u.file.filepath_name, name, name_length);
@@ -3449,7 +3453,7 @@ H5VL_rest_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fap
 
     /* Setup the "Host: " header */
     host_header_len = name_length + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -3533,7 +3537,7 @@ H5VL_rest_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fap
     CURL_PERFORM(curl, H5E_FILE, H5E_CANTCREATE, NULL);
 
     /* Store the newly-created file's URI */
-    if (H5VL_rest_parse_response(response_buffer.buffer, NULL, new_file->URI, H5VL_rest_copy_object_URI_parse_callback) < 0)
+    if (RV_parse_response(response_buffer.buffer, NULL, new_file->URI, RV_copy_object_URI_callback) < 0)
         HGOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't parse new file's URI")
 
     ret_value = (void *) new_file;
@@ -3551,11 +3555,11 @@ done:
 #endif
 
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
 
     /* Clean up allocated file object if there was an issue */
     if (new_file && !ret_value)
-        if (H5VL_rest_file_close(new_file, FAIL, NULL) < 0)
+        if (RV_file_close(new_file, FAIL, NULL) < 0)
             HDONE_ERROR(H5E_FILE, H5E_CANTCLOSEOBJ, NULL, "can't close file")
 
     /* Reset cURL custom request to prevent issues with future requests */
@@ -3568,30 +3572,30 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_file_create() */
+} /* end RV_file_create() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_file_open
+ * Function:    RV_file_open
  *
  * Purpose:     Opens an existing HDF5 file by retrieving its URI from the
  *              server and allocating an internal memory struct object for
  *              the file.
  *
- * Return:      Pointer to an H5VL_rest_object_t struct corresponding to
- *              the opened file on success/NULL on failure
+ * Return:      Pointer to an RV_object_t struct corresponding to the
+ *              opened file on success/NULL on failure
  *
  * Programmer:  Jordan Henderson
  *              March, 2017
  */
 static void *
-H5VL_rest_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *file = NULL;
-    size_t              name_length;
-    size_t              host_header_len = 0;
-    char               *host_header = NULL;
-    void               *ret_value = NULL;
+    RV_object_t *file = NULL;
+    size_t       name_length;
+    size_t       host_header_len = 0;
+    char        *host_header = NULL;
+    void        *ret_value = NULL;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -3604,7 +3608,7 @@ H5VL_rest_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_
 #endif
 
     /* Allocate and setup internal File struct */
-    if (NULL == (file = (H5VL_rest_object_t *) rest_malloc(sizeof(*file))))
+    if (NULL == (file = (RV_object_t *) RV_malloc(sizeof(*file))))
         HGOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate file object")
 
     file->obj_type = H5I_FILE;
@@ -3620,7 +3624,7 @@ H5VL_rest_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_
 
     /* Copy the path name into the new file object */
     name_length = strlen(name);
-    if (NULL == (file->u.file.filepath_name = (char *) rest_malloc(name_length + 1)))
+    if (NULL == (file->u.file.filepath_name = (char *) RV_malloc(name_length + 1)))
         HGOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath name")
 
     strncpy(file->u.file.filepath_name, name, name_length);
@@ -3628,7 +3632,7 @@ H5VL_rest_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_
 
     /* Setup the "Host: " header */
     host_header_len = name_length + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -3656,7 +3660,7 @@ H5VL_rest_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_
     CURL_PERFORM(curl, H5E_FILE, H5E_CANTOPENFILE, NULL);
 
     /* Store the opened file's URI */
-    if (H5VL_rest_parse_response(response_buffer.buffer, NULL, file->URI, H5VL_rest_copy_object_URI_parse_callback) < 0)
+    if (RV_parse_response(response_buffer.buffer, NULL, file->URI, RV_copy_object_URI_callback) < 0)
         HGOTO_ERROR(H5E_FILE, H5E_CANTOPENFILE, NULL, "can't parse file's URI")
 
     /* Set up a FAPL for the file so that H5Fget_access_plist() will function correctly */
@@ -3683,11 +3687,11 @@ done:
 #endif
 
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
 
     /* Clean up allocated file object if there was an issue */
     if (file && !ret_value)
-        if (H5VL_rest_file_close(file, FAIL, NULL) < 0)
+        if (RV_file_close(file, FAIL, NULL) < 0)
             HDONE_ERROR(H5E_FILE, H5E_CANTCLOSEOBJ, NULL, "can't close file")
 
     if (curl_headers) {
@@ -3696,11 +3700,11 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_file_open() */
+} /* end RV_file_open() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_file_get
+ * Function:    RV_file_get
  *
  * Purpose:     Performs a "GET" operation on an HDF5 file, such as calling
  *              the H5Fget_info routine.
@@ -3711,10 +3715,10 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_file_get(void *obj, H5VL_file_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    H5VL_rest_object_t *_obj = (H5VL_rest_object_t *) obj;
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *_obj = (RV_object_t *) obj;
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -3793,11 +3797,11 @@ H5VL_rest_file_get(void *obj, H5VL_file_get_t get_type, hid_t H5_ATTR_UNUSED dxp
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_file_get() */
+} /* end RV_file_get() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_file_specific
+ * Function:    RV_file_specific
  *
  * Purpose:     Performs a plugin-specific operation on an HDF5 file, such
  *              as calling the H5Fflush routine.
@@ -3808,13 +3812,13 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_ATTR_UNUSED dxpl_id,
-                        void H5_ATTR_UNUSED **req, va_list arguments)
+RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_ATTR_UNUSED dxpl_id,
+                 void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    H5VL_rest_object_t *file = (H5VL_rest_object_t *) obj;
-    size_t              host_header_len = 0;
-    char               *host_header = NULL;
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *file = (RV_object_t *) obj;
+    size_t       host_header_len = 0;
+    char        *host_header = NULL;
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -3829,7 +3833,7 @@ H5VL_rest_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_
 
     /* Setup the "Host: " header */
     host_header_len = strlen(file->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -3857,7 +3861,7 @@ H5VL_rest_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_
 
 done:
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
@@ -3865,11 +3869,11 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_file_specific() */
+} /* end RV_file_specific() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_file_optional
+ * Function:    RV_file_optional
  *
  * Purpose:     Performs an optional operation on an HDF5 file, such as
  *              calling the H5Freopen routine.
@@ -3880,10 +3884,10 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
     H5VL_file_optional_t  optional_type = (H5VL_file_optional_t) va_arg(arguments, int);
-    H5VL_rest_object_t   *file = (H5VL_rest_object_t *) obj;
+    RV_object_t          *file = (RV_object_t *) obj;
     herr_t                ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
@@ -3902,7 +3906,7 @@ H5VL_rest_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_
         {
             void **ret_file = va_arg(arguments, void **);
 
-            if (NULL == (*ret_file = H5VL_rest_file_open(file->u.file.filepath_name, file->u.file.intent, file->u.file.fapl_id, dxpl_id, NULL)))
+            if (NULL == (*ret_file = RV_file_open(file->u.file.filepath_name, file->u.file.intent, file->u.file.fapl_id, dxpl_id, NULL)))
                 HGOTO_ERROR(H5E_FILE, H5E_CANTOPENOBJ, FAIL, "can't re-open file")
 
             break;
@@ -3938,11 +3942,11 @@ H5VL_rest_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_file_optional() */
+} /* end RV_file_optional() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_file_close
+ * Function:    RV_file_close
  *
  * Purpose:     Closes an HDF5 file by freeing the memory allocated for its
  *              associated internal memory struct object. There is no
@@ -3954,10 +3958,10 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_file_close(void *file, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+RV_file_close(void *file, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *_file = (H5VL_rest_object_t *) file;
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *_file = (RV_object_t *) file;
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -3971,7 +3975,7 @@ H5VL_rest_file_close(void *file, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
     assert(H5I_FILE == _file->obj_type && "not a file");
 
     if (_file->u.file.filepath_name)
-        rest_free(_file->u.file.filepath_name);
+        RV_free(_file->u.file.filepath_name);
 
     if (_file->u.file.fapl_id >= 0) {
         if (_file->u.file.fapl_id != H5P_FILE_ACCESS_DEFAULT && H5Pclose(_file->u.file.fapl_id) < 0)
@@ -3983,21 +3987,21 @@ H5VL_rest_file_close(void *file, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
             HDONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FCPL")
     } /* end if */
 
-    rest_free(_file);
+    RV_free(_file);
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_file_close() */
+} /* end RV_file_close() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_group_create
+ * Function:    RV_group_create
  *
  * Purpose:     Creates an HDF5 Group by making the appropriate REST API
  *              call to the server and allocating an internal memory struct
  *              object for the group.
  *
- * Return:      Pointer to an H5VL_rest_object_t struct corresponding to
- *              the newly-created group on success/NULL on failure
+ * Return:      Pointer to an RV_object_t struct corresponding to the
+ *              newly-created group on success/NULL on failure
  *
  * Programmer:  Jordan Henderson
  *              March, 2017
@@ -4006,22 +4010,22 @@ H5VL_rest_file_close(void *file, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
  *              groups if this property is set in the GCPL
  */
 static void *
-H5VL_rest_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name, hid_t gcpl_id,
-                       hid_t gapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name, hid_t gcpl_id,
+                hid_t gapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *parent = (H5VL_rest_object_t *) obj;
-    H5VL_rest_object_t *new_group = NULL;
-    const char         *path_basename = get_basename(name);
-    curl_off_t          create_request_body_len = 0;
-    hbool_t             empty_dirname;
-    size_t              create_request_nalloc = 0;
-    size_t              host_header_len = 0;
-    char               *host_header = NULL;
-    char               *create_request_body = NULL;
-    char               *path_dirname = NULL;
-    char                target_URI[URI_MAX_LENGTH];
-    char                request_url[URL_MAX_LENGTH];
-    void               *ret_value = NULL;
+    RV_object_t *parent = (RV_object_t *) obj;
+    RV_object_t *new_group = NULL;
+    const char  *path_basename = RV_basename(name);
+    curl_off_t   create_request_body_len = 0;
+    hbool_t      empty_dirname;
+    size_t       create_request_nalloc = 0;
+    size_t       host_header_len = 0;
+    char        *host_header = NULL;
+    char        *create_request_body = NULL;
+    char        *path_dirname = NULL;
+    char         target_URI[URI_MAX_LENGTH];
+    char         request_url[URL_MAX_LENGTH];
+    void        *ret_value = NULL;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -4043,7 +4047,7 @@ H5VL_rest_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, c
         HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file")
 
     /* Allocate and setup internal Group struct */
-    if (NULL == (new_group = (H5VL_rest_object_t *) rest_malloc(sizeof(*new_group))))
+    if (NULL == (new_group = (RV_object_t *) RV_malloc(sizeof(*new_group))))
         HGOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate group object")
 
     new_group->obj_type = H5I_GROUP;
@@ -4063,7 +4067,7 @@ H5VL_rest_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, c
     /* In case the user specified a path which contains multiple groups on the way to the
      * one which this group will ultimately be linked under, extract out the path to the
      * final group in the chain */
-    if (NULL == (path_dirname = get_dirname(name)))
+    if (NULL == (path_dirname = RV_dirname(name)))
         HGOTO_ERROR(H5E_SYM, H5E_BADVALUE, NULL, "invalid pathname for group link")
     empty_dirname = !strcmp(path_dirname, "");
 
@@ -4079,7 +4083,7 @@ H5VL_rest_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, c
         H5I_type_t obj_type = H5I_GROUP;
         htri_t     search_ret;
 
-        search_ret = H5VL_rest_find_object_by_path(parent, path_dirname, &obj_type, H5VL_rest_copy_object_URI_parse_callback, NULL, target_URI);
+        search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
         if (!search_ret || search_ret < 0)
             HGOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate target for group link")
     } /* end if */
@@ -4094,7 +4098,7 @@ H5VL_rest_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, c
 
         /* Form the request body to link the new group to the parent object */
         create_request_nalloc = strlen(fmt_string) + strlen(path_basename) + (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
-        if (NULL == (create_request_body = (char *) rest_malloc(create_request_nalloc)))
+        if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
             HGOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group create request body")
 
         if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string,
@@ -4106,7 +4110,7 @@ H5VL_rest_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, c
 
     /* Setup the "Host: " header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -4144,7 +4148,7 @@ H5VL_rest_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, c
     CURL_PERFORM(curl, H5E_SYM, H5E_CANTCREATE, NULL);
 
     /* Store the newly-created group's URI */
-    if (H5VL_rest_parse_response(response_buffer.buffer, NULL, new_group->URI, H5VL_rest_copy_object_URI_parse_callback) < 0)
+    if (RV_parse_response(response_buffer.buffer, NULL, new_group->URI, RV_copy_object_URI_callback) < 0)
         HGOTO_ERROR(H5E_SYM, H5E_CANTCREATE, NULL, "can't parse new group's URI")
 
     ret_value = (void *) new_group;
@@ -4165,15 +4169,15 @@ done:
 #endif
 
     if (path_dirname)
-        rest_free(path_dirname);
+        RV_free(path_dirname);
     if (create_request_body)
-        rest_free(create_request_body);
+        RV_free(create_request_body);
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
 
     /* Clean up allocated group object if there was an issue */
     if (new_group && !ret_value)
-        if (H5VL_rest_group_close(new_group, FAIL, NULL) < 0)
+        if (RV_group_close(new_group, FAIL, NULL) < 0)
             HDONE_ERROR(H5E_SYM, H5E_CANTCLOSEOBJ, NULL, "can't close group")
 
     if (curl_headers) {
@@ -4182,31 +4186,31 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value);
-} /* end H5VL_rest_group_create() */
+} /* end RV_group_create() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_group_open
+ * Function:    RV_group_open
  *
  * Purpose:     Opens an existing HDF5 Group by retrieving its URI from the
  *              server and allocating an internal memory struct object for
  *              the group.
  *
- * Return:      Pointer to an H5VL_rest_object_t struct corresponding to
- *              the opened group on success/NULL on failure
+ * Return:      Pointer to an RV_object_t struct corresponding to the
+ *              opened group on success/NULL on failure
  *
  * Programmer:  Jordan Henderson
  *              March, 2017
  */
 static void *
-H5VL_rest_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name,
-                     hid_t gapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name,
+              hid_t gapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *parent = (H5VL_rest_object_t *) obj;
-    H5VL_rest_object_t *group = NULL;
-    H5I_type_t          obj_type = H5I_GROUP;
-    htri_t              search_ret;
-    void               *ret_value = NULL;
+    RV_object_t *parent = (RV_object_t *) obj;
+    RV_object_t *group = NULL;
+    H5I_type_t   obj_type = H5I_GROUP;
+    htri_t       search_ret;
+    void        *ret_value = NULL;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -4221,7 +4225,7 @@ H5VL_rest_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, con
             && "parent object not a file or group");
 
     /* Allocate and setup internal Group struct */
-    if (NULL == (group = (H5VL_rest_object_t *) rest_malloc(sizeof(*group))))
+    if (NULL == (group = (RV_object_t *) RV_malloc(sizeof(*group))))
         HGOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate group object")
 
     group->obj_type = H5I_GROUP;
@@ -4229,7 +4233,7 @@ H5VL_rest_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, con
     group->domain = parent->domain; /* Store pointer to file that the opened Group is within */
 
     /* Locate the Group */
-    search_ret = H5VL_rest_find_object_by_path(parent, name, &obj_type, H5VL_rest_copy_object_URI_parse_callback, NULL, group->URI);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_callback, NULL, group->URI);
     if (!search_ret || search_ret < 0)
         HGOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate group by path")
 
@@ -4252,15 +4256,15 @@ done:
 
     /* Clean up allocated file object if there was an issue */
     if (group && !ret_value)
-        if (H5VL_rest_group_close(group, FAIL, NULL) < 0)
+        if (RV_group_close(group, FAIL, NULL) < 0)
             HDONE_ERROR(H5E_SYM, H5E_CANTCLOSEOBJ, NULL, "can't close group")
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_group_open() */
+} /* end RV_group_open() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_group_get
+ * Function:    RV_group_get
  *
  * Purpose:     Performs a "GET" operation on an HDF5 Group, such as
  *              calling the H5Gget_info routine.
@@ -4271,14 +4275,14 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    H5VL_rest_object_t *group = (H5VL_rest_object_t *) obj;
-    hbool_t             curl_perform = FALSE;
-    size_t              host_header_len = 0;
-    char               *host_header = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *group = (RV_object_t *) obj;
+    hbool_t      curl_perform = FALSE;
+    size_t       host_header_len = 0;
+    char        *host_header = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -4298,7 +4302,7 @@ H5VL_rest_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED d
     if (curl_perform) {
         /* Setup the "Host: " header */
         host_header_len = strlen(group->domain->u.file.filepath_name) + strlen(host_string) + 1;
-        if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+        if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
             HGOTO_ERROR(H5E_SYM, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
         strcpy(host_header, host_string);
@@ -4356,7 +4360,7 @@ H5VL_rest_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED d
             /* Parse response from server and retrieve the relevant group information
              * (currently, just the number of links in the group)
              */
-            if (H5VL_rest_parse_response(response_buffer.buffer, NULL, group_info, H5VL_rest_get_group_info_callback) < 0)
+            if (RV_parse_response(response_buffer.buffer, NULL, group_info, RV_get_group_info_callback) < 0)
                 HGOTO_ERROR(H5E_SYM, H5E_CANTGET, FAIL, "can't retrieve group information")
 
             break;
@@ -4373,7 +4377,7 @@ done:
 
     if (curl_perform) {
         if (host_header)
-            rest_free(host_header);
+            RV_free(host_header);
 
         if (curl_headers) {
             curl_slist_free_all(curl_headers);
@@ -4382,11 +4386,11 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_group_get() */
+} /* end RV_group_get() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_group_close
+ * Function:    RV_group_close
  *
  * Purpose:     Closes an HDF5 group by freeing the memory allocated for
  *              its internal memory struct object. There is no interation
@@ -4398,10 +4402,10 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *_grp = (H5VL_rest_object_t *) grp;
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *_grp = (RV_object_t *) grp;
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -4418,14 +4422,14 @@ H5VL_rest_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUS
             HDONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close GCPL")
     } /* end if */
 
-    rest_free(_grp);
+    RV_free(_grp);
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_group_close() */
+} /* end RV_group_close() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_link_create
+ * Function:    RV_link_create
  *
  * Purpose:     Creates an HDF5 link in the given object by making the
  *              appropriate REST API call to the server.
@@ -4436,20 +4440,20 @@ H5VL_rest_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUS
  *              July, 2017
  */
 static herr_t
-H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t loc_params,
-                      hid_t lcpl_id, hid_t lapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t loc_params,
+               hid_t lcpl_id, hid_t lapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *new_link_loc_obj = (H5VL_rest_object_t *) obj;
-    H5VL_loc_params_t   hard_link_target_obj_loc_params;
-    curl_off_t          create_request_body_len = 0;
-    size_t              create_request_nalloc = 0;
-    size_t              host_header_len = 0;
-    void               *hard_link_target_obj;
-    char               *host_header = NULL;
-    char               *create_request_body = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    char               *url_encoded_link_name = NULL;
-    herr_t              ret_value = SUCCEED;
+    H5VL_loc_params_t  hard_link_target_obj_loc_params;
+    RV_object_t       *new_link_loc_obj = (RV_object_t *) obj;
+    curl_off_t         create_request_body_len = 0;
+    size_t             create_request_nalloc = 0;
+    size_t             host_header_len = 0;
+    void              *hard_link_target_obj;
+    char              *host_header = NULL;
+    char              *create_request_body = NULL;
+    char               request_url[URL_MAX_LENGTH];
+    char              *url_encoded_link_name = NULL;
+    herr_t             ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -4474,7 +4478,7 @@ H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_p
          * In this case, we use the target object's location as the new link's location.
          */
         if (!new_link_loc_obj)
-            new_link_loc_obj = (H5VL_rest_object_t *) hard_link_target_obj;
+            new_link_loc_obj = (RV_object_t *) hard_link_target_obj;
     } /* end if */
 
     /* Validate loc_id and check for write access on the file */
@@ -4500,13 +4504,13 @@ H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_p
             /* Check to make sure that a hard link is being created in the same file as
              * the target object
              */
-            if (strcmp(new_link_loc_obj->domain->u.file.filepath_name, ((H5VL_rest_object_t *) hard_link_target_obj)->domain->u.file.filepath_name))
+            if (strcmp(new_link_loc_obj->domain->u.file.filepath_name, ((RV_object_t *) hard_link_target_obj)->domain->u.file.filepath_name))
                 HGOTO_ERROR(H5E_LINK, H5E_CANTCREATE, FAIL, "can't create soft or hard link to object outside of the current file")
 
             switch (hard_link_target_obj_loc_params.type) {
                 case H5VL_OBJECT_BY_SELF:
                 {
-                    target_URI = ((H5VL_rest_object_t *) hard_link_target_obj)->URI;
+                    target_URI = ((RV_object_t *) hard_link_target_obj)->URI;
                     break;
                 } /* H5VL_OBJECT_BY_SELF */
 
@@ -4517,8 +4521,8 @@ H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_p
                     printf("  - Link target loc params by name: %s\n", hard_link_target_obj_loc_params.loc_data.loc_by_name.name);
 #endif
 
-                    search_ret = H5VL_rest_find_object_by_path((H5VL_rest_object_t *) hard_link_target_obj, hard_link_target_obj_loc_params.loc_data.loc_by_name.name,
-                            &obj_type, H5VL_rest_copy_object_URI_parse_callback, NULL, temp_URI);
+                    search_ret = RV_find_object_by_path((RV_object_t *) hard_link_target_obj, hard_link_target_obj_loc_params.loc_data.loc_by_name.name,
+                            &obj_type, RV_copy_object_URI_callback, NULL, temp_URI);
                     if (!search_ret || search_ret < 0)
                         HGOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't locate link target object")
 
@@ -4543,7 +4547,7 @@ H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_p
 
                 /* Form the request body to create the Link */
                 create_request_nalloc = (strlen(fmt_string) - 2) + strlen(target_URI) + 1;
-                if (NULL == (create_request_body = (char *) rest_malloc(create_request_nalloc)))
+                if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
                     HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link create request body")
 
                 if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string, target_URI)) < 0)
@@ -4573,7 +4577,7 @@ H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_p
 
                 /* Form the request body to create the Link */
                 create_request_nalloc = (strlen(fmt_string) - 2) + strlen(link_target) + 1;
-                if (NULL == (create_request_body = (char *) rest_malloc(create_request_nalloc)))
+                if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
                     HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link create request body")
 
                 if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string, link_target)) < 0)
@@ -4614,7 +4618,7 @@ H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_p
 
                 /* Form the request body to create the Link */
                 create_request_nalloc = (strlen(fmt_string) - 4) + strlen(file_path) + strlen(link_target) + 1;
-                if (NULL == (create_request_body = (char *) rest_malloc(create_request_nalloc)))
+                if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
                     HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link create request body")
 
                 if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string, file_path, link_target)) < 0)
@@ -4630,7 +4634,7 @@ H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_p
 
     /* Setup the "Host: " header */
     host_header_len = strlen(new_link_loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -4646,7 +4650,7 @@ H5VL_rest_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_p
     /* URL-encode the name of the link to ensure that the resulting URL for the link
      * creation operation doesn't contain any illegal characters
      */
-    if (NULL == (url_encoded_link_name = curl_easy_escape(curl, get_basename(loc_params.loc_data.loc_by_name.name), 0)))
+    if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(loc_params.loc_data.loc_by_name.name), 0)))
         HGOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
 
     /* Redirect cURL from the base URL to "/groups/<id>/links/<name>" to create the link */
@@ -4682,9 +4686,9 @@ done:
 #endif
 
     if (create_request_body)
-        rest_free(create_request_body);
+        RV_free(create_request_body);
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
     if (url_encoded_link_name)
         curl_free(url_encoded_link_name);
 
@@ -4698,11 +4702,11 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_link_create() */
+} /* end RV_link_create() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_link_copy
+ * Function:    RV_link_copy
  *
  * Purpose:     Copies an existing HDF5 link from the file or group
  *              specified by src_obj to the file or group specified by
@@ -4715,9 +4719,9 @@ done:
  *              July, 2017
  */
 static herr_t
-H5VL_rest_link_copy(void *src_obj, H5VL_loc_params_t loc_params1,
-                    void *dst_obj, H5VL_loc_params_t loc_params2,
-                    hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+RV_link_copy(void *src_obj, H5VL_loc_params_t loc_params1,
+             void *dst_obj, H5VL_loc_params_t loc_params2,
+             hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 {
     herr_t ret_value = SUCCEED;
 
@@ -4725,11 +4729,11 @@ H5VL_rest_link_copy(void *src_obj, H5VL_loc_params_t loc_params1,
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_link_copy() */
+} /* end RV_link_copy() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_link_move
+ * Function:    RV_link_move
  *
  * Purpose:     Moves an existing HDF5 link from the file or group
  *              specified by src_obj to the file or group specified by
@@ -4743,9 +4747,9 @@ done:
  *              July, 2017
  */
 static herr_t
-H5VL_rest_link_move(void *src_obj, H5VL_loc_params_t loc_params1,
-                    void *dst_obj, H5VL_loc_params_t loc_params2,
-                    hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+RV_link_move(void *src_obj, H5VL_loc_params_t loc_params1,
+             void *dst_obj, H5VL_loc_params_t loc_params2,
+             hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 {
     herr_t ret_value = SUCCEED;
 
@@ -4753,11 +4757,11 @@ H5VL_rest_link_move(void *src_obj, H5VL_loc_params_t loc_params1,
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_link_move() */
+} /* end RV_link_move() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_link_get
+ * Function:    RV_link_get
  *
  * Purpose:     Performs a "GET" operation on an HDF5 link, such as calling
  *              the H5Lget_info or H5Lget_name routines.
@@ -4768,15 +4772,15 @@ done:
  *              July, 2017
  */
 static herr_t
-H5VL_rest_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
-                   hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
+            hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    H5VL_rest_object_t *link = (H5VL_rest_object_t *) obj;
-    hbool_t             curl_perform = FALSE;
-    size_t              host_header_len = 0;
-    char               *host_header = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *link = (RV_object_t *) obj;
+    hbool_t      curl_perform = FALSE;
+    size_t       host_header_len = 0;
+    char        *host_header = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -4790,7 +4794,7 @@ H5VL_rest_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_
     if (curl_perform) {
         /* Setup the "Host: " header */
         host_header_len = strlen(link->domain->u.file.filepath_name) + strlen(host_string) + 1;
-        if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+        if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
             HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
         strcpy(host_header, host_string);
@@ -4854,7 +4858,7 @@ done:
 
     if (curl_perform) {
         if (host_header)
-            rest_free(host_header);
+            RV_free(host_header);
 
         if (curl_headers) {
             curl_slist_free_all(curl_headers);
@@ -4863,11 +4867,11 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_link_get() */
+} /* end RV_link_get() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_link_specific
+ * Function:    RV_link_specific
  *
  * Purpose:     Performs a plugin-specific operation on an HDF5 link, such
  *              as calling the H5Ldelete routine.
@@ -4878,16 +4882,16 @@ done:
  *              July, 2017
  */
 static herr_t
-H5VL_rest_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t specific_type,
-                        hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t specific_type,
+                 hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    H5VL_rest_object_t *loc_obj = (H5VL_rest_object_t *) obj;
-    size_t              host_header_len = 0;
-    char               *host_header = NULL;
-    char               *link_path_dirname = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    char               *url_encoded_link_name = NULL;
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *loc_obj = (RV_object_t *) obj;
+    size_t       host_header_len = 0;
+    char        *host_header = NULL;
+    char        *link_path_dirname = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    char        *url_encoded_link_name = NULL;
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -4907,7 +4911,7 @@ H5VL_rest_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_speci
             /* URL-encode the link name so that the resulting URL for the link delete
              * operation doesn't contain any illegal characters
              */
-            if (NULL == (url_encoded_link_name = curl_easy_escape(curl, get_basename(loc_params.loc_data.loc_by_name.name), 0)))
+            if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(loc_params.loc_data.loc_by_name.name), 0)))
                 HGOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
 
             /* Redirect cURL from the base URL to "/groups/<id>/links/<name>" to delete link */
@@ -4921,7 +4925,7 @@ H5VL_rest_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_speci
 
             /* Setup the "Host: " header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+            if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
             strcpy(host_header, host_string);
@@ -4958,7 +4962,7 @@ H5VL_rest_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_speci
 
             /* In case the user specified a path which contains multiple groups on the way to the
              * link in question, extract out the path to the final group in the chain */
-            if (NULL == (link_path_dirname = get_dirname(loc_params.loc_data.loc_by_name.name)))
+            if (NULL == (link_path_dirname = RV_dirname(loc_params.loc_data.loc_by_name.name)))
                 HGOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid pathname for link")
             empty_dirname = !strcmp(link_path_dirname, "");
 
@@ -4970,7 +4974,7 @@ H5VL_rest_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_speci
                 H5I_type_t obj_type = H5I_GROUP;
                 htri_t     search_ret;
 
-                search_ret = H5VL_rest_find_object_by_path(loc_obj, link_path_dirname, &obj_type, H5VL_rest_copy_object_URI_parse_callback,
+                search_ret = RV_find_object_by_path(loc_obj, link_path_dirname, &obj_type, RV_copy_object_URI_callback,
                         NULL, target_URI);
                 if (!search_ret || search_ret < 0)
                     HGOTO_ERROR(H5E_LINK, H5E_PATH, FAIL, "can't locate parent group for link")
@@ -4979,7 +4983,7 @@ H5VL_rest_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_speci
             /* URL-encode the link name so that the resulting URL for the link GET
              * operation doesn't contain any illegal characters
              */
-            if (NULL == (url_encoded_link_name = curl_easy_escape(curl, get_basename(loc_params.loc_data.loc_by_name.name), 0)))
+            if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(loc_params.loc_data.loc_by_name.name), 0)))
                 HGOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
 
             snprintf(request_url, URL_MAX_LENGTH,
@@ -4992,7 +4996,7 @@ H5VL_rest_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_speci
 
             /* Setup the "Host: " header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+            if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
             strcpy(host_header, host_string);
@@ -5038,9 +5042,9 @@ H5VL_rest_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_speci
 
 done:
     if (link_path_dirname)
-        rest_free(link_path_dirname);
+        RV_free(link_path_dirname);
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
 
     /* In case a custom DELETE request was made, reset the request to NULL
      * to prevent any possible future issues with requests
@@ -5058,17 +5062,17 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_link_specific() */
+} /* end RV_link_specific() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_object_open
+ * Function:    RV_object_open
  *
  * Purpose:     Generically opens an existing HDF5 group, dataset, or
  *              committed datatype by first retrieving the object's type
  *              from the server and then calling the appropriate
- *              H5VL_rest_*_open routine. This function is called as the
- *              result of calling the H5Oopen routine.
+ *              RV_*_open routine. This function is called as the result of
+ *              calling the H5Oopen routine.
  *
  * Return:      Non-negative on success/Negative on failure
  *
@@ -5076,14 +5080,14 @@ done:
  *              July, 2017
  */
 static void *
-H5VL_rest_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
-                      hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
+               hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    H5VL_rest_object_t *parent = (H5VL_rest_object_t *) obj;
-    H5I_type_t          obj_type = H5I_UNINIT;
-    htri_t              search_ret;
-    hid_t               lapl_id;
-    void               *ret_value = NULL;
+    RV_object_t *parent = (RV_object_t *) obj;
+    H5I_type_t   obj_type = H5I_UNINIT;
+    htri_t       search_ret;
+    hid_t        lapl_id;
+    void        *ret_value = NULL;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -5101,11 +5105,11 @@ H5VL_rest_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opene
     assert(H5VL_OBJECT_BY_NAME == loc_params.type && "loc_params type not H5VL_OBJECT_BY_NAME");
 
     /* Retrieve the type of object being dealt with by querying the server */
-    search_ret = H5VL_rest_find_object_by_path(parent, loc_params.loc_data.loc_by_name.name, &obj_type, NULL, NULL, NULL);
+    search_ret = RV_find_object_by_path(parent, loc_params.loc_data.loc_by_name.name, &obj_type, NULL, NULL, NULL);
     if (!search_ret || search_ret < 0)
         HGOTO_ERROR(H5E_LINK, H5E_CANTOPENOBJ, NULL, "can't find object by name")
 
-    /* Call the appropriate H5VL_rest_*_open call based upon the object type */
+    /* Call the appropriate RV_*_open call based upon the object type */
     switch (obj_type) {
         case H5I_DATATYPE:
             /* Setup the correct lapl_id. Note that if H5P_DEFAULT was specified for the LAPL in the H5Oopen(_by_name) call,
@@ -5121,7 +5125,7 @@ H5VL_rest_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opene
             else
                 lapl_id = H5P_DATATYPE_ACCESS_DEFAULT;
 
-            if (NULL == (ret_value = H5VL_rest_datatype_open(parent, loc_params, loc_params.loc_data.loc_by_name.name,
+            if (NULL == (ret_value = RV_datatype_open(parent, loc_params, loc_params.loc_data.loc_by_name.name,
                     lapl_id, dxpl_id, req)))
                 HGOTO_ERROR(H5E_DATATYPE, H5E_CANTOPENOBJ, NULL, "can't open datatype")
             break;
@@ -5140,7 +5144,7 @@ H5VL_rest_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opene
             else
                 lapl_id = H5P_DATASET_ACCESS_DEFAULT;
 
-            if (NULL == (ret_value = H5VL_rest_dataset_open(parent, loc_params, loc_params.loc_data.loc_by_name.name,
+            if (NULL == (ret_value = RV_dataset_open(parent, loc_params, loc_params.loc_data.loc_by_name.name,
                     lapl_id, dxpl_id, req)))
                 HGOTO_ERROR(H5E_DATASET, H5E_CANTOPENOBJ, NULL, "can't open dataset")
             break;
@@ -5159,7 +5163,7 @@ H5VL_rest_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opene
             else
                 lapl_id = H5P_GROUP_ACCESS_DEFAULT;
 
-            if (NULL == (ret_value = H5VL_rest_group_open(parent, loc_params, loc_params.loc_data.loc_by_name.name,
+            if (NULL == (ret_value = RV_group_open(parent, loc_params, loc_params.loc_data.loc_by_name.name,
                     lapl_id, dxpl_id, req)))
                 HGOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, NULL, "can't open group")
             break;
@@ -5186,11 +5190,11 @@ H5VL_rest_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opene
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_object_open() */
+} /* end RV_object_open() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_object_copy
+ * Function:    RV_object_copy
  *
  * Purpose:     Copies an existing HDF5 group, dataset or committed
  *              datatype from the file or group specified by src_obj to the
@@ -5203,9 +5207,9 @@ done:
  *              July, 2017
  */
 static herr_t
-H5VL_rest_object_copy(void *src_obj, H5VL_loc_params_t loc_params1, const char *src_name,
-                      void *dst_obj, H5VL_loc_params_t loc_params2, const char *dst_name,
-                      hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+RV_object_copy(void *src_obj, H5VL_loc_params_t loc_params1, const char *src_name,
+               void *dst_obj, H5VL_loc_params_t loc_params2, const char *dst_name,
+               hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 {
     herr_t ret_value = SUCCEED;
 
@@ -5213,11 +5217,11 @@ H5VL_rest_object_copy(void *src_obj, H5VL_loc_params_t loc_params1, const char *
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_object_copy() */
+} /* end RV_object_copy() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_object_get
+ * Function:    RV_object_get
  *
  * Purpose:     Performs a "GET" operation on an HDF5 object, such as
  *              calling the H5Rget_obj_type routine.
@@ -5228,8 +5232,8 @@ done:
  *              July, 2017
  */
 static herr_t
-H5VL_rest_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_type,
-                     hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_type,
+              hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
     herr_t ret_value = SUCCEED;
 
@@ -5237,11 +5241,11 @@ H5VL_rest_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t 
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_object_get() */
+} /* end RV_object_get() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_object_specific
+ * Function:    RV_object_specific
  *
  * Purpose:     Performs a plugin-specific operation on an HDF5 object,
  *              such as calling the H5Ovisit routine.
@@ -5252,11 +5256,11 @@ done:
  *              July, 2017
  */
 static herr_t
-H5VL_rest_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific_t specific_type,
-                          hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific_t specific_type,
+                   hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    H5VL_rest_object_t *theobj = (H5VL_rest_object_t *) obj;
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *theobj = (RV_object_t *) obj;
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -5289,12 +5293,12 @@ H5VL_rest_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_s
             switch (ref_type) {
                 case H5R_OBJECT:
                 {
-                    rest_obj_ref_t *objref = (rest_obj_ref_t *) ref;
-                    htri_t          search_ret;
+                    RV_obj_ref_t *objref = (RV_obj_ref_t *) ref;
+                    htri_t        search_ret;
 
                     /* Locate the object for the reference, setting the ref_obj_type and ref_obj_URI fields in the process */
                     objref->ref_obj_type = H5I_UNINIT;
-                    search_ret = H5VL_rest_find_object_by_path(theobj, name, &objref->ref_obj_type, H5VL_rest_copy_object_URI_parse_callback,
+                    search_ret = RV_find_object_by_path(theobj, name, &objref->ref_obj_type, RV_copy_object_URI_callback,
                             NULL, objref->ref_obj_URI);
                     if (!search_ret || search_ret < 0)
                         HGOTO_ERROR(H5E_REFERENCE, H5E_PATH, FAIL, "can't locate ref obj. by path")
@@ -5321,11 +5325,11 @@ H5VL_rest_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_s
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_object_specific() */
+} /* end RV_object_specific() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_object_optional
+ * Function:    RV_object_optional
  *
  * Purpose:     Performs an optional operation on an HDF5 object, such as
  *              calling the H5Oget_info or H5Oset/get_comment routines.
@@ -5336,10 +5340,10 @@ done:
  *              July, 2017
  */
 static herr_t
-H5VL_rest_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
     H5VL_object_optional_t  optional_type = (H5VL_object_optional_t) va_arg(arguments, int);
-    H5VL_rest_object_t     *theobj = (H5VL_rest_object_t *) obj;
+    RV_object_t            *theobj = (RV_object_t *) obj;
     size_t                  host_header_len = 0;
     char                   *host_header = NULL;
     char                    request_url[URL_MAX_LENGTH];
@@ -5395,7 +5399,7 @@ H5VL_rest_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_
 
             /* Setup the "Host: " header */
             host_header_len = strlen(theobj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+            if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 HGOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
             strcpy(host_header, host_string);
@@ -5423,7 +5427,7 @@ H5VL_rest_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_
             CURL_PERFORM(curl, H5E_VOL, H5E_CANTGET, FAIL);
 
             /* Retrieve the attribute count for the object */
-            if (H5VL_rest_parse_response(response_buffer.buffer, NULL, &attr_count, H5VL_rest_retrieve_attribute_count_callback) < 0)
+            if (RV_parse_response(response_buffer.buffer, NULL, &attr_count, RV_retrieve_attribute_count_callback) < 0)
                 HGOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "can't retrieve object attribute count")
 
             assert(attr_count >= 0);
@@ -5438,7 +5442,7 @@ H5VL_rest_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_
 
 done:
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
@@ -5446,7 +5450,7 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_object_optional() */
+} /* end RV_object_optional() */
 
 /************************************
  *         Helper functions         *
@@ -5480,7 +5484,7 @@ write_data_callback(void *buffer, size_t size, size_t nmemb, void H5_ATTR_UNUSED
     while (positive_ptrdiff + 1 > response_buffer.buffer_size) {
         char *tmp_realloc;
 
-        if (NULL == (tmp_realloc = (char *) rest_realloc(response_buffer.buffer, 2 * response_buffer.buffer_size)))
+        if (NULL == (tmp_realloc = (char *) RV_realloc(response_buffer.buffer, 2 * response_buffer.buffer_size)))
             return 0;
 
         response_buffer.curr_buf_ptr = tmp_realloc + (response_buffer.curr_buf_ptr - response_buffer.buffer);
@@ -5501,7 +5505,7 @@ write_data_callback(void *buffer, size_t size, size_t nmemb, void H5_ATTR_UNUSED
 
 
 /*-------------------------------------------------------------------------
- * Function:    get_basename
+ * Function:    RV_basename
  *
  * Purpose:     A portable implementation of the basename routine which
  *              retrieves everything after the final '/' in a given
@@ -5517,15 +5521,15 @@ write_data_callback(void *buffer, size_t size, size_t nmemb, void H5_ATTR_UNUSED
  */
 /* XXX: Potentially modify to deal with the trailing slash case */
 static const char *
-get_basename(const char *path)
+RV_basename(const char *path)
 {
     char *substr = strrchr(path, '/');
     return substr ? substr + 1 : path;
-} /* end get_basename() */
+} /* end RV_basename() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    get_dirname
+ * Function:    RV_dirname
  *
  * Purpose:     A portable implementation of the dirname routine which
  *              retrieves everything before the final '/' in a given
@@ -5539,19 +5543,19 @@ get_basename(const char *path)
  *              July, 2017
  */
 static char *
-get_dirname(const char *path)
+RV_dirname(const char *path)
 {
-    size_t  len = (size_t) (get_basename(path) - path);
+    size_t  len = (size_t) (RV_basename(path) - path);
     char   *dirname = NULL;
 
-    if (NULL == (dirname = (char *) rest_malloc(len + 1)))
+    if (NULL == (dirname = (char *) RV_malloc(len + 1)))
         return NULL;
 
     memcpy(dirname, path, len);
     dirname[len] = '\0';
 
     return dirname;
-} /* end get_dirname() */
+} /* end RV_dirname() */
 
 
 /*-------------------------------------------------------------------------
@@ -5580,7 +5584,7 @@ dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_parse_response
+ * Function:    RV_parse_response
  *
  * Purpose:     Helper function to simply ingest a string buffer containing
  *              an HTTP response given back by the server and call a
@@ -5595,8 +5599,8 @@ dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *
  *
  */
 static herr_t
-H5VL_rest_parse_response(char *HTTP_response, void *callback_data_in, void *callback_data_out,
-                         herr_t (*parse_callback)(char *, void *, void *))
+RV_parse_response(char *HTTP_response, void *callback_data_in, void *callback_data_out,
+                  herr_t (*parse_callback)(char *, void *, void *))
 {
     herr_t ret_value = SUCCEED;
 
@@ -5609,13 +5613,13 @@ H5VL_rest_parse_response(char *HTTP_response, void *callback_data_in, void *call
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_parse_response() */
+} /* end RV_parse_response() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_copy_object_URI_parse_callback
+ * Function:    RV_copy_object_URI_callback
  *
- * Purpose:     A callback for H5VL_rest_parse_response which will, given a
+ * Purpose:     A callback for RV_parse_response which will, given a
  *              set of JSON keys through the callback_data_in parameter,
  *              search an HTTP response for the URI of an object and copy
  *              that URI into the callback_data_out parameter, which should
@@ -5630,7 +5634,7 @@ done:
  *              July, 2017
  */
 static herr_t
-H5VL_rest_copy_object_URI_parse_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+RV_copy_object_URI_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
     const char *soft_link_class_keys[] = { "link", "class", (const char *) 0 };
     const char *hard_link_keys[] = { "link", "id", (const char *) 0 };
@@ -5710,13 +5714,13 @@ done:
         yajl_tree_free(parse_tree);
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_copy_object_URI_parse_callback() */
+} /* end RV_copy_object_URI_parse_callback() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_get_link_type_callback
+ * Function:    RV_get_link_type_callback
  *
- * Purpose:     A callback for H5VL_rest_parse_response which will search
+ * Purpose:     A callback for RV_parse_response which will search
  *              an HTTP response for the type of an object and copy that
  *              type into the callback_data_out parameter, which should be
  *              a H5I_type_t *. This callback is used to help H5Oopen
@@ -5729,7 +5733,7 @@ done:
  *              September, 2017
  */
 static herr_t
-H5VL_rest_get_link_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+RV_get_link_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
     const char *soft_link_class_keys[] = { "link", "class", (const char *) 0 };
     const char *link_collection_keys[] = { "link", "collection", (const char *) 0 };
@@ -5783,13 +5787,13 @@ done:
         yajl_tree_free(parse_tree);
 
     FUNC_LEAVE_NOAPI(ret_value);
-} /* end H5VL_rest_get_link_type_callback() */
+} /* end RV_get_link_type_callback() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_retrieve_attribute_count_callback
+ * Function:    RV_retrieve_attribute_count_callback
  *
- * Purpose:     A callback for H5VL_rest_parse_response which will search
+ * Purpose:     A callback for RV_parse_response which will search
  *              an HTTP response for the number of attributes on an object
  *              and copy that number into the callback_data_out parameter,
  *              which should be a long long *. This callback is used to
@@ -5802,7 +5806,7 @@ done:
  *              November, 2017
  */
 static herr_t
-H5VL_rest_retrieve_attribute_count_callback(char *HTTP_response,
+RV_retrieve_attribute_count_callback(char *HTTP_response,
     void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
     const char *attribute_count_keys[] = { "attributeCount", (const char *) 0 };
@@ -5830,13 +5834,13 @@ done:
         yajl_tree_free(parse_tree);
 
     FUNC_LEAVE_NOAPI(ret_value);
-} /* end H5VL_rest_retrieve_attribute_count_callback() */
+} /* end RV_retrieve_attribute_count_callback() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_get_group_info_callback
+ * Function:    RV_get_group_info_callback
  *
- * Purpose:     A callback for H5VL_rest_parse_response which will search
+ * Purpose:     A callback for RV_parse_response which will search
  *              an HTTP response for the number of links contained in a
  *              group and copy that number into the callback_data_out
  *              parameter, which should be a H5G_info_t *. This callback is
@@ -5852,7 +5856,7 @@ done:
  *              November, 2017
  */
 static herr_t
-H5VL_rest_get_group_info_callback(char *HTTP_response,
+RV_get_group_info_callback(char *HTTP_response,
     void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
     const char *group_link_count_keys[] = { "linkCount", (const char *) 0 };
@@ -5888,13 +5892,13 @@ done:
         yajl_tree_free(parse_tree);
 
     FUNC_LEAVE_NOAPI(ret_value);
-} /* end H5VL_rest_get_group_info_callback() */
+} /* end RV_get_group_info_callback() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_parse_dataset_creation_properties_callback
+ * Function:    RV_parse_dataset_creation_properties_callback
  *
- * Purpose:     A callback for H5VL_rest_parse_response which will search
+ * Purpose:     A callback for RV_parse_response which will search
  *              an HTTP response for the creation properties of a dataset
  *              and set those properties on a DCPL given as input. This
  *              callback is used to help H5Dopen() correctly setup a DCPL
@@ -5924,7 +5928,7 @@ done:
  *              November, 2017
  */
 static herr_t
-H5VL_rest_parse_dataset_creation_properties_callback(char *HTTP_response,
+RV_parse_dataset_creation_properties_callback(char *HTTP_response,
     void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
     const char *creation_properties_keys[]    = { "creationProperties", (const char *) 0 };
@@ -6226,11 +6230,11 @@ done:
         yajl_tree_free(parse_tree);
 
     FUNC_LEAVE_NOAPI(ret_value);
-} /* end H5VL_rest_parse_dataset_creation_properties_callback() */
+} /* end RV_parse_dataset_creation_properties_callback() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_find_object_by_path
+ * Function:    RV_find_object_by_path
  *
  * Purpose:     XXX
  *
@@ -6252,10 +6256,10 @@ done:
  *              November, 2017
  */
 static htri_t
-H5VL_rest_find_object_by_path(H5VL_rest_object_t *parent_obj, const char *obj_path,
-                              H5I_type_t *target_object_type,
-                              herr_t (*obj_found_callback)(char *, void *, void *),
-                              void *callback_data_in, void *callback_data_out)
+RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
+                       H5I_type_t *target_object_type,
+                       herr_t (*obj_found_callback)(char *, void *, void *),
+                       void *callback_data_in, void *callback_data_out)
 {
     hbool_t  intermediate_groups_in_path = FALSE;
     hbool_t  is_relative_path = FALSE;
@@ -6323,7 +6327,7 @@ H5VL_rest_find_object_by_path(H5VL_rest_object_t *parent_obj, const char *obj_pa
         /* In case the user specified a path which contains multiple groups on the way to the
          * one which the object in question should be under, extract out the path to the final
          * group in the chain */
-        if (NULL == (link_dir_name = get_dirname(obj_path)))
+        if (NULL == (link_dir_name = RV_dirname(obj_path)))
             HGOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get path dirname")
         empty_dirname = !strcmp(link_dir_name, "");
 
@@ -6340,8 +6344,8 @@ H5VL_rest_find_object_by_path(H5VL_rest_object_t *parent_obj, const char *obj_pa
             H5I_type_t obj_type = H5I_GROUP;
             htri_t     search_ret;
 
-            search_ret = H5VL_rest_find_object_by_path(parent_obj, link_dir_name, &obj_type,
-                    H5VL_rest_copy_object_URI_parse_callback, NULL, temp_URI);
+            search_ret = RV_find_object_by_path(parent_obj, link_dir_name, &obj_type,
+                    RV_copy_object_URI_callback, NULL, temp_URI);
             if (!search_ret || search_ret < 0)
                 HGOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't locate parent group")
 
@@ -6358,7 +6362,7 @@ H5VL_rest_find_object_by_path(H5VL_rest_object_t *parent_obj, const char *obj_pa
 
     /* Setup the "Host: " header */
     host_header_len = strlen(parent_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) rest_malloc(host_header_len)))
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
@@ -6382,7 +6386,7 @@ H5VL_rest_find_object_by_path(H5VL_rest_object_t *parent_obj, const char *obj_pa
                  "%s/groups/%s/links/%s",
                  base_URL,
                  intermediate_groups_in_path ? temp_URI : parent_obj->URI,
-                 get_basename(obj_path));
+                 RV_basename(obj_path));
 
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
             HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
@@ -6401,7 +6405,7 @@ H5VL_rest_find_object_by_path(H5VL_rest_object_t *parent_obj, const char *obj_pa
         printf("  - Found link for object of unknown type; capturing link type\n\n");
 #endif
 
-        if (H5VL_rest_parse_response(response_buffer.buffer, NULL, target_object_type, H5VL_rest_get_link_type_callback) < 0)
+        if (RV_parse_response(response_buffer.buffer, NULL, target_object_type, RV_get_link_type_callback) < 0)
             HGOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link type")
     } /* end if */
 
@@ -6472,7 +6476,7 @@ H5VL_rest_find_object_by_path(H5VL_rest_object_t *parent_obj, const char *obj_pa
     if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
         HGOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get HTTP response code")
 
-    if (obj_found_callback && H5VL_rest_parse_response(response_buffer.buffer,
+    if (obj_found_callback && RV_parse_response(response_buffer.buffer,
             callback_data_in, callback_data_out, obj_found_callback) < 0)
         HGOTO_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "can't perform callback operation")
 
@@ -6480,9 +6484,9 @@ H5VL_rest_find_object_by_path(H5VL_rest_object_t *parent_obj, const char *obj_pa
 
 done:
     if (link_dir_name)
-        rest_free(link_dir_name);
+        RV_free(link_dir_name);
     if (host_header)
-        rest_free(host_header);
+        RV_free(host_header);
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
@@ -6490,10 +6494,10 @@ done:
     } /* end if */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_find_object_by_path() */
+} /* end RV_find_object_by_path() */
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_convert_predefined_datatype_to_string
+ * Function:    RV_convert_predefined_datatype_to_string
  *
  * Purpose:     Given a predefined Datatype, returns a string
  *              representation of that Datatype.
@@ -6505,7 +6509,7 @@ done:
  *              April, 2017
  */
 static const char *
-H5VL_rest_convert_predefined_datatype_to_string(hid_t type_id)
+RV_convert_predefined_datatype_to_string(hid_t type_id)
 {
     H5T_class_t  type_class = H5T_NO_CLASS;
     H5T_order_t  type_order = H5T_ORDER_NONE;
@@ -6538,11 +6542,11 @@ H5VL_rest_convert_predefined_datatype_to_string(hid_t type_id)
 
 done:
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_convert_predefined_datatype_to_string() */
+} /* end RV_convert_predefined_datatype_to_string() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_convert_datatype_to_string
+ * Function:    RV_convert_datatype_to_string
  *
  * Purpose:     Given a datatype, this function creates a JSON-formatted
  *              string representation of the datatype.
@@ -6562,7 +6566,7 @@ done:
  *              July, 2017
  */
 static herr_t
-H5VL_rest_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested)
+RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested)
 {
     H5T_class_t   type_class;
     const char   *leading_string = "\"type\": "; /* Leading string for all datatypes */
@@ -6595,7 +6599,7 @@ H5VL_rest_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *ty
         HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid NULL pointer for converted datatype's string buffer")
 
     out_string_len = DATATYPE_BODY_DEFAULT_SIZE;
-    if (NULL == (out_string = (char *) rest_malloc(out_string_len)))
+    if (NULL == (out_string = (char *) RV_malloc(out_string_len)))
         HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for converted datatype's string buffer")
 
 #ifdef PLUGIN_DEBUG
@@ -6626,8 +6630,8 @@ H5VL_rest_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *ty
         HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine if datatype is committed")
 
     if (type_is_committed) {
-        H5VL_rest_object_t *vol_obj;
-        H5VL_object_t      *vol_container; /* XXX: Private definition currently prevents VOL plugin from being external */
+        H5VL_object_t *vol_container; /* XXX: Private definition currently prevents VOL plugin from being external */
+        RV_object_t   *vol_obj;
 
 #ifdef PLUGIN_DEBUG
         printf("  - Datatype was a committed type\n\n");
@@ -6637,7 +6641,7 @@ H5VL_rest_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *ty
         if (H5VLget_object(type_id, (void **) &vol_container) < 0)
             HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get VOL object for committed datatype")
 
-        vol_obj = (H5VL_rest_object_t *) vol_container->vol_obj;
+        vol_obj = (RV_object_t *) vol_container->vol_obj;
 
         /* Check whether the buffer needs to be grown */
         bytes_to_print = strlen(vol_obj->URI) + 2;
@@ -6675,7 +6679,7 @@ H5VL_rest_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *ty
             /* XXX: Need support for non-predefined integer and float types */
 
             /* Convert the class and name of the datatype to JSON */
-            if (NULL == (type_name = H5VL_rest_convert_predefined_datatype_to_string(type_id)))
+            if (NULL == (type_name = RV_convert_predefined_datatype_to_string(type_id)))
                 HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
 
             /* Check whether the buffer needs to be grown */
@@ -6778,7 +6782,7 @@ H5VL_rest_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *ty
             if ((nmembers = H5Tget_nmembers(type_id)) < 0)
                 HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve number of members in compound datatype")
 
-            if (NULL == (compound_member_strings = (char **) rest_malloc(((size_t) nmembers + 1) * sizeof(*compound_member_strings))))
+            if (NULL == (compound_member_strings = (char **) RV_malloc(((size_t) nmembers + 1) * sizeof(*compound_member_strings))))
                 HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for compound datatype member strings")
 
             for (i = 0; i < (size_t) nmembers + 1; i++)
@@ -6802,7 +6806,7 @@ H5VL_rest_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *ty
                 if ((compound_member = H5Tget_member_type(type_id, (unsigned) i)) < 0)
                     HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound datatype member")
 
-                if (H5VL_rest_convert_datatype_to_string(compound_member, &compound_member_strings[i], NULL, FALSE) < 0)
+                if (RV_convert_datatype_to_string(compound_member, &compound_member_strings[i], NULL, FALSE) < 0)
                     HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert compound datatype member to string representation")
 
                 if (NULL == (compound_member_name = H5Tget_member_name(type_id, (unsigned) i)))
@@ -6877,11 +6881,11 @@ H5VL_rest_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *ty
             if ((enum_nmembers = H5Tget_nmembers(type_id)) < 0)
                 HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't get number of members of enumerated type")
 
-            if (NULL == (enum_value = rest_malloc(type_size)))
+            if (NULL == (enum_value = RV_malloc(type_size)))
                 HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for enum member value")
 
             enum_mapping_length = ENUM_MAPPING_DEFAULT_SIZE;
-            if (NULL == (enum_mapping = (char *) rest_malloc(enum_mapping_length)))
+            if (NULL == (enum_mapping = (char *) RV_malloc(enum_mapping_length)))
                 HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for enum mapping")
 
 #ifdef PLUGIN_DEBUG
@@ -6928,7 +6932,7 @@ H5VL_rest_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *ty
             if ((type_base_class = H5Tget_super(type_id)) < 0)
                 HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "cant get base datatype for enum type")
 
-            if (NULL == (base_type_name = H5VL_rest_convert_predefined_datatype_to_string(type_base_class)))
+            if (NULL == (base_type_name = RV_convert_predefined_datatype_to_string(type_base_class)))
                 HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
 
             /* Check whether the buffer needs to be grown */
@@ -6969,12 +6973,12 @@ H5VL_rest_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *ty
             if ((ndims = H5Tget_array_ndims(type_id)) < 0)
                 HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't get array datatype number of dimensions")
 
-            if (NULL == (array_shape = (char *) rest_malloc((size_t) (ndims * MAX_NUM_LENGTH + ndims + 3))))
+            if (NULL == (array_shape = (char *) RV_malloc((size_t) (ndims * MAX_NUM_LENGTH + ndims + 3))))
                 HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array datatype dimensionality string")
             array_shape_curr_pos = array_shape;
             *array_shape_curr_pos = '\0';
 
-            if (NULL == (array_dims = (hsize_t *) rest_malloc((size_t) ndims * sizeof(*array_dims))))
+            if (NULL == (array_dims = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*array_dims))))
                 HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array datatype dimensions")
 
             if (H5Tget_array_dims2(type_id, array_dims) < 0)
@@ -6999,7 +7003,7 @@ H5VL_rest_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *ty
             if ((type_is_committed = H5Tcommitted(type_base_class)) < 0)
                 HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine if array base datatype is committed")
 
-            if (H5VL_rest_convert_datatype_to_string(type_base_class, &array_base_type, &array_base_type_len, TRUE) < 0)
+            if (RV_convert_datatype_to_string(type_base_class, &array_base_type, &array_base_type_len, TRUE) < 0)
                 HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert datatype to string representation")
 
             /* Check whether the buffer needs to be grown */
@@ -7081,7 +7085,7 @@ done:
     } /* end if */
     else {
         if (out_string)
-            rest_free(out_string);
+            RV_free(out_string);
     } /* end else */
 
     if (type_base_class >= 0)
@@ -7092,28 +7096,28 @@ done:
         H5free_memory(compound_member_name);
     if (compound_member_strings) {
         for (i = 0; compound_member_strings[i]; i++)
-            rest_free(compound_member_strings[i]);
-        rest_free(compound_member_strings);
+            RV_free(compound_member_strings[i]);
+        RV_free(compound_member_strings);
     } /* end if */
     if (array_shape)
-        rest_free(array_shape);
+        RV_free(array_shape);
     if (array_base_type)
-        rest_free(array_base_type);
+        RV_free(array_base_type);
     if (array_dims)
-        rest_free(array_dims);
+        RV_free(array_dims);
     if (enum_value)
-        rest_free(enum_value);
+        RV_free(enum_value);
     if (enum_value_name)
         H5free_memory(enum_value_name);
     if (enum_mapping)
-        rest_free(enum_mapping);
+        RV_free(enum_mapping);
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_convert_datatype_to_string() */
+} /* end RV_convert_datatype_to_string() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_convert_string_to_datatype
+ * Function:    RV_convert_string_to_datatype
  *
  * Purpose:     Given a JSON string representation of a datatype, creates
  *              and returns an hid_t for the datatype using H5Tcreate().
@@ -7161,7 +7165,7 @@ done:
  *              July, 2017
  */
 static hid_t
-H5VL_rest_convert_string_to_datatype(const char *type)
+RV_convert_string_to_datatype(const char *type)
 {
     const char  *class_keys[] = { "type", "class", (const char *) 0 };
     const char  *type_base_keys[] = { "type", "base", (const char *) 0 };
@@ -7461,11 +7465,11 @@ H5VL_rest_convert_string_to_datatype(const char *type)
         if (NULL == (key_obj = yajl_tree_get(parse_tree, field_keys, yajl_t_array)))
             HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve compound datatype members array")
 
-        if (NULL == (compound_member_type_array = (hid_t *) rest_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*compound_member_type_array))))
+        if (NULL == (compound_member_type_array = (hid_t *) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*compound_member_type_array))))
             HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate compound datatype")
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) compound_member_type_array[i] = FAIL;
 
-        if (NULL == (compound_member_names = (char **) rest_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*compound_member_names))))
+        if (NULL == (compound_member_names = (char **) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*compound_member_names))))
             HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate compound datatype member names array")
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) compound_member_names[i] = NULL;
 
@@ -7473,7 +7477,7 @@ H5VL_rest_convert_string_to_datatype(const char *type)
          * each compound member's datatype
          */
         tmp_cmpd_type_buffer_size = DATATYPE_BODY_DEFAULT_SIZE;
-        if (NULL == (tmp_cmpd_type_buffer = (char *) rest_malloc(tmp_cmpd_type_buffer_size)))
+        if (NULL == (tmp_cmpd_type_buffer = (char *) RV_malloc(tmp_cmpd_type_buffer_size)))
             HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate temporary buffer for storing type information")
 
         /* Retrieve the names of all of the members of the Compound Datatype */
@@ -7563,7 +7567,7 @@ H5VL_rest_convert_string_to_datatype(const char *type)
             printf("  - Compound datatype member %zu type string len: %zu\n", i, type_section_len);
 #endif
 
-            if ((compound_member_type_array[i] = H5VL_rest_convert_string_to_datatype(tmp_cmpd_type_buffer)) < 0)
+            if ((compound_member_type_array[i] = RV_convert_string_to_datatype(tmp_cmpd_type_buffer)) < 0)
                 HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert compound datatype member %zu from string representation", i)
 
             total_type_size += H5Tget_size(compound_member_type_array[i]);
@@ -7594,7 +7598,7 @@ H5VL_rest_convert_string_to_datatype(const char *type)
         if (NULL == (key_obj = yajl_tree_get(parse_tree, dims_keys, yajl_t_array)))
             HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve array datatype dimensions")
 
-        if (NULL == (array_dims = (hsize_t *) rest_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*array_dims))))
+        if (NULL == (array_dims = (hsize_t *) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*array_dims))))
             HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array dimensions")
 
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
@@ -7643,7 +7647,7 @@ H5VL_rest_convert_string_to_datatype(const char *type)
         /* Allocate enough memory to hold the "base" information substring, plus a few bytes for
          * the leading "type:" string and enclosing braces
          */
-        if (NULL == (array_base_type_substring = (char *) rest_malloc(base_type_substring_len + type_string_len + 2)))
+        if (NULL == (array_base_type_substring = (char *) RV_malloc(base_type_substring_len + type_string_len + 2)))
             HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array base type substring")
 
         /* In order for the conversion function to correctly process the datatype string, it must be in the
@@ -7656,7 +7660,7 @@ H5VL_rest_convert_string_to_datatype(const char *type)
         array_base_type_substring[type_string_len + base_type_substring_len + 1] = '\0';
 
         /* Convert the string representation of the array's base datatype to an hid_t */
-        if ((base_type_id = H5VL_rest_convert_string_to_datatype(array_base_type_substring)) < 0)
+        if ((base_type_id = RV_convert_string_to_datatype(array_base_type_substring)) < 0)
             HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert string representation of array base datatype to a usable form")
 
         if ((datatype = H5Tarray_create2(base_type_id, (unsigned) i, array_dims)) < 0)
@@ -7686,7 +7690,7 @@ H5VL_rest_convert_string_to_datatype(const char *type)
          * the leading "type:" string and enclosing braces
          */
         H5_CHECKED_ASSIGN(base_section_len, size_t, (base_section_end - base_section_ptr + 1), ptrdiff_t);
-        if (NULL == (tmp_enum_base_type_buffer = (char *) rest_malloc(base_section_len + type_string_len + 2)))
+        if (NULL == (tmp_enum_base_type_buffer = (char *) RV_malloc(base_section_len + type_string_len + 2)))
             HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for enum base datatype temporary buffer")
 
 #ifdef PLUGIN_DEBUG
@@ -7707,7 +7711,7 @@ H5VL_rest_convert_string_to_datatype(const char *type)
 #endif
 
         /* Convert the enum's base datatype substring into an hid_t for use in the following H5Tenum_create call */
-        if ((enum_base_type = H5VL_rest_convert_string_to_datatype(tmp_enum_base_type_buffer)) < 0)
+        if ((enum_base_type = RV_convert_string_to_datatype(tmp_enum_base_type_buffer)) < 0)
             HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert enum datatype's base datatype section from string into datatype")
 
 #ifdef PLUGIN_DEBUG
@@ -7778,17 +7782,17 @@ done:
     } /* end if */
 
     if (array_dims)
-        rest_free(array_dims);
+        RV_free(array_dims);
     if (array_base_type_substring)
-        rest_free(array_base_type_substring);
+        RV_free(array_base_type_substring);
     if (compound_member_type_array)
-        rest_free(compound_member_type_array);
+        RV_free(compound_member_type_array);
     if (compound_member_names)
-        rest_free(compound_member_names);
+        RV_free(compound_member_names);
     if (tmp_cmpd_type_buffer)
-        rest_free(tmp_cmpd_type_buffer);
+        RV_free(tmp_cmpd_type_buffer);
     if (tmp_enum_base_type_buffer)
-        rest_free(tmp_enum_base_type_buffer);
+        RV_free(tmp_enum_base_type_buffer);
     if (FAIL != enum_base_type)
         if (H5Tclose(enum_base_type) < 0)
             HDONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close enum base datatype")
@@ -7797,13 +7801,13 @@ done:
         yajl_tree_free(parse_tree);
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_convert_string_to_datatype() */
+} /* end RV_convert_string_to_datatype() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_convert_obj_refs_to_buffer
+ * Function:    RV_convert_obj_refs_to_buffer
  *
- * Purpose:     Given an array of rest_obj_ref_t structs, as well as the
+ * Purpose:     Given an array of RV_obj_ref_t structs, as well as the
  *              array's size, this function converts the array of object
  *              references into a binary buffer of object reference
  *              strings, which can then be transferred to the server.
@@ -7827,7 +7831,7 @@ done:
  *              December, 2017
  */
 static herr_t
-H5VL_rest_convert_obj_refs_to_buffer(const rest_obj_ref_t *ref_array, size_t ref_array_len,
+RV_convert_obj_refs_to_buffer(const RV_obj_ref_t *ref_array, size_t ref_array_len,
     char **buf_out, size_t *buf_out_len)
 {
     const char * const prefix_table[] = {
@@ -7853,7 +7857,7 @@ H5VL_rest_convert_obj_refs_to_buffer(const rest_obj_ref_t *ref_array, size_t ref
 #endif
 
     out_len = ref_array_len * OBJECT_REF_STRING_LEN;
-    if (NULL == (out = (char *) rest_malloc(out_len)))
+    if (NULL == (out = (char *) RV_malloc(out_len)))
         HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for object reference string buffer")
     out_curr_pos = out;
 
@@ -7905,7 +7909,7 @@ done:
     } /* end if */
     else {
         if (out)
-            rest_free(out);
+            RV_free(out);
     } /* end else */
 
 #ifdef PLUGIN_DEBUG
@@ -7913,19 +7917,19 @@ done:
 #endif
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_convert_obj_refs_to_buffer() */
+} /* end RV_convert_obj_refs_to_buffer() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_convert_buffer_to_obj_refs
+ * Function:    RV_convert_buffer_to_obj_refs
  *
  * Purpose:     Given a binary buffer of object reference strings, this
  *              function converts the binary buffer into a buffer of
- *              rest_obj_ref_t's which is then placed in the parameter
+ *              RV_obj_ref_t's which is then placed in the parameter
  *              buf_out.
  *
  *              Note that on the user's side, the buffer is expected to
- *              be an array of rest_obj_ref_t's, each of which has three
+ *              be an array of RV_obj_ref_t's, each of which has three
  *              fields to be populated. The first field is the reference
  *              type field, which gets set to H5R_OBJECT. The second is
  *              the URI of the object which is referenced and the final
@@ -7939,13 +7943,13 @@ done:
  *              December, 2017
  */
 static herr_t
-H5VL_rest_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
-    rest_obj_ref_t **buf_out, size_t *buf_out_len)
+RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
+    RV_obj_ref_t **buf_out, size_t *buf_out_len)
 {
-    rest_obj_ref_t *out = NULL;
-    size_t          i;
-    size_t          out_len = 0;
-    herr_t          ret_value = SUCCEED;
+    RV_obj_ref_t *out = NULL;
+    size_t        i;
+    size_t        out_len = 0;
+    herr_t        ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -7957,8 +7961,8 @@ H5VL_rest_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
     printf("  - Converting binary buffer to ref. array\n\n");
 #endif
 
-    out_len = ref_buf_len * sizeof(rest_obj_ref_t);
-    if (NULL == (out = (rest_obj_ref_t *) rest_malloc(out_len)))
+    out_len = ref_buf_len * sizeof(RV_obj_ref_t);
+    if (NULL == (out = (RV_obj_ref_t *) RV_malloc(out_len)))
         HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for object reference array")
 
     for (i = 0; i < ref_buf_len; i++) {
@@ -8005,15 +8009,15 @@ done:
     } /* end if */
     else {
         if (out)
-            rest_free(out);
+            RV_free(out);
     } /* end else */
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_convert_buffer_to_obj_refs() */
+} /* end RV_convert_buffer_to_obj_refs() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_parse_datatype
+ * Function:    RV_parse_datatype
  *
  * Purpose:     Given a JSON representation of an HDF5 Datatype, parse the
  *              JSON and set up an actual Datatype with a corresponding
@@ -8036,7 +8040,7 @@ done:
  *
  */
 static hid_t
-H5VL_rest_parse_datatype(char *type, hbool_t need_truncate)
+RV_parse_datatype(char *type, hbool_t need_truncate)
 {
     hbool_t  substring_allocated = FALSE;
     hid_t    datatype = FAIL;
@@ -8096,7 +8100,7 @@ H5VL_rest_parse_datatype(char *type, hbool_t need_truncate)
         } /* end while */
 
         H5_CHECKED_ASSIGN(substring_len, size_t, advancement_ptr - type_section_ptr, ptrdiff_t);
-        if (NULL == (type_string = (char *) rest_malloc(substring_len + 3)))
+        if (NULL == (type_string = (char *) RV_malloc(substring_len + 3)))
             HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for \"type\" subsection")
 
         memcpy(type_string + 1, type_section_ptr, substring_len);
@@ -8108,25 +8112,25 @@ H5VL_rest_parse_datatype(char *type, hbool_t need_truncate)
         substring_allocated = TRUE;
     } /* end if */
 
-    if ((datatype = H5VL_rest_convert_string_to_datatype(type_string)) < 0)
+    if ((datatype = RV_convert_string_to_datatype(type_string)) < 0)
         HGOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL, "can't convert string representation to datatype")
 
     ret_value = datatype;
 
 done:
     if (type_string && substring_allocated)
-        rest_free(type_string);
+        RV_free(type_string);
 
     if (ret_value < 0 && datatype >= 0)
         if (H5Tclose(datatype) < 0)
             HDONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_parse_datatype() */
+} /* end RV_parse_datatype() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_parse_dataspace
+ * Function:    RV_parse_dataspace
  *
  * Purpose:     Given a JSON representation of an HDF5 dataspace, parse the
  *              JSON and set up an actual dataspace with a corresponding
@@ -8138,7 +8142,7 @@ done:
  *              May, 2017
  */
 static hid_t
-H5VL_rest_parse_dataspace(char *space)
+RV_parse_dataspace(char *space)
 {
     const char *class_keys[] = { "shape", "class", (const char *) 0 };
     yajl_val    parse_tree = NULL, key_obj = NULL;
@@ -8187,11 +8191,11 @@ H5VL_rest_parse_dataspace(char *space)
         if (NULL == (maxdims_obj = yajl_tree_get(parse_tree, maxdims_keys, yajl_t_array)))
             maxdims_specified = FALSE;
 
-        if (NULL == (space_dims = (hsize_t *) rest_malloc(YAJL_GET_ARRAY(dims_obj)->len * sizeof(*space_dims))))
+        if (NULL == (space_dims = (hsize_t *) RV_malloc(YAJL_GET_ARRAY(dims_obj)->len * sizeof(*space_dims))))
             HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace dimensionality array")
 
         if (maxdims_specified)
-            if (NULL == (space_maxdims = (hsize_t *) rest_malloc(YAJL_GET_ARRAY(maxdims_obj)->len * sizeof(*space_maxdims))))
+            if (NULL == (space_maxdims = (hsize_t *) RV_malloc(YAJL_GET_ARRAY(maxdims_obj)->len * sizeof(*space_maxdims))))
                 HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace maximum dimensionality array")
 
         for (i = 0; i < dims_obj->u.array.len; i++) {
@@ -8232,19 +8236,19 @@ H5VL_rest_parse_dataspace(char *space)
 
 done:
     if (space_dims)
-        rest_free(space_dims);
+        RV_free(space_dims);
     if (space_maxdims)
-        rest_free(space_maxdims);
+        RV_free(space_maxdims);
 
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_parse_dataspace() */
+} /* end RV_parse_dataspace() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_convert_dataspace_shape_to_string
+ * Function:    RV_convert_dataspace_shape_to_string
  *
  * Purpose:     Given an HDF5 dataspace, converts the shape and maximum
  *              dimension size of the dataspace into JSON. The resulting
@@ -8257,7 +8261,7 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **maxdims_body)
+RV_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **maxdims_body)
 {
     H5S_class_t  space_type;
     hsize_t     *dims = NULL;
@@ -8280,10 +8284,10 @@ H5VL_rest_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, c
 
     /* Allocate space for each buffer */
     if (shape_body)
-        if (NULL == (shape_out_string = (char *) rest_malloc(DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE)))
+        if (NULL == (shape_out_string = (char *) RV_malloc(DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE)))
             HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace shape buffer")
     if (maxdims_body)
-        if (NULL == (maxdims_out_string = (char *) rest_malloc(DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE)))
+        if (NULL == (maxdims_out_string = (char *) RV_malloc(DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE)))
             HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace maximum dimension size buffer")
 
     /* Ensure that both buffers are NUL-terminated */
@@ -8319,11 +8323,11 @@ H5VL_rest_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, c
                 HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't get number of dimensions in dataspace")
 
             if (shape_out_string)
-                if (NULL == (dims = (hsize_t *) malloc((size_t) space_ndims * sizeof(*dims))))
+                if (NULL == (dims = (hsize_t *) RV_malloc((size_t) space_ndims * sizeof(*dims))))
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate memory for dataspace dimensions")
 
             if (maxdims_out_string)
-                if (NULL == (maxdims = (hsize_t *) malloc((size_t) space_ndims * sizeof(*dims))))
+                if (NULL == (maxdims = (hsize_t *) RV_malloc((size_t) space_ndims * sizeof(*dims))))
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate memory for dataspace maximum dimension sizes")
 
             if (H5Sget_simple_extent_dims(space_id, dims, maxdims) < 0)
@@ -8404,22 +8408,22 @@ done:
     } /* end if */
     else {
         if (maxdims_out_string)
-            rest_free(maxdims_out_string);
+            RV_free(maxdims_out_string);
         if (shape_out_string)
-            rest_free(shape_out_string);
+            RV_free(shape_out_string);
     } /* end else */
 
     if (maxdims)
-        free(maxdims);
+        RV_free(maxdims);
     if (dims)
-        free(dims);
+        RV_free(dims);
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_convert_dataspace_shape_to_string() */
+} /* end RV_convert_dataspace_shape_to_string() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_convert_dataspace_selection_to_string
+ * Function:    RV_convert_dataspace_selection_to_string
  *
  * Purpose:     Given an HDF5 dataspace, formats the selection within the
  *              dataspace into either a JSON-based or purely string-based
@@ -8449,7 +8453,7 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string, size_t *selection_string_len, hbool_t req_param)
+RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string, size_t *selection_string_len, hbool_t req_param)
 {
     hsize_t *point_list = NULL;
     hsize_t *start = NULL;
@@ -8473,7 +8477,7 @@ H5VL_rest_convert_dataspace_selection_to_string(hid_t space_id, char **selection
     assert(selection_string);
 
     out_string_len = DATASPACE_SELECTION_STRING_DEFAULT_SIZE;
-    if (NULL == (out_string = (char *) rest_malloc(out_string_len)))
+    if (NULL == (out_string = (char *) RV_malloc(out_string_len)))
         HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace selection string")
 
     out_string_curr_pos = out_string;
@@ -8481,7 +8485,7 @@ H5VL_rest_convert_dataspace_selection_to_string(hid_t space_id, char **selection
     /* Ensure that the buffer is NUL-terminated */
     *out_string_curr_pos = '\0';
 
-    if (NULL == H5Iobject_verify(space_id, H5I_DATASPACE))
+    if (H5I_DATASPACE != H5Iget_type(space_id))
         HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "not a dataspace")
 
     if ((ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
@@ -8510,13 +8514,13 @@ H5VL_rest_convert_dataspace_selection_to_string(hid_t space_id, char **selection
                  * where X is the starting coordinate of the selection, Y is the ending coordinate of
                  * the selection, and Z is the stride of the selection in that dimension.
                  */
-                if (NULL == (start = (hsize_t *) rest_malloc((size_t) ndims * sizeof(*start))))
+                if (NULL == (start = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*start))))
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'start' values")
-                if (NULL == (stride = (hsize_t *) rest_malloc((size_t) ndims * sizeof(*stride))))
+                if (NULL == (stride = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*stride))))
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'stride' values")
-                if (NULL == (count = (hsize_t *) rest_malloc((size_t) ndims * sizeof(*count))))
+                if (NULL == (count = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*count))))
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'count' values")
-                if (NULL == (block = (hsize_t *) rest_malloc((size_t) ndims * sizeof(*block))))
+                if (NULL == (block = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*block))))
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'block' values")
 
                 /* XXX: Currently only regular hyperslabs supported */
@@ -8577,7 +8581,7 @@ H5VL_rest_convert_dataspace_selection_to_string(hid_t space_id, char **selection
                 if ((num_points = H5Sget_select_npoints(space_id)) < 0)
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of selected points")
 
-                if (NULL == (point_list = (hsize_t *) rest_malloc((size_t) (ndims * num_points) * sizeof(*point_list))))
+                if (NULL == (point_list = (hsize_t *) RV_malloc((size_t) (ndims * num_points) * sizeof(*point_list))))
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate point list buffer")
 
                 if (H5Sget_select_elem_pointlist(space_id, 0, (hsize_t) num_points, point_list) < 0)
@@ -8634,24 +8638,24 @@ H5VL_rest_convert_dataspace_selection_to_string(hid_t space_id, char **selection
                                                  "\"stop\": %s,"
                                                  "\"step\": %s";
 
-                if (NULL == (start = (hsize_t *) rest_malloc((size_t) ndims * sizeof(*start))))
+                if (NULL == (start = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*start))))
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'start' values")
-                if (NULL == (stride = (hsize_t *) rest_malloc((size_t) ndims * sizeof(*stride))))
+                if (NULL == (stride = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*stride))))
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'stride' values")
-                if (NULL == (count = (hsize_t *) rest_malloc((size_t) ndims * sizeof(*count))))
+                if (NULL == (count = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*count))))
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'count' values")
-                if (NULL == (block = (hsize_t *) rest_malloc((size_t) ndims * sizeof(*block))))
+                if (NULL == (block = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*block))))
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'block' values")
 
-                if (NULL == (start_body = (char *) rest_calloc((size_t) (ndims * MAX_NUM_LENGTH + ndims))))
+                if (NULL == (start_body = (char *) RV_calloc((size_t) (ndims * MAX_NUM_LENGTH + ndims))))
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'start' values string representation")
                 start_body_curr_pos = start_body;
 
-                if (NULL == (stop_body = (char *) rest_calloc((size_t) (ndims * MAX_NUM_LENGTH + ndims))))
+                if (NULL == (stop_body = (char *) RV_calloc((size_t) (ndims * MAX_NUM_LENGTH + ndims))))
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'stop' values string representation")
                 stop_body_curr_pos = stop_body;
 
-                if (NULL == (step_body = (char *) rest_calloc((size_t) (ndims * MAX_NUM_LENGTH + ndims))))
+                if (NULL == (step_body = (char *) RV_calloc((size_t) (ndims * MAX_NUM_LENGTH + ndims))))
                     HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'step' values string representation")
                 step_body_curr_pos = step_body;
 
@@ -8715,32 +8719,32 @@ done:
     } /* end if */
     else {
         if (out_string)
-            rest_free(out_string);
+            RV_free(out_string);
     } /* end else */
 
     if (step_body)
-        rest_free(step_body);
+        RV_free(step_body);
     if (stop_body)
-        rest_free(stop_body);
+        RV_free(stop_body);
     if (start_body)
-        rest_free(start_body);
+        RV_free(start_body);
     if (block)
-        rest_free(block);
+        RV_free(block);
     if (count)
-        rest_free(count);
+        RV_free(count);
     if (stride)
-        rest_free(stride);
+        RV_free(stride);
     if (start)
-        rest_free(start);
+        RV_free(start);
     if (point_list)
-        rest_free(point_list);
+        RV_free(point_list);
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_convert_dataspace_selection_to_string() */
+} /* end RV_convert_dataspace_selection_to_string() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_setup_dataset_create_request_body
+ * Function:    RV_setup_dataset_create_request_body
  *
  * Purpose:     Given a DCPL during a dataset create operation, converts
  *              the datatype and shape of a dataset into JSON, then
@@ -8758,24 +8762,24 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t dcpl,
-                                       char **create_request_body, size_t *create_request_body_len)
+RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t dcpl,
+                                     char **create_request_body, size_t *create_request_body_len)
 {
-    H5VL_rest_object_t *pobj = (H5VL_rest_object_t *) parent_obj;
-    size_t              link_body_len = 0;
-    size_t              creation_properties_body_len = 0;
-    size_t              bytes_to_print = 0;
-    size_t              datatype_body_len = 0;
-    hid_t               type_id, space_id, lcpl_id;
-    char               *datatype_body = NULL;
-    char               *out_string = NULL;
-    char               *shape_body = NULL;
-    char               *maxdims_body = NULL;
-    char               *creation_properties_body = NULL;
-    char               *link_body = NULL;
-    char               *path_dirname = NULL;
-    int                 bytes_printed = 0;
-    herr_t              ret_value = SUCCEED;
+    RV_object_t *pobj = (RV_object_t *) parent_obj;
+    size_t       link_body_len = 0;
+    size_t       creation_properties_body_len = 0;
+    size_t       bytes_to_print = 0;
+    size_t       datatype_body_len = 0;
+    hid_t        type_id, space_id, lcpl_id;
+    char        *datatype_body = NULL;
+    char        *out_string = NULL;
+    char        *shape_body = NULL;
+    char        *maxdims_body = NULL;
+    char        *creation_properties_body = NULL;
+    char        *link_body = NULL;
+    char        *path_dirname = NULL;
+    int          bytes_printed = 0;
+    herr_t       ret_value = SUCCEED;
 
     FUNC_ENTER_NOAPI_NOINIT
 
@@ -8796,17 +8800,17 @@ H5VL_rest_setup_dataset_create_request_body(void *parent_obj, const char *name, 
         HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property value for link creation property list ID")
 
     /* Form the Datatype portion of the Dataset create request */
-    if (H5VL_rest_convert_datatype_to_string(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
+    if (RV_convert_datatype_to_string(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
         HGOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL, "can't convert datatype to string representation")
 
     /* If the Dataspace of the Dataset was not specified as H5P_DEFAULT, parse it. */
     if (H5P_DEFAULT != space_id)
-        if (H5VL_rest_convert_dataspace_shape_to_string(space_id, &shape_body, &maxdims_body) < 0)
+        if (RV_convert_dataspace_shape_to_string(space_id, &shape_body, &maxdims_body) < 0)
             HGOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL, "can't parse Dataset shape parameters")
 
     /* If the DCPL was not specified as H5P_DEFAULT, form the Dataset Creation Properties portion of the Dataset create request */
     if (H5P_DATASET_CREATE_DEFAULT != dcpl)
-        if (H5VL_rest_parse_dataset_creation_properties(dcpl, &creation_properties_body, &creation_properties_body_len) < 0)
+        if (RV_parse_dataset_creation_properties(dcpl, &creation_properties_body, &creation_properties_body_len) < 0)
             HGOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL, "can't parse Dataset Creation Properties")
 
 #ifdef PLUGIN_DEBUG
@@ -8819,7 +8823,7 @@ H5VL_rest_setup_dataset_create_request_body(void *parent_obj, const char *name, 
     if (name) {
         hbool_t            empty_dirname;
         char               target_URI[URI_MAX_LENGTH];
-        const char * const link_basename = get_basename(name);
+        const char * const link_basename = RV_basename(name);
         const char * const link_body_format = "\"link\": {"
                                                  "\"id\": \"%s\", "
                                                  "\"name\": \"%s\""
@@ -8828,7 +8832,7 @@ H5VL_rest_setup_dataset_create_request_body(void *parent_obj, const char *name, 
         /* In case the user specified a path which contains multiple groups on the way to the
          * one which the dataset will ultimately be linked under, extract out the path to the
          * final group in the chain */
-        if (NULL == (path_dirname = get_dirname(name)))
+        if (NULL == (path_dirname = RV_dirname(name)))
             HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid pathname for dataset link")
         empty_dirname = !strcmp(path_dirname, "");
 
@@ -8844,13 +8848,13 @@ H5VL_rest_setup_dataset_create_request_body(void *parent_obj, const char *name, 
             H5I_type_t obj_type = H5I_GROUP;
             htri_t     search_ret;
 
-            search_ret = H5VL_rest_find_object_by_path(pobj, path_dirname, &obj_type, H5VL_rest_copy_object_URI_parse_callback, NULL, target_URI);
+            search_ret = RV_find_object_by_path(pobj, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
             if (!search_ret || search_ret < 0)
                 HGOTO_ERROR(H5E_DATASET, H5E_PATH, FAIL, "can't locate target for dataset link")
         } /* end if */
 
         link_body_len = strlen(link_body_format) + strlen(link_basename) + (empty_dirname ? strlen(pobj->URI) : strlen(target_URI)) + 1;
-        if (NULL == (link_body = (char *) rest_malloc(link_body_len)))
+        if (NULL == (link_body = (char *) RV_malloc(link_body_len)))
             HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset link body")
 
         /* Form the Dataset Creation Link portion of the Dataset create request using the above format
@@ -8865,7 +8869,7 @@ H5VL_rest_setup_dataset_create_request_body(void *parent_obj, const char *name, 
                    + (link_body ? link_body_len + 2 : 0)
                    + 3;
 
-    if (NULL == (out_string = (char *) rest_malloc(bytes_to_print)))
+    if (NULL == (out_string = (char *) RV_malloc(bytes_to_print)))
         HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset creation request body")
 
     if ((bytes_printed = snprintf(out_string, bytes_to_print,
@@ -8889,28 +8893,28 @@ done:
     } /* end if */
     else {
         if (out_string)
-            rest_free(out_string);
+            RV_free(out_string);
     } /* end else */
 
     if (link_body)
-        rest_free(link_body);
+        RV_free(link_body);
     if (path_dirname)
-        rest_free(path_dirname);
+        RV_free(path_dirname);
     if (creation_properties_body)
-        rest_free(creation_properties_body);
+        RV_free(creation_properties_body);
     if (maxdims_body)
-        rest_free(maxdims_body);
+        RV_free(maxdims_body);
     if (shape_body)
-        rest_free(shape_body);
+        RV_free(shape_body);
     if (datatype_body)
-        rest_free(datatype_body);
+        RV_free(datatype_body);
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_setup_dataset_create_request_body() */
+} /* end RV_setup_dataset_create_request_body() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5VL_rest_parse_dataset_creation_properties
+ * Function:    RV_parse_dataset_creation_properties
  *
  * Purpose:     Given a DCPL during a dataset create operation, converts
  *              all of the Dataset Creation Properties, such as the
@@ -8925,7 +8929,7 @@ done:
  *              March, 2017
  */
 static herr_t
-H5VL_rest_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body, size_t *creation_properties_body_len)
+RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body, size_t *creation_properties_body_len)
 {
     const char * const  leading_string = "\"creationProperties\": {";
     H5D_alloc_time_t    alloc_time;
@@ -8946,7 +8950,7 @@ H5VL_rest_parse_dataset_creation_properties(hid_t dcpl, char **creation_properti
         HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid NULL pointer for dataset creation properties string buffer")
 
     out_string_len = DATASET_CREATION_PROPERTIES_BODY_DEFAULT_SIZE;
-    if (NULL == (out_string = (char *) rest_malloc(out_string_len)))
+    if (NULL == (out_string = (char *) RV_malloc(out_string_len)))
         HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset creation properties string buffer")
 
 #ifdef PLUGIN_DEBUG
@@ -9472,7 +9476,7 @@ H5VL_rest_parse_dataset_creation_properties(hid_t dcpl, char **creation_properti
                 HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve dataset chunk dimensionality")
             assert(ndims > 0 && "no chunk dimensionality specified");
 
-            if (NULL == (chunk_dims_string = (char *) rest_malloc((size_t) ((ndims * MAX_NUM_LENGTH) + ndims + 3))))
+            if (NULL == (chunk_dims_string = (char *) RV_malloc((size_t) ((ndims * MAX_NUM_LENGTH) + ndims + 3))))
                 HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for chunk dimensionality string")
             chunk_dims_string_curr_pos = chunk_dims_string;
             *chunk_dims_string_curr_pos = '\0';
@@ -9566,11 +9570,11 @@ done:
     } /* end if */
     else {
         if (out_string)
-            rest_free(out_string);
+            RV_free(out_string);
     } /* end else */
 
     if (chunk_dims_string)
-        rest_free(chunk_dims_string);
+        RV_free(chunk_dims_string);
 
     FUNC_LEAVE_NOAPI(ret_value)
-} /* end H5VL_rest_parse_dataset_creation_properties() */
+} /* end RV_parse_dataset_creation_properties() */

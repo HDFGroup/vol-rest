@@ -62,16 +62,16 @@ extern "C" {
  * VOL plugin will likely be truncated. */
 #define MAX_NUM_LENGTH 20
 
-typedef struct rest_obj_ref_t {
+typedef struct RV_obj_ref_t {
     H5R_type_t ref_type;
     H5I_type_t ref_obj_type;
     char       ref_obj_URI[URI_MAX_LENGTH];
-} rest_obj_ref_t;
+} RV_obj_ref_t;
 
-H5_DLL herr_t      H5VLrest_init(void);
-H5_DLL herr_t      H5VLrest_term(void);
+H5_DLL herr_t      RVinit(void);
+H5_DLL herr_t      RVterm(void);
 H5_DLL herr_t      H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const char *password);
-H5_DLL const char *H5VLrest_get_uri(hid_t);
+H5_DLL const char *RVget_uri(hid_t);
 
 #ifdef __cplusplus
 }

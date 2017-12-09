@@ -57,50 +57,50 @@ extern "C" {
 #define HTTP_SERVER_ERROR(status_code)  (status_code >= HTTP_SERVER_ERROR_MIN && status_code <= HTTP_SERVER_ERROR_MAX)
 
 
-typedef struct H5VL_rest_object_t H5VL_rest_object_t;
+typedef struct RV_object_t RV_object_t;
 
-typedef struct H5VL_rest_file_t {
+typedef struct RV_file_t {
     unsigned  intent;
     char     *filepath_name;
     hid_t     fcpl_id;
     hid_t     fapl_id;
-} H5VL_rest_file_t;
+} RV_file_t;
 
-typedef struct H5VL_rest_group_t {
+typedef struct RV_group_t {
     hid_t gcpl_id;
-} H5VL_rest_group_t;
+} RV_group_t;
 
-typedef struct H5VL_rest_dataset_t {
+typedef struct RV_dataset_t {
     hid_t space_id;
     hid_t dtype_id;
     hid_t dcpl_id;
     hid_t dapl_id;
-} H5VL_rest_dataset_t;
+} RV_dataset_t;
 
-typedef struct H5VL_rest_attr_t {
-    H5VL_rest_object_t *parent_obj;
-    hid_t               space_id;
-    hid_t               dtype_id;
-    hid_t               acpl_id;
-    char               *attr_name;
-} H5VL_rest_attr_t;
+typedef struct RV_attr_t {
+    RV_object_t *parent_obj;
+    hid_t        space_id;
+    hid_t        dtype_id;
+    hid_t        acpl_id;
+    char        *attr_name;
+} RV_attr_t;
 
-typedef struct H5VL_rest_datatype_t {
+typedef struct RV_datatype_t {
     hid_t dtype_id;
     hid_t tcpl_id;
-} H5VL_rest_datatype_t;
+} RV_datatype_t;
 
-struct H5VL_rest_object_t {
-    H5VL_rest_object_t *domain;
-    H5I_type_t          obj_type;
-    char                URI[URI_MAX_LENGTH];
+struct RV_object_t {
+    RV_object_t *domain;
+    H5I_type_t   obj_type;
+    char         URI[URI_MAX_LENGTH];
 
     union {
-        H5VL_rest_datatype_t datatype;
-        H5VL_rest_dataset_t  dataset;
-        H5VL_rest_group_t    group;
-        H5VL_rest_attr_t     attribute;
-        H5VL_rest_file_t     file;
+        RV_datatype_t datatype;
+        RV_dataset_t  dataset;
+        RV_group_t    group;
+        RV_attr_t     attribute;
+        RV_file_t     file;
     } u;
 };
 

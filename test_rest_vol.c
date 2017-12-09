@@ -686,7 +686,7 @@ test_setup_plugin(void)
 
     TESTING("plugin setup");
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -696,7 +696,7 @@ test_setup_plugin(void)
 
     if (H5Pclose(fapl) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -706,7 +706,7 @@ test_setup_plugin(void)
 error:
     H5E_BEGIN_TRY {
         H5Pclose(fapl);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -728,7 +728,7 @@ test_create_file(void)
 
     TESTING("create file")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -809,7 +809,7 @@ test_create_file(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -821,7 +821,7 @@ error:
         H5Gclose(group_id);
         H5Pclose(fapl);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -835,7 +835,7 @@ test_get_existing_file_info(void)
 
     TESTING("retrieve file info")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -859,7 +859,7 @@ test_get_existing_file_info(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -870,7 +870,7 @@ error:
     H5E_BEGIN_TRY {
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -883,7 +883,7 @@ test_nonexistent_file(void)
 
     TESTING("failure for opening non-existent file")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -903,7 +903,7 @@ test_nonexistent_file(void)
 
     if (H5Pclose(fapl_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -913,7 +913,7 @@ test_nonexistent_file(void)
 error:
     H5E_BEGIN_TRY {
         H5Pclose(fapl_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -928,7 +928,7 @@ test_get_file_intent(void)
 
     TESTING("retrieve file intent")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -1010,7 +1010,7 @@ test_get_file_intent(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -1023,7 +1023,7 @@ error:
         H5Dclose(dset_id);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -1038,7 +1038,7 @@ test_get_file_name(void)
 
     TESTING("get file name with H5Fget_name")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -1073,7 +1073,7 @@ test_get_file_name(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -1085,7 +1085,7 @@ error:
         if (file_name_buf) free(file_name_buf);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -1098,7 +1098,7 @@ test_file_reopen(void)
 
     TESTING("re-open file w/ H5Freopen")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -1124,7 +1124,7 @@ test_file_reopen(void)
         TEST_ERROR
     if (H5Fclose(file_id2) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -1136,7 +1136,7 @@ error:
         H5Pclose(fapl_id);
         H5Fclose(file_id);
         H5Fclose(file_id2);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -1150,7 +1150,7 @@ test_unused_file_API_calls(void)
 
     TESTING("unused File API calls")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -1202,7 +1202,7 @@ test_unused_file_API_calls(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -1213,7 +1213,7 @@ error:
     H5E_BEGIN_TRY {
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -1228,7 +1228,7 @@ test_file_property_lists(void)
 
     TESTING("file property list operations")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -1384,7 +1384,7 @@ test_file_property_lists(void)
         TEST_ERROR
     if (H5Fclose(file_id2) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -1400,7 +1400,7 @@ error:
         H5Pclose(fapl_id);
         H5Fclose(file_id1);
         H5Fclose(file_id2);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -1421,7 +1421,7 @@ test_create_group_invalid_loc_id(void)
 
     TESTING("create group with invalid loc_id")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -1441,7 +1441,7 @@ test_create_group_invalid_loc_id(void)
 
     if (H5Pclose(fapl_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -1451,7 +1451,7 @@ test_create_group_invalid_loc_id(void)
 error:
     H5E_BEGIN_TRY {
         H5Pclose(fapl_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -1464,7 +1464,7 @@ test_create_group_under_root(void)
 
     TESTING("create group under root group")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -1491,7 +1491,7 @@ test_create_group_under_root(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -1503,7 +1503,7 @@ error:
         H5Gclose(group_id);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -1518,7 +1518,7 @@ test_create_group_under_existing_group(void)
 
     TESTING("create group under existing group using relative path")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -1554,7 +1554,7 @@ test_create_group_under_existing_group(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -1567,7 +1567,7 @@ error:
         H5Gclose(parent_group_id);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -1582,7 +1582,7 @@ test_get_existing_group_info(void)
 
     TESTING("retrieve group info")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -1618,7 +1618,7 @@ test_get_existing_group_info(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -1629,7 +1629,7 @@ error:
     H5E_BEGIN_TRY {
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -1642,7 +1642,7 @@ test_nonexistent_group(void)
 
     TESTING("failure for opening nonexistent group")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -1670,7 +1670,7 @@ test_nonexistent_group(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -1681,7 +1681,7 @@ error:
     H5E_BEGIN_TRY {
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -1711,7 +1711,7 @@ test_group_property_lists(void)
 
     TESTING("group property list operations")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -1852,7 +1852,7 @@ test_group_property_lists(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -1868,7 +1868,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -1895,7 +1895,7 @@ test_create_attribute_on_root(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -1973,7 +1973,7 @@ test_create_attribute_on_root(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -1986,7 +1986,7 @@ error:
         H5Aclose(attr_id);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -2010,7 +2010,7 @@ test_create_attribute_on_dataset(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -2111,7 +2111,7 @@ test_create_attribute_on_dataset(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -2127,7 +2127,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -2149,7 +2149,7 @@ test_create_attribute_on_datatype(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -2262,7 +2262,7 @@ test_create_attribute_on_datatype(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -2277,7 +2277,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -2299,7 +2299,7 @@ test_get_existing_attribute_info(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -2373,7 +2373,7 @@ test_get_existing_attribute_info(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -2387,7 +2387,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -2410,7 +2410,7 @@ test_get_attribute_name(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -2516,7 +2516,7 @@ test_get_attribute_name(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -2531,7 +2531,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -2552,7 +2552,7 @@ test_create_attribute_with_space_in_name(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -2608,7 +2608,7 @@ test_create_attribute_with_space_in_name(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -2622,7 +2622,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -2643,7 +2643,7 @@ test_delete_attribute(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -2719,7 +2719,7 @@ test_delete_attribute(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -2733,7 +2733,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -2755,7 +2755,7 @@ test_write_attribute(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -2832,7 +2832,7 @@ test_write_attribute(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -2846,7 +2846,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -2869,7 +2869,7 @@ test_read_attribute(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -2975,7 +2975,7 @@ test_read_attribute(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -2991,7 +2991,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -3013,7 +3013,7 @@ test_get_number_attributes(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -3106,7 +3106,7 @@ test_get_number_attributes(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -3120,7 +3120,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -3143,7 +3143,7 @@ test_attribute_property_lists(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -3325,7 +3325,7 @@ test_attribute_property_lists(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -3343,7 +3343,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -3366,7 +3366,7 @@ test_create_dataset_under_root(void)
 
     TESTING("create dataset under root group")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -3401,7 +3401,7 @@ test_create_dataset_under_root(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -3414,7 +3414,7 @@ error:
         H5Dclose(dset_id);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -3431,7 +3431,7 @@ test_create_anonymous_dataset(void)
 
     TESTING("create anonymous dataset")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -3479,7 +3479,7 @@ test_create_anonymous_dataset(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -3493,7 +3493,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -3510,7 +3510,7 @@ test_create_dataset_under_existing_group(void)
 
     TESTING("create dataset under existing group")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -3552,7 +3552,7 @@ test_create_dataset_under_existing_group(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -3566,7 +3566,7 @@ error:
         H5Gclose(group_id);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -3592,7 +3592,7 @@ test_create_dataset_predefined_types(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -3659,7 +3659,7 @@ test_create_dataset_predefined_types(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -3674,7 +3674,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -3694,7 +3694,7 @@ test_create_dataset_string_types(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -3789,7 +3789,7 @@ test_create_dataset_string_types(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -3807,7 +3807,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -3838,7 +3838,7 @@ test_create_dataset_compound_types(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -3940,7 +3940,7 @@ test_create_dataset_compound_types(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -3958,7 +3958,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -3984,7 +3984,7 @@ test_create_dataset_enum_types(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -4092,7 +4092,7 @@ test_create_dataset_enum_types(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -4110,7 +4110,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -4137,7 +4137,7 @@ test_create_dataset_array_types(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -4329,7 +4329,7 @@ test_create_dataset_array_types(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -4357,7 +4357,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -4374,7 +4374,7 @@ test_create_dataset_shapes(void)
 
     TESTING("dataset creation w/ random dimension sizes")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     srand((unsigned) time(NULL));
@@ -4449,7 +4449,7 @@ test_create_dataset_shapes(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -4465,7 +4465,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -4485,7 +4485,7 @@ test_create_dataset_creation_properties(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -4747,7 +4747,7 @@ test_create_dataset_creation_properties(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -4763,7 +4763,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -4815,7 +4815,7 @@ test_write_dataset_small_all(void)
 
     TESTING("small write to dataset w/ H5S_ALL")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -4900,7 +4900,7 @@ test_write_dataset_small_all(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -4915,7 +4915,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -4938,7 +4938,7 @@ test_write_dataset_small_hyperslab(void)
 
     TESTING("small write to dataset w/ hyperslab")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -5013,7 +5013,7 @@ test_write_dataset_small_hyperslab(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -5029,7 +5029,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -5049,7 +5049,7 @@ test_write_dataset_small_point_selection(void)
 
     TESTING("small write to dataset w/ point selection")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -5123,7 +5123,7 @@ test_write_dataset_small_point_selection(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -5138,7 +5138,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -5196,7 +5196,7 @@ test_read_dataset_small_all(void)
 
     TESTING("small read from dataset w/ H5S_ALL")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -5259,7 +5259,7 @@ test_read_dataset_small_all(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -5274,7 +5274,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -5297,7 +5297,7 @@ test_read_dataset_small_hyperslab(void)
 
     TESTING("small read from dataset w/ hyperslab")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -5372,7 +5372,7 @@ test_read_dataset_small_hyperslab(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -5388,7 +5388,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -5410,7 +5410,7 @@ test_read_dataset_small_point_selection(void)
 
     TESTING("small read from dataset w/ point selection")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -5485,7 +5485,7 @@ test_read_dataset_small_point_selection(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -5501,7 +5501,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -5560,7 +5560,7 @@ test_write_dataset_data_verification(void)
 
     TESTING("verification of dataset data after write then read")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -5667,7 +5667,7 @@ test_write_dataset_data_verification(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -5682,7 +5682,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -5720,7 +5720,7 @@ test_dataset_property_lists(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -6005,7 +6005,7 @@ test_dataset_property_lists(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -6028,7 +6028,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -6050,7 +6050,7 @@ test_create_hard_link(void)
 
     TESTING("create hard link")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -6116,7 +6116,7 @@ test_create_hard_link(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -6128,7 +6128,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -6151,7 +6151,7 @@ test_create_hard_link_same_loc(void)
 
     TESTING("create hard link with H5L_SAME_LOC")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -6243,7 +6243,7 @@ test_create_hard_link_same_loc(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -6258,7 +6258,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -6299,7 +6299,7 @@ test_create_soft_link_existing_absolute(void)
 
     TESTING("create soft link to existing object by absolute path")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -6365,7 +6365,7 @@ test_create_soft_link_existing_absolute(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -6377,7 +6377,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -6431,7 +6431,7 @@ test_create_external_link(void)
 
     TESTING("create external link to existing object")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -6497,7 +6497,7 @@ test_create_external_link(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -6509,7 +6509,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -6543,7 +6543,7 @@ test_copy_link(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -6676,7 +6676,7 @@ test_copy_link(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -6691,7 +6691,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -6712,7 +6712,7 @@ test_move_link(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -6871,7 +6871,7 @@ test_move_link(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -6886,7 +6886,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -6922,7 +6922,7 @@ test_create_committed_datatype(void)
 
     TESTING("creation of committed datatype")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -6962,7 +6962,7 @@ test_create_committed_datatype(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -6975,7 +6975,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -6990,7 +6990,7 @@ test_create_anonymous_committed_datatype(void)
 
     TESTING("creation of anonymous committed datatype")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -7036,7 +7036,7 @@ test_create_anonymous_committed_datatype(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -7049,7 +7049,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -7082,7 +7082,7 @@ test_create_dataset_with_committed_type(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -7172,7 +7172,7 @@ test_create_dataset_with_committed_type(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -7187,7 +7187,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -7209,7 +7209,7 @@ test_create_attribute_with_committed_type(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -7288,7 +7288,7 @@ test_create_attribute_with_committed_type(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -7303,7 +7303,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -7319,7 +7319,7 @@ test_delete_committed_type(void)
 
     TESTING("delete committed datatype")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -7389,7 +7389,7 @@ test_delete_committed_type(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -7402,7 +7402,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -7444,7 +7444,7 @@ test_datatype_property_lists(void)
 
     TESTING("datatype property list operations")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -7570,7 +7570,7 @@ test_datatype_property_lists(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -7587,7 +7587,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -7614,7 +7614,7 @@ test_open_dataset_generically(void)
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -7666,7 +7666,7 @@ test_open_dataset_generically(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -7680,7 +7680,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -7695,7 +7695,7 @@ test_open_group_generically(void)
 
     TESTING("open group generically w/ H5Oopen()")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -7738,7 +7738,7 @@ test_open_group_generically(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -7751,7 +7751,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -7766,7 +7766,7 @@ test_open_datatype_generically(void)
 
     TESTING("open datatype generically w/ H5Oopen()")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -7815,7 +7815,7 @@ test_open_datatype_generically(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -7828,7 +7828,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -7850,12 +7850,12 @@ error:
 static int
 test_create_obj_ref(void)
 {
-    rest_obj_ref_t ref;
-    hid_t          file_id = -1, fapl_id = -1;
+    RV_obj_ref_t ref;
+    hid_t        file_id = -1, fapl_id = -1;
 
     TESTING("create an object reference")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -7877,13 +7877,13 @@ test_create_obj_ref(void)
 
     if (H5R_OBJECT != ref.ref_type) TEST_ERROR
     if (H5I_GROUP != ref.ref_obj_type) TEST_ERROR
-    if (strcmp(H5VLrest_get_uri(file_id), ref.ref_obj_URI)) TEST_ERROR
+    if (strcmp(RVget_uri(file_id), ref.ref_obj_URI)) TEST_ERROR
 
     if (H5Pclose(fapl_id) < 0)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -7894,7 +7894,7 @@ error:
     H5E_BEGIN_TRY {
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -7903,20 +7903,20 @@ error:
 static int
 test_write_dataset_w_obj_refs(void)
 {
-    rest_obj_ref_t *ref_array = NULL;
-    hsize_t         dims[OBJ_REF_DATASET_WRITE_TEST_SPACE_RANK];
-    size_t          i, ref_array_size = 0;
-    hid_t           file_id = -1, fapl_id = -1;
-    hid_t           container_group = -1, group_id = -1;
-    hid_t           dset_id = -1, ref_dset_id = -1;
-    hid_t           ref_dtype_id = -1;
-    hid_t           space_id = -1;
+    RV_obj_ref_t *ref_array = NULL;
+    hsize_t       dims[OBJ_REF_DATASET_WRITE_TEST_SPACE_RANK];
+    size_t        i, ref_array_size = 0;
+    hid_t         file_id = -1, fapl_id = -1;
+    hid_t         container_group = -1, group_id = -1;
+    hid_t         dset_id = -1, ref_dset_id = -1;
+    hid_t         ref_dtype_id = -1;
+    hid_t         space_id = -1;
 
     TESTING("write to a dataset w/ object reference type")
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -7991,7 +7991,7 @@ test_write_dataset_w_obj_refs(void)
     for (i = 0, ref_array_size = 1; i < OBJ_REF_DATASET_WRITE_TEST_SPACE_RANK; i++)
         ref_array_size *= dims[i];
 
-    if (NULL == (ref_array = (rest_obj_ref_t *) malloc(ref_array_size * sizeof(*ref_array))))
+    if (NULL == (ref_array = (RV_obj_ref_t *) malloc(ref_array_size * sizeof(*ref_array))))
         TEST_ERROR
 
     for (i = 0; i < dims[0]; i++) {
@@ -8006,7 +8006,7 @@ test_write_dataset_w_obj_refs(void)
                     goto error;
                 }
 
-                if (NULL == (URI = H5VLrest_get_uri(file_id)))
+                if (NULL == (URI = RVget_uri(file_id)))
                     TEST_ERROR
 
                 break;
@@ -8018,7 +8018,7 @@ test_write_dataset_w_obj_refs(void)
                     goto error;
                 }
 
-                if (NULL == (URI = H5VLrest_get_uri(ref_dtype_id)))
+                if (NULL == (URI = RVget_uri(ref_dtype_id)))
                     TEST_ERROR
 
                 break;
@@ -8030,7 +8030,7 @@ test_write_dataset_w_obj_refs(void)
                     goto error;
                 }
 
-                if (NULL == (URI = H5VLrest_get_uri(ref_dset_id)))
+                if (NULL == (URI = RVget_uri(ref_dset_id)))
                     TEST_ERROR
 
                 break;
@@ -8073,7 +8073,7 @@ test_write_dataset_w_obj_refs(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -8091,7 +8091,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -8100,20 +8100,20 @@ error:
 static int
 test_read_dataset_w_obj_refs(void)
 {
-    rest_obj_ref_t *ref_array = NULL;
-    hsize_t         dims[OBJ_REF_DATASET_READ_TEST_SPACE_RANK];
-    size_t          i, ref_array_size = 0;
-    hid_t           file_id = -1, fapl_id = -1;
-    hid_t           container_group = -1, group_id = -1;
-    hid_t           dset_id = -1, ref_dset_id = -1;
-    hid_t           ref_dtype_id = -1;
-    hid_t           space_id = -1;
+    RV_obj_ref_t *ref_array = NULL;
+    hsize_t       dims[OBJ_REF_DATASET_READ_TEST_SPACE_RANK];
+    size_t        i, ref_array_size = 0;
+    hid_t         file_id = -1, fapl_id = -1;
+    hid_t         container_group = -1, group_id = -1;
+    hid_t         dset_id = -1, ref_dset_id = -1;
+    hid_t         ref_dtype_id = -1;
+    hid_t         space_id = -1;
 
     TESTING("read from a dataset w/ object reference type")
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -8188,7 +8188,7 @@ test_read_dataset_w_obj_refs(void)
     for (i = 0, ref_array_size = 1; i < OBJ_REF_DATASET_READ_TEST_SPACE_RANK; i++)
         ref_array_size *= dims[i];
 
-    if (NULL == (ref_array = (rest_obj_ref_t *) malloc(ref_array_size * sizeof(*ref_array))))
+    if (NULL == (ref_array = (RV_obj_ref_t *) malloc(ref_array_size * sizeof(*ref_array))))
         TEST_ERROR
 
     for (i = 0; i < dims[0]; i++) {
@@ -8203,7 +8203,7 @@ test_read_dataset_w_obj_refs(void)
                     goto error;
                 }
 
-                if (NULL == (URI = H5VLrest_get_uri(file_id)))
+                if (NULL == (URI = RVget_uri(file_id)))
                     TEST_ERROR
 
                     break;
@@ -8215,7 +8215,7 @@ test_read_dataset_w_obj_refs(void)
                     goto error;
                 }
 
-                if (NULL == (URI = H5VLrest_get_uri(ref_dtype_id)))
+                if (NULL == (URI = RVget_uri(ref_dtype_id)))
                     TEST_ERROR
 
                     break;
@@ -8227,7 +8227,7 @@ test_read_dataset_w_obj_refs(void)
                     goto error;
                 }
 
-                if (NULL == (URI = H5VLrest_get_uri(ref_dset_id)))
+                if (NULL == (URI = RVget_uri(ref_dset_id)))
                     TEST_ERROR
 
                     break;
@@ -8322,7 +8322,7 @@ test_read_dataset_w_obj_refs(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -8340,7 +8340,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -8349,19 +8349,19 @@ error:
 static int
 test_write_dataset_w_obj_refs_empty_data(void)
 {
-    rest_obj_ref_t *ref_array = NULL;
-    hsize_t         dims[OBJ_REF_DATASET_EMPTY_WRITE_TEST_SPACE_RANK];
-    size_t          i, ref_array_size = 0;
-    hid_t           file_id = -1, fapl_id = -1;
-    hid_t           container_group = -1, group_id = -1;
-    hid_t           dset_id = -1;
-    hid_t           space_id = -1;
+    RV_obj_ref_t *ref_array = NULL;
+    hsize_t       dims[OBJ_REF_DATASET_EMPTY_WRITE_TEST_SPACE_RANK];
+    size_t        i, ref_array_size = 0;
+    hid_t         file_id = -1, fapl_id = -1;
+    hid_t         container_group = -1, group_id = -1;
+    hid_t         dset_id = -1;
+    hid_t         space_id = -1;
 
     TESTING("write to a dataset w/ object reference type; partially initialized ref. data")
 
     srand((unsigned) time(NULL));
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -8403,7 +8403,7 @@ test_write_dataset_w_obj_refs_empty_data(void)
     for (i = 0, ref_array_size = 1; i < OBJ_REF_DATASET_EMPTY_WRITE_TEST_SPACE_RANK; i++)
         ref_array_size *= dims[i];
 
-    if (NULL == (ref_array = (rest_obj_ref_t *) malloc(ref_array_size * sizeof(*ref_array))))
+    if (NULL == (ref_array = (RV_obj_ref_t *) malloc(ref_array_size * sizeof(*ref_array))))
         TEST_ERROR
 
     for (i = 0; i < dims[0]; i++) {
@@ -8417,7 +8417,7 @@ test_write_dataset_w_obj_refs_empty_data(void)
                     goto error;
                 }
 
-                if (NULL == (URI = H5VLrest_get_uri(file_id)))
+                if (NULL == (URI = RVget_uri(file_id)))
                     TEST_ERROR
 
                 if (strcmp(URI, ref_array[i].ref_obj_URI)) {
@@ -8459,7 +8459,7 @@ test_write_dataset_w_obj_refs_empty_data(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -8474,7 +8474,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -8488,7 +8488,7 @@ test_unused_object_API_calls(void)
 
     TESTING("unused object API calls")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -8518,7 +8518,7 @@ test_unused_object_API_calls(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -8529,7 +8529,7 @@ error:
     H5E_BEGIN_TRY {
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -8554,7 +8554,7 @@ test_open_link_without_leading_slash(void)
 
     TESTING("opening a link without a leading slash")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -8623,7 +8623,7 @@ test_open_link_without_leading_slash(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -8638,7 +8638,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -8659,7 +8659,7 @@ test_object_creation_by_absolute_path(void)
 
     TESTING("object creation by absolute path")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -8787,7 +8787,7 @@ test_object_creation_by_absolute_path(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -8804,7 +8804,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -8828,7 +8828,7 @@ test_absolute_vs_relative_path(void)
 
     TESTING("absolute vs. relative pathnames")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -9004,7 +9004,7 @@ test_absolute_vs_relative_path(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -9024,14 +9024,14 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
 }
 
-/* Simple test to ensure that calling H5VLrest_init() and
- * H5VLrest_term() twice doesn't do anything bad
+/* Simple test to ensure that calling RVinit() and
+ * RVterm() twice doesn't do anything bad
  */
 static int
 test_double_init_free(void)
@@ -9040,9 +9040,9 @@ test_double_init_free(void)
 
     TESTING("double init/free correctness")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -9052,9 +9052,9 @@ test_double_init_free(void)
 
     if (H5Pclose(fapl_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -9064,8 +9064,8 @@ test_double_init_free(void)
 error:
     H5E_BEGIN_TRY {
         H5Pclose(fapl_id);
-        H5VLrest_term();
-        H5VLrest_term();
+        RVterm();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
@@ -9087,7 +9087,7 @@ test_url_encoding(void)
 
     TESTING("Correct URL-encoding behavior")
 
-    if (H5VLrest_init() < 0)
+    if (RVinit() < 0)
         TEST_ERROR
 
     if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
@@ -9172,7 +9172,7 @@ test_url_encoding(void)
         TEST_ERROR
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
-    if (H5VLrest_term() < 0)
+    if (RVterm() < 0)
         TEST_ERROR
 
     PASSED();
@@ -9188,7 +9188,7 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl_id);
         H5Fclose(file_id);
-        H5VLrest_term();
+        RVterm();
     } H5E_END_TRY;
 
     return 1;
