@@ -31,12 +31,7 @@
 /* XXX: Attempt to eliminate all use of globals/static variables */
 /* XXX: Create a table of all the hard-coded JSON keys used so these can be modified in the future if desired */
 
-#define H5F_FRIEND /* XXX: Temporarily needed for include H5Fpkg.h */
-#define H5O_FRIEND /* XXX: Temporarily needed for including H5Opkg.h */
-
 #include "H5private.h"       /* XXX: Temporarily needed; Generic Functions */
-#include "H5Fpkg.h"          /* XXX: Temporarily needed */
-#include "H5Opkg.h"          /* XXX: Temporarily needed */
 #include "H5Ppublic.h"       /* Property Lists    */
 #include "H5Spublic.h"       /* Dataspaces        */
 #include "H5VLpublic.h"      /* VOL plugins       */
@@ -9342,7 +9337,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
 
         case H5D_CHUNKED:
         {
-            hsize_t             chunk_dims[H5O_LAYOUT_NDIMS];
+            hsize_t             chunk_dims[H5S_MAX_RANK + 1];
             size_t              i;
             char               *chunk_dims_string_curr_pos;
             int                 ndims;
@@ -9351,7 +9346,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
                                                    "\"dims\": %s"
                                                "}";
 
-            if ((ndims = H5Pget_chunk(dcpl, H5O_LAYOUT_NDIMS, chunk_dims)) < 0)
+            if ((ndims = H5Pget_chunk(dcpl, H5S_MAX_RANK + 1, chunk_dims)) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve dataset chunk dimensionality")
             assert(ndims > 0 && "no chunk dimensionality specified");
 
