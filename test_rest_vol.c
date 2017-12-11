@@ -27,39 +27,9 @@
 
 #include "hdf5.h"
 #include "rest_vol_public.h"
+#include "rest_vol_err.h"
 
 #define ARRAY_LENGTH(array) sizeof(array) / sizeof(array[0])
-
-/* Macros for error handling */
-/* Use FUNC to safely handle variations of C99 __func__ keyword handling */
-#ifdef H5_HAVE_C99_FUNC
-#define FUNC __func__
-#elif defined(H5_HAVE_FUNCTION)
-#define FUNC __FUNCTION__
-#else
-#error "We need __func__ or __FUNCTION__ to test function names!"
-#endif
-
-/*
- * Print the current location on the standard output stream.
- */
-#define AT()     printf ("   at %s:%d in %s()...\n",        \
-        __FILE__, __LINE__, FUNC);
-
-/*
- * The name of the test is printed by saying TESTING("something") which will
- * result in the string `Testing something' being flushed to standard output.
- * If a test passes, fails, or is skipped then the PASSED(), H5_FAILED(), or
- * SKIPPED() macro should be called.  After H5_FAILED() or SKIPPED() the caller
- * should print additional information to stdout indented by at least four
- * spaces.  If the h5_errors() is used for automatic error handling then
- * the H5_FAILED() macro is invoked automatically when an API function fails.
- */
-#define TESTING(S)  {printf("Testing %-62s", S); fflush(stdout);}
-#define PASSED()    {puts("PASSED"); fflush(stdout);}
-#define H5_FAILED() {puts("*FAILED*"); fflush(stdout);}
-#define SKIPPED()   {puts(" - SKIPPED -"); fflush(stdout);}
-#define TEST_ERROR  {H5_FAILED(); AT(); goto error;}
 
 
 /* The HSDS endpoint and authentication information */

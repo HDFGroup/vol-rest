@@ -44,78 +44,79 @@
 #include "H5Eprivate.h"      /* XXX: Temporarily needed */
 #include "H5VLprivate.h"     /* XXX: Temporarily needed */
 #include "rest_vol_public.h"
+#include "rest_vol_err.h"    /* Error reporting macros */
 #include "rest_vol.h"        /* REST VOL plugin   */
 
 /* Macro to handle various HTTP response codes */
-#define HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value)                                     \
-do {                                                                                                        \
-    switch(response_code) {                                                                                 \
-        case 200:                                                                                           \
-        case 201:                                                                                           \
-            break;                                                                                          \
-        case 400:                                                                                           \
-            HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Malformed/Bad request for resource\n");           \
-            break;                                                                                          \
-        case 401:                                                                                           \
-            HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Username/Password needed to access resource\n");  \
-            break;                                                                                          \
-        case 403:                                                                                           \
-            HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Unauthorized access to resource\n");              \
-            break;                                                                                          \
-        case 404:                                                                                           \
-            HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Resource not found\n");                           \
-            break;                                                                                          \
-        case 405:                                                                                           \
-            HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Method not allowed\n");                           \
-            break;                                                                                          \
-        case 409:                                                                                           \
-            HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Resource already exists\n");                      \
-            break;                                                                                          \
-        case 410:                                                                                           \
-            HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Resource has been deleted\n");                    \
-            break;                                                                                          \
-        case 413:                                                                                           \
-            HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Selection too large\n");                          \
-            break;                                                                                          \
-        case 500:                                                                                           \
-            HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "An internal server error occurred\n");            \
-            break;                                                                                          \
-        case 501:                                                                                           \
-            HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Functionality not implemented\n");                \
-            break;                                                                                          \
-        case 503:                                                                                           \
-            HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Service unavailable\n");                          \
-            break;                                                                                          \
-        case 504:                                                                                           \
-            HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Gateway timeout\n");                              \
-            break;                                                                                          \
-        default:                                                                                            \
-            HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Unknown error occurred\n");                       \
-            break;                                                                                          \
-    } /* end switch */                                                                                      \
+#define HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value)                                         \
+do {                                                                                                            \
+    switch(response_code) {                                                                                     \
+        case 200:                                                                                               \
+        case 201:                                                                                               \
+            break;                                                                                              \
+        case 400:                                                                                               \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Malformed/Bad request for resource\n");           \
+            break;                                                                                              \
+        case 401:                                                                                               \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Username/Password needed to access resource\n");  \
+            break;                                                                                              \
+        case 403:                                                                                               \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Unauthorized access to resource\n");              \
+            break;                                                                                              \
+        case 404:                                                                                               \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Resource not found\n");                           \
+            break;                                                                                              \
+        case 405:                                                                                               \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Method not allowed\n");                           \
+            break;                                                                                              \
+        case 409:                                                                                               \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Resource already exists\n");                      \
+            break;                                                                                              \
+        case 410:                                                                                               \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Resource has been deleted\n");                    \
+            break;                                                                                              \
+        case 413:                                                                                               \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Selection too large\n");                          \
+            break;                                                                                              \
+        case 500:                                                                                               \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "An internal server error occurred\n");            \
+            break;                                                                                              \
+        case 501:                                                                                               \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Functionality not implemented\n");                \
+            break;                                                                                              \
+        case 503:                                                                                               \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Service unavailable\n");                          \
+            break;                                                                                              \
+        case 504:                                                                                               \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Gateway timeout\n");                              \
+            break;                                                                                              \
+        default:                                                                                                \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Unknown error occurred\n");                       \
+            break;                                                                                              \
+    } /* end switch */                                                                                          \
 } while(0)
 
 /* Macro to perform cURL operation and handle errors. Note that
  * this macro should not generally be called directly. Use one
  * of the below macros to call this with the appropriate arguments. */
-#define CURL_PERFORM_INTERNAL(curl_ptr, handle_HTTP_response, ERR_MAJOR, ERR_MINOR, ret_value)              \
-do {                                                                                                        \
-    CURLcode result = curl_easy_perform(curl_ptr);                                                          \
-                                                                                                            \
-    /* Reset the cURL response buffer write position pointer */                                             \
-    response_buffer.curr_buf_ptr = response_buffer.buffer;                                                  \
-                                                                                                            \
-    if (CURLE_OK != result)                                                                                 \
-        HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "%s", curl_easy_strerror(result))                      \
-                                                                                                            \
-    if (handle_HTTP_response) {                                                                             \
-        long response_code;                                                                                 \
-                                                                                                            \
-        if (CURLE_OK != curl_easy_getinfo(curl_ptr, CURLINFO_RESPONSE_CODE, &response_code))                \
-            HGOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "can't get HTTP response code")                    \
-                                                                                                            \
-        HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value);                                    \
-    } /* end if */                                                                                          \
+#define CURL_PERFORM_INTERNAL(curl_ptr, handle_HTTP_response, ERR_MAJOR, ERR_MINOR, ret_value)                  \
+do {                                                                                                            \
+    CURLcode result = curl_easy_perform(curl_ptr);                                                              \
+                                                                                                                \
+    /* Reset the cURL response buffer write position pointer */                                                 \
+    response_buffer.curr_buf_ptr = response_buffer.buffer;                                                      \
+                                                                                                                \
+    if (CURLE_OK != result)                                                                                     \
+        FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "%s", curl_easy_strerror(result))                      \
+                                                                                                                \
+    if (handle_HTTP_response) {                                                                                 \
+        long response_code;                                                                                     \
+                                                                                                                \
+        if (CURLE_OK != curl_easy_getinfo(curl_ptr, CURLINFO_RESPONSE_CODE, &response_code))                    \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "can't get HTTP response code")                    \
+                                                                                                                \
+        HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value);                                        \
+    } /* end if */                                                                                              \
 } while(0)
 
 /* Calls the CURL_PERFORM_INTERNAL macro in such a way that any
@@ -124,7 +125,7 @@ do {                                                                            
  * the default behavior for most of the server requests that
  * this VOL plugin makes.
  */
-#define CURL_PERFORM(curl_ptr, ERR_MAJOR, ERR_MINOR, ret_value)                                             \
+#define CURL_PERFORM(curl_ptr, ERR_MAJOR, ERR_MINOR, ret_value)                                                 \
 CURL_PERFORM_INTERNAL(curl_ptr, TRUE, ERR_MAJOR, ERR_MINOR, ret_value)
 
 /* Calls the CURL_PERFORM_INTERNAL macro in such a way that any
@@ -133,7 +134,7 @@ CURL_PERFORM_INTERNAL(curl_ptr, TRUE, ERR_MAJOR, ERR_MINOR, ret_value)
  * server to test for the existence of an object, such as in the
  * behavior for H5Fcreate()'s H5F_ACC_TRUNC flag.
  */
-#define CURL_PERFORM_NO_ERR(curl_ptr, ret_value)                                                            \
+#define CURL_PERFORM_NO_ERR(curl_ptr, ret_value)                                                                \
 CURL_PERFORM_INTERNAL(curl_ptr, FALSE, H5E_NONE_MAJOR, H5E_NONE_MINOR, ret_value)
 
 /* Macro to check whether the size of a buffer matches the given target size
@@ -143,28 +144,28 @@ CURL_PERFORM_INTERNAL(curl_ptr, FALSE, H5E_NONE_MAJOR, H5E_NONE_MINOR, ret_value
  * incremented so that the next print operation can continue where the
  * last one left off, and not overwrite the current contents of the buffer.
  */
-#define CHECKED_REALLOC(buffer, buffer_len, target_size, ptr_to_buffer, ERR_MAJOR, ret_value)               \
-while (target_size > buffer_len) {                                                                          \
-    char *tmp_realloc;                                                                                      \
-                                                                                                            \
-    if (NULL == (tmp_realloc = (char *) RV_realloc(buffer, 2 * buffer_len))) {                              \
-        RV_free(buffer); buffer = NULL;                                                                     \
-        HGOTO_ERROR(ERR_MAJOR, H5E_CANTALLOC, ret_value, "can't allocate space")                            \
-    } /* end if */                                                                                          \
-                                                                                                            \
-    /* Place the "current position" pointer at the correct spot in the new buffer */                        \
-    if (ptr_to_buffer) ptr_to_buffer = tmp_realloc + ((char *) ptr_to_buffer - buffer);                     \
-    buffer = tmp_realloc;                                                                                   \
-    buffer_len *= 2;                                                                                        \
+#define CHECKED_REALLOC(buffer, buffer_len, target_size, ptr_to_buffer, ERR_MAJOR, ret_value)                   \
+while (target_size > buffer_len) {                                                                              \
+    char *tmp_realloc;                                                                                          \
+                                                                                                                \
+    if (NULL == (tmp_realloc = (char *) RV_realloc(buffer, 2 * buffer_len))) {                                  \
+        RV_free(buffer); buffer = NULL;                                                                         \
+        FUNC_GOTO_ERROR(ERR_MAJOR, H5E_CANTALLOC, ret_value, "can't allocate space")                            \
+    } /* end if */                                                                                              \
+                                                                                                                \
+    /* Place the "current position" pointer at the correct spot in the new buffer */                            \
+    if (ptr_to_buffer) ptr_to_buffer = tmp_realloc + ((char *) ptr_to_buffer - buffer);                         \
+    buffer = tmp_realloc;                                                                                       \
+    buffer_len *= 2;                                                                                            \
 }
 
 /* Helper macro to call the above with a temporary useless variable, since directly passing
  * NULL to the macro generates invalid code
  */
-#define CHECKED_REALLOC_NO_PTR(buffer, buffer_len, target_size, ERR_MAJOR, ret_value)                       \
-do {                                                                                                        \
-    char *tmp = NULL;                                                                                       \
-    CHECKED_REALLOC(buffer, buffer_len, target_size, tmp, ERR_MAJOR, ret_value);                            \
+#define CHECKED_REALLOC_NO_PTR(buffer, buffer_len, target_size, ERR_MAJOR, ret_value)                           \
+do {                                                                                                            \
+    char *tmp = NULL;                                                                                           \
+    CHECKED_REALLOC(buffer, buffer_len, target_size, tmp, ERR_MAJOR, ret_value);                                \
 } while (0)
 
 
@@ -206,6 +207,8 @@ do {                                                                            
  */
 static hid_t REST_g = -1;
 
+hid_t h5_err_class_g = -1;
+
 /*
  * The CURL pointer used for all cURL operations.
  */
@@ -241,7 +244,7 @@ static struct {
 } response_buffer;
 
 /* Host header string for specifying the host (Domain) for requests */
-const char * const  host_string = "Host: ";
+const char * const host_string = "Host: ";
 
 /* Internal initialization/termination functions which are called by
  * the public functions RVinit() and RVterm() */
@@ -462,12 +465,9 @@ RVinit(void)
 {
     herr_t ret_value = SUCCEED;
 
-    FUNC_ENTER_API(FAIL)
-    H5TRACE0("e","");
-
     /* Check if already initialized */
     if (REST_g >= 0)
-        HGOTO_DONE(SUCCEED)
+        FUNC_GOTO_DONE(SUCCEED)
 
 #ifdef TRACK_MEM_USAGE
     /* Initialize allocated memory counter */
@@ -476,29 +476,33 @@ RVinit(void)
 
     /* Initialize cURL */
     if (NULL == (curl = curl_easy_init()))
-        HGOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't initialize cURL")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't initialize cURL")
 
     /* Instruct cURL to use the buffer for error messages */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_buf))
-        HGOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't set cURL error buffer")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't set cURL error buffer")
 
     /* Allocate buffer for cURL to write responses to */
     if (NULL == (response_buffer.buffer = (char *) RV_malloc(CURL_RESPONSE_BUFFER_DEFAULT_SIZE)))
-        HGOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate cURL response buffer")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate cURL response buffer")
     response_buffer.buffer_size = CURL_RESPONSE_BUFFER_DEFAULT_SIZE;
     response_buffer.curr_buf_ptr = response_buffer.buffer;
 
     /* Redirect cURL output to response buffer */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data_callback))
-        HGOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL write function: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL write function: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
     /* curl_easy_setopt(curl, CURLOPT_VERBOSE, 1); */
 #endif
 
+    /* Register the plugin with HDF5's error reporting API */
+    if ((h5_err_class_g = H5Eregister_class("REST VOL", "REST VOL", "1.0")) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't register with HDF5 error API")
+
     /* Register the plugin with the library */
     if (RV_init() < 0)
-        HGOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't initialize REST VOL plugin")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't initialize REST VOL plugin")
 
 done:
     /* Cleanup if REST VOL plugin initialization failed */
@@ -509,7 +513,7 @@ done:
         curl_easy_cleanup(curl);
     } /* end if */
 
-    FUNC_LEAVE_API(ret_value)
+    return ret_value;
 } /* end RVinit() */
 
 
@@ -528,16 +532,14 @@ RV_init(void)
 {
     herr_t ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI(FAIL)
-
     /* Register the REST VOL plugin, if it isn't already registered */
     if (H5I_VOL != H5Iget_type(REST_g)) {
         if ((REST_g = H5VL_register((const H5VL_class_t *) &H5VL_rest_g, sizeof(H5VL_class_t), TRUE)) < 0)
-            HGOTO_ERROR(H5E_ATOM, H5E_CANTINSERT, FAIL, "can't create ID for REST VOL plugin")
+            FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTINSERT, FAIL, "can't create ID for REST VOL plugin")
     } /* end if */
 
 done:
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_init() */
 
 
@@ -556,14 +558,11 @@ RVterm(void)
 {
     herr_t ret_value = SUCCEED;
 
-    FUNC_ENTER_API(FAIL)
-    H5TRACE0("e","");
-
     if (RV_term(-1) < 0)
-        HGOTO_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close REST VOL plugin")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close REST VOL plugin")
 
 done:
-    FUNC_LEAVE_API(ret_value)
+    return ret_value;
 } /* end RVterm() */
 
 
@@ -582,12 +581,6 @@ RV_term(hid_t H5_ATTR_UNUSED vtpl_id)
 {
     herr_t ret_value = SUCCEED;
 
-#ifdef TRACK_MEM_USAGE
-    FUNC_ENTER_NOAPI_NOINIT
-#else
-    FUNC_ENTER_NOAPI_NOINIT_NOERR
-#endif
-
     /* Free base URL */
     if (base_URL)
         base_URL = (char *) RV_free(base_URL);
@@ -602,21 +595,26 @@ RV_term(hid_t H5_ATTR_UNUSED vtpl_id)
         curl = NULL;
     } /* end if */
 
-    /* Reset ID */
-    REST_g = -1;
-
 #ifdef TRACK_MEM_USAGE
     /* Check for allocated memory */
     if (0 != rest_curr_alloc_bytes)
-        HGOTO_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "%zu bytes were still left allocated", rest_curr_alloc_bytes)
-#endif
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "%zu bytes were still left allocated", rest_curr_alloc_bytes)
 
-#ifdef TRACK_MEM_USAGE
 done:
     rest_curr_alloc_bytes = 0;
 #endif
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    /* Unregister from the HDF5 error API */
+    if (h5_err_class_g >= 0) {
+        if (H5Eunregister_class(h5_err_class_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister from HDF5 error API")
+        h5_err_class_g = -1;
+    } /* end if */
+
+    /* Reset ID */
+    REST_g = -1;
+
+    return ret_value;
 } /* end RV_term() */
 
 
@@ -637,19 +635,16 @@ H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const
     size_t URL_len = 0;
     herr_t ret_value;
 
-    FUNC_ENTER_API(FAIL)
-    H5TRACE4("e", "i*s*s*s", fapl_id, URL, username, password);
-
     assert(URL && "must specify a base URL");
 
     if (REST_g < 0)
-        HGOTO_ERROR(H5E_VOL, H5E_UNINITIALIZED, FAIL, "REST VOL plugin not initialized")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_UNINITIALIZED, FAIL, "REST VOL plugin not initialized")
 
     if (H5P_DEFAULT == fapl_id)
-        HGOTO_ERROR(H5E_PLIST, H5E_BADVALUE, FAIL, "can't set REST VOL plugin for default property list")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_BADVALUE, FAIL, "can't set REST VOL plugin for default property list")
 
     if ((ret_value = H5Pset_vol(fapl_id, REST_g, NULL)) < 0)
-        HGOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't set REST VOL plugin in FAPL")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't set REST VOL plugin in FAPL")
 
     /* Save a copy of the base URL being worked on so that operations like
      * creating a Group can be redirected to "base URL"/groups by building
@@ -657,23 +652,23 @@ H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const
      */
     URL_len = strlen(URL);
     if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
-        HGOTO_ERROR(H5E_ARGS, H5E_CANTALLOC, FAIL, "can't allocate space for necessary base URL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTALLOC, FAIL, "can't allocate space for necessary base URL")
 
     strncpy(base_URL, URL, URL_len);
     base_URL[URL_len] = '\0';
 
     if (username) {
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, username))
-            HGOTO_ERROR(H5E_ARGS, H5E_CANTINIT, FAIL, "can't set username: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTINIT, FAIL, "can't set username: %s", curl_err_buf)
     } /* end if */
 
     if (password) {
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, password))
-            HGOTO_ERROR(H5E_ARGS, H5E_CANTINIT, FAIL, "can't set password: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTINIT, FAIL, "can't set password: %s", curl_err_buf)
     } /* end if */
 
 done:
-    FUNC_LEAVE_API(ret_value)
+    return ret_value;
 } /* end H5Pset_fapl_rest_vol() */
 
 
@@ -683,15 +678,12 @@ RVget_uri(hid_t obj_id)
     RV_object_t *VOL_obj;
     char               *ret_value = NULL;
 
-    FUNC_ENTER_API(NULL)
-    H5TRACE1("e", "i", obj_id);
-
     if (NULL == (VOL_obj = (RV_object_t *) H5VL_object(obj_id)))
-        HGOTO_ERROR(H5E_VOL, H5E_CANTGET, NULL, "invalid identifier")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, NULL, "invalid identifier")
     ret_value = VOL_obj->URI;
 
 done:
-    FUNC_LEAVE_API((const char *) ret_value)
+    return (const char *) ret_value;
 } /* end RVget_uri() */
 
 
@@ -904,8 +896,6 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
     char        *url_encoded_attr_name = NULL;
     void        *ret_value = NULL;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Attribute create call with following parameters:\n");
     printf("  - Attribute Name: %s\n", attr_name);
@@ -922,11 +912,11 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
-        HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file")
 
     /* Allocate and setup internal Attribute struct */
     if (NULL == (new_attribute = (RV_object_t *) RV_malloc(sizeof(*new_attribute))))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate attribute object")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate attribute object")
 
     new_attribute->obj_type = H5I_ATTR;
     new_attribute->domain = parent->domain; /* Store pointer to file that the newly-created attribute is in */
@@ -941,27 +931,27 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
      */
     if (H5P_ATTRIBUTE_CREATE_DEFAULT != acpl_id) {
         if ((new_attribute->u.attribute.acpl_id = H5Pcopy(acpl_id)) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy ACPL")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy ACPL")
     } /* end if */
     else
         new_attribute->u.attribute.acpl_id = H5P_ATTRIBUTE_CREATE_DEFAULT;
 
     /* Get the Datatype and Dataspace IDs */
     if (H5Pget(acpl_id, H5VL_PROP_ATTR_TYPE_ID, &type_id) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get property list value for attribute's datatype ID")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get property list value for attribute's datatype ID")
     if (H5Pget(acpl_id, H5VL_PROP_ATTR_SPACE_ID, &space_id) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get property list value for attribute's dataspace ID")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get property list value for attribute's dataspace ID")
 
     /* Copy the IDs into the internal struct for the Attribute */
     if ((new_attribute->u.attribute.dtype_id = H5Tcopy(type_id)) < 0)
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTCOPY, NULL, "failed to copy datatype")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTCOPY, NULL, "failed to copy datatype")
     if ((new_attribute->u.attribute.space_id = H5Scopy(space_id)) < 0)
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTCOPY, NULL, "failed to copy dataspace")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTCOPY, NULL, "failed to copy dataspace")
 
     /* Copy the attribute's name */
     attr_name_len = strlen(attr_name);
     if (NULL == (new_attribute->u.attribute.attr_name = (char *) RV_malloc(attr_name_len + 1)))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute name")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute name")
     memcpy(new_attribute->u.attribute.attr_name, attr_name, attr_name_len);
     new_attribute->u.attribute.attr_name[attr_name_len] = '\0';
 
@@ -969,16 +959,16 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
 
     /* Form the Datatype portion of the Attribute create request */
     if (RV_convert_datatype_to_string(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTCONVERT, NULL, "can't convert datatype to string representation")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTCONVERT, NULL, "can't convert datatype to string representation")
 
     /* If the Dataspace of the Attribute was specified, convert it to JSON. Otherwise, use defaults */
     if (H5P_DEFAULT != space_id)
         if (RV_convert_dataspace_shape_to_string(space_id, &shape_body, NULL) < 0)
-            HGOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL, "can't parse Attribute shape parameters")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL, "can't parse Attribute shape parameters")
 
     create_request_nalloc = strlen(datatype_body) + (shape_body ? strlen(shape_body) : 0) + 4;
     if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute create request body")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute create request body")
 
     if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc,
             "{%s%s%s}",
@@ -986,12 +976,12 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
             shape_body ? "," : "",
             shape_body ? shape_body : "")
         ) < 0)
-        HGOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error")
 
     /* Setup the "Host: " header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -1007,7 +997,7 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
      * operation contains no illegal characters
      */
     if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, attr_name, (int) attr_name_len)))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, NULL, "can't URL-encode attribute name")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, NULL, "can't URL-encode attribute name")
 
     /* Redirect cURL from the base URL to
      * "/groups/<id>/attributes/<attr name>",
@@ -1046,19 +1036,19 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
         case H5I_ERROR_STACK:
         case H5I_NTYPES:
         default:
-            HGOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "parent object not a group, datatype or dataset")
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "parent object not a group, datatype or dataset")
     } /* end switch */
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT"))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL PUT data: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL PUT data: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, create_request_body_len))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL PUT data size: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
     printf("  - Creating Attribute\n\n");
@@ -1099,18 +1089,18 @@ done:
     /* Clean up allocated attribute object if there was an issue */
     if (new_attribute && !ret_value)
         if (RV_attr_close(new_attribute, FAIL, NULL) < 0)
-            HDONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, NULL, "can't close attribute")
+            FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, NULL, "can't close attribute")
 
     /* Reset cURL custom request to prevent issues with future requests */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        HDONE_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't reset cURL custom request: %s", curl_err_buf)
+        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't reset cURL custom request: %s", curl_err_buf)
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_attr_create() */
 
 
@@ -1141,8 +1131,6 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
     char        *url_encoded_attr_name = NULL;
     void        *ret_value = NULL;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Attribute open call with following parameters:\n");
     printf("  - Attribute Name: %s\n", attr_name);
@@ -1158,11 +1146,11 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
 
     /* XXX: Eventually implement H5Aopen_by_idx() */
     if (loc_params.type == H5VL_OBJECT_BY_IDX)
-        HGOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL, "opening an attribute by index is currently unsupported")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL, "opening an attribute by index is currently unsupported")
 
     /* Allocate and setup internal Attribute struct */
     if (NULL == (attribute = (RV_object_t *) RV_malloc(sizeof(*attribute))))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate attribute object")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate attribute object")
 
     attribute->obj_type = H5I_ATTR;
     attribute->domain = parent->domain; /* Store pointer to file that the opened Dataset is within */
@@ -1177,7 +1165,7 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
     /* Setup the "Host: " header */
     host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -1191,7 +1179,7 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
      */
     attr_name_len = strlen(attr_name);
     if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, attr_name, (int) attr_name_len)))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, NULL, "can't URL-encode attribute name")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, NULL, "can't URL-encode attribute name")
 
     /* Redirect cURL from the base URL to
      * "/groups/<id>/attributes/<attr name>",
@@ -1230,7 +1218,7 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
         case H5I_ERROR_STACK:
         case H5I_NTYPES:
         default:
-            HGOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "parent object not a group, datatype or dataset")
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "parent object not a group, datatype or dataset")
     } /* end switch */
 
 #ifdef PLUGIN_DEBUG
@@ -1238,11 +1226,11 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
 #endif
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
     printf("   /********************************\\\n");
@@ -1254,22 +1242,22 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
 
     /* Set up a Dataspace for the opened Attribute */
     if ((attribute->u.attribute.space_id = RV_parse_dataspace(response_buffer.buffer)) < 0)
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't parse attribute dataspace")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't parse attribute dataspace")
 
     /* Set up a Datatype for the opened Attribute */
     if ((attribute->u.attribute.dtype_id = RV_parse_datatype(response_buffer.buffer, TRUE)) < 0)
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't parse attribute datatype")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't parse attribute datatype")
 
     /* Copy the attribute's name */
     if (NULL == (attribute->u.attribute.attr_name = (char *) RV_malloc(attr_name_len + 1)))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute name")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute name")
     memcpy(attribute->u.attribute.attr_name, attr_name, attr_name_len);
     attribute->u.attribute.attr_name[attr_name_len] = '\0';
 
     /* Set up an ACPL for the attribute so that H5Aget_create_plist() will function correctly */
     /* XXX: Set any properties necessary */
     if ((attribute->u.attribute.acpl_id = H5Pcreate(H5P_ATTRIBUTE_CREATE)) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create ACPL for attribute")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create ACPL for attribute")
 
     ret_value = (void *) attribute;
 
@@ -1292,14 +1280,14 @@ done:
     /* Clean up allocated attribute object if there was an issue */
     if (attribute && !ret_value)
         if (RV_attr_close(attribute, FAIL, NULL) < 0)
-            HDONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, NULL, "can't close attribute")
+            FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, NULL, "can't close attribute")
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_attr_open() */
 
 
@@ -1328,8 +1316,6 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED dxpl_id
     char         request_url[URL_MAX_LENGTH];
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(buf);
     assert(H5I_ATTR == attribute->obj_type && "not an attribute");
 
@@ -1340,23 +1326,23 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED dxpl_id
 
     /* Determine whether it's possible to receive the data as a binary blob instead of as JSON */
     if (H5T_NO_CLASS == (dtype_class = H5Tget_class(dtype_id)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
 
     if ((is_variable_str = H5Tis_variable_str(dtype_id)) < 0)
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
 
     is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
 
     if ((file_select_npoints = H5Sget_select_npoints(attribute->u.attribute.space_id)) < 0)
-        HGOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid attribute dataspace")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid attribute dataspace")
 
     if (0 == (dtype_size = H5Tget_size(dtype_id)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
 
     /* Setup the "Host: " header */
     host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -1372,7 +1358,7 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED dxpl_id
      * operation contains no illegal characters
      */
     if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, attribute->u.attribute.attr_name, 0)))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name")
 
     /* Redirect cURL from the base URL to
      * "/groups/<id>/attributes/<attr name>/value",
@@ -1411,15 +1397,15 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED dxpl_id
         case H5I_ERROR_STACK:
         case H5I_NTYPES:
         default:
-            HGOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
     } /* end switch */
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
     printf("  - Reading attribute\n\n");
@@ -1449,7 +1435,7 @@ done:
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_attr_read() */
 
 
@@ -1480,14 +1466,12 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
     char         request_url[URL_MAX_LENGTH];
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(buf);
     assert(H5I_ATTR == attribute->obj_type && "not an attribute");
 
     /* Check for write access */
     if (!(attribute->domain->u.file.intent & H5F_ACC_RDWR))
-        HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
 
 #ifdef PLUGIN_DEBUG
     printf("Received Attribute write call with following parameters:\n");
@@ -1496,18 +1480,18 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
 
     /* Determine whether it's possible to send the data as a binary blob instead of as JSON */
     if (H5T_NO_CLASS == (dtype_class = H5Tget_class(dtype_id)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
 
     if ((is_variable_str = H5Tis_variable_str(dtype_id)) < 0)
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
 
     is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
 
     if ((file_select_npoints = H5Sget_select_npoints(attribute->u.attribute.space_id)) < 0)
-        HGOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid attribute dataspace")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid attribute dataspace")
 
     if (0 == (dtype_size = H5Tget_size(dtype_id)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
 
     if (!is_transfer_binary) {
 
@@ -1518,7 +1502,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
     /* Setup the "Host: " header */
     host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -1534,7 +1518,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
      * operation contains no illegal characters
      */
     if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, attribute->u.attribute.attr_name, 0)))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name")
 
     /* Redirect cURL from the base URL to
      * "/groups/<id>/attributes/<attr name>/value",
@@ -1573,19 +1557,19 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
         case H5I_ERROR_STACK:
         case H5I_NTYPES:
         default:
-            HGOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
     } /* end switch */
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT"))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, is_transfer_binary ? (const char *) buf : write_body))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) write_body_len)) /* XXX: unsafe cast */
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
     printf("  - Writing attribute\n\n");
@@ -1612,14 +1596,14 @@ done:
 
     /* Reset cURL custom request to prevent issues with future requests */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        HDONE_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf)
+        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf)
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_attr_write() */
 
 
@@ -1640,8 +1624,6 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
     RV_object_t *_obj = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Attribute get call with following parameters:\n");
     printf("  - Get Type: %d\n", get_type);
@@ -1656,7 +1638,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Pcopy(_obj->u.attribute.acpl_id)) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy attribute ACPL")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy attribute ACPL")
 
             break;
         } /* H5VL_ATTR_GET_ACPL */
@@ -1710,7 +1692,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
                 case H5VL_OBJECT_BY_ADDR:
                 case H5VL_OBJECT_BY_NAME:
                 default:
-                    HGOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid loc_params type")
+                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid loc_params type")
             }
 
             break;
@@ -1722,14 +1704,14 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Scopy(_obj->u.attribute.space_id)) < 0)
-                HGOTO_ERROR(H5E_ATTR, H5E_CANTCOPY, FAIL, "can't copy attribute's dataspace")
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTCOPY, FAIL, "can't copy attribute's dataspace")
 
             break;
         } /* H5VL_ATTR_GET_SPACE */
 
         /* H5Aget_storage_size */
         case H5VL_ATTR_GET_STORAGE_SIZE:
-            HGOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL, "get attribute storage size is unsupported")
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL, "get attribute storage size is unsupported")
 
         /* H5Aget_type */
         case H5VL_ATTR_GET_TYPE:
@@ -1737,17 +1719,17 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Tcopy(_obj->u.attribute.dtype_id)) < 0)
-                HGOTO_ERROR(H5E_ATTR, H5E_CANTCOPY, FAIL, "can't copy attribute's datatype")
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTCOPY, FAIL, "can't copy attribute's datatype")
 
             break;
         } /* H5VL_ATTR_GET_TYPE */
 
         default:
-            HGOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't get this type of information from attribute")
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't get this type of information from attribute")
     } /* end switch */
 
 done:
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_attr_get() */
 
 
@@ -1773,8 +1755,6 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
     char        *url_encoded_attr_name = NULL;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Attribute-specific call with following parameters:\n");
     printf("  - Specific type: %d\n", specific_type);
@@ -1782,12 +1762,12 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
 
     /* Check for write access */
     if (!(loc_obj->domain->u.file.intent & H5F_ACC_RDWR))
-        HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
 
     /* Setup the "Host: " header */
     host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -1797,7 +1777,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
 
     switch (specific_type) {
         /* H5Adelete(_by_name/idx) */
@@ -1809,7 +1789,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
              * attribute delete operation doesn't contain any illegal characters
              */
             if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, attr_name, 0)))
-                HGOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name")
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name")
 
             /* Redirect cURL from the base URL to
              * "/groups/<id>/attributes/<attr name>",
@@ -1848,7 +1828,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                 case H5I_ERROR_STACK:
                 case H5I_NTYPES:
                 default:
-                    HGOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
+                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
             } /* end switch */
 
 #ifdef PLUGIN_DEBUG
@@ -1856,9 +1836,9 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
 #endif
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
-                HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
             printf("   /********************************\\\n");
@@ -1882,7 +1862,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
              * attribute delete operation doesn't contain any illegal characters
              */
             if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, attr_name, 0)))
-                HGOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name")
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name")
 
             /* Redirect cURL from the base URL to
              * "/groups/<id>/attributes/<attr name>",
@@ -1921,7 +1901,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                 case H5I_ERROR_STACK:
                 case H5I_NTYPES:
                 default:
-                    HGOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
+                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
             } /* end switch */
 
 #ifdef PLUGIN_DEBUG
@@ -1929,9 +1909,9 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
 #endif
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                HGOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
             printf("   /********************************\\\n");
@@ -1942,7 +1922,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
             CURL_PERFORM_NO_ERR(curl, FAIL);
 
             if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
-                HGOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't get HTTP response code")
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't get HTTP response code")
 
             if (HTTP_SUCCESS(http_response))
                 *ret = TRUE;
@@ -1956,14 +1936,14 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
 
         /* H5Aiterate (_by_name) */
         case H5VL_ATTR_ITER:
-            HGOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL, "attribute iteration is unsupported")
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL, "attribute iteration is unsupported")
 
         /* H5Arename (_by_name) */
         case H5VL_ATTR_RENAME:
-            HGOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL, "attribute renaming is unsupported")
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL, "attribute renaming is unsupported")
 
         default:
-            HGOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "unknown attribute operation")
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "unknown attribute operation")
     } /* end switch */
 
 done:
@@ -1974,7 +1954,7 @@ done:
      * to prevent any possible future issues with requests
      */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        HDONE_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf)
+        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf)
 
     if (url_encoded_attr_name)
         curl_free(url_encoded_attr_name);
@@ -1984,7 +1964,7 @@ done:
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_attr_specific() */
 
 
@@ -2006,8 +1986,6 @@ RV_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
     RV_object_t *_attr = (RV_object_t *) attr;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Attribute close call with following parameters:\n");
     if (_attr->u.attribute.attr_name) printf("  - Attribute name: %s\n", _attr->u.attribute.attr_name);
@@ -2020,18 +1998,18 @@ RV_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
         RV_free(_attr->u.attribute.attr_name);
 
     if (_attr->u.attribute.dtype_id >= 0 && H5Tclose(_attr->u.attribute.dtype_id) < 0)
-        HDONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
+        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
     if (_attr->u.attribute.space_id >= 0 && H5Sclose(_attr->u.attribute.space_id) < 0)
-        HDONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close dataspace")
+        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close dataspace")
 
     if (_attr->u.attribute.acpl_id >= 0) {
         if (_attr->u.attribute.acpl_id != H5P_ATTRIBUTE_CREATE_DEFAULT && H5Pclose(_attr->u.attribute.acpl_id) < 0)
-            HDONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close ACPL")
+            FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close ACPL")
     } /* end if */
 
     RV_free(_attr);
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_attr_close() */
 
 
@@ -2067,8 +2045,6 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
     char         request_url[URL_MAX_LENGTH];
     void        *ret_value = NULL;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Datatype commit call with following parameters:\n");
     printf("  - Name: %s\n", name);
@@ -2086,11 +2062,11 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
-        HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file")
 
     /* Allocate and setup internal Datatype struct */
     if (NULL == (new_datatype = (RV_object_t *) RV_malloc(sizeof(*new_datatype))))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate datatype object")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate datatype object")
 
     new_datatype->obj_type = H5I_DATATYPE;
     new_datatype->domain = parent->domain; /* Store pointer to file that the newly-committed datatype is in */
@@ -2102,14 +2078,14 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
      */
     if (H5P_DATATYPE_CREATE_DEFAULT != tcpl_id) {
         if ((new_datatype->u.datatype.tcpl_id = H5Pcopy(tcpl_id)) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy TCPL")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy TCPL")
     } /* end if */
     else
         new_datatype->u.datatype.tcpl_id = H5P_DATATYPE_CREATE_DEFAULT;
 
     /* Convert the datatype into JSON to be used in the request body */
     if (RV_convert_datatype_to_string(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert datatype to string representation")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert datatype to string representation")
 
     /* If this is not a H5Tcommit_anon call, create a link for the Datatype
      * to link it into the file structure */
@@ -2126,7 +2102,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
          * one which the datatype will ultimately be linked under, extract out the path to the
          * final group in the chain */
         if (NULL == (path_dirname = RV_dirname(name)))
-            HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, NULL, "invalid pathname for datatype link")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, NULL, "invalid pathname for datatype link")
         empty_dirname = !strcmp(path_dirname, "");
 
 #ifdef PLUGIN_DEBUG
@@ -2143,12 +2119,12 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
 
             search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
             if (!search_ret || search_ret < 0)
-                HGOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate target for dataset link")
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate target for dataset link")
         } /* end if */
 
         link_body_len = strlen(link_body_format) + strlen(link_basename) + (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
         if (NULL == (link_body = (char *) RV_malloc(link_body_len)))
-            HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for datatype link body")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for datatype link body")
 
         /* Form the Datatype Commit Link portion of the commit request using the above format
          * specifier and the corresponding arguments */
@@ -2158,7 +2134,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
     /* Form the request body to commit the Datatype */
     commit_request_nalloc = datatype_body_len + (link_body ? link_body_len + 2 : 0) + 3;
     if (NULL == (commit_request_body = (char *) RV_malloc(commit_request_nalloc)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for datatype commit request body")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for datatype commit request body")
 
     if ((commit_request_len = snprintf(commit_request_body, commit_request_nalloc,
              "{%s%s%s}",
@@ -2166,12 +2142,12 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
              link_body ? ", " : "",
              link_body ? link_body : "")
         ) < 0)
-        HGOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "snprintf error")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "snprintf error")
 
     /* Setup the "Host: " header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -2187,15 +2163,15 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
     snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes", base_URL);
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, commit_request_body))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL POST data: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL POST data: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, commit_request_len))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL POST data size: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL POST data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
     printf("  - Committing datatype\n\n");
@@ -2209,7 +2185,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
 
     /* Store the newly-committed Datatype's URI */
     if (RV_parse_response(response_buffer.buffer, NULL, new_datatype->URI, RV_copy_object_URI_callback) < 0)
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, NULL, "can't parse committed datatype's URI")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, NULL, "can't parse committed datatype's URI")
 
     ret_value = (void *) new_datatype;
 
@@ -2241,14 +2217,14 @@ done:
     /* Clean up allocated datatype object if there was an issue */
     if (new_datatype && !ret_value)
         if (RV_datatype_close(new_datatype, FAIL, NULL) < 0)
-            HDONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, NULL, "can't close datatype")
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, NULL, "can't close datatype")
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_datatype_commit() */
 
 
@@ -2275,8 +2251,6 @@ RV_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const c
     htri_t       search_ret;
     void        *ret_value = NULL;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Datatype open call with following parameters:\n");
     printf("  - Name: %s\n", name);
@@ -2290,7 +2264,7 @@ RV_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const c
 
     /* Allocate and setup internal Datatype struct */
     if (NULL == (datatype = (RV_object_t *) RV_malloc(sizeof(*datatype))))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate datatype object")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate datatype object")
 
     datatype->obj_type = H5I_DATATYPE;
     datatype->domain = parent->domain; /* Store pointer to file that the opened Dataset is within */
@@ -2300,17 +2274,17 @@ RV_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const c
     /* Locate the named Datatype */
     search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_callback, NULL, datatype->URI);
     if (!search_ret || search_ret < 0)
-        HGOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't locate datatype by path")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't locate datatype by path")
 
     /* Set up the actual datatype by converting the string representation into an hid_t */
     if ((datatype->u.datatype.dtype_id = RV_parse_datatype(response_buffer.buffer, TRUE)) < 0)
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, NULL, "can't parse dataset's datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, NULL, "can't parse dataset's datatype")
 
     /* Set up a TCPL for the datatype so that H5Tget_create_plist() will function correctly.
        Note that currently there aren't any properties that can be set for a TCPL, however
        we still use one here specifically for H5Tget_create_plist(). */
     if ((datatype->u.datatype.tcpl_id = H5Pcreate(H5P_DATATYPE_CREATE)) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create TCPL for datatype")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create TCPL for datatype")
 
     ret_value = (void *) datatype;
 
@@ -2329,9 +2303,9 @@ done:
     /* Clean up allocated datatype object if there was an issue */
     if (datatype && !ret_value)
         if (RV_datatype_close(datatype, FAIL, NULL) < 0)
-            HDONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, NULL, "can't close datatype")
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, NULL, "can't close datatype")
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_datatype_open() */
 
 
@@ -2353,8 +2327,6 @@ RV_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t H5_ATTR_UNUSED dx
     RV_object_t *dtype = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Datatype get call with following parameters:\n");
     printf("  - Get Type: %d\n", get_type);
@@ -2372,7 +2344,7 @@ RV_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t H5_ATTR_UNUSED dx
             size_t   size = va_arg(arguments, size_t);
 
             if (H5Tencode(dtype->u.datatype.dtype_id, buf, &size) < 0)
-                HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "can't determine serialized length of datatype")
+                FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "can't determine serialized length of datatype")
 
             *nalloc = (ssize_t) size;
 
@@ -2386,17 +2358,17 @@ RV_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t H5_ATTR_UNUSED dx
 
             /* Retrieve the datatype's creation property list */
             if((*plist_id = H5Pcopy(dtype->u.datatype.tcpl_id)) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get datatype creation property list")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get datatype creation property list")
 
             break;
         } /* H5VL_DATATYPE_GET_TCPL */
 
         default:
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get this type of information from datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get this type of information from datatype")
     } /* end switch */
 
 done:
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_datatype_get() */
 
 
@@ -2419,8 +2391,6 @@ RV_datatype_close(void *dt, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **
     RV_object_t *_dtype = (RV_object_t *) dt;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Datatype close call with following parameters:\n");
     printf("  - URI: %s\n\n", _dtype->URI);
@@ -2429,16 +2399,16 @@ RV_datatype_close(void *dt, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **
     assert(H5I_DATATYPE == _dtype->obj_type && "not a datatype");
 
     if (_dtype->u.datatype.dtype_id >= 0 && H5Tclose(_dtype->u.datatype.dtype_id) < 0)
-        HDONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
+        FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
 
     if (_dtype->u.datatype.tcpl_id >= 0) {
         if (_dtype->u.datatype.tcpl_id != H5P_DATATYPE_CREATE_DEFAULT && H5Pclose(_dtype->u.datatype.tcpl_id) < 0)
-            HDONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close TCPL")
+            FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close TCPL")
     } /* end if */
 
     RV_free(_dtype);
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_datatype_close() */
 
 
@@ -2469,8 +2439,6 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
     char         request_url[URL_MAX_LENGTH];
     void        *ret_value = NULL;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Dataset create call with following parameters:\n");
     printf("  - Name: %s\n", name);
@@ -2486,11 +2454,11 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
-        HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file")
 
     /* Allocate and setup internal Dataset struct */
     if (NULL == (new_dataset = (RV_object_t *) RV_malloc(sizeof(*new_dataset))))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate dataset object")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate dataset object")
 
     new_dataset->obj_type = H5I_DATASET;
     new_dataset->domain = parent->domain; /* Store pointer to file that the newly-created dataset is in */
@@ -2504,7 +2472,7 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
      */
     if (H5P_DATASET_ACCESS_DEFAULT != dapl_id) {
         if ((new_dataset->u.dataset.dapl_id = H5Pcopy(dapl_id)) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy DAPL")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy DAPL")
     } /* end if */
     else
         new_dataset->u.dataset.dapl_id = H5P_DATASET_ACCESS_DEFAULT;
@@ -2514,7 +2482,7 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
      */
     if (H5P_DATASET_CREATE_DEFAULT != dcpl_id) {
         if ((new_dataset->u.dataset.dcpl_id = H5Pcopy(dcpl_id)) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy DCPL")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy DCPL")
     } /* end if */
     else
         new_dataset->u.dataset.dcpl_id = H5P_DATASET_CREATE_DEFAULT;
@@ -2524,7 +2492,7 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
         size_t tmp_len = 0;
 
         if (RV_setup_dataset_create_request_body(obj, name, dcpl_id, &create_request_body, &tmp_len) < 0)
-            HGOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL, "can't parse dataset creation parameters")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL, "can't parse dataset creation parameters")
 
         /* XXX: unsafe cast */
         create_request_body_len = (curl_off_t) tmp_len;
@@ -2533,7 +2501,7 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
     /* Setup the "Host: " header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -2549,15 +2517,15 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
     snprintf(request_url, URL_MAX_LENGTH, "%s/datasets", base_URL);
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set cURL POST data: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set cURL POST data: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, create_request_body_len))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set cURL POST data size: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set cURL POST data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
     printf("  - Creating dataset\n\n");
@@ -2571,17 +2539,17 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
 
     /* Store the newly-created dataset's URI */
     if (RV_parse_response(response_buffer.buffer, NULL, new_dataset->URI, RV_copy_object_URI_callback) < 0)
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL, "can't parse new dataset's URI")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL, "can't parse new dataset's URI")
 
     if (H5Pget(dcpl_id, H5VL_PROP_DSET_TYPE_ID, &type_id) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get property list value for dataset's datatype ID")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get property list value for dataset's datatype ID")
     if (H5Pget(dcpl_id, H5VL_PROP_DSET_SPACE_ID, &space_id) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get property list value for dataset's dataspace ID")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get property list value for dataset's dataspace ID")
 
     if ((new_dataset->u.dataset.dtype_id = H5Tcopy(type_id)) < 0)
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTCOPY, NULL, "failed to copy datatype")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCOPY, NULL, "failed to copy datatype")
     if ((new_dataset->u.dataset.space_id = H5Scopy(space_id)) < 0)
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTCOPY, NULL, "failed to copy dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCOPY, NULL, "failed to copy dataspace")
 
     ret_value = (void *) new_dataset;
 
@@ -2608,14 +2576,14 @@ done:
     /* Clean up allocated dataset object if there was an issue */
     if (new_dataset && !ret_value)
         if (RV_dataset_close(new_dataset, FAIL, NULL) < 0)
-            HDONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, NULL, "can't close dataset")
+            FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, NULL, "can't close dataset")
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_dataset_create() */
 
 
@@ -2642,8 +2610,6 @@ RV_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
     htri_t       search_ret;
     void        *ret_value = NULL;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Dataset open call with following parameters:\n");
     printf("  - Name: %s\n", name);
@@ -2657,7 +2623,7 @@ RV_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
 
     /* Allocate and setup internal Dataset struct */
     if (NULL == (dataset = (RV_object_t *) RV_malloc(sizeof(*dataset))))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate dataset object")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate dataset object")
 
     dataset->obj_type = H5I_DATASET;
     dataset->domain = parent->domain; /* Store pointer to file that the opened Dataset is within */
@@ -2669,27 +2635,27 @@ RV_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
     /* Locate the Dataset */
     search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_callback, NULL, dataset->URI);
     if (!search_ret || search_ret < 0)
-        HGOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate dataset by path")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate dataset by path")
 
     /* Set up a Dataspace for the opened Dataset */
     if ((dataset->u.dataset.space_id = RV_parse_dataspace(response_buffer.buffer)) < 0)
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTGET, NULL, "can't parse dataset dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, NULL, "can't parse dataset dataspace")
 
     /* Set up a Datatype for the opened Dataset */
     if ((dataset->u.dataset.dtype_id = RV_parse_datatype(response_buffer.buffer, TRUE)) < 0)
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTGET, NULL, "can't parse dataset datatype")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, NULL, "can't parse dataset datatype")
 
     /* Set up a DAPL for the dataset so that H5Dget_access_plist() will function correctly */
     if ((dataset->u.dataset.dapl_id = H5Pcreate(H5P_DATASET_ACCESS)) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create DAPL for dataset")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create DAPL for dataset")
 
     /* Set up a DCPL for the dataset so that H5Dget_create_plist() will function correctly */
     if ((dataset->u.dataset.dcpl_id = H5Pcreate(H5P_DATASET_CREATE)) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create DCPL for dataset")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create DCPL for dataset")
 
     /* Set any necessary creation properties on the DCPL setup for the dataset */
     if (RV_parse_response(response_buffer.buffer, NULL, &dataset->u.dataset.dcpl_id, RV_parse_dataset_creation_properties_callback) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't parse dataset's creation properties")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't parse dataset's creation properties")
 
     ret_value = (void *) dataset;
 
@@ -2708,9 +2674,9 @@ done:
     /* Clean up allocated dataset object if there was an issue */
     if (dataset && !ret_value)
         if (RV_dataset_close(dataset, FAIL, NULL) < 0)
-            HDONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, NULL, "can't close dataset")
+            FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, NULL, "can't close dataset")
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_dataset_open() */
 
 
@@ -2744,8 +2710,6 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     void         *obj_ref_buf = NULL;
     char          request_url[URL_MAX_LENGTH];
     herr_t        ret_value = SUCCEED;
-
-    FUNC_ENTER_NOAPI_NOINIT
 
     assert(buf);
     assert(H5I_DATASET == dataset->obj_type && "not a dataset");
@@ -2791,7 +2755,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
             /* Copy the selection from file_space_id into the mem_space_id. */
             if (H5Sselect_copy(mem_space_id, file_space_id, FALSE) < 0)
-                HGOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL, "can't copy selection from file space to memory space")
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL, "can't copy selection from file space to memory space")
         } /* end if */
 
         /* Since the selection in the dataset's file dataspace is not set
@@ -2799,27 +2763,27 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
         /* Retrieve the selection type to choose how to format the dataspace selection */
         if (H5S_SEL_ERROR == (sel_type = H5Sget_select_type(file_space_id)))
-            HGOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type")
 
         if (RV_convert_dataspace_selection_to_string(file_space_id, &selection_body, &selection_body_len,
                 (H5S_SEL_POINTS == sel_type) ? FALSE : TRUE) < 0)
-            HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't convert dataspace selection to string representation")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't convert dataspace selection to string representation")
     } /* end else */
 
     /* Verify that the number of selected points matches */
     if ((mem_select_npoints = H5Sget_select_npoints(mem_space_id)) < 0)
-        HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
     if ((file_select_npoints = H5Sget_select_npoints(file_space_id)) < 0)
-        HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
     assert((mem_select_npoints == file_select_npoints) && "memory selection num points != file selection num points");
 
 
     /* Determine whether it's possible to send the data as a binary blob instead of a JSON array */
     if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
 
     if ((is_variable_str = H5Tis_variable_str(mem_type_id)) < 0)
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
 
     /* Only perform a binary transfer for fixed-length datatype datasets with an
      * All or Hyperslab selection. Point selections are dealt with by POSTing the
@@ -2830,7 +2794,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     /* Setup the "Host: " header */
     host_header_len = strlen(dataset->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -2864,7 +2828,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
         /* Ensure we have enough space to add the enclosing '{' and '}' */
         if (NULL == (selection_body = (char *) RV_realloc(selection_body, selection_body_len + 3)))
-            HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't reallocate space for point selection body")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't reallocate space for point selection body")
 
         /* Shift the whole string down by a byte */
         memmove(selection_body + 1, selection_body, selection_body_len + 1);
@@ -2880,23 +2844,23 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 #endif
 
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
-            HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, selection_body))
-            HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL POST data: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL POST data: %s", curl_err_buf)
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, write_len))
-            HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL POST data size: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL POST data size: %s", curl_err_buf)
 
         curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
     } /* end if */
     else {
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-            HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
     } /* end else */
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
     printf("  - Reading dataset\n\n");
@@ -2912,20 +2876,20 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         size_t dtype_size;
 
         if (0 == (dtype_size = H5Tget_size(mem_type_id)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
 
         /* Scatter the read data out to the supplied read buffer according to the mem_type_id
          * and mem_space_id given */
         read_data_size = (size_t) file_select_npoints * dtype_size;
         if (H5Dscatter(dataset_read_scatter_op, &read_data_size, mem_type_id, mem_space_id, buf) < 0)
-            HGOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL, "can't scatter data to read buffer")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL, "can't scatter data to read buffer")
     } /* end if */
     else {
         if (H5T_STD_REF_OBJ == mem_type_id) {
             /* Convert the received binary buffer into a buffer of rest_obj_ref_t's */
             if (RV_convert_buffer_to_obj_refs(response_buffer.buffer, (size_t) file_select_npoints,
                     (RV_obj_ref_t **) &obj_ref_buf, &read_data_size) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert ref string/s to object ref array")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert ref string/s to object ref array")
 
             memcpy(buf, obj_ref_buf, read_data_size);
         } /* end if */
@@ -2950,7 +2914,7 @@ done:
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_dataset_read() */
 
 
@@ -2984,14 +2948,12 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     char          request_url[URL_MAX_LENGTH];
     herr_t        ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(buf);
     assert(H5I_DATASET == dataset->obj_type && "not a dataset");
 
     /* Check for write access */
     if (!(dataset->domain->u.file.intent & H5F_ACC_RDWR))
-        HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
 
 #ifdef PLUGIN_DEBUG
     printf("Received Dataset write call with following parameters:\n");
@@ -3006,10 +2968,10 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
     /* Determine whether it's possible to send the data as a binary blob instead of as JSON */
     if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
 
     if ((is_variable_str = H5Tis_variable_str(mem_type_id)) < 0)
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
 
     is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
 
@@ -3043,7 +3005,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
             /* Copy the selection from file_space_id into the mem_space_id */
             if (H5Sselect_copy(mem_space_id, file_space_id, FALSE) < 0)
-                HGOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL, "can't copy selection from file space to memory space")
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL, "can't copy selection from file space to memory space")
         } /* end if */
 
         /* Since the selection in the dataset's file dataspace is not set
@@ -3051,17 +3013,17 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
         /* Retrieve the selection type here for later use */
         if (H5S_SEL_ERROR == (sel_type = H5Sget_select_type(file_space_id)))
-            HGOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type")
 
         if (RV_convert_dataspace_selection_to_string(file_space_id, &selection_body, NULL, is_transfer_binary) < 0)
-            HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't convert dataspace to string representation")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't convert dataspace to string representation")
     } /* end else */
 
     /* Verify that the number of selected points matches */
     if ((mem_select_npoints = H5Sget_select_npoints(mem_space_id)) < 0)
-        HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
     if ((file_select_npoints = H5Sget_select_npoints(file_space_id)) < 0)
-        HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
     assert((mem_select_npoints == file_select_npoints) && "memory selection num points != file selection num points");
 
     /* Setup the size of the data being transferred and the data buffer itself (for non-simple
@@ -3071,7 +3033,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         size_t dtype_size;
 
         if (0 == (dtype_size = H5Tget_size(mem_type_id)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
 
         write_body_len = (size_t) file_select_npoints * dtype_size;
     } /* end if */
@@ -3079,7 +3041,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         if (H5T_STD_REF_OBJ == mem_type_id) {
             /* Convert the buffer of rest_obj_ref_t's to a binary buffer */
             if (RV_convert_obj_refs_to_buffer((const RV_obj_ref_t *) buf, (size_t) file_select_npoints, &write_body, &write_body_len) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert object ref/s to ref string/s")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert object ref/s to ref string/s")
             buf = write_body;
         } /* end if */
     } /* end else */
@@ -3088,7 +3050,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     /* Setup the "Host: " header */
     host_header_len = strlen(dataset->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -3108,15 +3070,15 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
                                           is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? selection_body : "");
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT"))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, is_transfer_binary ? (const char *) buf : write_body))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) write_body_len)) /* XXX: unsafe cast */
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
     printf("  - Writing dataset\n\n");
@@ -3143,14 +3105,14 @@ done:
 
     /* Reset cURL custom request to prevent issues with future requests */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        HDONE_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf)
+        FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf)
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_dataset_write() */
 
 
@@ -3172,8 +3134,6 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl
     RV_object_t *dset = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Dataset get call with following parameters:\n");
     printf("  - Get Type: %d\n", get_type);
@@ -3190,7 +3150,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Pcopy(dset->u.dataset.dapl_id)) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy Dataset DAPL")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy Dataset DAPL")
 
             break;
         } /* H5VL_DATASET_GET_DAPL */
@@ -3201,14 +3161,14 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Pcopy(dset->u.dataset.dcpl_id)) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy Dataset DCPL")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy Dataset DCPL")
 
             break;
         } /* H5VL_DATASET_GET_DCPL */
 
         /* H5Dget_offset */
         case H5VL_DATASET_GET_OFFSET:
-            HGOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "get dataset offset unsupported")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "get dataset offset unsupported")
 
         /* H5Dget_space */
         case H5VL_DATASET_GET_SPACE:
@@ -3216,18 +3176,18 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Scopy(dset->u.dataset.space_id)) < 0)
-                HGOTO_ERROR(H5E_ARGS, H5E_CANTGET, FAIL, "can't get dataspace of dataset")
+                FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTGET, FAIL, "can't get dataspace of dataset")
 
             break;
         } /* H5VL_DATASET_GET_SPACE */
 
         /* H5Dget_space_status */
         case H5VL_DATASET_GET_SPACE_STATUS:
-            HGOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "get dataset space status unsupported")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "get dataset space status unsupported")
 
         /* H5Dget_storage_size */
         case H5VL_DATASET_GET_STORAGE_SIZE:
-            HGOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "get dataset storage size unsupported")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "get dataset storage size unsupported")
 
         /* H5Dget_type */
         case H5VL_DATASET_GET_TYPE:
@@ -3235,17 +3195,17 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Tcopy(dset->u.dataset.dtype_id)) < 0)
-                HGOTO_ERROR(H5E_DATASET, H5E_CANTCOPY, FAIL, "can't copy dataset's datatype")
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCOPY, FAIL, "can't copy dataset's datatype")
 
             break;
         } /* H5VL_DATASET_GET_TYPE */
 
         default:
-            HGOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get this type of information from dataset")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get this type of information from dataset")
     } /* end switch */
 
 done:
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_dataset_get() */
 
 
@@ -3270,8 +3230,6 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
     char         request_url[URL_MAX_LENGTH];
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Dataset-specific call with following parameters:\n");
     printf("  - Specific type: %d\n", specific_type);
@@ -3283,12 +3241,12 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
 
     /* Check for write access */
     if (!(dset->domain->u.file.intent & H5F_ACC_RDWR))
-        HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
 
     /* Setup the "Host: " header */
     host_header_len = strlen(dset->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -3298,16 +3256,16 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
 
     switch (specific_type) {
         /* H5Dset_extent */
         case H5VL_DATASET_SET_EXTENT:
-            HGOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "set dataset extent unsupported")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "set dataset extent unsupported")
             break;
 
         default:
-            HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "unknown dataset operation")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "unknown dataset operation")
     } /* end switch */
 
 done:
@@ -3319,7 +3277,7 @@ done:
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_dataset_specific() */
 
 
@@ -3341,8 +3299,6 @@ RV_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED *
     RV_object_t *_dset = (RV_object_t *) dset;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Dataset close call with following parameters:\n");
     printf("  - URI: %s\n\n", _dset->URI);
@@ -3351,23 +3307,23 @@ RV_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED *
     assert(H5I_DATASET == _dset->obj_type && "not a dataset");
 
     if (_dset->u.dataset.dtype_id >= 0 && H5Tclose(_dset->u.dataset.dtype_id) < 0)
-        HDONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
+        FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
     if (_dset->u.dataset.space_id >= 0 && H5Sclose(_dset->u.dataset.space_id) < 0)
-        HDONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, FAIL, "can't close dataspace")
+        FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, FAIL, "can't close dataspace")
 
     if (_dset->u.dataset.dapl_id >= 0) {
         if (_dset->u.dataset.dapl_id != H5P_DATASET_ACCESS_DEFAULT && H5Pclose(_dset->u.dataset.dapl_id) < 0)
-            HDONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close DAPL")
+            FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close DAPL")
     } /* end if */
 
     if (_dset->u.dataset.dcpl_id >= 0) {
         if (_dset->u.dataset.dcpl_id != H5P_DATASET_CREATE_DEFAULT && H5Pclose(_dset->u.dataset.dcpl_id) < 0)
-            HDONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close DCPL")
+            FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close DCPL")
     } /* end if */
 
     RV_free(_dset);
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_dataset_close() */
 
 
@@ -3394,8 +3350,6 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     char        *host_header = NULL;
     void        *ret_value = NULL;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received File create call with following parameters:\n");
     printf("  - Name: %s\n", name);
@@ -3407,7 +3361,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
 
     /* Allocate and setup internal File struct */
     if (NULL == (new_file = (RV_object_t *) RV_malloc(sizeof(*new_file))))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate file object")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate file object")
 
     new_file->obj_type = H5I_FILE;
     new_file->u.file.intent = H5F_ACC_RDWR;
@@ -3423,7 +3377,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
      */
     if (H5P_FILE_ACCESS_DEFAULT != fapl_id) {
         if ((new_file->u.file.fapl_id = H5Pcopy(fapl_id)) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FAPL")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FAPL")
     } /* end if */
     else
         new_file->u.file.fapl_id = H5P_FILE_ACCESS_DEFAULT;
@@ -3433,7 +3387,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
      */
     if (H5P_FILE_CREATE_DEFAULT != fcpl_id) {
         if ((new_file->u.file.fcpl_id = H5Pcopy(fcpl_id)) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FCPL")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FCPL")
     } /* end if */
     else
         new_file->u.file.fcpl_id = H5P_FILE_CREATE_DEFAULT;
@@ -3446,7 +3400,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     /* Copy the path name into the new file object */
     name_length = strlen(name);
     if (NULL == (new_file->u.file.filepath_name = (char *) RV_malloc(name_length + 1)))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath name")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath name")
 
     strncpy(new_file->u.file.filepath_name, name, name_length);
     new_file->u.file.filepath_name[name_length] = '\0';
@@ -3454,7 +3408,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     /* Setup the "Host: " header */
     host_header_len = name_length + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -3464,9 +3418,9 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
 
     /* Before making the actual request, check the file creation flags for
      * the use of H5F_ACC_TRUNC. In this case, we want to check with the
@@ -3476,7 +3430,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
         long http_response;
 
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-            HGOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
         printf("  - H5F_ACC_TRUNC specified; checking if file exists\n\n");
@@ -3495,7 +3449,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
         CURL_PERFORM_NO_ERR(curl, NULL);
 
         if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
-            HGOTO_ERROR(H5E_FILE, H5E_CANTGET, NULL, "can't get HTTP response code")
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTGET, NULL, "can't get HTTP response code")
 
         /* If the file exists, go ahead and delete it before proceeding */
         if (HTTP_SUCCESS(http_response)) {
@@ -3510,21 +3464,21 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
 #endif
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
-                HGOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf)
 
             CURL_PERFORM(curl, H5E_FILE, H5E_CANTREMOVE, NULL);
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-                HGOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't reset cURL custom request: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't reset cURL custom request: %s", curl_err_buf)
         } /* end if */
     } /* end if */
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT"))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, ""))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL PUT data: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL PUT data: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 0))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL PUT data size: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL PUT data size: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
     printf("  - Creating file\n\n");
@@ -3538,7 +3492,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
 
     /* Store the newly-created file's URI */
     if (RV_parse_response(response_buffer.buffer, NULL, new_file->URI, RV_copy_object_URI_callback) < 0)
-        HGOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't parse new file's URI")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't parse new file's URI")
 
     ret_value = (void *) new_file;
 
@@ -3560,18 +3514,18 @@ done:
     /* Clean up allocated file object if there was an issue */
     if (new_file && !ret_value)
         if (RV_file_close(new_file, FAIL, NULL) < 0)
-            HDONE_ERROR(H5E_FILE, H5E_CANTCLOSEOBJ, NULL, "can't close file")
+            FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEOBJ, NULL, "can't close file")
 
     /* Reset cURL custom request to prevent issues with future requests */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        HDONE_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't reset cURL custom request: %s", curl_err_buf)
+        FUNC_DONE_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't reset cURL custom request: %s", curl_err_buf)
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_file_create() */
 
 
@@ -3597,8 +3551,6 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     char        *host_header = NULL;
     void        *ret_value = NULL;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received File open call with following parameters:\n");
     printf("  - Name: %s\n", name);
@@ -3609,7 +3561,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
 
     /* Allocate and setup internal File struct */
     if (NULL == (file = (RV_object_t *) RV_malloc(sizeof(*file))))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate file object")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate file object")
 
     file->obj_type = H5I_FILE;
     file->u.file.intent = flags;
@@ -3625,7 +3577,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     /* Copy the path name into the new file object */
     name_length = strlen(name);
     if (NULL == (file->u.file.filepath_name = (char *) RV_malloc(name_length + 1)))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath name")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath name")
 
     strncpy(file->u.file.filepath_name, name, name_length);
     file->u.file.filepath_name[name_length] = '\0';
@@ -3633,7 +3585,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     /* Setup the "Host: " header */
     host_header_len = name_length + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -3643,11 +3595,11 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
     printf("  - Retrieving info for File open\n\n");
@@ -3661,16 +3613,16 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
 
     /* Store the opened file's URI */
     if (RV_parse_response(response_buffer.buffer, NULL, file->URI, RV_copy_object_URI_callback) < 0)
-        HGOTO_ERROR(H5E_FILE, H5E_CANTOPENFILE, NULL, "can't parse file's URI")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTOPENFILE, NULL, "can't parse file's URI")
 
     /* Set up a FAPL for the file so that H5Fget_access_plist() will function correctly */
     /* XXX: Set any properties necessary */
     if ((file->u.file.fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create FAPL for file")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create FAPL for file")
 
     /* Set up a FCPL for the file so that H5Fget_create_plist() will function correctly */
     if ((file->u.file.fcpl_id = H5Pcreate(H5P_FILE_CREATE)) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create FCPL for file")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create FCPL for file")
 
     ret_value = (void *) file;
 
@@ -3692,14 +3644,14 @@ done:
     /* Clean up allocated file object if there was an issue */
     if (file && !ret_value)
         if (RV_file_close(file, FAIL, NULL) < 0)
-            HDONE_ERROR(H5E_FILE, H5E_CANTCLOSEOBJ, NULL, "can't close file")
+            FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEOBJ, NULL, "can't close file")
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_file_open() */
 
 
@@ -3720,8 +3672,6 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
     RV_object_t *_obj = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received File get call with following parameters:\n");
     printf("  - Get Type: %d\n", get_type);
@@ -3736,7 +3686,7 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Pcopy(_obj->u.file.fapl_id)) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy File FAPL")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy File FAPL")
 
             break;
         } /* H5VL_FILE_GET_FAPL */
@@ -3747,7 +3697,7 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Pcopy(_obj->u.file.fcpl_id)) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy File FCPL")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy File FCPL")
 
             break;
         } /* H5VL_FILE_GET_FCPL */
@@ -3782,21 +3732,21 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
 
         /* H5Fget_obj_count */
         case H5VL_FILE_GET_OBJ_COUNT:
-            HGOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "get file object count unsupported")
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "get file object count unsupported")
 
         /* H5Fget_obj_ids */
         case H5VL_FILE_GET_OBJ_IDS:
-            HGOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "get file object IDs unsupported")
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "get file object IDs unsupported")
 
         case H5VL_OBJECT_GET_FILE:
-            HGOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "get file unsupported")
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "get file unsupported")
 
         default:
-            HGOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "can't get this type of information from file")
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "can't get this type of information from file")
     } /* end switch */
 
 done:
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_file_get() */
 
 
@@ -3820,8 +3770,6 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_ATTR_UN
     char        *host_header = NULL;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received File-specific call with following parameters:\n");
     printf("  - Specific Type: %d\n", specific_type);
@@ -3834,7 +3782,7 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_ATTR_UN
     /* Setup the "Host: " header */
     host_header_len = strlen(file->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -3844,19 +3792,19 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_ATTR_UN
     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
-        HGOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
     switch (specific_type) {
         case H5VL_FILE_FLUSH:
         case H5VL_FILE_IS_ACCESSIBLE:
         case H5VL_FILE_MOUNT:
         case H5VL_FILE_UNMOUNT:
-            HGOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "unsupported file operation")
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "unsupported file operation")
 
         default:
-            HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "unknown file operation")
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "unknown file operation")
     } /* end switch */
 
 done:
@@ -3868,7 +3816,7 @@ done:
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_file_specific() */
 
 
@@ -3890,8 +3838,6 @@ RV_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list ar
     RV_object_t          *file = (RV_object_t *) obj;
     herr_t                ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(H5I_FILE == file->obj_type && "not a file");
 
 #ifdef PLUGIN_DEBUG
@@ -3907,7 +3853,7 @@ RV_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list ar
             void **ret_file = va_arg(arguments, void **);
 
             if (NULL == (*ret_file = RV_file_open(file->u.file.filepath_name, file->u.file.intent, file->u.file.fapl_id, dxpl_id, NULL)))
-                HGOTO_ERROR(H5E_FILE, H5E_CANTOPENOBJ, FAIL, "can't re-open file")
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTOPENOBJ, FAIL, "can't re-open file")
 
             break;
         } /* H5VL_FILE_REOPEN */
@@ -3934,14 +3880,14 @@ RV_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list ar
         case H5VL_FILE_GET_VFD_HANDLE:
         case H5VL_FILE_RESET_MDC_HIT_RATE:
         case H5VL_FILE_SET_MDC_CONFIG:
-            HGOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "unsupported file operation")
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "unsupported file operation")
 
         default:
-            HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "unknown file operation")
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "unknown file operation")
     } /* end switch */
 
 done:
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_file_optional() */
 
 
@@ -3963,8 +3909,6 @@ RV_file_close(void *file, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
     RV_object_t *_file = (RV_object_t *) file;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received File close call with following parameters:\n");
     printf("  - Name: %s\n", _file->domain->u.file.filepath_name);
@@ -3979,17 +3923,17 @@ RV_file_close(void *file, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 
     if (_file->u.file.fapl_id >= 0) {
         if (_file->u.file.fapl_id != H5P_FILE_ACCESS_DEFAULT && H5Pclose(_file->u.file.fapl_id) < 0)
-            HDONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FAPL")
+            FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FAPL")
     } /* end if */
 
     if (_file->u.file.fcpl_id >= 0) {
         if (_file->u.file.fcpl_id != H5P_FILE_CREATE_DEFAULT && H5Pclose(_file->u.file.fcpl_id) < 0)
-            HDONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FCPL")
+            FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FCPL")
     } /* end if */
 
     RV_free(_file);
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_file_close() */
 
 
@@ -4027,8 +3971,6 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
     char         request_url[URL_MAX_LENGTH];
     void        *ret_value = NULL;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Group create call with following parameters:\n");
     printf("  - Name: %s\n", name);
@@ -4044,11 +3986,11 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
-        HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file")
 
     /* Allocate and setup internal Group struct */
     if (NULL == (new_group = (RV_object_t *) RV_malloc(sizeof(*new_group))))
-        HGOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate group object")
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate group object")
 
     new_group->obj_type = H5I_GROUP;
     new_group->u.group.gcpl_id = FAIL;
@@ -4059,7 +4001,7 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
      */
     if (H5P_GROUP_CREATE_DEFAULT != gcpl_id) {
         if ((new_group->u.group.gcpl_id = H5Pcopy(gcpl_id)) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy GCPL")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy GCPL")
     } /* end if */
     else
         new_group->u.group.gcpl_id = H5P_GROUP_CREATE_DEFAULT;
@@ -4068,7 +4010,7 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
      * one which this group will ultimately be linked under, extract out the path to the
      * final group in the chain */
     if (NULL == (path_dirname = RV_dirname(name)))
-        HGOTO_ERROR(H5E_SYM, H5E_BADVALUE, NULL, "invalid pathname for group link")
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_BADVALUE, NULL, "invalid pathname for group link")
     empty_dirname = !strcmp(path_dirname, "");
 
 #ifdef PLUGIN_DEBUG
@@ -4085,7 +4027,7 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
 
         search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
         if (!search_ret || search_ret < 0)
-            HGOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate target for group link")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate target for group link")
     } /* end if */
 
     {
@@ -4099,19 +4041,19 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
         /* Form the request body to link the new group to the parent object */
         create_request_nalloc = strlen(fmt_string) + strlen(path_basename) + (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
         if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
-            HGOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group create request body")
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group create request body")
 
         if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string,
                 empty_dirname ? parent->URI : target_URI,
                 path_basename)
             ) < 0)
-            HGOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error")
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error")
     }
 
     /* Setup the "Host: " header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -4127,15 +4069,15 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
     snprintf(request_url, URL_MAX_LENGTH, "%s/groups", base_URL);
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
-        HGOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body))
-        HGOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL POST data: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL POST data: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, create_request_body_len))
-        HGOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL POST data size: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL POST data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        HGOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
     printf("  - Creating group\n\n");
@@ -4149,7 +4091,7 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
 
     /* Store the newly-created group's URI */
     if (RV_parse_response(response_buffer.buffer, NULL, new_group->URI, RV_copy_object_URI_callback) < 0)
-        HGOTO_ERROR(H5E_SYM, H5E_CANTCREATE, NULL, "can't parse new group's URI")
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTCREATE, NULL, "can't parse new group's URI")
 
     ret_value = (void *) new_group;
 
@@ -4178,14 +4120,14 @@ done:
     /* Clean up allocated group object if there was an issue */
     if (new_group && !ret_value)
         if (RV_group_close(new_group, FAIL, NULL) < 0)
-            HDONE_ERROR(H5E_SYM, H5E_CANTCLOSEOBJ, NULL, "can't close group")
+            FUNC_DONE_ERROR(H5E_SYM, H5E_CANTCLOSEOBJ, NULL, "can't close group")
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value);
+    return ret_value;
 } /* end RV_group_create() */
 
 
@@ -4212,8 +4154,6 @@ RV_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char
     htri_t       search_ret;
     void        *ret_value = NULL;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Group open call with following parameters:\n");
     printf("  - Name: %s\n", name);
@@ -4226,7 +4166,7 @@ RV_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char
 
     /* Allocate and setup internal Group struct */
     if (NULL == (group = (RV_object_t *) RV_malloc(sizeof(*group))))
-        HGOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate group object")
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate group object")
 
     group->obj_type = H5I_GROUP;
     group->u.group.gcpl_id = FAIL;
@@ -4235,12 +4175,12 @@ RV_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char
     /* Locate the Group */
     search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_callback, NULL, group->URI);
     if (!search_ret || search_ret < 0)
-        HGOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate group by path")
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate group by path")
 
     /* Set up a GCPL for the group so that H5Gget_create_plist() will function correctly */
     /* XXX: Set any properties necessary */
     if ((group->u.group.gcpl_id = H5Pcreate(H5P_GROUP_CREATE)) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create GCPL for group")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create GCPL for group")
 
     ret_value = (void *) group;
 
@@ -4257,9 +4197,9 @@ done:
     /* Clean up allocated file object if there was an issue */
     if (group && !ret_value)
         if (RV_group_close(group, FAIL, NULL) < 0)
-            HDONE_ERROR(H5E_SYM, H5E_CANTCLOSEOBJ, NULL, "can't close group")
+            FUNC_DONE_ERROR(H5E_SYM, H5E_CANTCLOSEOBJ, NULL, "can't close group")
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_group_open() */
 
 
@@ -4284,8 +4224,6 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
     char         request_url[URL_MAX_LENGTH];
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Group get call with following parameters:\n");
     printf("  - Get Type: %d\n", get_type);
@@ -4303,7 +4241,7 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
         /* Setup the "Host: " header */
         host_header_len = strlen(group->domain->u.file.filepath_name) + strlen(host_string) + 1;
         if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-            HGOTO_ERROR(H5E_SYM, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
         strcpy(host_header, host_string);
 
@@ -4316,11 +4254,11 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
         snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, group->URI);
 
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-            HGOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-            HGOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-            HGOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
         printf("  - Retrieving group info\n\n");
@@ -4341,7 +4279,7 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Pcopy(group->u.group.gcpl_id)) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy Group GCPL")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy Group GCPL")
 
             break;
         } /* H5VL_GROUP_GET_GCPL */
@@ -4361,13 +4299,13 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
              * (currently, just the number of links in the group)
              */
             if (RV_parse_response(response_buffer.buffer, NULL, group_info, RV_get_group_info_callback) < 0)
-                HGOTO_ERROR(H5E_SYM, H5E_CANTGET, FAIL, "can't retrieve group information")
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTGET, FAIL, "can't retrieve group information")
 
             break;
         } /* H5VL_GROUP_GET_INFO */
 
         default:
-            HGOTO_ERROR(H5E_SYM, H5E_CANTGET, FAIL, "can't get this type of information from group");
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTGET, FAIL, "can't get this type of information from group");
     } /* end switch */
 
 done:
@@ -4385,7 +4323,7 @@ done:
         } /* end if */
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_group_get() */
 
 
@@ -4407,8 +4345,6 @@ RV_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
     RV_object_t *_grp = (RV_object_t *) grp;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Group close call with following parameters:\n");
     printf("  - URI: %s\n", _grp->URI);
@@ -4419,12 +4355,12 @@ RV_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
 
     if (_grp->u.group.gcpl_id >= 0) {
         if (_grp->u.group.gcpl_id != H5P_GROUP_CREATE_DEFAULT && H5Pclose(_grp->u.group.gcpl_id) < 0)
-            HDONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close GCPL")
+            FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close GCPL")
     } /* end if */
 
     RV_free(_grp);
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_group_close() */
 
 
@@ -4455,8 +4391,6 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
     char              *url_encoded_link_name = NULL;
     herr_t             ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Link create call with following parameters:\n");
     printf("  - Link Name: %s\n", loc_params.loc_data.loc_by_name.name);
@@ -4470,9 +4404,9 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
     if (H5VL_LINK_CREATE_HARD == create_type) {
         /* Pre-fetch the target object's relevant information in the case of hard link creation */
         if (H5Pget(lcpl_id, H5VL_PROP_LINK_TARGET, &hard_link_target_obj) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's target object")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's target object")
         if (H5Pget(lcpl_id, H5VL_PROP_LINK_TARGET_LOC_PARAMS, &hard_link_target_obj_loc_params) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's target object loc params")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's target object loc params")
 
         /* If link_loc_new_obj was NULL, H5L_SAME_LOC was specified as the new link's loc_id.
          * In this case, we use the target object's location as the new link's location.
@@ -4487,7 +4421,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
     assert(loc_params.loc_data.loc_by_name.name);
 
     if (!(new_link_loc_obj->domain->u.file.intent & H5F_ACC_RDWR))
-        HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
 
 
     switch (create_type) {
@@ -4505,7 +4439,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
              * the target object
              */
             if (strcmp(new_link_loc_obj->domain->u.file.filepath_name, ((RV_object_t *) hard_link_target_obj)->domain->u.file.filepath_name))
-                HGOTO_ERROR(H5E_LINK, H5E_CANTCREATE, FAIL, "can't create soft or hard link to object outside of the current file")
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTCREATE, FAIL, "can't create soft or hard link to object outside of the current file")
 
             switch (hard_link_target_obj_loc_params.type) {
                 case H5VL_OBJECT_BY_SELF:
@@ -4524,7 +4458,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                     search_ret = RV_find_object_by_path((RV_object_t *) hard_link_target_obj, hard_link_target_obj_loc_params.loc_data.loc_by_name.name,
                             &obj_type, RV_copy_object_URI_callback, NULL, temp_URI);
                     if (!search_ret || search_ret < 0)
-                        HGOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't locate link target object")
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't locate link target object")
 
                     target_URI = temp_URI;
 
@@ -4535,7 +4469,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                 case H5VL_OBJECT_BY_ADDR:
                 case H5VL_OBJECT_BY_REF:
                 default:
-                    HGOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
             } /* end switch */
 
 #ifdef PLUGIN_DEBUG
@@ -4548,10 +4482,10 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                 /* Form the request body to create the Link */
                 create_request_nalloc = (strlen(fmt_string) - 2) + strlen(target_URI) + 1;
                 if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
-                    HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link create request body")
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link create request body")
 
                 if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string, target_URI)) < 0)
-                    HGOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
             }
 
             break;
@@ -4562,7 +4496,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
             const char *link_target;
 
             if (H5Pget(lcpl_id, H5VL_PROP_LINK_TARGET_NAME, &link_target) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's target")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's target")
 
             /* XXX: Check to make sure that a soft link is being created in the same file as
              * the target object
@@ -4578,10 +4512,10 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                 /* Form the request body to create the Link */
                 create_request_nalloc = (strlen(fmt_string) - 2) + strlen(link_target) + 1;
                 if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
-                    HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link create request body")
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link create request body")
 
                 if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string, link_target)) < 0)
-                    HGOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
             }
 
             break;
@@ -4595,17 +4529,17 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
             void       *link_target_buf;
 
             if (H5Pget(lcpl_id, H5VL_PROP_LINK_TYPE, &link_type) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's type")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's type")
 
             /* XXX: For now, no support for user-defined links, beyond external links */
             if (H5L_TYPE_EXTERNAL != link_type)
-                HGOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "unsupported link type")
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "unsupported link type")
 
             /* Retrieve the buffer containing the external link's information */
             if (H5Pget(lcpl_id, H5VL_PROP_LINK_UDATA_SIZE, &link_target_buf_size) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for external link's information buffer size")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for external link's information buffer size")
             if (H5Pget(lcpl_id, H5VL_PROP_LINK_UDATA, &link_target_buf) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for external link's information buffer")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for external link's information buffer")
 
             /* The first byte of the link_target_buf contains the external link's version
              * and flags
@@ -4619,23 +4553,23 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                 /* Form the request body to create the Link */
                 create_request_nalloc = (strlen(fmt_string) - 4) + strlen(file_path) + strlen(link_target) + 1;
                 if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
-                    HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link create request body")
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link create request body")
 
                 if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string, file_path, link_target)) < 0)
-                    HGOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
             }
 
             break;
         } /* H5VL_LINK_CREATE_UD */
 
         default:
-            HGOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "Invalid link create type")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "Invalid link create type")
     } /* end switch */
 
     /* Setup the "Host: " header */
     host_header_len = strlen(new_link_loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -4651,21 +4585,21 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
      * creation operation doesn't contain any illegal characters
      */
     if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(loc_params.loc_data.loc_by_name.name), 0)))
-        HGOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
 
     /* Redirect cURL from the base URL to "/groups/<id>/links/<name>" to create the link */
     snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links/%s", base_URL, new_link_loc_obj->URI, url_encoded_link_name);
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT"))
-        HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body))
-        HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, create_request_body_len))
-        HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
     printf("  - Creating link\n\n");
@@ -4694,14 +4628,14 @@ done:
 
     /* Reset cURL custom request to prevent issues with future requests */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        HDONE_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf)
+        FUNC_DONE_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf)
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_link_create() */
 
 
@@ -4725,10 +4659,8 @@ RV_link_copy(void *src_obj, H5VL_loc_params_t loc_params1,
 {
     herr_t ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 done:
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_link_copy() */
 
 
@@ -4753,10 +4685,8 @@ RV_link_move(void *src_obj, H5VL_loc_params_t loc_params1,
 {
     herr_t ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 done:
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_link_move() */
 
 
@@ -4782,8 +4712,6 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
     char         request_url[URL_MAX_LENGTH];
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Link get call with following parameters:\n");
     printf("  - Get type: %d\n", get_type);
@@ -4795,7 +4723,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
         /* Setup the "Host: " header */
         host_header_len = strlen(link->domain->u.file.filepath_name) + strlen(host_string) + 1;
         if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-            HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
         strcpy(host_header, host_string);
 
@@ -4808,11 +4736,11 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
         /* snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links/%s", base_URL, link->obj.); */
 
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-            HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-            HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-            HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
         printf("  - Retrieving link info\n\n");
@@ -4830,7 +4758,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
         case H5VL_LINK_GET_INFO:
         {
             /* XXX: */
-            HGOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "get link info unsupported")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "get link info unsupported")
         } /* H5VL_LINK_GET_INFO */
 
         /* H5Lget_name */
@@ -4848,7 +4776,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
         } /* H5VL_LINK_GET_VAL */
 
         default:
-            HGOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get this type of information from link")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get this type of information from link")
     } /* end switch */
 
 done:
@@ -4866,7 +4794,7 @@ done:
         } /* end if */
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_link_get() */
 
 
@@ -4893,8 +4821,6 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
     char        *url_encoded_link_name = NULL;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Link-specific call with following parameters:\n");
     printf("  - Specific type: %d\n", specific_type);
@@ -4912,7 +4838,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
              * operation doesn't contain any illegal characters
              */
             if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(loc_params.loc_data.loc_by_name.name), 0)))
-                HGOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
 
             /* Redirect cURL from the base URL to "/groups/<id>/links/<name>" to delete link */
             snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links/%s", base_URL, loc_obj->URI, url_encoded_link_name);
@@ -4926,7 +4852,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             /* Setup the "Host: " header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-                HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
             strcpy(host_header, host_string);
 
@@ -4936,11 +4862,11 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
-                HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
             printf("   /********************************\\\n");
@@ -4963,7 +4889,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             /* In case the user specified a path which contains multiple groups on the way to the
              * link in question, extract out the path to the final group in the chain */
             if (NULL == (link_path_dirname = RV_dirname(loc_params.loc_data.loc_by_name.name)))
-                HGOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid pathname for link")
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid pathname for link")
             empty_dirname = !strcmp(link_path_dirname, "");
 
             /* If the path to the final group in the chain wasn't empty, get the URI of the final
@@ -4977,14 +4903,14 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                 search_ret = RV_find_object_by_path(loc_obj, link_path_dirname, &obj_type, RV_copy_object_URI_callback,
                         NULL, target_URI);
                 if (!search_ret || search_ret < 0)
-                    HGOTO_ERROR(H5E_LINK, H5E_PATH, FAIL, "can't locate parent group for link")
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_PATH, FAIL, "can't locate parent group for link")
             } /* end if */
 
             /* URL-encode the link name so that the resulting URL for the link GET
              * operation doesn't contain any illegal characters
              */
             if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(loc_params.loc_data.loc_by_name.name), 0)))
-                HGOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
 
             snprintf(request_url, URL_MAX_LENGTH,
                      "%s/groups/%s/links/%s",
@@ -4997,7 +4923,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             /* Setup the "Host: " header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-                HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
             strcpy(host_header, host_string);
 
@@ -5007,11 +4933,11 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
             printf("   /********************************\\\n");
@@ -5022,7 +4948,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             CURL_PERFORM_NO_ERR(curl, FAIL);
 
             if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
-                HGOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get HTTP response code")
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get HTTP response code")
 
             *ret = HTTP_SUCCESS(http_response);
 
@@ -5033,11 +4959,11 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
         case H5VL_LINK_ITER:
         {
             /* XXX: */
-            HGOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "unsupported operation")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "unsupported operation")
         } /* H5VL_LINK_ITER */
 
         default:
-            HGOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "unknown link operation");
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "unknown link operation");
     } /* end switch */
 
 done:
@@ -5050,7 +4976,7 @@ done:
      * to prevent any possible future issues with requests
      */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        HDONE_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf)
+        FUNC_DONE_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf)
 
     /* Free the escaped portion of the URL */
     if (url_encoded_link_name)
@@ -5061,7 +4987,7 @@ done:
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_link_specific() */
 
 
@@ -5089,8 +5015,6 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
     hid_t        lapl_id;
     void        *ret_value = NULL;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received Object open call with following parameters:\n");
     printf("  - Path: %s\n", loc_params.loc_data.loc_by_name.name);
@@ -5107,7 +5031,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
     /* Retrieve the type of object being dealt with by querying the server */
     search_ret = RV_find_object_by_path(parent, loc_params.loc_data.loc_by_name.name, &obj_type, NULL, NULL, NULL);
     if (!search_ret || search_ret < 0)
-        HGOTO_ERROR(H5E_LINK, H5E_CANTOPENOBJ, NULL, "can't find object by name")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTOPENOBJ, NULL, "can't find object by name")
 
     /* Call the appropriate RV_*_open call based upon the object type */
     switch (obj_type) {
@@ -5127,7 +5051,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
 
             if (NULL == (ret_value = RV_datatype_open(parent, loc_params, loc_params.loc_data.loc_by_name.name,
                     lapl_id, dxpl_id, req)))
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTOPENOBJ, NULL, "can't open datatype")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTOPENOBJ, NULL, "can't open datatype")
             break;
 
         case H5I_DATASET:
@@ -5146,7 +5070,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
 
             if (NULL == (ret_value = RV_dataset_open(parent, loc_params, loc_params.loc_data.loc_by_name.name,
                     lapl_id, dxpl_id, req)))
-                HGOTO_ERROR(H5E_DATASET, H5E_CANTOPENOBJ, NULL, "can't open dataset")
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTOPENOBJ, NULL, "can't open dataset")
             break;
 
         case H5I_GROUP:
@@ -5165,7 +5089,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
 
             if (NULL == (ret_value = RV_group_open(parent, loc_params, loc_params.loc_data.loc_by_name.name,
                     lapl_id, dxpl_id, req)))
-                HGOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, NULL, "can't open group")
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, NULL, "can't open group")
             break;
 
         case H5I_ATTR:
@@ -5183,13 +5107,13 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
         case H5I_ERROR_STACK:
         case H5I_NTYPES:
         default:
-            HGOTO_ERROR(H5E_ARGS, H5E_CANTOPENOBJ, NULL, "invalid object type")
+            FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTOPENOBJ, NULL, "invalid object type")
     } /* end switch */
 
     if (opened_type) *opened_type = obj_type;
 
 done:
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_object_open() */
 
 
@@ -5213,10 +5137,8 @@ RV_object_copy(void *src_obj, H5VL_loc_params_t loc_params1, const char *src_nam
 {
     herr_t ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 done:
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_object_copy() */
 
 
@@ -5237,10 +5159,8 @@ RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_typ
 {
     herr_t ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 done:
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_object_get() */
 
 
@@ -5262,8 +5182,6 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
     RV_object_t *theobj = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Received object specific call with following parameters:\n");
     printf("  - Call type: %d\n", specific_type);
@@ -5280,7 +5198,7 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
 
         /* H5Ovisit(_by_name) */
         case H5VL_OBJECT_VISIT:
-            HGOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "unsupported object operation")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "unsupported object operation")
 
         /* H5Rcreate */
         case H5VL_REF_CREATE:
@@ -5301,7 +5219,7 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
                     search_ret = RV_find_object_by_path(theobj, name, &objref->ref_obj_type, RV_copy_object_URI_callback,
                             NULL, objref->ref_obj_URI);
                     if (!search_ret || search_ret < 0)
-                        HGOTO_ERROR(H5E_REFERENCE, H5E_PATH, FAIL, "can't locate ref obj. by path")
+                        FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_PATH, FAIL, "can't locate ref obj. by path")
 
                     objref->ref_type = ref_type;
 
@@ -5313,18 +5231,18 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
                 case H5R_BADTYPE:
                 case H5R_MAXTYPE:
                 default:
-                    HGOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "invalid ref type")
+                    FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "invalid ref type")
             } /* end switch */
 
             break;
         } /* H5VL_REF_CREATE */
 
         default:
-            HGOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "unknown object operation")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "unknown object operation")
     } /* end switch */
 
 done:
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_object_specific() */
 
 
@@ -5349,8 +5267,6 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
     char                    request_url[URL_MAX_LENGTH];
     herr_t                  ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(( H5I_FILE == theobj->obj_type
           || H5I_DATATYPE == theobj->obj_type
           || H5I_DATASET == theobj->obj_type
@@ -5367,7 +5283,7 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
     switch (optional_type) {
         case H5VL_OBJECT_SET_COMMENT:
         case H5VL_OBJECT_GET_COMMENT:
-            HGOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "object comments are deprecated in favor of use of object attributes")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "object comments are deprecated in favor of use of object attributes")
 
         case H5VL_OBJECT_GET_INFO:
         {
@@ -5400,7 +5316,7 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
             /* Setup the "Host: " header */
             host_header_len = strlen(theobj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-                HGOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
             strcpy(host_header, host_string);
 
@@ -5410,11 +5326,11 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                HGOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                HGOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                HGOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
             printf("  - Retrieving object info\n\n");
@@ -5428,7 +5344,7 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
 
             /* Retrieve the attribute count for the object */
             if (RV_parse_response(response_buffer.buffer, NULL, &attr_count, RV_retrieve_attribute_count_callback) < 0)
-                HGOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "can't retrieve object attribute count")
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "can't retrieve object attribute count")
 
             assert(attr_count >= 0);
             obj_info->num_attrs = (hsize_t) attr_count;
@@ -5437,7 +5353,7 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
         } /* H5VL_OBJECT_GET_INFO */
 
         default:
-            HGOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "unknown object operation")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "unknown object operation")
     } /* end switch */
 
 done:
@@ -5449,7 +5365,7 @@ done:
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_object_optional() */
 
 /************************************
@@ -5604,15 +5520,13 @@ RV_parse_response(char *HTTP_response, void *callback_data_in, void *callback_da
 {
     herr_t ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(HTTP_response);
 
     if (parse_callback && parse_callback(HTTP_response, callback_data_in, callback_data_out) < 0)
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "can't perform callback operation")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "can't perform callback operation")
 
 done:
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_parse_response() */
 
 
@@ -5644,12 +5558,10 @@ RV_copy_object_URI_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_d
     char       *parsed_string;
     herr_t      ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(callback_data_out && "invalid URI pointer");
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
 
     /* To handle the awkward case of soft and external links, which do not return an "ID",
      * first check for the link class field and short circuit if it is found to be
@@ -5659,11 +5571,11 @@ RV_copy_object_URI_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_d
         char *link_type;
 
         if (NULL == (link_type = YAJL_GET_STRING(key_obj)))
-            HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link type failed")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link type failed")
 
         if (!strcmp(link_type, "H5L_TYPE_SOFT") || !strcmp(link_type, "H5L_TYPE_EXTERNAL") ||
                 !strcmp(link_type, "H5L_TYPE_UD"))
-            HGOTO_DONE(SUCCEED)
+            FUNC_GOTO_DONE(SUCCEED)
     } /* end if */
 
     /* First attempt to retrieve the URI of the object by using the JSON key sequence
@@ -5672,10 +5584,10 @@ RV_copy_object_URI_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_d
     key_obj = yajl_tree_get(parse_tree, hard_link_keys, yajl_t_string);
     if (key_obj) {
         if (!YAJL_IS_STRING(key_obj))
-            HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned URI is not a string")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned URI is not a string")
 
         if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
-            HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of URI failed")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of URI failed")
     } /* end if */
     else {
         /* Could not find the object's URI by the sequence "link" -> "id". Try looking
@@ -5685,10 +5597,10 @@ RV_copy_object_URI_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_d
         key_obj = yajl_tree_get(parse_tree, object_create_keys, yajl_t_string);
         if (key_obj) {
             if (!YAJL_IS_STRING(key_obj))
-                HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned URI is not a string")
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned URI is not a string")
 
             if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
-                HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of URI failed")
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of URI failed")
         } /* end if */
         else {
             /* Could not find the object's URI by the JSON key "id". Try looking for
@@ -5697,13 +5609,13 @@ RV_copy_object_URI_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_d
              * the root group of a file.
              */
             if (NULL == (key_obj = yajl_tree_get(parse_tree, root_group_keys, yajl_t_string)))
-                HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of URI failed")
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of URI failed")
 
             if (!YAJL_IS_STRING(key_obj))
-                HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned URI is not a string")
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned URI is not a string")
 
             if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
-                HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of URI failed")
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of URI failed")
         } /* end else */
     } /* end else */
 
@@ -5713,7 +5625,7 @@ done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_copy_object_URI_parse_callback() */
 
 
@@ -5741,12 +5653,10 @@ RV_get_link_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_dat
     char       *parsed_string;
     herr_t      ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(callback_data_out && "invalid object type pointer");
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
 
     /* To handle the awkward case of soft and external links, which do not return an "ID",
      * first check for the link class field and short circuit if it is found to be
@@ -5756,22 +5666,22 @@ RV_get_link_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_dat
         char *link_type;
 
         if (NULL == (link_type = YAJL_GET_STRING(key_obj)))
-            HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link type failed")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link type failed")
 
         if (!strcmp(link_type, "H5L_TYPE_SOFT") || !strcmp(link_type, "H5L_TYPE_EXTERNAL") ||
                 !strcmp(link_type, "H5L_TYPE_UD"))
-            HGOTO_DONE(SUCCEED);
+            FUNC_GOTO_DONE(SUCCEED);
     } /* end if */
 
     /* Retrieve the object's type */
     if (NULL == (key_obj = yajl_tree_get(parse_tree, link_collection_keys, yajl_t_string)))
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object parent collection failed")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object parent collection failed")
 
     if (!YAJL_IS_STRING(key_obj))
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned object parent collection is not a string")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned object parent collection is not a string")
 
     if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object parent collection failed")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object parent collection failed")
 
     if (!strcmp(parsed_string, "groups"))
         *((H5I_type_t *) callback_data_out) = H5I_GROUP;
@@ -5780,13 +5690,13 @@ RV_get_link_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_dat
     else if (!strcmp(parsed_string, "datatypes"))
         *((H5I_type_t *) callback_data_out) = H5I_DATATYPE;
     else
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "invalid object type")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "invalid object type")
 
 done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
-    FUNC_LEAVE_NOAPI(ret_value);
+    return ret_value;
 } /* end RV_get_link_type_callback() */
 
 
@@ -5813,19 +5723,17 @@ RV_retrieve_attribute_count_callback(char *HTTP_response,
     yajl_val    parse_tree, key_obj;
     herr_t      ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(callback_data_out && "invalid attribute count pointer");
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
 
     /* Retrieve the object's attribute count */
     if (NULL == (key_obj = yajl_tree_get(parse_tree, attribute_count_keys, yajl_t_number)))
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object attribute count failed")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object attribute count failed")
 
     if (!YAJL_IS_INTEGER(key_obj))
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned object attribute count is not an integer")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned object attribute count is not an integer")
 
     *((long long *) callback_data_out) = YAJL_GET_INTEGER(key_obj);
 
@@ -5833,7 +5741,7 @@ done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
-    FUNC_LEAVE_NOAPI(ret_value);
+    return ret_value;
 } /* end RV_retrieve_attribute_count_callback() */
 
 
@@ -5864,19 +5772,17 @@ RV_get_group_info_callback(char *HTTP_response,
     yajl_val    parse_tree, key_obj;
     herr_t      ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(callback_data_out && "invalid group info pointer");
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
 
     /* Retrieve the group's link count */
     if (NULL == (key_obj = yajl_tree_get(parse_tree, group_link_count_keys, yajl_t_number)))
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of group link count failed")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of group link count failed")
 
     if (!YAJL_IS_INTEGER(key_obj))
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned group link count is not an integer")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned group link count is not an integer")
 
     assert(YAJL_GET_INTEGER(key_obj) >= 0 && "group link count is not non-negative");
     info->nlinks = (hsize_t) YAJL_GET_INTEGER(key_obj);
@@ -5891,7 +5797,7 @@ done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
-    FUNC_LEAVE_NOAPI(ret_value);
+    return ret_value;
 } /* end RV_get_group_info_callback() */
 
 
@@ -5944,16 +5850,14 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
     hid_t      *DCPL = (hid_t *) callback_data_out;
     herr_t      ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(callback_data_out && "invalid DCPL pointer");
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
 
     /* Retrieve the creationProperties object */
     if (NULL == (creation_properties_obj = yajl_tree_get(parse_tree, creation_properties_keys, yajl_t_object)))
-        HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of creationProperties object failed")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of creationProperties object failed")
 
 
     /********************************************************************************************
@@ -5969,7 +5873,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         char             *alloc_time_string;
 
         if (NULL == (alloc_time_string = YAJL_GET_STRING(key_obj)))
-            HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of space allocation time string failed")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of space allocation time string failed")
 
         if (!strcmp(alloc_time_string, "H5D_ALLOC_TIME_EARLY")) {
             alloc_time = H5D_ALLOC_TIME_EARLY;
@@ -5986,7 +5890,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
 #endif
 
         if (H5Pset_alloc_time(*DCPL, alloc_time) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set space allocation time property on DCPL")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set space allocation time property on DCPL")
     } /* end if */
 
 
@@ -6003,7 +5907,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         char     *crt_order_string;
 
         if (NULL == (crt_order_string = YAJL_GET_STRING(key_obj)))
-            HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of attribute creation order string failed")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of attribute creation order string failed")
 
         if (!strcmp(crt_order_string, "H5P_CRT_ORDER_INDEXED")) {
             crt_order_flags = H5P_CRT_ORDER_INDEXED | H5P_CRT_ORDER_TRACKED;
@@ -6017,7 +5921,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
 #endif
 
         if (H5Pset_attr_creation_order(*DCPL, crt_order_flags) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set attribute creation order property on DCPL")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set attribute creation order property on DCPL")
     } /* end if */
 
 
@@ -6037,19 +5941,19 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         yajl_val    sub_obj;
 
         if (NULL == (sub_obj = yajl_tree_get(key_obj, max_compact_keys, yajl_t_number)))
-            HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of maxCompact attribute phase change value failed")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of maxCompact attribute phase change value failed")
 
         if (!YAJL_IS_INTEGER(sub_obj))
-            HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "return maxCompact attribute phase change value is not an integer")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "return maxCompact attribute phase change value is not an integer")
 
         if (YAJL_GET_INTEGER(sub_obj) >= 0)
             maxCompact = (unsigned) YAJL_GET_INTEGER(sub_obj);
 
         if (NULL == (sub_obj = yajl_tree_get(key_obj, min_dense_keys, yajl_t_number)))
-            HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of minDense attribute phase change value failed")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of minDense attribute phase change value failed")
 
         if (!YAJL_IS_INTEGER(sub_obj))
-            HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned minDense attribute phase change value is not an integer")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned minDense attribute phase change value is not an integer")
 
         if (YAJL_GET_INTEGER(sub_obj) >= 0)
             minDense = (unsigned) YAJL_GET_INTEGER(sub_obj);
@@ -6060,7 +5964,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
 #endif
 
             if (H5Pset_attr_phase_change(*DCPL, maxCompact, minDense) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set attribute phase change values property on DCPL")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set attribute phase change values property on DCPL")
         } /* end if */
     } /* end if */
 
@@ -6077,7 +5981,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         char            *fill_time_str;
 
         if (NULL == (fill_time_str = YAJL_GET_STRING(key_obj)))
-            HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of fill time string failed")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of fill time string failed")
 
         if (!strcmp(fill_time_str, "H5D_FILL_TIME_ALLOC")) {
             fill_time = H5D_FILL_TIME_ALLOC;
@@ -6091,7 +5995,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
 #endif
 
         if (H5Pset_fill_time(*DCPL, fill_time) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set fill time property on DCPL")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set fill time property on DCPL")
     } /* end if */
 
 
@@ -6134,10 +6038,10 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         char       *layout_class;
 
         if (NULL == (sub_obj = yajl_tree_get(key_obj, layout_class_keys, yajl_t_string)))
-            HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of layout class property failed")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of layout class property failed")
 
         if (NULL == (layout_class = YAJL_GET_STRING(sub_obj)))
-            HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of layout class string failed")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of layout class string failed")
 
         if (!strcmp(layout_class, "H5D_CHUNKED")) {
             const char *chunk_dims_keys[] = { "dims", (const char *) 0 };
@@ -6145,16 +6049,16 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
             hsize_t     chunk_dims[DATASPACE_MAX_RANK];
 
             if (NULL == (chunk_dims_obj = yajl_tree_get(key_obj, chunk_dims_keys, yajl_t_array)))
-                HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of chunk dimensionality failed")
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of chunk dimensionality failed")
 
             for (i = 0; i < YAJL_GET_ARRAY(chunk_dims_obj)->len; i++) {
                 long long val;
 
                 if (!YAJL_IS_INTEGER(YAJL_GET_ARRAY(chunk_dims_obj)->values[i]))
-                    HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "one of the chunk dimension sizes was not an integer")
+                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "one of the chunk dimension sizes was not an integer")
 
                 if ((val = YAJL_GET_INTEGER(YAJL_GET_ARRAY(chunk_dims_obj)->values[i])) < 0)
-                    HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "one of the chunk dimension sizes was negative")
+                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "one of the chunk dimension sizes was negative")
 
                 chunk_dims[i] = (hsize_t) val;
             } /* end for */
@@ -6170,21 +6074,21 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
 #endif
 
             if (H5Pset_chunk(*DCPL, (int) YAJL_GET_ARRAY(chunk_dims_obj)->len, chunk_dims) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set chunked storage layout on DCPL")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set chunked storage layout on DCPL")
         } /* end if */
         else if (!strcmp(layout_class, "H5D_CONTIGUOUS")) {
             const char *external_storage_keys[] = { "externalStorage", (const char *) 0 };
             yajl_val    external_storage_obj;
 
             if (NULL == (external_storage_obj = yajl_tree_get(key_obj, external_storage_keys, yajl_t_array)))
-                HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of external storage file extent array failed")
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of external storage file extent array failed")
 
 #ifdef PLUGIN_DEBUG
             printf("  - Setting contiguous layout on DCPL\n");
 #endif
 
             if (H5Pset_layout(*DCPL, H5D_CONTIGUOUS) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set contiguous storage layout on DCPL")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set contiguous storage layout on DCPL")
         } /* end if */
         else if (!strcmp(layout_class, "H5D_COMPACT")) {
 #ifdef PLUGIN_DEBUG
@@ -6192,7 +6096,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
 #endif
 
             if (H5Pset_layout(*DCPL, H5D_COMPACT) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set compact storage layout on DCPL")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set compact storage layout on DCPL")
         } /* end else */
     } /* end if */
 
@@ -6209,7 +6113,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         char    *track_times_str;
 
         if (NULL == (track_times_str = YAJL_GET_STRING(key_obj)))
-            HGOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of track times string failed")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of track times string failed")
 
         track_times = !strcmp(track_times_str, "true");
 
@@ -6218,7 +6122,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
 #endif
 
         if (H5Pset_obj_track_times(*DCPL, track_times) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set track object times property on DCPL")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set track object times property on DCPL")
     } /* end if */
 
 #ifdef PLUGIN_DEBUG
@@ -6229,7 +6133,7 @@ done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
-    FUNC_LEAVE_NOAPI(ret_value);
+    return ret_value;
 } /* end RV_parse_dataset_creation_properties_callback() */
 
 
@@ -6271,8 +6175,6 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
     char     request_url[URL_MAX_LENGTH];
     long     http_response;
     htri_t   ret_value = FAIL;
-
-    FUNC_ENTER_NOAPI_NOINIT
 
     assert(parent_obj);
     assert(obj_path);
@@ -6328,7 +6230,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
          * one which the object in question should be under, extract out the path to the final
          * group in the chain */
         if (NULL == (link_dir_name = RV_dirname(obj_path)))
-            HGOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get path dirname")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get path dirname")
         empty_dirname = !strcmp(link_dir_name, "");
 
 #ifdef PLUGIN_DEBUG
@@ -6347,7 +6249,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
             search_ret = RV_find_object_by_path(parent_obj, link_dir_name, &obj_type,
                     RV_copy_object_URI_callback, NULL, temp_URI);
             if (!search_ret || search_ret < 0)
-                HGOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't locate parent group")
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't locate parent group")
 
 #ifdef PLUGIN_DEBUG
             printf("  - Found new parent group %s at end of path chain\n\n", temp_URI);
@@ -6363,7 +6265,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
     /* Setup the "Host: " header */
     host_header_len = strlen(parent_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        HGOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
     strcpy(host_header, host_string);
 
@@ -6373,9 +6275,9 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-        HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
 
 
     if (H5I_UNINIT == *target_object_type) {
@@ -6389,7 +6291,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
                  RV_basename(obj_path));
 
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-            HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
         printf("  - Retrieving link for object of unknown type at URL %s\n\n", request_url);
@@ -6406,7 +6308,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
 #endif
 
         if (RV_parse_response(response_buffer.buffer, NULL, target_object_type, RV_get_link_type_callback) < 0)
-            HGOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link type")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link type")
     } /* end if */
 
 
@@ -6457,11 +6359,11 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
         case H5I_ERROR_STACK:
         case H5I_NTYPES:
         default:
-            HGOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "target object not a group, datatype or dataset")
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "target object not a group, datatype or dataset")
     } /* end switch */
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        HGOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
     printf("Accessing URL: %s\n\n", request_url);
@@ -6474,11 +6376,11 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
     CURL_PERFORM_NO_ERR(curl, FAIL);
 
     if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
-        HGOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get HTTP response code")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get HTTP response code")
 
     if (obj_found_callback && RV_parse_response(response_buffer.buffer,
             callback_data_in, callback_data_out, obj_found_callback) < 0)
-        HGOTO_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "can't perform callback operation")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "can't perform callback operation")
 
     ret_value = HTTP_SUCCESS(http_response);
 
@@ -6493,7 +6395,7 @@ done:
         curl_headers = NULL;
     } /* end if */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_find_object_by_path() */
 
 /*-------------------------------------------------------------------------
@@ -6518,20 +6420,18 @@ RV_convert_predefined_datatype_to_string(hid_t type_id)
     size_t       type_size;
     char        *ret_value = type_name;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     if (H5T_NO_CLASS == (type_class = H5Tget_class(type_id)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, NULL, "invalid datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, NULL, "invalid datatype")
 
     if (!(type_size = H5Tget_size(type_id)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, NULL, "invalid datatype size")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, NULL, "invalid datatype size")
 
     if (H5T_ORDER_ERROR == (type_order = H5Tget_order(type_id)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, NULL, "invalid datatype ordering")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, NULL, "invalid datatype ordering")
 
     if (type_class == H5T_INTEGER)
         if (H5T_SGN_ERROR == (type_sign = H5Tget_sign(type_id)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, NULL, "invalid datatype sign")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, NULL, "invalid datatype sign")
 
     snprintf(type_name, PREDEFINED_DATATYPE_NAME_MAX_LENGTH,
              "H5T_%s_%s%zu%s",
@@ -6541,7 +6441,7 @@ RV_convert_predefined_datatype_to_string(hid_t type_id)
              (type_order == H5T_ORDER_LE) ? "LE" : "BE");
 
 done:
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_convert_predefined_datatype_to_string() */
 
 
@@ -6593,14 +6493,12 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
     int           bytes_printed = 0;
     herr_t        ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     if (!type_body)
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid NULL pointer for converted datatype's string buffer")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid NULL pointer for converted datatype's string buffer")
 
     out_string_len = DATATYPE_BODY_DEFAULT_SIZE;
     if (NULL == (out_string = (char *) RV_malloc(out_string_len)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for converted datatype's string buffer")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for converted datatype's string buffer")
 
 #ifdef PLUGIN_DEBUG
     printf("  - Initial datatype-to-string buffer size is %zu\n\n", out_string_len);
@@ -6627,7 +6525,7 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
 
     /* If the datatype is a committed type, append the datatype's URI and return */
     if ((type_is_committed = H5Tcommitted(type_id)) < 0)
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine if datatype is committed")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine if datatype is committed")
 
     if (type_is_committed) {
         H5VL_object_t *vol_container; /* XXX: Private definition currently prevents VOL plugin from being external */
@@ -6639,7 +6537,7 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
 
         /* Retrieve the VOL object's container */
         if (H5VLget_object(type_id, (void **) &vol_container) < 0)
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get VOL object for committed datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get VOL object for committed datatype")
 
         vol_obj = (RV_object_t *) vol_container->vol_obj;
 
@@ -6650,11 +6548,11 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
         CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
 
         if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, "\"%s\"", vol_obj->URI)) < 0)
-            HGOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
         out_string_curr_pos += bytes_printed;
 
-        HGOTO_DONE(SUCCEED);
+        FUNC_GOTO_DONE(SUCCEED);
     } /* end if */
 
 #ifdef PLUGIN_DEBUG
@@ -6662,7 +6560,7 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
 #endif
 
     if (!(type_size = H5Tget_size(type_id)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
 
     switch ((type_class = H5Tget_class(type_id))) {
         case H5T_INTEGER:
@@ -6680,7 +6578,7 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
 
             /* Convert the class and name of the datatype to JSON */
             if (NULL == (type_name = RV_convert_predefined_datatype_to_string(type_id)))
-                HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
 
             /* Check whether the buffer needs to be grown */
             bytes_to_print = (H5T_INTEGER == type_class ? strlen(int_class_str) : strlen(float_class_str))
@@ -6695,7 +6593,7 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
 
             if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
                     (H5T_INTEGER == type_class ? int_class_str : float_class_str), type_name)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
             out_string_curr_pos += bytes_printed;
 
@@ -6708,13 +6606,14 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
             htri_t             is_vlen;
 
             if ((is_vlen = H5Tis_variable_str(type_id)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't determine if datatype is variable-length string")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't determine if datatype is variable-length string")
 
             /* Build the Datatype body by appending the character set for the string type,
              * any type of string padding, and the length of the string */
             /* Note: currently only H5T_CSET_ASCII is supported for the character set and
-             * only H5T_STR_NULLPAD is supported for string padding, but these may change
-             * in the future
+             * only H5T_STR_NULLTERM is supported for string padding for variable-length
+             * strings and only H5T_STR_NULLPAD is supported for string padding for
+             * fixed-length strings, but these may change in the future.
              */
             if (is_vlen) {
                 const char * const nullterm_string = "H5T_STR_NULLTERM";
@@ -6736,7 +6635,7 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
 
                 if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - leading_string_len,
                                               fmt_string, cset_ascii_string, nullterm_string)) < 0)
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                 out_string_curr_pos += bytes_printed;
             } /* end if */
@@ -6760,7 +6659,7 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
 
                 if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - leading_string_len,
                                               fmt_string, cset_ascii_string, nullpad_string, type_size)) < 0)
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                 out_string_curr_pos += bytes_printed;
             } /* end else */
@@ -6780,10 +6679,10 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
                                              "}%s";
 
             if ((nmembers = H5Tget_nmembers(type_id)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve number of members in compound datatype")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve number of members in compound datatype")
 
             if (NULL == (compound_member_strings = (char **) RV_malloc(((size_t) nmembers + 1) * sizeof(*compound_member_strings))))
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for compound datatype member strings")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for compound datatype member strings")
 
             for (i = 0; i < (size_t) nmembers + 1; i++)
                 compound_member_strings[i] = NULL;
@@ -6804,13 +6703,13 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
              */
             for (i = 0; i < (size_t) nmembers; i++) {
                 if ((compound_member = H5Tget_member_type(type_id, (unsigned) i)) < 0)
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound datatype member")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound datatype member")
 
                 if (RV_convert_datatype_to_string(compound_member, &compound_member_strings[i], NULL, FALSE) < 0)
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert compound datatype member to string representation")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert compound datatype member to string representation")
 
                 if (NULL == (compound_member_name = H5Tget_member_name(type_id, (unsigned) i)))
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound datatype member name")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound datatype member name")
 
 #ifdef PLUGIN_DEBUG
                 printf("  - Compound Datatype member %zu name: %s\n", i, compound_member_name);
@@ -6832,14 +6731,14 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
                 if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff,
                                               fmt_string, compound_member_name, compound_member_strings[i],
                                               i < (size_t) nmembers - 1 ? ", " : "")) < 0)
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                 out_string_curr_pos += bytes_printed;
 
                 if (H5Tclose(compound_member) < 0)
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
                 if (H5free_memory(compound_member_name) < 0)
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free compound datatype member name buffer")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free compound datatype member name buffer")
                 compound_member = FAIL;
                 compound_member_name = NULL;
             } /* end for */
@@ -6879,14 +6778,14 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
                                              "}";
 
             if ((enum_nmembers = H5Tget_nmembers(type_id)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't get number of members of enumerated type")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't get number of members of enumerated type")
 
             if (NULL == (enum_value = RV_malloc(type_size)))
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for enum member value")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for enum member value")
 
             enum_mapping_length = ENUM_MAPPING_DEFAULT_SIZE;
             if (NULL == (enum_mapping = (char *) RV_malloc(enum_mapping_length)))
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for enum mapping")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for enum mapping")
 
 #ifdef PLUGIN_DEBUG
             printf("  - Enum mapping string buffer initial length is %zu bytes\n\n", enum_mapping_length);
@@ -6897,10 +6796,10 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
              */
             for (i = 0, mapping_curr_pos = enum_mapping; i < (size_t) enum_nmembers; i++) {
                 if (NULL == (enum_value_name = H5Tget_member_name(type_id, (unsigned) i)))
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't get name of enum member")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't get name of enum member")
 
                 if (H5Tget_member_value(type_id, (unsigned) i, enum_value) < 0)
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve value of enum member")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve value of enum member")
 
                 /* Check if the mapping buffer needs to grow */
                 bytes_to_print = strlen(enum_value_name) + MAX_NUM_LENGTH + (strlen(mapping_fmt_string) - 8)
@@ -6915,12 +6814,12 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
                 if ((bytes_printed = snprintf(mapping_curr_pos, enum_mapping_length - positive_ptrdiff,
                                               mapping_fmt_string, enum_value_name, *((long long int *) enum_value),
                                               i < (size_t) enum_nmembers - 1 ? ", " : "")) < 0)
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                 mapping_curr_pos += bytes_printed;
 
                 if (H5free_memory(enum_value_name) < 0)
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free memory allocated for enum member name")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free memory allocated for enum member name")
                 enum_value_name = NULL;
             } /* end for */
 
@@ -6930,10 +6829,10 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
 
             /* Retrieve the enum type's base datatype and convert it into JSON as well */
             if ((type_base_class = H5Tget_super(type_id)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "cant get base datatype for enum type")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "cant get base datatype for enum type")
 
             if (NULL == (base_type_name = RV_convert_predefined_datatype_to_string(type_base_class)))
-                HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
 
             /* Check whether the buffer needs to be grown */
             bytes_to_print = strlen(base_type_name) + strlen(enum_mapping) + (strlen(fmt_string) - 4) + 1;
@@ -6952,7 +6851,7 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
              */
             if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff,
                                           fmt_string, base_type_name, enum_mapping)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
             out_string_curr_pos += bytes_printed;
 
@@ -6971,25 +6870,25 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
                                              "}";
 
             if ((ndims = H5Tget_array_ndims(type_id)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't get array datatype number of dimensions")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't get array datatype number of dimensions")
 
             if (NULL == (array_shape = (char *) RV_malloc((size_t) (ndims * MAX_NUM_LENGTH + ndims + 3))))
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array datatype dimensionality string")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array datatype dimensionality string")
             array_shape_curr_pos = array_shape;
             *array_shape_curr_pos = '\0';
 
             if (NULL == (array_dims = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*array_dims))))
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array datatype dimensions")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array datatype dimensions")
 
             if (H5Tget_array_dims2(type_id, array_dims) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get array datatype dimensions")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get array datatype dimensions")
 
             strcat(array_shape_curr_pos++, "[");
 
             /* Setup the shape of the array Datatype */
             for (i = 0; i < (size_t) ndims; i++) {
                 if ((bytes_printed = snprintf(array_shape_curr_pos, MAX_NUM_LENGTH, "%s%llu", i > 0 ? "," : "", array_dims[i])) < 0)
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                 array_shape_curr_pos += bytes_printed;
             } /* end for */
@@ -6998,13 +6897,13 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
 
             /* Get the class and name of the base datatype */
             if ((type_base_class = H5Tget_super(type_id)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get base datatype for array type")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get base datatype for array type")
 
             if ((type_is_committed = H5Tcommitted(type_base_class)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine if array base datatype is committed")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine if array base datatype is committed")
 
             if (RV_convert_datatype_to_string(type_base_class, &array_base_type, &array_base_type_len, TRUE) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert datatype to string representation")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert datatype to string representation")
 
             /* Check whether the buffer needs to be grown */
             bytes_to_print = array_base_type_len + strlen(array_shape) + (strlen(fmt_string) - 4) + 1;
@@ -7020,7 +6919,7 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
             /* Build the Datatype body by appending the array type class and base type and dimensions of the array */
             if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff,
                                           fmt_string, array_base_type, array_shape)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
             out_string_curr_pos += bytes_printed;
 
@@ -7028,10 +6927,10 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
         } /* H5T_ARRAY */
 
         case H5T_BITFIELD:
-            HGOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype")
             break;
         case H5T_OPAQUE:
-            HGOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype")
             break;
         case H5T_REFERENCE:
         {
@@ -7046,7 +6945,7 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
             /* XXX: Maybe not the correct way to check for the type of reference? */
             is_obj_ref = H5Tequal(type_id, H5T_STD_REF_OBJ);
             if (is_obj_ref < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine type of reference")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine type of reference")
 
             bytes_to_print = (strlen(fmt_string) - 2) + (is_obj_ref ? strlen(obj_ref_str) : strlen(reg_ref_str)) + 1;
 
@@ -7055,7 +6954,7 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
 
             if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff,
                     fmt_string, is_obj_ref ? obj_ref_str : reg_ref_str)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
             out_string_curr_pos += bytes_printed;
 
@@ -7063,15 +6962,15 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
         } /* H5T_REFERENCE */
 
         case H5T_VLEN:
-            HGOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype")
             break;
         case H5T_TIME:
-            HGOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype")
             break;
         case H5T_NO_CLASS:
         case H5T_NCLASSES:
         default:
-            HGOTO_ERROR(H5E_DATATYPE, H5E_BADTYPE, FAIL, "invalid datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADTYPE, FAIL, "invalid datatype")
     } /* end switch */
 
 done:
@@ -7112,7 +7011,7 @@ done:
     if (enum_mapping)
         RV_free(enum_mapping);
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_convert_datatype_to_string() */
 
 
@@ -7182,21 +7081,19 @@ RV_convert_string_to_datatype(const char *type)
     char        *tmp_enum_base_type_buffer = NULL;
     hid_t        ret_value = FAIL;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
 #ifdef PLUGIN_DEBUG
     printf("Converting String-to-Datatype buffer %s to hid_t\n", type);
 #endif
 
     /* Retrieve the datatype class */
     if (NULL == (parse_tree = yajl_tree_parse(type, NULL, 0)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "JSON parse tree creation failed")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "JSON parse tree creation failed")
 
     if (NULL == (key_obj = yajl_tree_get(parse_tree, class_keys, yajl_t_string)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't parse datatype from string representation")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't parse datatype from string representation")
 
     if (NULL == (datatype_class = YAJL_GET_STRING(key_obj)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't parse datatype from string representation")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't parse datatype from string representation")
 
     /* Create the appropriate datatype or copy an existing one */
     if (!strcmp(datatype_class, "H5T_INTEGER")) {
@@ -7204,10 +7101,10 @@ RV_convert_string_to_datatype(const char *type)
         char    *type_base = NULL;
 
         if (NULL == (key_obj = yajl_tree_get(parse_tree, type_base_keys, yajl_t_string)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
 
         if (NULL == (type_base = YAJL_GET_STRING(key_obj)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
 
         if (is_predefined) {
             hbool_t  is_unsigned;
@@ -7317,11 +7214,11 @@ RV_convert_string_to_datatype(const char *type)
 
                     break;
                 default:
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unknown predefined integer datatype")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unknown predefined integer datatype")
             } /* end switch */
 
             if ((datatype = H5Tcopy(predefined_type)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy predefined integer datatype")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy predefined integer datatype")
         } /* end if */
         else {
             /* XXX: Need support for non-predefined integer types */
@@ -7333,10 +7230,10 @@ RV_convert_string_to_datatype(const char *type)
         char    *type_base = NULL;
 
         if (NULL == (key_obj = yajl_tree_get(parse_tree, type_base_keys, yajl_t_string)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
 
         if (NULL == (type_base = YAJL_GET_STRING(key_obj)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
 
         if (is_predefined) {
             char *type_base_ptr = type_base + 10;
@@ -7367,11 +7264,11 @@ RV_convert_string_to_datatype(const char *type)
 
                     break;
                 default:
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unknown predefined floating-point datatype")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unknown predefined floating-point datatype")
             } /* end switch */
 
             if ((datatype = H5Tcopy(predefined_type)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy predefined floating-point datatype")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy predefined floating-point datatype")
         } /* end if */
         else {
             /* XXX: need support for non-predefined float types */
@@ -7392,7 +7289,7 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Retrieve the string datatype's length and check if it's a variable-length string */
         if (NULL == (key_obj = yajl_tree_get(parse_tree, length_keys, yajl_t_any)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype length")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype length")
 
         is_variable_str = YAJL_IS_STRING(key_obj);
 
@@ -7403,10 +7300,10 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Retrieve and check the string datatype's character set */
         if (NULL == (key_obj = yajl_tree_get(parse_tree, charSetKeys, yajl_t_string)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype character set")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype character set")
 
         if (NULL == (charSet = YAJL_GET_STRING(key_obj)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype character set")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype character set")
 
 #ifdef PLUGIN_DEBUG
         printf("  - charSet: %s\n", charSet);
@@ -7414,20 +7311,20 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Currently, only H5T_CSET_ASCII character set is supported */
         if (strcmp(charSet, "H5T_CSET_ASCII"))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported character set for string datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported character set for string datatype")
 
 
         /* Retrieve and check the string datatype's string padding */
         if (NULL == (key_obj = yajl_tree_get(parse_tree, strPadKeys, yajl_t_string)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype padding")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype padding")
 
         if (NULL == (strPad = YAJL_GET_STRING(key_obj)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype padding")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype padding")
 
         /* Currently, only H5T_STR_NULLPAD string padding is supported for fixed-length strings
          * and H5T_STR_NULLTERM for variable-length strings */
         if (strcmp(strPad, is_variable_str ? "H5T_STR_NULLTERM" : "H5T_STR_NULLPAD"))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported string padding for string datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported string padding for string datatype")
 
 #ifdef PLUGIN_DEBUG
             printf("  - String padding: %s\n\n", strPad);
@@ -7435,20 +7332,20 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Retrieve the length if the datatype is a fixed-length string */
         if (!is_variable_str) fixed_length = YAJL_GET_INTEGER(key_obj);
-        if (fixed_length < 0) HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype length")
+        if (fixed_length < 0) FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype length")
 
         if ((datatype = H5Tcreate(H5T_STRING, is_variable_str ? H5T_VARIABLE : (size_t) fixed_length)) < 0)
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create datatype")
 
         if (H5Tset_cset(datatype, H5T_CSET_ASCII) < 0)
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't set character set for dataset string datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't set character set for dataset string datatype")
 
         if (H5Tset_strpad(datatype, is_variable_str ? H5T_STR_NULLTERM : H5T_STR_NULLPAD) < 0)
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't set string padding for dataset string datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't set string padding for dataset string datatype")
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_OPAQUE")) {
         /* XXX: Need support for opaque types */
-        HGOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - opaque")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - opaque")
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_COMPOUND")) {
         const char *field_keys[] = { "type", "fields", (const char *) 0 };
@@ -7463,14 +7360,14 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Retrieve the compound member fields array */
         if (NULL == (key_obj = yajl_tree_get(parse_tree, field_keys, yajl_t_array)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve compound datatype members array")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve compound datatype members array")
 
         if (NULL == (compound_member_type_array = (hid_t *) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*compound_member_type_array))))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate compound datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate compound datatype")
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) compound_member_type_array[i] = FAIL;
 
         if (NULL == (compound_member_names = (char **) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*compound_member_names))))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate compound datatype member names array")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate compound datatype member names array")
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) compound_member_names[i] = NULL;
 
         /* Allocate space for a temporary buffer used to extract and process the substring corresponding to
@@ -7478,7 +7375,7 @@ RV_convert_string_to_datatype(const char *type)
          */
         tmp_cmpd_type_buffer_size = DATATYPE_BODY_DEFAULT_SIZE;
         if (NULL == (tmp_cmpd_type_buffer = (char *) RV_malloc(tmp_cmpd_type_buffer_size)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate temporary buffer for storing type information")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate temporary buffer for storing type information")
 
         /* Retrieve the names of all of the members of the Compound Datatype */
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
@@ -7486,12 +7383,12 @@ RV_convert_string_to_datatype(const char *type)
             size_t   j;
 
             if (NULL == (compound_member_field = YAJL_GET_ARRAY(key_obj)->values[i]))
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound field member %zu information", i)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound field member %zu information", i)
 
             for (j = 0; j < YAJL_GET_OBJECT(compound_member_field)->len; j++) {
                 if (!strcmp(YAJL_GET_OBJECT(compound_member_field)->keys[j], "name"))
                     if (NULL == (compound_member_names[i] = YAJL_GET_STRING(YAJL_GET_OBJECT(compound_member_field)->values[j])))
-                        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound field member %zu name", j)
+                        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound field member %zu name", j)
             } /* end for */
         } /* end for */
 
@@ -7502,7 +7399,7 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Start the search from the "fields" JSON key */
         if (NULL == (type_section_ptr = strstr(type, "\"fields\"")))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't find \"fields\" information section in datatype string")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't find \"fields\" information section in datatype string")
 
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
             size_t  type_section_len = 0;
@@ -7512,7 +7409,7 @@ RV_convert_string_to_datatype(const char *type)
 
             /* Find the beginning of the "type" section for this Compound Datatype member */
             if (NULL == (type_section_ptr = strstr(type_section_ptr, "\"type\"")))
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't find \"type\" information section in datatype string")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't find \"type\" information section in datatype string")
 
             /* Search for the initial '{' brace that begins the subsection and set the initial value for the depth
              * counter, to keep track of brace depth level inside the subsection
@@ -7523,7 +7420,7 @@ RV_convert_string_to_datatype(const char *type)
                  * the JSON must be misformatted
                  */
                 if (!current_symbol)
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't locate beginning of \"type\" subsection - misformatted JSON")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't locate beginning of \"type\" subsection - misformatted JSON")
 
             depth_counter++;
 
@@ -7543,7 +7440,7 @@ RV_convert_string_to_datatype(const char *type)
                  * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
                  */
                 if (!current_symbol)
-                    HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't locate end of \"type\" subsection - stray '{' is likely")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't locate end of \"type\" subsection - stray '{' is likely")
 
                 if (current_symbol == '{')
                     depth_counter++;
@@ -7568,7 +7465,7 @@ RV_convert_string_to_datatype(const char *type)
 #endif
 
             if ((compound_member_type_array[i] = RV_convert_string_to_datatype(tmp_cmpd_type_buffer)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert compound datatype member %zu from string representation", i)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert compound datatype member %zu from string representation", i)
 
             total_type_size += H5Tget_size(compound_member_type_array[i]);
 
@@ -7577,12 +7474,12 @@ RV_convert_string_to_datatype(const char *type)
         } /* end for */
 
         if ((datatype = H5Tcreate(H5T_COMPOUND, total_type_size)) < 0)
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create compound datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create compound datatype")
 
         /* Insert all fields into the Compound Datatype */
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
             if (H5Tinsert(datatype, compound_member_names[i], current_offset, compound_member_type_array[i]) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTINSERT, FAIL, "can't insert compound datatype member")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTINSERT, FAIL, "can't insert compound datatype member")
             current_offset += H5Tget_size(compound_member_type_array[i]);
         } /* end for */
     } /* end if */
@@ -7596,10 +7493,10 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Retrieve the array dimensions */
         if (NULL == (key_obj = yajl_tree_get(parse_tree, dims_keys, yajl_t_array)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve array datatype dimensions")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve array datatype dimensions")
 
         if (NULL == (array_dims = (hsize_t *) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*array_dims))))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array dimensions")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array dimensions")
 
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
             if (YAJL_IS_INTEGER(YAJL_GET_ARRAY(key_obj)->values[i]))
@@ -7617,9 +7514,9 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Locate the beginning and end braces of the "base" section for the array datatype */
         if (NULL == (base_type_substring_ptr = strstr(type, "\"base\"")))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't find \"base\" type information in datatype string")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't find \"base\" type information in datatype string")
         if (NULL == (base_type_substring_ptr = strstr(base_type_substring_ptr, "{")))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "incorrectly formatted \"base\" type information in datatype string")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "incorrectly formatted \"base\" type information in datatype string")
 
         /* To find the end of the "base type" section, a quick solution is to repeatedly search for
          * '{' symbols, matching this with the same number of searches for '}', and taking the final
@@ -7648,7 +7545,7 @@ RV_convert_string_to_datatype(const char *type)
          * the leading "type:" string and enclosing braces
          */
         if (NULL == (array_base_type_substring = (char *) RV_malloc(base_type_substring_len + type_string_len + 2)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array base type substring")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array base type substring")
 
         /* In order for the conversion function to correctly process the datatype string, it must be in the
          * form {"type": {...}}. Since the enclosing braces and the leading "type:" string are missing from
@@ -7661,10 +7558,10 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Convert the string representation of the array's base datatype to an hid_t */
         if ((base_type_id = RV_convert_string_to_datatype(array_base_type_substring)) < 0)
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert string representation of array base datatype to a usable form")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert string representation of array base datatype to a usable form")
 
         if ((datatype = H5Tarray_create2(base_type_id, (unsigned) i, array_dims)) < 0)
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "creating array datatype failed")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "creating array datatype failed")
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_ENUM")) {
         const char * const  type_string = "{\"type\":"; /* Gets prepended to the enum "base" datatype substring */
@@ -7680,18 +7577,18 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Locate the beginning and end braces of the "base" section for the enum datatype */
         if (NULL == (base_section_ptr = strstr(type, "\"base\"")))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "incorrectly formatted datatype string - missing \"base\" datatype section")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "incorrectly formatted datatype string - missing \"base\" datatype section")
         if (NULL == (base_section_ptr = strstr(base_section_ptr, "{")))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "incorrectly formatted \"base\" datatype section in datatype string")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "incorrectly formatted \"base\" datatype section in datatype string")
         if (NULL == (base_section_end = strstr(base_section_ptr, "}")))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "incorrectly formatted \"base\" datatype section in datatype string")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "incorrectly formatted \"base\" datatype section in datatype string")
 
         /* Allocate enough memory to hold the "base" information substring, plus a few bytes for
          * the leading "type:" string and enclosing braces
          */
         H5_CHECKED_ASSIGN(base_section_len, size_t, (base_section_end - base_section_ptr + 1), ptrdiff_t);
         if (NULL == (tmp_enum_base_type_buffer = (char *) RV_malloc(base_section_len + type_string_len + 2)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for enum base datatype temporary buffer")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for enum base datatype temporary buffer")
 
 #ifdef PLUGIN_DEBUG
         printf("  - Allocated %zu bytes for enum base datatype section\n\n", base_section_len + type_string_len + 2);
@@ -7712,24 +7609,24 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Convert the enum's base datatype substring into an hid_t for use in the following H5Tenum_create call */
         if ((enum_base_type = RV_convert_string_to_datatype(tmp_enum_base_type_buffer)) < 0)
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert enum datatype's base datatype section from string into datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert enum datatype's base datatype section from string into datatype")
 
 #ifdef PLUGIN_DEBUG
         printf("Converted enum base datatype to hid_t\n\n");
 #endif
 
         if ((datatype = H5Tenum_create(enum_base_type)) < 0)
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create datatype")
 
         if (NULL == (key_obj = yajl_tree_get(parse_tree, mapping_keys, yajl_t_object)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve enum mapping from enum string representation")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve enum mapping from enum string representation")
 
         /* Retrieve the name and value of each member in the enum mapping, inserting them into the enum type as new members */
         for (i = 0; i < YAJL_GET_OBJECT(key_obj)->len; i++) {
             long long val;
 
             if (!YAJL_IS_INTEGER(YAJL_GET_OBJECT(key_obj)->values[i]))
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "enum member %zu value is not an integer", i)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "enum member %zu value is not an integer", i)
 
             val = YAJL_GET_INTEGER(YAJL_GET_OBJECT(key_obj)->values[i]);
 
@@ -7738,31 +7635,31 @@ RV_convert_string_to_datatype(const char *type)
              * a long long.
              */
             if (H5Tenum_insert(datatype, YAJL_GET_OBJECT(key_obj)->keys[i], (void *) &val) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTINSERT, FAIL, "can't insert member into enum datatype")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTINSERT, FAIL, "can't insert member into enum datatype")
         } /* end for */
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_REFERENCE")) {
         char *type_base;
 
         if (NULL == (key_obj = yajl_tree_get(parse_tree, type_base_keys, yajl_t_string)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
 
         if (NULL == (type_base = YAJL_GET_STRING(key_obj)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
 
         if (!strcmp(type_base, "H5T_STD_REF_OBJ")) {
             if ((datatype = H5Tcopy(H5T_STD_REF_OBJ)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy object reference datatype")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy object reference datatype")
         }
         else if (!strcmp(type_base, "H5T_STD_REF_DSETREG")) {
             if ((datatype = H5Tcopy(H5T_STD_REF_DSETREG)) < 0)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy region reference datatype")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy region reference datatype")
         }
         else
-            HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid reference type")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid reference type")
     } /* end if */
     else
-        HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unknown datatype class")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unknown datatype class")
 
     ret_value = datatype;
 
@@ -7773,11 +7670,11 @@ RV_convert_string_to_datatype(const char *type)
 done:
     if (ret_value < 0 && datatype >= 0) {
         if (H5Tclose(datatype) < 0)
-            HDONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
         if (compound_member_type_array) {
             while (FAIL != compound_member_type_array[i])
                 if (H5Tclose(compound_member_type_array[i]) < 0)
-                    HDONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
+                    FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
         } /* end if */
     } /* end if */
 
@@ -7795,12 +7692,12 @@ done:
         RV_free(tmp_enum_base_type_buffer);
     if (FAIL != enum_base_type)
         if (H5Tclose(enum_base_type) < 0)
-            HDONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close enum base datatype")
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close enum base datatype")
 
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_convert_string_to_datatype() */
 
 
@@ -7846,8 +7743,6 @@ RV_convert_obj_refs_to_buffer(const RV_obj_ref_t *ref_array, size_t ref_array_le
     char   *out_curr_pos;
     herr_t  ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(ref_array);
     assert(buf_out);
     assert(buf_out_len);
@@ -7858,7 +7753,7 @@ RV_convert_obj_refs_to_buffer(const RV_obj_ref_t *ref_array, size_t ref_array_le
 
     out_len = ref_array_len * OBJECT_REF_STRING_LEN;
     if (NULL == (out = (char *) RV_malloc(out_len)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for object reference string buffer")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for object reference string buffer")
     out_curr_pos = out;
 
     for (i = 0; i < ref_array_len; i++) {
@@ -7890,7 +7785,7 @@ RV_convert_obj_refs_to_buffer(const RV_obj_ref_t *ref_array, size_t ref_array_le
             case H5I_ERROR_STACK:
             case H5I_NTYPES:
             default:
-                HGOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid ref obj. type")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid ref obj. type")
         } /* end switch */
 
         snprintf(out_curr_pos, OBJECT_REF_STRING_LEN, "%s/%s", prefix_table[prefix_index], ref_array[i].ref_obj_URI);
@@ -7916,7 +7811,7 @@ done:
     printf("\n");
 #endif
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_convert_obj_refs_to_buffer() */
 
 
@@ -7951,8 +7846,6 @@ RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
     size_t        out_len = 0;
     herr_t        ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(ref_buf);
     assert(buf_out);
     assert(buf_out_len);
@@ -7963,7 +7856,7 @@ RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
 
     out_len = ref_buf_len * sizeof(RV_obj_ref_t);
     if (NULL == (out = (RV_obj_ref_t *) RV_malloc(out_len)))
-        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for object reference array")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for object reference array")
 
     for (i = 0; i < ref_buf_len; i++) {
         char *URI_start;
@@ -8012,7 +7905,7 @@ done:
             RV_free(out);
     } /* end else */
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_convert_buffer_to_obj_refs() */
 
 
@@ -8048,8 +7941,6 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
     char    *type_section_ptr = NULL;
     hid_t    ret_value = FAIL;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(type);
 
     if (need_truncate) {
@@ -8060,7 +7951,7 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
 
         /* Start by locating the beginning of the "type" subsection, as indicated by the JSON "type" key */
         if (NULL == (type_section_ptr = strstr(type, "\"type\"")))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't find \"type\" information section in datatype string")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't find \"type\" information section in datatype string")
 
         /* Search for the initial '{' brace that begins the subsection and set the initial value for the depth
          * counter, to keep track of brace depth level inside the subsectjon
@@ -8071,7 +7962,7 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
              * the JSON must be misformatted
              */
             if (!current_symbol)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't locate beginning of \"type\" subsection - misformatted JSON")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't locate beginning of \"type\" subsection - misformatted JSON")
 
         depth_counter++;
 
@@ -8091,7 +7982,7 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
              * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
              */
             if (!current_symbol)
-                HGOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't locate end of \"type\" subsection - stray '{' is likely")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't locate end of \"type\" subsection - stray '{' is likely")
 
             if (current_symbol == '{')
                 depth_counter++;
@@ -8101,7 +7992,7 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
 
         H5_CHECKED_ASSIGN(substring_len, size_t, advancement_ptr - type_section_ptr, ptrdiff_t);
         if (NULL == (type_string = (char *) RV_malloc(substring_len + 3)))
-            HGOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for \"type\" subsection")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for \"type\" subsection")
 
         memcpy(type_string + 1, type_section_ptr, substring_len);
 
@@ -8113,7 +8004,7 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
     } /* end if */
 
     if ((datatype = RV_convert_string_to_datatype(type_string)) < 0)
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL, "can't convert string representation to datatype")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL, "can't convert string representation to datatype")
 
     ret_value = datatype;
 
@@ -8123,9 +8014,9 @@ done:
 
     if (ret_value < 0 && datatype >= 0)
         if (H5Tclose(datatype) < 0)
-            HDONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_parse_datatype() */
 
 
@@ -8152,28 +8043,26 @@ RV_parse_dataspace(char *space)
     char       *dataspace_type = NULL;
     hid_t       ret_value = FAIL;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(space);
 
     if (NULL == (parse_tree = yajl_tree_parse(space, NULL, 0)))
-        HGOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "JSON parse tree creation failed")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "JSON parse tree creation failed")
 
     /* Retrieve the Dataspace type */
     if (NULL == (key_obj = yajl_tree_get(parse_tree, class_keys, yajl_t_string)))
-        HGOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace class")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace class")
 
     if (NULL == (dataspace_type = YAJL_GET_STRING(key_obj)))
-        HGOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace class")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace class")
 
     /* Create the appropriate type of Dataspace */
     if (!strcmp(dataspace_type, "H5S_NULL")) {
         if ((dataspace = H5Screate(H5S_NULL)) < 0)
-            HGOTO_ERROR(H5E_DATASPACE, H5E_CANTCREATE, FAIL, "can't create null dataspace")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCREATE, FAIL, "can't create null dataspace")
     } /* end if */
     else if (!strcmp(dataspace_type, "H5S_SCALAR")) {
         if ((dataspace = H5Screate(H5S_SCALAR)) < 0)
-            HGOTO_ERROR(H5E_DATASPACE, H5E_CANTCREATE, FAIL, "can't create scalar dataspace")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCREATE, FAIL, "can't create scalar dataspace")
     } /* end if */
     else if (!strcmp(dataspace_type, "H5S_SIMPLE")) {
         const char *dims_keys[] =    { "shape", "dims", (const char *) 0 };
@@ -8183,7 +8072,7 @@ RV_parse_dataspace(char *space)
         size_t      i;
 
         if (NULL == (dims_obj = yajl_tree_get(parse_tree, dims_keys, yajl_t_array)))
-            HGOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace dims")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace dims")
 
         /* Check to see whether the maximum dimension size is specified as part of the
          * dataspace's JSON representation
@@ -8192,11 +8081,11 @@ RV_parse_dataspace(char *space)
             maxdims_specified = FALSE;
 
         if (NULL == (space_dims = (hsize_t *) RV_malloc(YAJL_GET_ARRAY(dims_obj)->len * sizeof(*space_dims))))
-            HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace dimensionality array")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace dimensionality array")
 
         if (maxdims_specified)
             if (NULL == (space_maxdims = (hsize_t *) RV_malloc(YAJL_GET_ARRAY(maxdims_obj)->len * sizeof(*space_maxdims))))
-                HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace maximum dimensionality array")
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace maximum dimensionality array")
 
         for (i = 0; i < dims_obj->u.array.len; i++) {
             long long val = YAJL_GET_INTEGER(dims_obj->u.array.values[i]);
@@ -8229,7 +8118,7 @@ RV_parse_dataspace(char *space)
 #endif
 
         if ((dataspace = H5Screate_simple((int) dims_obj->u.array.len, space_dims, space_maxdims)) < 0)
-            HGOTO_ERROR(H5E_DATASPACE, H5E_CANTCREATE, FAIL, "can't create simple dataspace")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCREATE, FAIL, "can't create simple dataspace")
     } /* end if */
 
     ret_value = dataspace;
@@ -8243,7 +8132,7 @@ done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_parse_dataspace() */
 
 
@@ -8271,24 +8160,22 @@ RV_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **m
     char        *maxdims_out_string = NULL;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     if (H5S_NO_CLASS == (space_type = H5Sget_simple_extent_type(space_id)))
-        HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "invalid dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "invalid dataspace")
 
     /* Scalar dataspaces operate upon the assumption that if no shape
      * is specified in the request body during the creation of an object,
      * the server will create the object with a scalar dataspace.
      */
-    if (H5S_SCALAR == space_type) HGOTO_DONE(SUCCEED);
+    if (H5S_SCALAR == space_type) FUNC_GOTO_DONE(SUCCEED);
 
     /* Allocate space for each buffer */
     if (shape_body)
         if (NULL == (shape_out_string = (char *) RV_malloc(DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE)))
-            HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace shape buffer")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace shape buffer")
     if (maxdims_body)
         if (NULL == (maxdims_out_string = (char *) RV_malloc(DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE)))
-            HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace maximum dimension size buffer")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace maximum dimension size buffer")
 
     /* Ensure that both buffers are NUL-terminated */
     if (shape_out_string) *shape_out_string = '\0';
@@ -8320,18 +8207,18 @@ RV_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **m
             int                 bytes_printed;
 
             if ((space_ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
-                HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't get number of dimensions in dataspace")
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't get number of dimensions in dataspace")
 
             if (shape_out_string)
                 if (NULL == (dims = (hsize_t *) RV_malloc((size_t) space_ndims * sizeof(*dims))))
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate memory for dataspace dimensions")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate memory for dataspace dimensions")
 
             if (maxdims_out_string)
                 if (NULL == (maxdims = (hsize_t *) RV_malloc((size_t) space_ndims * sizeof(*dims))))
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate memory for dataspace maximum dimension sizes")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate memory for dataspace maximum dimension sizes")
 
             if (H5Sget_simple_extent_dims(space_id, dims, maxdims) < 0)
-                HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't retrieve dataspace dimensions and maximum dimension sizes")
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't retrieve dataspace dimensions and maximum dimension sizes")
 
             /* Add the JSON key prefixes to their respective buffers */
             if (shape_out_string) {
@@ -8363,7 +8250,7 @@ RV_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **m
                                     shape_out_string_curr_pos, H5E_DATASPACE, FAIL);
 
                     if ((bytes_printed = sprintf(shape_out_string_curr_pos, "%s%llu", i > 0 ? "," : "", dims[i])) < 0)
-                        HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "sprintf error")
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "sprintf error")
                     shape_out_string_curr_pos += bytes_printed;
                 } /* end if */
 
@@ -8381,7 +8268,7 @@ RV_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **m
                     } /* end if */
                     else {
                         if ((bytes_printed = sprintf(maxdims_out_string_curr_pos, "%s%llu", i > 0 ? "," : "", maxdims[i])) < 0)
-                            HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "sprintf error")
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "sprintf error")
                         maxdims_out_string_curr_pos += bytes_printed;
                     } /* end else */
                 } /* end if */
@@ -8396,7 +8283,7 @@ RV_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **m
         case H5S_SCALAR: /* Should have already been handled above */
         case H5S_NO_CLASS:
         default:
-            HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't get dataspace type")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't get dataspace type")
     } /* end switch */
 
 done:
@@ -8418,7 +8305,7 @@ done:
     if (dims)
         RV_free(dims);
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_convert_dataspace_shape_to_string() */
 
 
@@ -8472,13 +8359,11 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
     int      ndims;
     herr_t   ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(selection_string);
 
     out_string_len = DATASPACE_SELECTION_STRING_DEFAULT_SIZE;
     if (NULL == (out_string = (char *) RV_malloc(out_string_len)))
-        HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace selection string")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace selection string")
 
     out_string_curr_pos = out_string;
 
@@ -8486,10 +8371,10 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
     *out_string_curr_pos = '\0';
 
     if (H5I_DATASPACE != H5Iget_type(space_id))
-        HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "not a dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "not a dataspace")
 
     if ((ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
-        HGOTO_ERROR(H5E_DATASPACE, H5E_CANTCOUNT, FAIL, "can't retrieve dataspace dimensionality")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOUNT, FAIL, "can't retrieve dataspace dimensionality")
 
     if (req_param) {
         /* Format the selection in a manner such that it can be used as a request parameter in
@@ -8503,7 +8388,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
             case H5S_SEL_NONE:
                 break;
             case H5S_SEL_POINTS:
-                HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "point selections are unsupported as a HTTP request parameter")
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "point selections are unsupported as a HTTP request parameter")
 
             case H5S_SEL_HYPERSLABS:
                 /* Format the hyperslab selection according to the 'select' request/query parameter.
@@ -8515,17 +8400,17 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                  * the selection, and Z is the stride of the selection in that dimension.
                  */
                 if (NULL == (start = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*start))))
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'start' values")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'start' values")
                 if (NULL == (stride = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*stride))))
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'stride' values")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'stride' values")
                 if (NULL == (count = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*count))))
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'count' values")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'count' values")
                 if (NULL == (block = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*block))))
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'block' values")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'block' values")
 
                 /* XXX: Currently only regular hyperslabs supported */
                 if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't get regular hyperslab selection")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't get regular hyperslab selection")
 
                 strcat(out_string_curr_pos++, "[");
 
@@ -8543,7 +8428,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                                                  start[i] + (stride[i] * count[i]),
                                                  stride[i]
                                          )) < 0)
-                        HGOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
+                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
 
                     out_string_curr_pos += bytes_printed;
                 } /* end for */
@@ -8558,7 +8443,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
             case H5S_SEL_ERROR:
             case H5S_SEL_N:
             default:
-                HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "invalid selection type")
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "invalid selection type")
         } /* end switch */
     } /* end if */
     else {
@@ -8579,13 +8464,13 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                 size_t             points_strlen = strlen(points_str);
 
                 if ((num_points = H5Sget_select_npoints(space_id)) < 0)
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of selected points")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of selected points")
 
                 if (NULL == (point_list = (hsize_t *) RV_malloc((size_t) (ndims * num_points) * sizeof(*point_list))))
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate point list buffer")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate point list buffer")
 
                 if (H5Sget_select_elem_pointlist(space_id, 0, (hsize_t) num_points, point_list) < 0)
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve point list")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve point list")
 
                 CHECKED_REALLOC(out_string, out_string_len, points_strlen + 1, out_string_curr_pos, H5E_DATASPACE, FAIL);
 
@@ -8607,7 +8492,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
 
                     for (j = 0; j < (size_t) ndims; j++) {
                         if ((bytes_printed = sprintf(out_string_curr_pos, "%s%llu", j > 0 ? "," : "", point_list[(i * (size_t) ndims) + j])) < 0)
-                            HGOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
+                            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
 
                         out_string_curr_pos += bytes_printed;
                     } /* end for */
@@ -8639,24 +8524,24 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                                                  "\"step\": %s";
 
                 if (NULL == (start = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*start))))
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'start' values")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'start' values")
                 if (NULL == (stride = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*stride))))
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'stride' values")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'stride' values")
                 if (NULL == (count = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*count))))
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'count' values")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'count' values")
                 if (NULL == (block = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*block))))
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'block' values")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'block' values")
 
                 if (NULL == (start_body = (char *) RV_calloc((size_t) (ndims * MAX_NUM_LENGTH + ndims))))
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'start' values string representation")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'start' values string representation")
                 start_body_curr_pos = start_body;
 
                 if (NULL == (stop_body = (char *) RV_calloc((size_t) (ndims * MAX_NUM_LENGTH + ndims))))
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'stop' values string representation")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'stop' values string representation")
                 stop_body_curr_pos = stop_body;
 
                 if (NULL == (step_body = (char *) RV_calloc((size_t) (ndims * MAX_NUM_LENGTH + ndims))))
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'step' values string representation")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'step' values string representation")
                 step_body_curr_pos = step_body;
 
                 strcat(start_body_curr_pos++, "[");
@@ -8665,20 +8550,20 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
 
                 /* XXX: Currently only regular hyperslabs supported */
                 if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't get regular hyperslab selection")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't get regular hyperslab selection")
 
                 for (i = 0; i < (size_t) ndims; i++) {
                     if ((bytes_printed = sprintf(start_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), start[i])) < 0)
-                        HGOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
+                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
                     start_body_curr_pos += bytes_printed;
 
                     /* XXX: stop body may be wrong */
                     if ((bytes_printed = sprintf(stop_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), start[i] + (stride[i] * count[i]))) < 0)
-                        HGOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
+                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
                     stop_body_curr_pos += bytes_printed;
 
                     if ((bytes_printed = sprintf(step_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), stride[i])) < 0)
-                        HGOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
+                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
                     step_body_curr_pos += bytes_printed;
                 } /* end for */
 
@@ -8697,7 +8582,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                                               stop_body,
                                               step_body
                                      )) < 0)
-                    HGOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                 out_string_curr_pos += bytes_printed;
 
@@ -8707,7 +8592,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
             case H5S_SEL_ERROR:
             case H5S_SEL_N:
             default:
-                HGOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "invalid selection type")
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "invalid selection type")
         } /* end switch(H5Sget_select_type()) */
     } /* end else */
 
@@ -8739,7 +8624,7 @@ done:
     if (point_list)
         RV_free(point_list);
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_convert_dataspace_selection_to_string() */
 
 
@@ -8781,37 +8666,35 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
     int          bytes_printed = 0;
     herr_t       ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     assert(create_request_body);
     assert((H5I_FILE == pobj->obj_type || H5I_GROUP == pobj->obj_type)
               && "parent object not a file or group");
 
     /* Get the type ID */
     if (H5Pget(dcpl, H5VL_PROP_DSET_TYPE_ID, &type_id) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property value for datatype ID")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property value for datatype ID")
 
     /* Get the space ID */
     if (H5Pget(dcpl, H5VL_PROP_DSET_SPACE_ID, &space_id) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property value for dataspace ID")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property value for dataspace ID")
 
     /* Get the Link Creation property list ID */
     if (H5Pget(dcpl, H5VL_PROP_DSET_LCPL_ID, &lcpl_id) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property value for link creation property list ID")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property value for link creation property list ID")
 
     /* Form the Datatype portion of the Dataset create request */
     if (RV_convert_datatype_to_string(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL, "can't convert datatype to string representation")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL, "can't convert datatype to string representation")
 
     /* If the Dataspace of the Dataset was not specified as H5P_DEFAULT, parse it. */
     if (H5P_DEFAULT != space_id)
         if (RV_convert_dataspace_shape_to_string(space_id, &shape_body, &maxdims_body) < 0)
-            HGOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL, "can't parse Dataset shape parameters")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL, "can't parse Dataset shape parameters")
 
     /* If the DCPL was not specified as H5P_DEFAULT, form the Dataset Creation Properties portion of the Dataset create request */
     if (H5P_DATASET_CREATE_DEFAULT != dcpl)
         if (RV_parse_dataset_creation_properties(dcpl, &creation_properties_body, &creation_properties_body_len) < 0)
-            HGOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL, "can't parse Dataset Creation Properties")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL, "can't parse Dataset Creation Properties")
 
 #ifdef PLUGIN_DEBUG
     printf("  - Dataset creation properties body: %s\n", creation_properties_body);
@@ -8833,7 +8716,7 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
          * one which the dataset will ultimately be linked under, extract out the path to the
          * final group in the chain */
         if (NULL == (path_dirname = RV_dirname(name)))
-            HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid pathname for dataset link")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid pathname for dataset link")
         empty_dirname = !strcmp(path_dirname, "");
 
 #ifdef PLUGIN_DEBUG
@@ -8850,12 +8733,12 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
 
             search_ret = RV_find_object_by_path(pobj, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
             if (!search_ret || search_ret < 0)
-                HGOTO_ERROR(H5E_DATASET, H5E_PATH, FAIL, "can't locate target for dataset link")
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, FAIL, "can't locate target for dataset link")
         } /* end if */
 
         link_body_len = strlen(link_body_format) + strlen(link_basename) + (empty_dirname ? strlen(pobj->URI) : strlen(target_URI)) + 1;
         if (NULL == (link_body = (char *) RV_malloc(link_body_len)))
-            HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset link body")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset link body")
 
         /* Form the Dataset Creation Link portion of the Dataset create request using the above format
          * specifier and the corresponding arguments */
@@ -8870,7 +8753,7 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
                    + 3;
 
     if (NULL == (out_string = (char *) RV_malloc(bytes_to_print)))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset creation request body")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset creation request body")
 
     if ((bytes_printed = snprintf(out_string, bytes_to_print,
              "{%s%s%s%s%s%s%s%s%s}",
@@ -8884,7 +8767,7 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
              link_body ? ", " : "",                                    /* Add separator for Link Creation section, if specified */
              link_body ? link_body : "")                               /* Add the Link Creation section, if specified */
         ) < 0)
-        HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
 done:
     if (ret_value >= 0) {
@@ -8909,7 +8792,7 @@ done:
     if (datatype_body)
         RV_free(datatype_body);
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_setup_dataset_create_request_body() */
 
 
@@ -8944,14 +8827,12 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
     int                 bytes_printed = 0;
     herr_t              ret_value = SUCCEED;
 
-    FUNC_ENTER_NOAPI_NOINIT
-
     if (!creation_properties_body)
-        HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid NULL pointer for dataset creation properties string buffer")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid NULL pointer for dataset creation properties string buffer")
 
     out_string_len = DATASET_CREATION_PROPERTIES_BODY_DEFAULT_SIZE;
     if (NULL == (out_string = (char *) RV_malloc(out_string_len)))
-        HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset creation properties string buffer")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset creation properties string buffer")
 
 #ifdef PLUGIN_DEBUG
     printf("  - Initial dataset creation properties string buffer size is: %zu\n\n", out_string_len);
@@ -8978,7 +8859,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
      * space allocation time property is chosen to always be printed to the resulting string.
      */
     if (H5Pget_alloc_time(dcpl, &alloc_time) < 0)
-        HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve alloc time property")
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve alloc time property")
 
     /* Check whether the buffer needs to be grown */
     bytes_to_print = strlen("\"allocTime\": \"H5D_ALLOC_TIME_DEFAULT\"") + 1;
@@ -9029,7 +8910,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
 
         case H5D_ALLOC_TIME_ERROR:
         default:
-            HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataset space alloc time")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataset space alloc time")
     } /* end switch */
 
 
@@ -9045,7 +8926,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
         unsigned crt_order_flags;
 
         if (H5Pget_attr_creation_order(dcpl, &crt_order_flags) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve attribute creation order property")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve attribute creation order property")
 
         if (0 != crt_order_flags) {
             const char * const fmt_string = ", \"attributeCreationOrder\": \"H5P_CRT_ORDER_%s\"";
@@ -9059,7 +8940,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
             if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
                     (H5P_CRT_ORDER_INDEXED | H5P_CRT_ORDER_TRACKED) == crt_order_flags ? "INDEXED" : "TRACKED")
                 ) < 0)
-                HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
             out_string_curr_pos += bytes_printed;
         } /* end if */
@@ -9078,7 +8959,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
         unsigned max_compact, min_dense;
 
         if (H5Pget_attr_phase_change(dcpl, &max_compact, &min_dense) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve attribute phase change property")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve attribute phase change property")
 
         if (DATASET_CREATE_MAX_COMPACT_ATTRIBUTES_DEFAULT != max_compact
                 || DATASET_CREATE_MIN_DENSE_ATTRIBUTES_DEFAULT != min_dense) {
@@ -9094,7 +8975,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
             CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
 
             if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string, max_compact, min_dense)) < 0)
-                HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
             out_string_curr_pos += bytes_printed;
         } /* end if */
@@ -9112,7 +8993,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
         H5D_fill_time_t fill_time;
 
         if (H5Pget_fill_time(dcpl, &fill_time) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve fill time property")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve fill time property")
 
         if (H5D_FILL_TIME_IFSET != fill_time) {
             const char * const fmt_string = ", \"fillTime\": \"H5D_FILL_TIME_%s\"";
@@ -9126,7 +9007,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
             if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
                     H5D_FILL_TIME_ALLOC == fill_time ? "ALLOC" : "NEVER")
                 ) < 0)
-                HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
             out_string_curr_pos += bytes_printed;
         } /* end if */
@@ -9145,7 +9026,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
         H5D_fill_value_t fill_status;
 
         if (H5Pfill_value_defined(dcpl, &fill_status) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve the \"fill value defined\" status")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve the \"fill value defined\" status")
 
         if (H5D_FILL_VALUE_DEFAULT != fill_status) {
             if (H5D_FILL_VALUE_UNDEFINED == fill_status) {
@@ -9226,7 +9107,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
                                 H5Z_FILTER_DEFLATE,
                                 cd_values[0])
                             ) < 0)
-                            HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                         out_string_curr_pos += bytes_printed;
                         break;
@@ -9248,7 +9129,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
                         if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
                                 H5Z_FILTER_SHUFFLE)
                             ) < 0)
-                            HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                         out_string_curr_pos += bytes_printed;
                         break;
@@ -9270,7 +9151,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
                         if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
                                 H5Z_FILTER_FLETCHER32)
                             ) < 0)
-                            HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                         out_string_curr_pos += bytes_printed;
                         break;
@@ -9301,7 +9182,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
                                 cd_values[H5Z_SZIP_PARM_PPB],
                                 cd_values[H5Z_SZIP_PARM_PPS])
                             ) < 0)
-                            HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                         out_string_curr_pos += bytes_printed;
                         break;
@@ -9323,7 +9204,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
                         if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
                                 H5Z_FILTER_NBIT)
                             ) < 0)
-                            HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                         out_string_curr_pos += bytes_printed;
                         break;
@@ -9349,7 +9230,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
                                 "", /* XXX: */
                                 cd_values[1])
                             ) < 0)
-                            HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                         out_string_curr_pos += bytes_printed;
                         break;
@@ -9371,7 +9252,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
                         if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
                                 LZF_FILTER_ID)
                             ) < 0)
-                            HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                         out_string_curr_pos += bytes_printed;
                         break;
@@ -9396,14 +9277,14 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
                                 0,
                                 "")
                             ) < 0)
-                            HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                         out_string_curr_pos += bytes_printed;
                         break;
                     } /* User-defined filter */
 
                     case H5Z_FILTER_ERROR:
-                        HGOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid filter specified")
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid filter specified")
                 } /* end switch */
             } /* end for */
 
@@ -9473,11 +9354,11 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
                                                "}";
 
             if ((ndims = H5Pget_chunk(dcpl, H5O_LAYOUT_NDIMS, chunk_dims)) < 0)
-                HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve dataset chunk dimensionality")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve dataset chunk dimensionality")
             assert(ndims > 0 && "no chunk dimensionality specified");
 
             if (NULL == (chunk_dims_string = (char *) RV_malloc((size_t) ((ndims * MAX_NUM_LENGTH) + ndims + 3))))
-                HGOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for chunk dimensionality string")
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for chunk dimensionality string")
             chunk_dims_string_curr_pos = chunk_dims_string;
             *chunk_dims_string_curr_pos = '\0';
 
@@ -9485,7 +9366,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
 
             for (i = 0; i < (size_t) ndims; i++) {
                 if ((bytes_printed = snprintf(chunk_dims_string_curr_pos, MAX_NUM_LENGTH, "%s%llu", i > 0 ? "," : "", chunk_dims[i])) < 0)
-                    HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                 chunk_dims_string_curr_pos += bytes_printed;
             } /* end for */
@@ -9499,19 +9380,19 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
             CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
 
             if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string, chunk_dims_string)) < 0)
-                HGOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
             out_string_curr_pos += bytes_printed;
             break;
         } /* H5D_CHUNKED */
 
         case H5D_VIRTUAL:
-            HGOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "unsupported dataset layout: Virtual")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "unsupported dataset layout: Virtual")
 
         case H5D_LAYOUT_ERROR:
         case H5D_NLAYOUTS:
         default:
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve dataset layout property")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve dataset layout property")
     } /* end switch */
 
 
@@ -9526,7 +9407,7 @@ RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body
         hbool_t track_times;
 
         if (H5Pget_obj_track_times(dcpl, &track_times) < 0)
-            HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve object time tracking property")
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve object time tracking property")
 
         if (track_times) {
             const char * const track_times_true = ", \"trackTimes\": \"true\"";
@@ -9576,5 +9457,5 @@ done:
     if (chunk_dims_string)
         RV_free(chunk_dims_string);
 
-    FUNC_LEAVE_NOAPI(ret_value)
+    return ret_value;
 } /* end RV_parse_dataset_creation_properties() */
