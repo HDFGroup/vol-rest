@@ -43,17 +43,6 @@ extern hid_t h5_err_class_g;
 #endif
 
 
-#define PRINT_ERR_STACK(err_major, ret_val)                                                                  \
-{                                                                                                            \
-    ssize_t num_errors;                                                                                      \
-    if ((num_errors = H5Eget_num(H5P_DEFAULT)) < 0)                                                          \
-        FUNC_DONE_ERROR(err_major, H5E_CANTGET, ret_val, "can't retrieve number of messages on error stack") \
-    else                                                                                                     \
-        if (num_errors)                                                                                      \
-            H5Eprint2(H5P_DEFAULT, NULL);                                                                    \
-}
-
-
 /* Macro to push the current function to the current error stack
  * and then goto the "done" label, which should appear inside
  * the function
@@ -64,6 +53,7 @@ extern hid_t h5_err_class_g;
     ret_value = ret_val;                                                                                     \
     goto done;                                                                                               \
 }
+
 
 /* Macro to push the current function to the current error stack
  * without calling goto. This is used for handling the case where
@@ -77,6 +67,11 @@ extern hid_t h5_err_class_g;
     ret_value = ret_val;                                                                                     \
 }
 
+
+/* Macro to simply jump to the "done" label inside the function,
+ * setting ret_value to the given value. This is often used for
+ * short circuiting in functions when certain conditions arise.
+ */
 #define FUNC_GOTO_DONE(ret_val)                                                                              \
 {                                                                                                            \
     ret_value = ret_val;                                                                                     \
@@ -92,14 +87,14 @@ extern hid_t h5_err_class_g;
 #define AT()     printf ("   at %s:%d in %s()...\n",        \
         __FILE__, __LINE__, FUNC);
 
+
 /*
  * The name of the test is printed by saying TESTING("something") which will
  * result in the string `Testing something' being flushed to standard output.
  * If a test passes, fails, or is skipped then the PASSED(), H5_FAILED(), or
  * SKIPPED() macro should be called.  After H5_FAILED() or SKIPPED() the caller
  * should print additional information to stdout indented by at least four
- * spaces.  If the h5_errors() is used for automatic error handling then
- * the H5_FAILED() macro is invoked automatically when an API function fails.
+ * spaces.
  */
 #define TESTING(S)  {printf("Testing %-62s", S); fflush(stdout);}
 #define PASSED()    {puts("PASSED"); fflush(stdout);}

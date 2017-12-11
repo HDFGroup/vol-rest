@@ -28,24 +28,22 @@
 /* XXX: Implement _iterate functions */
 /* XXX: Add support for the _by_idx and _by_name functions. In particular to not segfault when certain parameters to main functions are NULL */
 /* XXX: Eventually replace CURL PUT calls with CURLOPT_UPLOAD calls */
-/* XXX: Switch to the public error stack functions */
 /* XXX: Attempt to eliminate all use of globals/static variables */
 /* XXX: Create a table of all the hard-coded JSON keys used so these can be modified in the future if desired */
 
 #define H5F_FRIEND /* XXX: Temporarily needed for include H5Fpkg.h */
 #define H5O_FRIEND /* XXX: Temporarily needed for including H5Opkg.h */
 
-#include "H5private.h"       /* Generic Functions */
+#include "H5private.h"       /* XXX: Temporarily needed; Generic Functions */
 #include "H5Fpkg.h"          /* XXX: Temporarily needed */
 #include "H5Opkg.h"          /* XXX: Temporarily needed */
 #include "H5Ppublic.h"       /* Property Lists    */
 #include "H5Spublic.h"       /* Dataspaces        */
 #include "H5VLpublic.h"      /* VOL plugins       */
-#include "H5Eprivate.h"      /* XXX: Temporarily needed */
 #include "H5VLprivate.h"     /* XXX: Temporarily needed */
-#include "rest_vol_public.h"
-#include "rest_vol_err.h"    /* Error reporting macros */
 #include "rest_vol.h"        /* REST VOL plugin   */
+#include "rest_vol_public.h"
+#include "rest_vol_err.h"    /* REST VOL error reporting macros */
 
 /* Macro to handle various HTTP response codes */
 #define HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value)                                         \
