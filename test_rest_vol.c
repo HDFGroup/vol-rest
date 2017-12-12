@@ -7820,7 +7820,7 @@ error:
 static int
 test_create_obj_ref(void)
 {
-    RV_obj_ref_t ref;
+    rv_obj_ref_t ref;
     hid_t        file_id = -1, fapl_id = -1;
 
     TESTING("create an object reference")
@@ -7873,7 +7873,7 @@ error:
 static int
 test_write_dataset_w_obj_refs(void)
 {
-    RV_obj_ref_t *ref_array = NULL;
+    rv_obj_ref_t *ref_array = NULL;
     hsize_t       dims[OBJ_REF_DATASET_WRITE_TEST_SPACE_RANK];
     size_t        i, ref_array_size = 0;
     hid_t         file_id = -1, fapl_id = -1;
@@ -7961,7 +7961,7 @@ test_write_dataset_w_obj_refs(void)
     for (i = 0, ref_array_size = 1; i < OBJ_REF_DATASET_WRITE_TEST_SPACE_RANK; i++)
         ref_array_size *= dims[i];
 
-    if (NULL == (ref_array = (RV_obj_ref_t *) malloc(ref_array_size * sizeof(*ref_array))))
+    if (NULL == (ref_array = (rv_obj_ref_t *) malloc(ref_array_size * sizeof(*ref_array))))
         TEST_ERROR
 
     for (i = 0; i < dims[0]; i++) {
@@ -8070,7 +8070,7 @@ error:
 static int
 test_read_dataset_w_obj_refs(void)
 {
-    RV_obj_ref_t *ref_array = NULL;
+    rv_obj_ref_t *ref_array = NULL;
     hsize_t       dims[OBJ_REF_DATASET_READ_TEST_SPACE_RANK];
     size_t        i, ref_array_size = 0;
     hid_t         file_id = -1, fapl_id = -1;
@@ -8158,7 +8158,7 @@ test_read_dataset_w_obj_refs(void)
     for (i = 0, ref_array_size = 1; i < OBJ_REF_DATASET_READ_TEST_SPACE_RANK; i++)
         ref_array_size *= dims[i];
 
-    if (NULL == (ref_array = (RV_obj_ref_t *) malloc(ref_array_size * sizeof(*ref_array))))
+    if (NULL == (ref_array = (rv_obj_ref_t *) malloc(ref_array_size * sizeof(*ref_array))))
         TEST_ERROR
 
     for (i = 0; i < dims[0]; i++) {
@@ -8319,7 +8319,7 @@ error:
 static int
 test_write_dataset_w_obj_refs_empty_data(void)
 {
-    RV_obj_ref_t *ref_array = NULL;
+    rv_obj_ref_t *ref_array = NULL;
     hsize_t       dims[OBJ_REF_DATASET_EMPTY_WRITE_TEST_SPACE_RANK];
     size_t        i, ref_array_size = 0;
     hid_t         file_id = -1, fapl_id = -1;
@@ -8373,7 +8373,7 @@ test_write_dataset_w_obj_refs_empty_data(void)
     for (i = 0, ref_array_size = 1; i < OBJ_REF_DATASET_EMPTY_WRITE_TEST_SPACE_RANK; i++)
         ref_array_size *= dims[i];
 
-    if (NULL == (ref_array = (RV_obj_ref_t *) malloc(ref_array_size * sizeof(*ref_array))))
+    if (NULL == (ref_array = (rv_obj_ref_t *) malloc(ref_array_size * sizeof(*ref_array))))
         TEST_ERROR
 
     for (i = 0; i < dims[0]; i++) {

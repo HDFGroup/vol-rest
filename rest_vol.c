@@ -343,8 +343,8 @@ static herr_t      RV_convert_datatype_to_string(hid_t type_id, char **type_body
 static hid_t       RV_convert_string_to_datatype(const char *type);
 
 /* Conversion function to convert one or more rest_obj_ref_t objects into a binary buffer for data transfer */
-static herr_t RV_convert_obj_refs_to_buffer(const RV_obj_ref_t *ref_array, size_t ref_array_len, char **buf_out, size_t *buf_out_len);
-static herr_t RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len, RV_obj_ref_t **buf_out, size_t *buf_out_len);
+static herr_t RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_len, char **buf_out, size_t *buf_out_len);
+static herr_t RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len, rv_obj_ref_t **buf_out, size_t *buf_out_len);
 
 /* Helper function to parse a JSON string representing an HDF5 Datatype and
  * setup an hid_t for the Datatype
@@ -2881,7 +2881,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         if (H5T_STD_REF_OBJ == mem_type_id) {
             /* Convert the received binary buffer into a buffer of rest_obj_ref_t's */
             if (RV_convert_buffer_to_obj_refs(response_buffer.buffer, (size_t) file_select_npoints,
-                    (RV_obj_ref_t **) &obj_ref_buf, &read_data_size) < 0)
+                    (rv_obj_ref_t **) &obj_ref_buf, &read_data_size) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert ref string/s to object ref array")
 
             memcpy(buf, obj_ref_buf, read_data_size);
@@ -3033,7 +3033,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     else {
         if (H5T_STD_REF_OBJ == mem_type_id) {
             /* Convert the buffer of rest_obj_ref_t's to a binary buffer */
-            if (RV_convert_obj_refs_to_buffer((const RV_obj_ref_t *) buf, (size_t) file_select_npoints, &write_body, &write_body_len) < 0)
+            if (RV_convert_obj_refs_to_buffer((const rv_obj_ref_t *) buf, (size_t) file_select_npoints, &write_body, &write_body_len) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert object ref/s to ref string/s")
             buf = write_body;
         } /* end if */
@@ -3232,28 +3232,13 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
 
     assert(H5I_DATASET == dset->obj_type && "not a dataset");
 
-    /* Check for write access */
-    if (!(dset->domain->u.file.intent & H5F_ACC_RDWR))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
-
-    /* Setup the "Host: " header */
-    host_header_len = strlen(dset->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
-
-    strcpy(host_header, host_string);
-
-    curl_headers = curl_slist_append(curl_headers, strncat(host_header, dset->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
-
-    /* Disable use of Expect: 100 Continue HTTP response */
-    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
-
     switch (specific_type) {
         /* H5Dset_extent */
         case H5VL_DATASET_SET_EXTENT:
+            /* Check for write access */
+            if (!(dset->domain->u.file.intent & H5F_ACC_RDWR))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
+
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "set dataset extent unsupported")
             break;
 
@@ -5144,13 +5129,109 @@ done:
  * Return:      Non-negative on success/Negative on failure
  *
  * Programmer:  Jordan Henderson
- *              July, 2017
+ *              December, 2017
  */
 static herr_t
 RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_type,
               hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    herr_t ret_value = SUCCEED;
+    RV_object_t *theobj = (RV_object_t *) obj;
+    herr_t       ret_value = SUCCEED;
+
+#ifdef PLUGIN_DEBUG
+    printf("Received object get call with following parameters:\n");
+    printf("  - Call type: %d\n", get_type);
+    printf("  - Object URI: %s\n", theobj->URI);
+    printf("  - Object type: %d\n", theobj->obj_type);
+#endif
+
+    switch (get_type) {
+        case H5VL_REF_GET_NAME:
+            FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_UNSUPPORTED, FAIL, "unsupported reference operation")
+
+        /* H5Rget_region */
+        case H5VL_REF_GET_REGION:
+        {
+            hid_t      *ret = va_arg(arguments, hid_t *);
+            H5R_type_t  ref_type = va_arg(arguments, H5R_type_t);
+            void       *ref = va_arg(arguments, void *);
+
+            if (H5R_DATASET_REGION != ((rv_obj_ref_t *) ref)->ref_type)
+                FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_BADVALUE, FAIL, "not a dataset region reference")
+
+            /* XXX: */
+            FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_UNSUPPORTED, FAIL, "region references are currently unsupported")
+
+            break;
+        } /* H5VL_REF_GET_REGION */
+
+        /* H5Rget_obj_type2 */
+        case H5VL_REF_GET_TYPE:
+        {
+            H5O_type_t *obj_type = va_arg(arguments, H5O_type_t *);
+            H5R_type_t  ref_type = va_arg(arguments, H5R_type_t);
+            void       *ref = va_arg(arguments, void *);
+
+            /* Even though the reference type is stored as a field inside a
+             * rv_obj_ref_t struct, take the user's passed in ref. type at
+             * face value
+             */
+            switch (ref_type) {
+                case H5R_OBJECT:
+                {
+                    /* Since the type of the referenced object is embedded
+                     * in the rv_obj_ref_t struct, just retrieve it
+                     */
+                    switch (((rv_obj_ref_t *) ref)->ref_obj_type) {
+                        case H5I_FILE:
+                        case H5I_GROUP:
+                            *obj_type = H5O_TYPE_GROUP;
+                            break;
+
+                        case H5I_DATATYPE:
+                            *obj_type = H5O_TYPE_NAMED_DATATYPE;
+                            break;
+
+                        case H5I_DATASET:
+                            *obj_type = H5O_TYPE_DATASET;
+                            break;
+
+                        case H5I_ATTR:
+                        case H5I_UNINIT:
+                        case H5I_BADID:
+                        case H5I_DATASPACE:
+                        case H5I_REFERENCE:
+                        case H5I_VFL:
+                        case H5I_VOL:
+                        case H5I_GENPROP_CLS:
+                        case H5I_GENPROP_LST:
+                        case H5I_ERROR_CLASS:
+                        case H5I_ERROR_MSG:
+                        case H5I_ERROR_STACK:
+                        case H5I_NTYPES:
+                        default:
+                            FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_BADVALUE, FAIL, "referenced object not a group, datatype or dataset")
+                    } /* end switch */
+                } /* H5R_OBJECT */
+
+                case H5R_DATASET_REGION:
+                {
+                    /* XXX: */
+                    FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_BADVALUE, FAIL, "region references are currently unsupported")
+                } /* H5R_DATASET_REGION */
+
+                case H5R_BADTYPE:
+                case H5R_MAXTYPE:
+                default:
+                    FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_BADVALUE, FAIL, "invalid reference type")
+            } /* end switch */
+
+            break;
+        } /* H5VL_REF_GET_TYPE */
+
+        default:
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "unknown object operation")
+    } /* end switch */
 
 done:
     return ret_value;
@@ -5204,7 +5285,7 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
             switch (ref_type) {
                 case H5R_OBJECT:
                 {
-                    RV_obj_ref_t *objref = (RV_obj_ref_t *) ref;
+                    rv_obj_ref_t *objref = (rv_obj_ref_t *) ref;
                     htri_t        search_ret;
 
                     /* Locate the object for the reference, setting the ref_obj_type and ref_obj_URI fields in the process */
@@ -5220,6 +5301,9 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
                 } /* H5R_OBJECT */
 
                 case H5R_DATASET_REGION:
+                {
+                    FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_UNSUPPORTED, FAIL, "region references are currently unsupported")
+                } /* H5R_DATASET_REGION */
 
                 case H5R_BADTYPE:
                 case H5R_MAXTYPE:
@@ -5278,33 +5362,89 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
         case H5VL_OBJECT_GET_COMMENT:
             FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "object comments are deprecated in favor of use of object attributes")
 
+        /* H5Oget_info(_by_name/_by_idx) */
         case H5VL_OBJECT_GET_INFO:
         {
             H5VL_loc_params_t  loc_params = va_arg(arguments, H5VL_loc_params_t);
             H5O_info_t        *obj_info = va_arg(arguments, H5O_info_t *);
             long long          attr_count = 0;
 
+            memset(obj_info, 0, sizeof(H5O_info_t));
+
             /* XXX: Handle the _by_name and _by_idx cases */
+            switch (loc_params.type) {
+                /* H5Oget_info */
+                case H5VL_OBJECT_BY_SELF:
+                {
+                    /* Redirect cURL from the base URL to
+                     * "/groups/<id>", "/datasets/<id>" or "/datatypes/<id>",
+                     * depending on the type of the object. Also set the
+                     * object's type in the H5O_info_t struct.
+                     */
+                    switch (theobj->obj_type) {
+                        case H5I_FILE:
+                        case H5I_GROUP:
+                        {
+                            obj_info->type = H5O_TYPE_GROUP;
+                            snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, theobj->URI);
+                            break;
+                        } /* H5I_FILE H5I_GROUP */
+
+                        case H5I_DATATYPE:
+                        {
+                            obj_info->type = H5O_TYPE_NAMED_DATATYPE;
+                            snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL, theobj->URI);
+                            break;
+                        } /* H5I_DATATYPE */
+
+                        case H5I_DATASET:
+                        {
+                            obj_info->type = H5O_TYPE_DATASET;
+                            snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL, theobj->URI);
+                            break;
+                        } /* H5I_DATASET */
+
+                        case H5I_ATTR:
+                        case H5I_UNINIT:
+                        case H5I_BADID:
+                        case H5I_DATASPACE:
+                        case H5I_REFERENCE:
+                        case H5I_VFL:
+                        case H5I_VOL:
+                        case H5I_GENPROP_CLS:
+                        case H5I_GENPROP_LST:
+                        case H5I_ERROR_CLASS:
+                        case H5I_ERROR_MSG:
+                        case H5I_ERROR_STACK:
+                        case H5I_NTYPES:
+                        default:
+                            FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "loc_id object is not a group, datatype or dataset")
+                    } /* end switch */
+
+                    break;
+                } /* H5VL_OBJECT_BY_SELF */
+
+                /* H5Oget_info_by_name */
+                case H5VL_OBJECT_BY_NAME:
+                {
+
+                    break;
+                } /* H5VL_OBJECT_BY_NAME */
+
+                /* H5Oget_info_by_idx */
+                case H5VL_OBJECT_BY_IDX:
+                {
+
+                    break;
+                } /* H5VL_OBJECT_BY_IDX */
+
+                case H5VL_OBJECT_BY_ADDR:
+                case H5VL_OBJECT_BY_REF:
+                default:
+                    FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "invalid loc_params type")
+            } /* end switch */
 
             /* Make a GET request to the server to retrieve the number of attributes attached to the object */
-
-            /* Redirect cURL from the base URL to
-             * "/groups/<id>", "/dataset/<id>" or "/datatypes/<id>",
-             * depending on the type of the object. Also set the
-             * object's type in the H5O_info_t struct.
-             */
-            if (H5I_DATATYPE == theobj->obj_type) {
-                obj_info->type = H5O_TYPE_NAMED_DATATYPE;
-                snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL, theobj->URI);
-            } /* end if */
-            else if (H5I_DATASET == theobj->obj_type) {
-                obj_info->type = H5O_TYPE_DATASET;
-                snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL, theobj->URI);
-            } /* end else if */
-            else {
-                obj_info->type = H5O_TYPE_GROUP;
-                snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, theobj->URI);
-            } /* end else */
 
             /* Setup the "Host: " header */
             host_header_len = strlen(theobj->domain->u.file.filepath_name) + strlen(host_string) + 1;
@@ -6935,7 +7075,6 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
                                                 "\"base\": \"%s\""
                                             "}";
 
-            /* XXX: Maybe not the correct way to check for the type of reference? */
             is_obj_ref = H5Tequal(type_id, H5T_STD_REF_OBJ);
             if (is_obj_ref < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine type of reference")
@@ -7697,7 +7836,7 @@ done:
 /*-------------------------------------------------------------------------
  * Function:    RV_convert_obj_refs_to_buffer
  *
- * Purpose:     Given an array of RV_obj_ref_t structs, as well as the
+ * Purpose:     Given an array of rv_obj_ref_t structs, as well as the
  *              array's size, this function converts the array of object
  *              references into a binary buffer of object reference
  *              strings, which can then be transferred to the server.
@@ -7721,7 +7860,7 @@ done:
  *              December, 2017
  */
 static herr_t
-RV_convert_obj_refs_to_buffer(const RV_obj_ref_t *ref_array, size_t ref_array_len,
+RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_len,
     char **buf_out, size_t *buf_out_len)
 {
     const char * const prefix_table[] = {
@@ -7813,11 +7952,11 @@ done:
  *
  * Purpose:     Given a binary buffer of object reference strings, this
  *              function converts the binary buffer into a buffer of
- *              RV_obj_ref_t's which is then placed in the parameter
+ *              rv_obj_ref_t's which is then placed in the parameter
  *              buf_out.
  *
  *              Note that on the user's side, the buffer is expected to
- *              be an array of RV_obj_ref_t's, each of which has three
+ *              be an array of rv_obj_ref_t's, each of which has three
  *              fields to be populated. The first field is the reference
  *              type field, which gets set to H5R_OBJECT. The second is
  *              the URI of the object which is referenced and the final
@@ -7832,9 +7971,9 @@ done:
  */
 static herr_t
 RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
-    RV_obj_ref_t **buf_out, size_t *buf_out_len)
+    rv_obj_ref_t **buf_out, size_t *buf_out_len)
 {
-    RV_obj_ref_t *out = NULL;
+    rv_obj_ref_t *out = NULL;
     size_t        i;
     size_t        out_len = 0;
     herr_t        ret_value = SUCCEED;
@@ -7847,8 +7986,8 @@ RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
     printf("  - Converting binary buffer to ref. array\n\n");
 #endif
 
-    out_len = ref_buf_len * sizeof(RV_obj_ref_t);
-    if (NULL == (out = (RV_obj_ref_t *) RV_malloc(out_len)))
+    out_len = ref_buf_len * sizeof(rv_obj_ref_t);
+    if (NULL == (out = (rv_obj_ref_t *) RV_malloc(out_len)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for object reference array")
 
     for (i = 0; i < ref_buf_len; i++) {

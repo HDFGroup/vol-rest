@@ -62,11 +62,11 @@ extern "C" {
  * VOL plugin will likely be truncated. */
 #define MAX_NUM_LENGTH 20
 
-typedef struct RV_obj_ref_t {
+typedef struct rv_obj_ref_t {
     H5R_type_t ref_type;
     H5I_type_t ref_obj_type;
     char       ref_obj_URI[URI_MAX_LENGTH];
-} RV_obj_ref_t;
+} rv_obj_ref_t;
 
 H5_DLL herr_t      RVinit(void);
 H5_DLL herr_t      RVterm(void);
