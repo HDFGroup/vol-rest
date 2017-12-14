@@ -449,7 +449,7 @@ static int test_setup_plugin(void);
 
 /* File interface tests */
 static int test_create_file(void);
-static int test_get_existing_file_info(void);
+static int test_get_file_info(void);
 static int test_nonexistent_file(void);
 static int test_get_file_intent(void);
 static int test_get_file_name(void);
@@ -461,7 +461,7 @@ static int test_file_property_lists(void);
 static int test_create_group_invalid_loc_id(void);
 static int test_create_group_under_root(void);
 static int test_create_group_under_existing_group(void);
-static int test_get_existing_group_info(void);
+static int test_get_group_info(void);
 static int test_nonexistent_group(void);
 static int test_unused_group_API_calls(void);
 static int test_group_property_lists(void);
@@ -470,7 +470,7 @@ static int test_group_property_lists(void);
 static int test_create_attribute_on_root(void);
 static int test_create_attribute_on_dataset(void);
 static int test_create_attribute_on_datatype(void);
-static int test_get_existing_attribute_info(void);
+static int test_get_attribute_info(void);
 static int test_get_attribute_name(void);
 static int test_create_attribute_with_space_in_name(void);
 static int test_delete_attribute(void);
@@ -521,6 +521,7 @@ static int test_create_external_link(void);
 static int test_open_object_by_external_link(void);
 static int test_copy_link(void);
 static int test_move_link(void);
+static int test_get_link_info(void);
 static int test_unused_link_API_calls(void);
 
 /* Committed Datatype interface tests */
@@ -530,7 +531,7 @@ static int test_create_committed_datatype_combinations(void);
 static int test_create_dataset_with_committed_type(void);
 static int test_create_attribute_with_committed_type(void);
 static int test_delete_committed_type(void);
-static int test_get_existing_type_info(void);
+static int test_get_type_info(void);
 static int test_unused_datatype_API_calls(void);
 static int test_datatype_property_lists(void);
 
@@ -556,27 +557,39 @@ static int test_H5P_DEFAULT(void);
 
 static int cleanup(void);
 
-static int (*tests[])(void) = {
+static int (*setup_tests[])(void) = {
         test_setup_plugin,
+        NULL
+};
+
+static int (*file_tests[])(void) = {
         test_create_file,
-        test_get_existing_file_info,
+        test_get_file_info,
         test_nonexistent_file,
         test_get_file_intent,
         test_get_file_name,
         test_file_reopen,
         test_unused_file_API_calls,
         test_file_property_lists,
+        NULL
+};
+
+static int (*group_tests[])(void) = {
         test_create_group_invalid_loc_id,
         test_create_group_under_root,
         test_create_group_under_existing_group,
-        test_get_existing_group_info,
+        test_get_group_info,
         test_nonexistent_group,
         test_unused_group_API_calls,
         test_group_property_lists,
+        NULL
+};
+
+static int (*attribute_tests[])(void) = {
         test_create_attribute_on_root,
         test_create_attribute_on_dataset,
         test_create_attribute_on_datatype,
-        test_get_existing_attribute_info,
+        test_get_attribute_info,
         test_get_attribute_name,
         test_create_attribute_with_space_in_name,
         test_delete_attribute,
@@ -584,6 +597,10 @@ static int (*tests[])(void) = {
         test_read_attribute,
         test_get_number_attributes,
         test_attribute_property_lists,
+        NULL
+};
+
+static int (*dataset_tests[])(void) = {
         test_create_dataset_under_root,
         test_create_anonymous_dataset,
         test_create_dataset_under_existing_group,
@@ -611,6 +628,10 @@ static int (*tests[])(void) = {
         test_write_dataset_data_verification,
         test_unused_dataset_API_calls,
         test_dataset_property_lists,
+        NULL
+};
+
+static int (*link_tests[])(void) = {
         test_create_hard_link,
         test_create_hard_link_same_loc,
         test_open_object_by_hard_link,
@@ -623,33 +644,63 @@ static int (*tests[])(void) = {
         test_open_object_by_external_link,
         test_copy_link,
         test_move_link,
+        test_get_link_info,
         test_unused_link_API_calls,
+        NULL
+};
+
+static int (*type_tests[])(void) = {
         test_create_committed_datatype,
         test_create_anonymous_committed_datatype,
         test_create_committed_datatype_combinations,
         test_create_dataset_with_committed_type,
         test_create_attribute_with_committed_type,
         test_delete_committed_type,
-        test_get_existing_type_info,
+        test_get_type_info,
         test_unused_datatype_API_calls,
         test_datatype_property_lists,
+        NULL
+};
+
+static int (*object_tests[])(void) = {
         test_open_dataset_generically,
         test_open_group_generically,
         test_open_datatype_generically,
         test_h5o_close,
+        test_unused_object_API_calls,
+        NULL
+};
+
+static int (*ref_tests[])(void) = {
         test_create_obj_ref,
         test_get_ref_type,
         test_write_dataset_w_obj_refs,
         test_read_dataset_w_obj_refs,
         test_write_dataset_w_obj_refs_empty_data,
-        test_unused_object_API_calls,
+        NULL
+};
+
+static int (*misc_tests[])(void) = {
         test_open_link_without_leading_slash,
         test_object_creation_by_absolute_path,
         test_absolute_vs_relative_path,
         test_double_init_free,
         test_url_encoding,
         test_H5P_DEFAULT,
-        /*cleanup*/
+        NULL
+};
+
+static int (**tests[])(void) = {
+        setup_tests,
+        file_tests,
+        group_tests,
+        attribute_tests,
+        dataset_tests,
+        link_tests,
+        type_tests,
+        object_tests,
+        ref_tests,
+        misc_tests,
 };
 
 /*****************************************************
@@ -808,7 +859,7 @@ error:
 }
 
 static int
-test_get_existing_file_info(void)
+test_get_file_info(void)
 {
     H5F_info2_t file_info;
     hid_t       file_id = -1, fapl_id = -1;
@@ -1549,7 +1600,7 @@ error:
 }
 
 static int
-test_get_existing_group_info(void)
+test_get_group_info(void)
 {
     H5G_info_t group_info;
     hid_t      file_id = -1, fapl_id = -1;
@@ -2270,7 +2321,7 @@ error:
 }
 
 static int
-test_get_existing_attribute_info(void)
+test_get_attribute_info(void)
 {
     H5A_info_t attr_info;
     hsize_t    dims[ATTRIBUTE_GET_INFO_TEST_SPACE_RANK];
@@ -6947,6 +6998,19 @@ error:
 }
 
 static int
+test_get_link_info(void)
+{
+    TESTING("get link info")
+
+    SKIPPED();
+
+    return 0;
+
+error:
+    return 1;
+}
+
+static int
 test_unused_link_API_calls(void)
 {
     TESTING("unused link API calls")
@@ -7463,7 +7527,7 @@ error:
 }
 
 static int
-test_get_existing_type_info(void)
+test_get_type_info(void)
 {
     TESTING("get existing committed datatype info")
 
@@ -9467,18 +9531,27 @@ main( int argc, char** argv )
     printf("\n\n");
 
     for (i = 0, nerrors = 0; i < sizeof(tests) / sizeof(tests[0]); i++) {
-        nerrors += (tests[i])();
-        printf("\n");
-        fflush(stdout);
+        int (**func)(void) = tests[i];
+
+        while (*func) {
+            nerrors += (*func++)();
+            printf("\n");
+            fflush(stdout);
+        }
     }
 
     if (nerrors) goto error;
 
     puts("All REST VOL plugin tests passed");
 
+    if (cleanup() < 0)
+        puts("cleanup failed");
+
     return 0;
 
 error:
     printf("*** %d TEST%s FAILED ***\n", nerrors, nerrors > 1 ? "S" : "");
+    if (cleanup() < 0)
+        puts("cleanup failed");
     return 1;
 }
