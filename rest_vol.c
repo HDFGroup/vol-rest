@@ -1926,7 +1926,6 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
             char       *obj_URI;
             char        temp_URI[URI_MAX_LENGTH];
 
-            /* XXX: Handle _by_name case */
             switch (loc_params.type) {
                 /* H5Aexists */
                 case H5VL_OBJECT_BY_SELF:
@@ -3282,7 +3281,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl
 
         /* H5Dget_offset */
         case H5VL_DATASET_GET_OFFSET:
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "get dataset offset unsupported")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "H5Dget_offset is unsupported")
 
         /* H5Dget_space */
         case H5VL_DATASET_GET_SPACE:
@@ -3297,11 +3296,11 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl
 
         /* H5Dget_space_status */
         case H5VL_DATASET_GET_SPACE_STATUS:
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "get dataset space status unsupported")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "H5Dget_space_status is unsupported")
 
         /* H5Dget_storage_size */
         case H5VL_DATASET_GET_STORAGE_SIZE:
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "get dataset storage size unsupported")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "H5Dget_storage_size is unsupported")
 
         /* H5Dget_type */
         case H5VL_DATASET_GET_TYPE:
@@ -3360,7 +3359,7 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
             if (!(dset->domain->u.file.intent & H5F_ACC_RDWR))
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
 
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "set dataset extent unsupported")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "H5Dset_extent is unsupported")
             break;
 
         default:
@@ -3831,14 +3830,14 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
 
         /* H5Fget_obj_count */
         case H5VL_FILE_GET_OBJ_COUNT:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "get file object count unsupported")
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_obj_count is unsupported")
 
         /* H5Fget_obj_ids */
         case H5VL_FILE_GET_OBJ_IDS:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "get file object IDs unsupported")
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_obj_ids is unsupported")
 
         case H5VL_OBJECT_GET_FILE:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "get file unsupported")
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "get file is unsupported")
 
         default:
             FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "can't get this type of information from file")
@@ -3896,11 +3895,21 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_ATTR_UN
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
     switch (specific_type) {
+        /* H5Fflush */
         case H5VL_FILE_FLUSH:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fflush is unsupported")
+
+        /* H5Fis_accessible */
         case H5VL_FILE_IS_ACCESSIBLE:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fis_accessible is unsupported")
+
+        /* H5Fmount */
         case H5VL_FILE_MOUNT:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fmount is unsupported")
+
+        /* H5Funmount */
         case H5VL_FILE_UNMOUNT:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "unsupported file operation")
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Funmount is unsupported")
 
         default:
             FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "unknown file operation")
@@ -3947,6 +3956,7 @@ RV_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list ar
 #endif
 
     switch (optional_type) {
+        /* H5Freopen */
         case H5VL_FILE_REOPEN:
         {
             void **ret_file = va_arg(arguments, void **);
@@ -3957,6 +3967,7 @@ RV_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list ar
             break;
         } /* H5VL_FILE_REOPEN */
 
+        /* H5Fget_info */
         case H5VL_FILE_GET_INFO:
         {
             H5I_type_t   obj_type = va_arg(arguments, H5I_type_t);
@@ -3968,18 +3979,49 @@ RV_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list ar
             break;
         } /* H5VL_FILE_GET_INFO */
 
+        /* H5Fclear_elink_file_cache */
         case H5VL_FILE_CLEAR_ELINK_CACHE:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fclear_elink_file_cache is unsupported")
+
+        /* H5Fget_file_image */
         case H5VL_FILE_GET_FILE_IMAGE:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_file_image is unsupported")
+
+        /* H5Fget_free_sections */
         case H5VL_FILE_GET_FREE_SECTIONS:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_free_sections is unsupported")
+
+        /* H5Fget_freespace */
         case H5VL_FILE_GET_FREE_SPACE:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_freespace is unsupported")
+
+        /* H5Fget_mdc_config */
         case H5VL_FILE_GET_MDC_CONF:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_mdc_config is unsupported")
+
+        /* H5Fget_mdc_hit_rate */
         case H5VL_FILE_GET_MDC_HR:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_mdc_hit_rate is unsupported")
+
+        /* H5Fget_mdc_size */
         case H5VL_FILE_GET_MDC_SIZE:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_mdc_size is unsupported")
+
+        /* H5Fget_filesize */
         case H5VL_FILE_GET_SIZE:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_filesize is unsupported")
+
+        /* H5Fget_vfd_handle */
         case H5VL_FILE_GET_VFD_HANDLE:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_vfd_handle is unsupported")
+
+        /* H5Freset_mdc_hit_rate_stats */
         case H5VL_FILE_RESET_MDC_HIT_RATE:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Freset_mdc_hit_rate_stats is unsupported")
+
+        /* H5Fset_mdc_config */
         case H5VL_FILE_SET_MDC_CONFIG:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "unsupported file operation")
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fset_mdc_config is unsupported")
 
         default:
             FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "unknown file operation")
@@ -4316,8 +4358,7 @@ done:
 static herr_t
 RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    RV_object_t *group = (RV_object_t *) obj;
-    hbool_t      curl_perform = FALSE;
+    RV_object_t *loc_obj = (RV_object_t *) obj;
     size_t       host_header_len = 0;
     char        *host_header = NULL;
     char         request_url[URL_MAX_LENGTH];
@@ -4326,50 +4367,13 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
 #ifdef PLUGIN_DEBUG
     printf("Received Group get call with following parameters:\n");
     printf("  - Get Type: %d\n", get_type);
-    printf("  - Group URI: %s\n", group->URI);
-    printf("  - Group File: %s\n", group->domain->u.file.filepath_name);
+    printf("  - Object URI: %s\n", loc_obj->URI);
+    printf("  - Object File: %s\n", loc_obj->domain->u.file.filepath_name);
 #endif
 
-    assert(( H5I_GROUP == group->obj_type
-          || H5I_FILE == group->obj_type)
+    assert(( H5I_GROUP == loc_obj->obj_type
+          || H5I_FILE == loc_obj->obj_type)
           && "not a group");
-
-    curl_perform = H5VL_GROUP_GET_INFO == get_type;
-
-    if (curl_perform) {
-        /* Setup the "Host: " header */
-        host_header_len = strlen(group->domain->u.file.filepath_name) + strlen(host_string) + 1;
-        if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
-
-        strcpy(host_header, host_string);
-
-        curl_headers = curl_slist_append(curl_headers, strncat(host_header, group->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
-
-        /* Disable use of Expect: 100 Continue HTTP response */
-        curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-        /* Redirect cURL from the base URL to "/groups/<id>" to get information about the group */
-        snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, group->URI);
-
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
-
-#ifdef PLUGIN_DEBUG
-        printf("  - Retrieving group info\n\n");
-
-        printf("   /********************************\\\n");
-        printf("-> | Making a request to the server |\n");
-        printf("   \\********************************/\n\n");
-#endif
-
-        /* Make request to server to retrieve the group info */
-        CURL_PERFORM(curl, H5E_SYM, H5E_CANTGET, FAIL);
-    } /* end if */
 
     switch (get_type) {
         /* H5Gget_create_plist */
@@ -4377,7 +4381,7 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
         {
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
-            if ((*ret_id = H5Pcopy(group->u.group.gcpl_id)) < 0)
+            if ((*ret_id = H5Pcopy(loc_obj->u.group.gcpl_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy Group GCPL")
 
             break;
@@ -4388,11 +4392,82 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
         {
             H5VL_loc_params_t  loc_params = va_arg(arguments, H5VL_loc_params_t);
             H5G_info_t        *group_info = va_arg(arguments, H5G_info_t *);
-
-            /* XXX: Handle _by_name and _by_idx cases */
+            char              *group_URI = NULL;
+            char               temp_URI[URI_MAX_LENGTH];
 
             /* Initialize struct to 0 */
             memset(group_info, 0, sizeof(*group_info));
+
+            switch (loc_params.type) {
+                /* H5Gget_info */
+                case H5VL_OBJECT_BY_SELF:
+                {
+                    group_URI = loc_obj->URI;
+                    break;
+                } /* H5VL_OBJECT_BY_SELF */
+
+                /* H5Gget_info_by_name */
+                case H5VL_OBJECT_BY_NAME:
+                {
+                    H5I_type_t obj_type = H5I_GROUP;
+                    htri_t     search_ret;
+
+                    search_ret = RV_find_object_by_path(loc_obj, loc_params.loc_data.loc_by_name.name, &obj_type,
+                            RV_copy_object_URI_callback, NULL, temp_URI);
+                    if (!search_ret || search_ret < 0)
+                        FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate group")
+
+                    group_URI = temp_URI;
+
+                    break;
+                } /* H5VL_OBJECT_BY_NAME */
+
+                /* H5Gget_info_by_idx */
+                case H5VL_OBJECT_BY_IDX:
+                {
+                    /* XXX: */
+                    FUNC_GOTO_ERROR(H5E_SYM, H5E_UNSUPPORTED, FAIL, "H5Gget_info_by_idx is unsupported")
+                    break;
+                } /* H5VL_OBJECT_BY_IDX */
+
+                case H5VL_OBJECT_BY_ADDR:
+                case H5VL_OBJECT_BY_REF:
+                default:
+                    FUNC_GOTO_ERROR(H5E_SYM, H5E_BADVALUE, FAIL, "invalid loc_params type")
+            } /* end switch */
+
+            /* Setup the "Host: " header */
+            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
+            if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+
+            strcpy(host_header, host_string);
+
+            curl_headers = curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+
+            /* Disable use of Expect: 100 Continue HTTP response */
+            curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+            /* Redirect cURL from the base URL to "/groups/<id>" to get information about the group */
+            snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, group_URI);
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+
+#ifdef PLUGIN_DEBUG
+            printf("  - Retrieving group info\n\n");
+
+            printf("   /********************************\\\n");
+            printf("-> | Making a request to the server |\n");
+            printf("   \\********************************/\n\n");
+#endif
+
+            /* Make request to server to retrieve the group info */
+            CURL_PERFORM(curl, H5E_SYM, H5E_CANTGET, FAIL);
 
             /* Parse response from server and retrieve the relevant group information
              * (currently, just the number of links in the group)
@@ -4412,14 +4487,12 @@ done:
     printf("Group Get response buffer: %s\n\n", response_buffer.buffer);
 #endif
 
-    if (curl_perform) {
-        if (host_header)
-            RV_free(host_header);
+    if (host_header)
+        RV_free(host_header);
 
-        if (curl_headers) {
-            curl_slist_free_all(curl_headers);
-            curl_headers = NULL;
-        } /* end if */
+    if (curl_headers) {
+        curl_slist_free_all(curl_headers);
+        curl_headers = NULL;
     } /* end if */
 
     return ret_value;
@@ -4524,6 +4597,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
 
 
     switch (create_type) {
+        /* H5Lcreate_hard */
         case H5VL_LINK_CREATE_HARD:
         {
             htri_t  search_ret;
@@ -4541,6 +4615,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTCREATE, FAIL, "can't create soft or hard link to object outside of the current file")
 
             switch (hard_link_target_obj_loc_params.type) {
+                /* H5Olink */
                 case H5VL_OBJECT_BY_SELF:
                 {
                     target_URI = ((RV_object_t *) hard_link_target_obj)->URI;
@@ -4590,6 +4665,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
             break;
         } /* H5VL_LINK_CREATE_HARD */
 
+        /* H5Lcreate_soft */
         case H5VL_LINK_CREATE_SOFT:
         {
             const char *link_target;
@@ -4620,6 +4696,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
             break;
         } /* H5VL_LINK_CREATE_SOFT */
 
+        /* H5Lcreate_external and H5Lcreate_ud */
         case H5VL_LINK_CREATE_UD:
         {
             H5L_type_t  link_type;
@@ -4856,21 +4933,68 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
         /* H5Lget_info */
         case H5VL_LINK_GET_INFO:
         {
-            /* XXX: */
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "get link info unsupported")
+            switch (loc_params.type) {
+                /* H5Lget_info */
+                case H5VL_OBJECT_BY_SELF:
+                {
+                    /* XXX: */
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lget_info is unsupported")
+                    break;
+                } /* H5VL_OBJECT_BY_SELF */
+
+                /* H5Lget_info_by_idx */
+                case H5VL_OBJECT_BY_IDX:
+                {
+                    /* XXX: */
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lget_info_by_idx is unsupported")
+                    break;
+                } /* H5VL_OBJECT_BY_IDX */
+
+                case H5VL_OBJECT_BY_NAME:
+                case H5VL_OBJECT_BY_ADDR:
+                case H5VL_OBJECT_BY_REF:
+                default:
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
+            } /* end switch */
+
+            break;
         } /* H5VL_LINK_GET_INFO */
 
-        /* H5Lget_name */
+        /* H5Lget_name_by_idx */
         case H5VL_LINK_GET_NAME:
         {
             /* XXX: */
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lget_name_by_idx is unsupported")
             break;
         } /* H5VL_LINK_GET_NAME */
 
         /* H5Lget_val */
         case H5VL_LINK_GET_VAL:
         {
-            /* XXX: */
+            switch (loc_params.type) {
+                /* H5Lget_val */
+                case H5VL_OBJECT_BY_SELF:
+                {
+                    /* XXX: */
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lget_val is unsupported")
+                    break;
+                } /* H5VL_OBJECT_BY_SELF */
+
+                /* H5Lget_val_by_idx */
+                case H5VL_OBJECT_BY_IDX:
+                {
+                    /* XXX: */
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lget_val_by_idx is unsupported")
+                    break;
+                } /* H5VL_OBJECT_BY_IDX */
+
+                case H5VL_OBJECT_BY_NAME:
+                case H5VL_OBJECT_BY_ADDR:
+                case H5VL_OBJECT_BY_REF:
+                default:
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
+            } /* end switch */
+
             break;
         } /* H5VL_LINK_GET_VAL */
 
@@ -4933,14 +5057,42 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
     switch (specific_type) {
         /* H5Ldelete */
         case H5VL_LINK_DELETE:
-            /* URL-encode the link name so that the resulting URL for the link delete
-             * operation doesn't contain any illegal characters
-             */
-            if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(loc_params.loc_data.loc_by_name.name), 0)))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
+        {
+            char *link_URI;
+            char  temp_URI[URI_MAX_LENGTH];
+
+            switch (loc_params.type) {
+                /* H5Ldelete */
+                case H5VL_OBJECT_BY_NAME:
+                {
+                    /* URL-encode the link name so that the resulting URL for the link delete
+                     * operation doesn't contain any illegal characters
+                     */
+                    if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(loc_params.loc_data.loc_by_name.name), 0)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
+
+                    link_URI = loc_obj->URI;
+
+                    break;
+                } /* H5VL_OBJECT_BY_SELF */
+
+                /* H5Ldelete_by_idx */
+                case H5VL_OBJECT_BY_IDX:
+                {
+                    /* XXX: */
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Ldelete_by_idx is unsupported")
+                    break;
+                } /* H5VL_OBJECT_BY_IDX */
+
+                case H5VL_OBJECT_BY_SELF:
+                case H5VL_OBJECT_BY_ADDR:
+                case H5VL_OBJECT_BY_REF:
+                default:
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
+            } /* end switch */
 
             /* Redirect cURL from the base URL to "/groups/<id>/links/<name>" to delete link */
-            snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links/%s", base_URL, loc_obj->URI, url_encoded_link_name);
+            snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links/%s", base_URL, link_URI, url_encoded_link_name);
 
 #ifdef PLUGIN_DEBUG
             printf("  - Link Delete URL: %s\n", request_url);
@@ -4976,6 +5128,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             CURL_PERFORM(curl, H5E_LINK, H5E_CANTREMOVE, FAIL);
 
             break;
+        } /* H5VL_LINK_DELETE */
 
         /* H5Lexists */
         case H5VL_LINK_EXISTS:
@@ -5057,8 +5210,60 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
         /* H5Literate/visit (_by_name) */
         case H5VL_LINK_ITER:
         {
-            /* XXX: */
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "unsupported operation")
+            hbool_t is_iterate = va_arg(arguments, hbool_t); /* XXX: may be invalid va_arg type */
+
+            if (is_iterate) {
+                switch (loc_params.type) {
+                    /* H5Literate */
+                    case H5VL_OBJECT_BY_SELF:
+                    {
+                        /* XXX: */
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Literate is unsupported")
+                        break;
+                    } /* H5VL_OBJECT_BY_SELF */
+
+                    /* H5Literate_by_name */
+                    case H5VL_OBJECT_BY_NAME:
+                    {
+                        /* XXX: */
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Literate_by_name is unsupported")
+                        break;
+                    } /* H5VL_OBJECT_BY_NAME */
+
+                    case H5VL_OBJECT_BY_IDX:
+                    case H5VL_OBJECT_BY_ADDR:
+                    case H5VL_OBJECT_BY_REF:
+                    default:
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
+                } /* end switch */
+            } /* end if */
+            else {
+                switch (loc_params.type) {
+                    /* H5Lvisit */
+                    case H5VL_OBJECT_BY_SELF:
+                    {
+                        /* XXX: */
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lvisit is unsupported")
+                        break;
+                    } /* H5VL_OBJECT_BY_SELF */
+
+                    /* H5Lvisit_by_name */
+                    case H5VL_OBJECT_BY_NAME:
+                    {
+                        /* XXX: */
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lvisit_by_name is unsupported")
+                        break;
+                    } /* H5VL_OBJECT_BY_NAME */
+
+                    case H5VL_OBJECT_BY_IDX:
+                    case H5VL_OBJECT_BY_ADDR:
+                    case H5VL_OBJECT_BY_REF:
+                    default:
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
+                } /* end switch */
+            } /* end else */
+
+            break;
         } /* H5VL_LINK_ITER */
 
         default:
@@ -5267,8 +5472,9 @@ RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_typ
 #endif
 
     switch (get_type) {
+        /* H5Rget_name */
         case H5VL_REF_GET_NAME:
-            FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_UNSUPPORTED, FAIL, "unsupported reference operation")
+            FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_UNSUPPORTED, FAIL, "H5Rget_name is unsupported")
 
         /* H5Rget_region */
         case H5VL_REF_GET_REGION:
@@ -5341,6 +5547,7 @@ RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_typ
                 {
                     /* XXX: */
                     FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_BADVALUE, FAIL, "region references are currently unsupported")
+                    break;
                 } /* H5R_DATASET_REGION */
 
                 case H5R_BADTYPE:
@@ -5389,13 +5596,15 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
     switch (specific_type) {
         /* H5Oincr/decr_refcount */
         case H5VL_OBJECT_CHANGE_REF_COUNT:
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "H5Oincr_refcount and H5Odecr_refcount are unsupported")
 
         /* H5Oexists_by_name */
         case H5VL_OBJECT_EXISTS:
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "H5Oexists_by_name is unsupported")
 
         /* H5Ovisit(_by_name) */
         case H5VL_OBJECT_VISIT:
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "unsupported object operation")
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "H5Ovisit and H5Ovisit_by_name are unsupported")
 
         /* H5Rcreate */
         case H5VL_REF_CREATE:
@@ -5426,6 +5635,7 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
                 case H5R_DATASET_REGION:
                 {
                     FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_UNSUPPORTED, FAIL, "region references are currently unsupported")
+                    break;
                 } /* H5R_DATASET_REGION */
 
                 case H5R_BADTYPE:
@@ -5481,11 +5691,12 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
 #endif
 
     switch (optional_type) {
+        /* H5Oset_comment, H5Oset_comment_by_name, H5Oget_comment and H5Oget_comment_by_name */
         case H5VL_OBJECT_SET_COMMENT:
         case H5VL_OBJECT_GET_COMMENT:
             FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "object comments are deprecated in favor of use of object attributes")
 
-        /* H5Oget_info(_by_name/_by_idx) */
+        /* H5Oget_info (_by_name/_by_idx) */
         case H5VL_OBJECT_GET_INFO:
         {
             H5VL_loc_params_t  loc_params = va_arg(arguments, H5VL_loc_params_t);
