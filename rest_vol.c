@@ -916,6 +916,8 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
     char        *url_encoded_attr_name = NULL;
     void        *ret_value = NULL;
 
+    /* XXX: Handle H5Acreate_by_name */
+
 #ifdef PLUGIN_DEBUG
     printf("Received Attribute create call with following parameters:\n");
     printf("  - Attribute Name: %s\n", attr_name);
