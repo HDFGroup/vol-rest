@@ -5320,9 +5320,8 @@ static void *
 RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
                hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 {
-    RV_object_t *parent = (RV_object_t *) obj;
+    RV_object_t *loc_obj = (RV_object_t *) obj;
     H5I_type_t   obj_type = H5I_UNINIT;
-    htri_t       search_ret;
     hid_t        lapl_id;
     void        *ret_value = NULL;
 
@@ -5330,19 +5329,47 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
     printf("Received Object open call with following parameters:\n");
     printf("  - Path: %s\n", loc_params.loc_data.loc_by_name.name);
     printf("  - DXPL: %ld\n", dxpl_id);
-    printf("  - Parent Object Type: %d\n", parent->obj_type);
+    printf("  - Object Type: %d\n", loc_obj->obj_type);
 #endif
 
-    assert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
-                && "parent object not a file or group");
+    assert((H5I_FILE == loc_obj->obj_type || H5I_GROUP == loc_obj->obj_type)
+                && "loc_id object not a file or group");
 
-    /* XXX: Currently only opening objects by name is supported */
-    assert(H5VL_OBJECT_BY_NAME == loc_params.type && "loc_params type not H5VL_OBJECT_BY_NAME");
+    switch (loc_params.type) {
+        /* H5Oopen */
+        case H5VL_OBJECT_BY_NAME:
+        {
+            htri_t search_ret;
 
-    /* Retrieve the type of object being dealt with by querying the server */
-    search_ret = RV_find_object_by_path(parent, loc_params.loc_data.loc_by_name.name, &obj_type, NULL, NULL, NULL);
-    if (!search_ret || search_ret < 0)
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTOPENOBJ, NULL, "can't find object by name")
+            /* Retrieve the type of object being dealt with by querying the server */
+            search_ret = RV_find_object_by_path(loc_obj, loc_params.loc_data.loc_by_name.name, &obj_type, NULL, NULL, NULL);
+            if (!search_ret || search_ret < 0)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTOPENOBJ, NULL, "can't find object by name")
+
+            break;
+        } /* H5VL_OBJECT_BY_NAME */
+
+        /* H5Oopen_by_idx */
+        case H5VL_OBJECT_BY_IDX:
+        {
+            /* XXX: */
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, NULL, "H5Oopen_by_idx is unsupported")
+            break;
+        } /* H5VL_OBJECT_BY_IDX */
+
+        /* H5Oopen_by_addr */
+        case H5VL_OBJECT_BY_ADDR:
+        {
+            /* XXX: */
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, NULL, "H5Oopen_by_addr is unsupported")
+            break;
+        } /* H5VL_OBJECT_BY_ADDR */
+
+        case H5VL_OBJECT_BY_SELF:
+        case H5VL_OBJECT_BY_REF:
+        default:
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, NULL, "invalid loc_params type")
+    } /* end switch */
 
     /* Call the appropriate RV_*_open call based upon the object type */
     switch (obj_type) {
@@ -5360,7 +5387,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
             else
                 lapl_id = H5P_DATATYPE_ACCESS_DEFAULT;
 
-            if (NULL == (ret_value = RV_datatype_open(parent, loc_params, loc_params.loc_data.loc_by_name.name,
+            if (NULL == (ret_value = RV_datatype_open(loc_obj, loc_params, loc_params.loc_data.loc_by_name.name,
                     lapl_id, dxpl_id, req)))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTOPENOBJ, NULL, "can't open datatype")
             break;
@@ -5379,7 +5406,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
             else
                 lapl_id = H5P_DATASET_ACCESS_DEFAULT;
 
-            if (NULL == (ret_value = RV_dataset_open(parent, loc_params, loc_params.loc_data.loc_by_name.name,
+            if (NULL == (ret_value = RV_dataset_open(loc_obj, loc_params, loc_params.loc_data.loc_by_name.name,
                     lapl_id, dxpl_id, req)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTOPENOBJ, NULL, "can't open dataset")
             break;
@@ -5398,7 +5425,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
             else
                 lapl_id = H5P_GROUP_ACCESS_DEFAULT;
 
-            if (NULL == (ret_value = RV_group_open(parent, loc_params, loc_params.loc_data.loc_by_name.name,
+            if (NULL == (ret_value = RV_group_open(loc_obj, loc_params, loc_params.loc_data.loc_by_name.name,
                     lapl_id, dxpl_id, req)))
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, NULL, "can't open group")
             break;
