@@ -519,9 +519,14 @@ static int test_create_soft_link_dangling_absolute(void);
 static int test_open_object_by_soft_link(void);
 static int test_create_external_link(void);
 static int test_open_object_by_external_link(void);
+static int test_delete_link(void);
 static int test_copy_link(void);
 static int test_move_link(void);
 static int test_get_link_info(void);
+static int test_get_link_name(void);
+static int test_get_link_val(void);
+static int test_link_iterate(void);
+static int test_link_visit(void);
 static int test_unused_link_API_calls(void);
 
 /* Committed Datatype interface tests */
@@ -542,6 +547,7 @@ static int test_open_datatype_generically(void);
 static int test_h5o_close(void);
 static int test_create_obj_ref(void);
 static int test_get_ref_type(void);
+static int test_get_ref_name(void);
 static int test_write_dataset_w_obj_refs(void);
 static int test_read_dataset_w_obj_refs(void);
 static int test_write_dataset_w_obj_refs_empty_data(void);
@@ -642,9 +648,14 @@ static int (*link_tests[])(void) = {
         test_open_object_by_soft_link,
         test_create_external_link,
         test_open_object_by_external_link,
+        test_delete_link,
         test_copy_link,
         test_move_link,
         test_get_link_info,
+        test_get_link_name,
+        test_get_link_val,
+        test_link_iterate,
+        test_link_visit,
         test_unused_link_API_calls,
         NULL
 };
@@ -667,16 +678,13 @@ static int (*object_tests[])(void) = {
         test_open_group_generically,
         test_open_datatype_generically,
         test_h5o_close,
-        test_unused_object_API_calls,
-        NULL
-};
-
-static int (*ref_tests[])(void) = {
         test_create_obj_ref,
         test_get_ref_type,
+        test_get_ref_name,
         test_write_dataset_w_obj_refs,
         test_read_dataset_w_obj_refs,
         test_write_dataset_w_obj_refs_empty_data,
+        test_unused_object_API_calls,
         NULL
 };
 
@@ -699,7 +707,6 @@ static int (**tests[])(void) = {
         link_tests,
         type_tests,
         object_tests,
-        ref_tests,
         misc_tests,
 };
 
@@ -6195,26 +6202,6 @@ test_create_hard_link(void)
         goto error;
     }
 
-    /* Delete the link */
-    if (H5Ldelete(container_group, HARD_LINK_TEST_LINK_NAME, H5P_DEFAULT) < 0) {
-        H5_FAILED();
-        printf("    couldn't delete link\n");
-        goto error;
-    }
-
-    /* Verify the link has been deleted */
-    if ((link_exists = H5Lexists(container_group, HARD_LINK_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
-        H5_FAILED();
-        printf("    couldn't determine if link exists\n");
-        goto error;
-    }
-
-    if (link_exists) {
-        H5_FAILED();
-        printf("    link existed!\n");
-        goto error;
-    }
-
     if (H5Gclose(container_group) < 0)
         TEST_ERROR
     if (H5Pclose(fapl) < 0)
@@ -6444,26 +6431,6 @@ test_create_soft_link_existing_absolute(void)
         goto error;
     }
 
-    /* Delete the link */
-    if (H5Ldelete(container_group, SOFT_LINK_TEST_LINK_PATH, H5P_DEFAULT) < 0) {
-        H5_FAILED();
-        printf("    couldn't delete link\n");
-        goto error;
-    }
-
-    /* Verify the link has been deleted */
-    if ((link_exists = H5Lexists(container_group, SOFT_LINK_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
-        H5_FAILED();
-        printf("    couldn't determine if link exists\n");
-        goto error;
-    }
-
-    if (link_exists) {
-        H5_FAILED();
-        printf("    link existed!\n");
-        goto error;
-    }
-
     if (H5Gclose(container_group) < 0)
         TEST_ERROR
     if (H5Pclose(fapl) < 0)
@@ -6576,26 +6543,6 @@ test_create_external_link(void)
         goto error;
     }
 
-    /* Delete the link */
-    if (H5Ldelete(container_group, EXTERNAL_LINK_TEST_LINK_NAME, H5P_DEFAULT) < 0) {
-        H5_FAILED();
-        printf("    couldn't delete link\n");
-        goto error;
-    }
-
-    /* Verify the link has been deleted */
-    if ((link_exists = H5Lexists(container_group, EXTERNAL_LINK_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
-        H5_FAILED();
-        printf("    couldn't determine if link exists\n");
-        goto error;
-    }
-
-    if (link_exists) {
-        H5_FAILED();
-        printf("    link existed!\n");
-        goto error;
-    }
-
     if (H5Gclose(container_group) < 0)
         TEST_ERROR
     if (H5Pclose(fapl) < 0)
@@ -6624,6 +6571,19 @@ static int
 test_open_object_by_external_link(void)
 {
     TESTING("open object in file by using an external link")
+
+    SKIPPED();
+
+    return 0;
+
+error:
+    return 1;
+}
+
+static int
+test_delete_link(void)
+{
+    TESTING("delete link")
 
     SKIPPED();
 
@@ -7001,6 +6961,58 @@ static int
 test_get_link_info(void)
 {
     TESTING("get link info")
+
+    SKIPPED();
+
+    return 0;
+
+error:
+    return 1;
+}
+
+static int
+test_get_link_name(void)
+{
+    TESTING("get link name")
+
+    SKIPPED();
+
+    return 0;
+
+error:
+    return 1;
+}
+
+static int
+test_get_link_val(void)
+{
+    TESTING("get link value")
+
+    SKIPPED();
+
+    return 0;
+
+error:
+    return 1;
+}
+
+static int
+test_link_iterate(void)
+{
+    TESTING("link iteration")
+
+    SKIPPED();
+
+    return 0;
+
+error:
+    return 1;
+}
+
+static int
+test_link_visit(void)
+{
+    TESTING("link visit")
 
     SKIPPED();
 
@@ -7477,7 +7489,7 @@ test_delete_committed_type(void)
 
     if (!type_exists) {
         H5_FAILED();
-        printf("    datatype didn't exists\n");
+        printf("    datatype didn't exist\n");
         goto error;
     }
 
@@ -7774,6 +7786,31 @@ test_open_dataset_generically(void)
         goto error;
     }
 
+    H5E_BEGIN_TRY {
+#if 0
+        if (H5Dclose(dset_id) < 0)
+            TEST_ERROR
+#endif
+
+        if ((/*dset_id = */H5Oopen_by_idx(file_id, "/" OBJECT_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT)) >= 0) {
+            H5_FAILED();
+            printf("    unsupported API succeeded!\n");
+            goto error;
+        }
+
+#if 0
+        if (H5Dclose(dset_id) < 0)
+            TEST_ERROR
+#endif
+
+        if ((/*dset_id = */H5Oopen_by_addr(file_id, 0)) >= 0) {
+            H5_FAILED();
+            printf("    unsupported API succeeded!\n");
+            goto error;
+        }
+    } H5E_END_TRY;
+
+
     if (H5Sclose(fspace_id) < 0)
         TEST_ERROR
     if (H5Dclose(dset_id) < 0)
@@ -7847,6 +7884,30 @@ test_open_group_generically(void)
         printf("    couldn't open group with H5Oopen()\n");
         goto error;
     }
+
+    H5E_BEGIN_TRY {
+#if 0
+        if (H5Gclose(group_id) < 0)
+            TEST_ERROR
+#endif
+
+        if ((/*group_id = */H5Oopen_by_idx(file_id, "/" OBJECT_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT)) >= 0) {
+            H5_FAILED();
+            printf("    unsupported API succeeded!\n");
+            goto error;
+        }
+
+#if 0
+        if (H5Gclose(group_id) < 0)
+            TEST_ERROR
+#endif
+
+        if ((/*group_id = */H5Oopen_by_addr(file_id, 0)) >= 0) {
+            H5_FAILED();
+            printf("    unsupported API succeeded!\n");
+            goto error;
+        }
+    } H5E_END_TRY;
 
     if (H5Gclose(group_id) < 0)
         TEST_ERROR
@@ -7924,6 +7985,30 @@ test_open_datatype_generically(void)
         printf("    couldn't open datatype generically w/ H5Oopen()\n");
         goto error;
     }
+
+    H5E_BEGIN_TRY {
+#if 0
+        if (H5Tclose(type_id) < 0)
+            TEST_ERROR
+#endif
+
+        if ((/*type_id = */H5Oopen_by_idx(file_id, "/" OBJECT_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT)) >= 0) {
+            H5_FAILED();
+            printf("    unsupported API succeeded!\n");
+            goto error;
+        }
+
+#if 0
+        if (H5Tclose(type_id) < 0)
+            TEST_ERROR
+#endif
+
+        if ((/*type_id = */H5Oopen_by_addr(file_id, 0)) >= 0) {
+            H5_FAILED();
+            printf("    unsupported API succeeded!\n");
+            goto error;
+        }
+    } H5E_END_TRY;
 
     if (H5Tclose(type_id) < 0)
         TEST_ERROR
@@ -8193,6 +8278,19 @@ error:
         RVterm();
     } H5E_END_TRY;
 
+    return 1;
+}
+
+static int
+test_get_ref_name(void)
+{
+    TESTING("get ref. name")
+
+    SKIPPED();
+
+    return 0;
+
+error:
     return 1;
 }
 
