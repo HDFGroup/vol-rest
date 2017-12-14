@@ -1582,11 +1582,13 @@ test_get_existing_group_info(void)
         goto error;
     }
 
-    if (H5Gget_info_by_idx(file_id, "/", H5_INDEX_NAME, H5_ITER_INC, 0, &group_info, H5P_DEFAULT) < 0) {
-        H5_FAILED();
-        printf("    couldn't get group info by index\n");
-        goto error;
-    }
+    H5E_BEGIN_TRY {
+        if (H5Gget_info_by_idx(file_id, "/", H5_INDEX_NAME, H5_ITER_INC, 0, &group_info, H5P_DEFAULT) >= 0) {
+            H5_FAILED();
+            printf("    unsupported API succeeded!\n");
+            goto error;
+        }
+    } H5E_END_TRY;
 
     if (H5Pclose(fapl_id) < 0)
         TEST_ERROR
@@ -3120,21 +3122,19 @@ test_get_number_attributes(void)
         goto error;
     }
 
+    if (H5Oget_info_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, &obj_info, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't retrieve root group info\n");
+        goto error;
+    }
+
+    if (obj_info.num_attrs < 1) {
+        H5_FAILED();
+        printf("    invalid number of attributes received\n");
+        goto error;
+    }
+
     H5E_BEGIN_TRY {
-        if (H5Oget_info_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, &obj_info, H5P_DEFAULT) >= 0) {
-            H5_FAILED();
-            printf("    unsupported API succeeded!\n");
-            goto error;
-        }
-
-#if 0
-        if (obj_info.num_attrs < 1) {
-            H5_FAILED();
-            printf("    invalid number of attributes received\n");
-            goto error;
-        }
-#endif
-
         if (H5Oget_info_by_idx(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, &obj_info, H5P_DEFAULT) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded!\n");
