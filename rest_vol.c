@@ -26,7 +26,6 @@
  *          XXX: Add link to HSDS
  */
 /* XXX: Implement _iterate functions */
-/* XXX: Add support for the _by_idx and _by_name functions. In particular to not segfault when certain parameters to main functions are NULL */
 /* XXX: Eventually replace CURL PUT calls with CURLOPT_UPLOAD calls */
 /* XXX: Attempt to eliminate all use of globals/static variables */
 /* XXX: Create a table of all the hard-coded JSON keys used so these can be modified in the future if desired */
@@ -206,7 +205,13 @@ do {                                                                            
  */
 static hid_t REST_g = -1;
 
+/* Identifiers and defines for HDF5's error API */
 hid_t h5_err_class_g = -1;
+hid_t obj_err_maj_g = -1;
+hid_t parse_err_min_g = -1;
+
+#define H5E_OBJECT obj_err_maj_g
+#define H5E_PARSEERROR parse_err_min_g
 
 /*
  * The CURL pointer used for all cURL operations.
@@ -345,8 +350,8 @@ static htri_t RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_pa
 
 /* Conversion functions to convert a JSON-format string to an HDF5 Datatype or vice versa */
 static const char *RV_convert_predefined_datatype_to_string(hid_t type_id);
-static herr_t      RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested);
-static hid_t       RV_convert_string_to_datatype(const char *type);
+static herr_t      RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested);
+static hid_t       RV_convert_JSON_to_datatype(const char *type);
 
 /* Conversion function to convert one or more rest_obj_ref_t objects into a binary buffer for data transfer */
 static herr_t RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_len, char **buf_out, size_t *buf_out_len);
@@ -362,14 +367,14 @@ static hid_t RV_parse_datatype(char *type, hbool_t need_truncate);
 static hid_t RV_parse_dataspace(char *space);
 
 /* Helper function to interpret a dataspace's shape and convert it into JSON */
-static herr_t RV_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **maxdims_body);
+static herr_t RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **maxdims_body);
 
 /* Helper function to convert a selection within an HDF5 Dataspace into a JSON-format string */
 static herr_t RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string, size_t *selection_string_len, hbool_t req_param);
 
 /* Helper functions for creating a Dataset */
 static herr_t RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t dcpl, char **create_request_body, size_t *create_request_body_len);
-static herr_t RV_parse_dataset_creation_properties(hid_t dcpl_id, char **creation_properties_body, size_t *creation_properties_body_len);
+static herr_t RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl_id, char **creation_properties_body, size_t *creation_properties_body_len);
 
 static H5VL_class_t H5VL_rest_g = {
     HDF5_VOL_REST_VERSION,     /* Version number                 */
@@ -479,7 +484,7 @@ RVinit(void)
 
     /* Instruct cURL to use the buffer for error messages */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_buf))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't set cURL error buffer")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL error buffer")
 
     /* Allocate buffer for cURL to write responses to */
     if (NULL == (response_buffer.buffer = (char *) RV_malloc(CURL_RESPONSE_BUFFER_DEFAULT_SIZE)))
@@ -498,6 +503,12 @@ RVinit(void)
     /* Register the plugin with HDF5's error reporting API */
     if ((h5_err_class_g = H5Eregister_class("REST VOL", "REST VOL", "1.0")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't register with HDF5 error API")
+
+    /* Set up a few REST VOL-specific error API message classes */
+    if ((obj_err_maj_g = H5Ecreate_msg(h5_err_class_g, H5E_MAJOR, "Object interface")) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for object interface")
+    if ((parse_err_min_g = H5Ecreate_msg(h5_err_class_g, H5E_MINOR, "Error occurred while parsing JSON")) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for JSON parsing failures")
 
     /* Register the plugin with the library */
     if (RV_init() < 0)
@@ -605,6 +616,16 @@ done:
 
     /* Unregister from the HDF5 error API */
     if (h5_err_class_g >= 0) {
+        if (obj_err_maj_g >= 0) {
+            if (H5Eclose_msg(obj_err_maj_g) < 0)
+                FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close object interface error message")
+        } /* end if */
+
+        if (parse_err_min_g >= 0) {
+            if (H5Eclose_msg(parse_err_min_g) < 0)
+                FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close JSON parsing failure error message")
+        } /* end if */
+
         if (H5Eunregister_class(h5_err_class_g) < 0)
             FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister from HDF5 error API")
         h5_err_class_g = -1;
@@ -658,12 +679,12 @@ H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const
 
     if (username) {
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, username))
-            FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTINIT, FAIL, "can't set username: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf)
     } /* end if */
 
     if (password) {
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, password))
-            FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTINIT, FAIL, "can't set password: %s", curl_err_buf)
+            FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf)
     } /* end if */
 
 done:
@@ -678,7 +699,7 @@ RVget_uri(hid_t obj_id)
     char               *ret_value = NULL;
 
     if (NULL == (VOL_obj = (RV_object_t *) H5VL_object(obj_id)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, NULL, "invalid identifier")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, NULL, "invalid identifier")
     ret_value = VOL_obj->URI;
 
 done:
@@ -915,7 +936,7 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
 
     /* Allocate and setup internal Attribute struct */
     if (NULL == (new_attribute = (RV_object_t *) RV_malloc(sizeof(*new_attribute))))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate attribute object")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute object")
 
     new_attribute->obj_type = H5I_ATTR;
     new_attribute->domain = parent->domain; /* Store pointer to file that the newly-created attribute is in */
@@ -943,27 +964,27 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
 
     /* Copy the IDs into the internal struct for the Attribute */
     if ((new_attribute->u.attribute.dtype_id = H5Tcopy(type_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTCOPY, NULL, "failed to copy datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, NULL, "failed to copy attribute's datatype")
     if ((new_attribute->u.attribute.space_id = H5Scopy(space_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTCOPY, NULL, "failed to copy dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, NULL, "failed to copy attribute's dataspace")
 
     /* Copy the attribute's name */
     attr_name_len = strlen(attr_name);
     if (NULL == (new_attribute->u.attribute.attr_name = (char *) RV_malloc(attr_name_len + 1)))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute name")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for copy of attribute's name")
     memcpy(new_attribute->u.attribute.attr_name, attr_name, attr_name_len);
     new_attribute->u.attribute.attr_name[attr_name_len] = '\0';
 
     /* Form the request body to give the new Attribute its properties */
 
     /* Form the Datatype portion of the Attribute create request */
-    if (RV_convert_datatype_to_string(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTCONVERT, NULL, "can't convert datatype to string representation")
+    if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert attribute's datatype to JSON representation")
 
     /* If the Dataspace of the Attribute was specified, convert it to JSON. Otherwise, use defaults */
     if (H5P_DEFAULT != space_id)
-        if (RV_convert_dataspace_shape_to_string(space_id, &shape_body, NULL) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL, "can't parse Attribute shape parameters")
+        if (RV_convert_dataspace_shape_to_JSON(space_id, &shape_body, NULL) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, NULL, "can't convert attribute's dataspace to JSON representation")
 
     create_request_nalloc = strlen(datatype_body) + (shape_body ? strlen(shape_body) : 0) + 4;
     if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
@@ -1145,11 +1166,11 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
 
     /* XXX: Eventually implement H5Aopen_by_idx() */
     if (loc_params.type == H5VL_OBJECT_BY_IDX)
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL, "opening an attribute by index is currently unsupported")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL, "H5Aopen_by_idx is currently unsupported")
 
     /* Allocate and setup internal Attribute struct */
     if (NULL == (attribute = (RV_object_t *) RV_malloc(sizeof(*attribute))))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate attribute object")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute object")
 
     attribute->obj_type = H5I_ATTR;
     attribute->domain = parent->domain; /* Store pointer to file that the opened Dataset is within */
@@ -1241,15 +1262,15 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
 
     /* Set up a Dataspace for the opened Attribute */
     if ((attribute->u.attribute.space_id = RV_parse_dataspace(response_buffer.buffer)) < 0)
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't parse attribute dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, NULL, "can't convert JSON into usable dataspace for attribute")
 
     /* Set up a Datatype for the opened Attribute */
     if ((attribute->u.attribute.dtype_id = RV_parse_datatype(response_buffer.buffer, TRUE)) < 0)
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't parse attribute datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert JSON into usable datatype for attribute")
 
     /* Copy the attribute's name */
     if (NULL == (attribute->u.attribute.attr_name = (char *) RV_malloc(attr_name_len + 1)))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute name")
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for copy of attribute's name")
     memcpy(attribute->u.attribute.attr_name, attr_name, attr_name_len);
     attribute->u.attribute.attr_name[attr_name_len] = '\0';
 
@@ -1319,24 +1340,24 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED dxpl_id
     assert(H5I_ATTR == attribute->obj_type && "not an attribute");
 
 #ifdef PLUGIN_DEBUG
-    printf("Recieved Attribute read call with following parameters:\n");
+    printf("Received Attribute read call with following parameters:\n");
     if (attribute->u.attribute.attr_name) printf("  - Attribute name: %s\n", attribute->u.attribute.attr_name);
 #endif
 
     /* Determine whether it's possible to receive the data as a binary blob instead of as JSON */
     if (H5T_NO_CLASS == (dtype_class = H5Tget_class(dtype_id)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
     if ((is_variable_str = H5Tis_variable_str(dtype_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
     is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
 
     if ((file_select_npoints = H5Sget_select_npoints(attribute->u.attribute.space_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid attribute dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "attribute's dataspace is invalid")
 
     if (0 == (dtype_size = H5Tget_size(dtype_id)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
     /* Setup the "Host: " header */
     host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
@@ -1479,21 +1500,21 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
 
     /* Determine whether it's possible to send the data as a binary blob instead of as JSON */
     if (H5T_NO_CLASS == (dtype_class = H5Tget_class(dtype_id)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
     if ((is_variable_str = H5Tis_variable_str(dtype_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
     is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
 
     if ((file_select_npoints = H5Sget_select_npoints(attribute->u.attribute.space_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid attribute dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "attribute's dataspace is invalid")
 
     if (0 == (dtype_size = H5Tget_size(dtype_id)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid attribute datatype")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
     if (!is_transfer_binary) {
-
+        /* XXX: */
     } /* end if */
     else
         write_body_len = (size_t) file_select_npoints * dtype_size;
@@ -1734,7 +1755,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Scopy(_obj->u.attribute.space_id)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTCOPY, FAIL, "can't copy attribute's dataspace")
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL, "can't copy attribute's dataspace")
 
             break;
         } /* H5VL_ATTR_GET_SPACE */
@@ -1749,7 +1770,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Tcopy(_obj->u.attribute.dtype_id)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTCOPY, FAIL, "can't copy attribute's datatype")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy attribute's datatype")
 
             break;
         } /* H5VL_ATTR_GET_TYPE */
@@ -1897,7 +1918,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
             /* Setup the "Host: " header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
             strcpy(host_header, host_string);
 
@@ -2017,7 +2038,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
             /* Setup the "Host: " header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
             strcpy(host_header, host_string);
 
@@ -2118,9 +2139,9 @@ RV_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
         RV_free(_attr->u.attribute.attr_name);
 
     if (_attr->u.attribute.dtype_id >= 0 && H5Tclose(_attr->u.attribute.dtype_id) < 0)
-        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
+        FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close attribute's datatype")
     if (_attr->u.attribute.space_id >= 0 && H5Sclose(_attr->u.attribute.space_id) < 0)
-        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close dataspace")
+        FUNC_DONE_ERROR(H5E_DATASPACE, H5E_CANTCLOSEOBJ, FAIL, "can't close attribute's dataspace")
 
     if (_attr->u.attribute.acpl_id >= 0) {
         if (_attr->u.attribute.acpl_id != H5P_ATTRIBUTE_CREATE_DEFAULT && H5Pclose(_attr->u.attribute.acpl_id) < 0)
@@ -2186,7 +2207,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
 
     /* Allocate and setup internal Datatype struct */
     if (NULL == (new_datatype = (RV_object_t *) RV_malloc(sizeof(*new_datatype))))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate datatype object")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for datatype object")
 
     new_datatype->obj_type = H5I_DATATYPE;
     new_datatype->domain = parent->domain; /* Store pointer to file that the newly-committed datatype is in */
@@ -2204,8 +2225,8 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
         new_datatype->u.datatype.tcpl_id = H5P_DATATYPE_CREATE_DEFAULT;
 
     /* Convert the datatype into JSON to be used in the request body */
-    if (RV_convert_datatype_to_string(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert datatype to string representation")
+    if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert datatype to JSON representation")
 
     /* If this is not a H5Tcommit_anon call, create a link for the Datatype
      * to link it into the file structure */
@@ -2222,7 +2243,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
          * one which the datatype will ultimately be linked under, extract out the path to the
          * final group in the chain */
         if (NULL == (path_dirname = RV_dirname(name)))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, NULL, "invalid pathname for datatype link")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, NULL, "invalid pathname for datatype link")
         empty_dirname = !strcmp(path_dirname, "");
 
 #ifdef PLUGIN_DEBUG
@@ -2239,12 +2260,12 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
 
             search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
             if (!search_ret || search_ret < 0)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate target for dataset link")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't locate target for dataset link")
         } /* end if */
 
         link_body_len = strlen(link_body_format) + strlen(link_basename) + (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
         if (NULL == (link_body = (char *) RV_malloc(link_body_len)))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for datatype link body")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for datatype link body")
 
         /* Form the Datatype Commit Link portion of the commit request using the above format
          * specifier and the corresponding arguments */
@@ -2384,7 +2405,7 @@ RV_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const c
 
     /* Allocate and setup internal Datatype struct */
     if (NULL == (datatype = (RV_object_t *) RV_malloc(sizeof(*datatype))))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate datatype object")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for datatype object")
 
     datatype->obj_type = H5I_DATATYPE;
     datatype->domain = parent->domain; /* Store pointer to file that the opened Dataset is within */
@@ -2398,7 +2419,7 @@ RV_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const c
 
     /* Set up the actual datatype by converting the string representation into an hid_t */
     if ((datatype->u.datatype.dtype_id = RV_parse_datatype(response_buffer.buffer, TRUE)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, NULL, "can't parse dataset's datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert JSON to usable datatype")
 
     /* Set up a TCPL for the datatype so that H5Tget_create_plist() will function correctly.
        Note that currently there aren't any properties that can be set for a TCPL, however
@@ -2464,7 +2485,7 @@ RV_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t H5_ATTR_UNUSED dx
             size_t   size = va_arg(arguments, size_t);
 
             if (H5Tencode(dtype->u.datatype.dtype_id, buf, &size) < 0)
-                FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "can't determine serialized length of datatype")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADTYPE, FAIL, "can't determine serialized length of datatype")
 
             *nalloc = (ssize_t) size;
 
@@ -2578,7 +2599,7 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
 
     /* Allocate and setup internal Dataset struct */
     if (NULL == (new_dataset = (RV_object_t *) RV_malloc(sizeof(*new_dataset))))
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate dataset object")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for dataset object")
 
     new_dataset->obj_type = H5I_DATASET;
     new_dataset->domain = parent->domain; /* Store pointer to file that the newly-created dataset is in */
@@ -2612,7 +2633,7 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
         size_t tmp_len = 0;
 
         if (RV_setup_dataset_create_request_body(obj, name, dcpl_id, &create_request_body, &tmp_len) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL, "can't parse dataset creation parameters")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, NULL, "can't convert dataset creation parameters to JSON")
 
         /* XXX: unsafe cast */
         create_request_body_len = (curl_off_t) tmp_len;
@@ -2667,9 +2688,9 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get property list value for dataset's dataspace ID")
 
     if ((new_dataset->u.dataset.dtype_id = H5Tcopy(type_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCOPY, NULL, "failed to copy datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, NULL, "failed to copy dataset's datatype")
     if ((new_dataset->u.dataset.space_id = H5Scopy(space_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCOPY, NULL, "failed to copy dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, NULL, "failed to copy dataset's dataspace")
 
     ret_value = (void *) new_dataset;
 
@@ -2743,7 +2764,7 @@ RV_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
 
     /* Allocate and setup internal Dataset struct */
     if (NULL == (dataset = (RV_object_t *) RV_malloc(sizeof(*dataset))))
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate dataset object")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for dataset object")
 
     dataset->obj_type = H5I_DATASET;
     dataset->domain = parent->domain; /* Store pointer to file that the opened Dataset is within */
@@ -2759,11 +2780,11 @@ RV_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
 
     /* Set up a Dataspace for the opened Dataset */
     if ((dataset->u.dataset.space_id = RV_parse_dataspace(response_buffer.buffer)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, NULL, "can't parse dataset dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, NULL, "can't convert JSON to usable dataspace for dataset")
 
     /* Set up a Datatype for the opened Dataset */
     if ((dataset->u.dataset.dtype_id = RV_parse_datatype(response_buffer.buffer, TRUE)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, NULL, "can't parse dataset datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert JSON to usable datatype for dataset")
 
     /* Set up a DAPL for the dataset so that H5Dget_access_plist() will function correctly */
     if ((dataset->u.dataset.dapl_id = H5Pcreate(H5P_DATASET_ACCESS)) < 0)
@@ -2775,7 +2796,7 @@ RV_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
 
     /* Set any necessary creation properties on the DCPL setup for the dataset */
     if (RV_parse_response(response_buffer.buffer, NULL, &dataset->u.dataset.dcpl_id, RV_parse_dataset_creation_properties_callback) < 0)
-        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't parse dataset's creation properties")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL, "can't parse dataset's creation properties from JSON representation")
 
     ret_value = (void *) dataset;
 
@@ -2887,23 +2908,23 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
         if (RV_convert_dataspace_selection_to_string(file_space_id, &selection_body, &selection_body_len,
                 (H5S_SEL_POINTS == sel_type) ? FALSE : TRUE) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't convert dataspace selection to string representation")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL, "can't convert dataspace selection to string representation")
     } /* end else */
 
     /* Verify that the number of selected points matches */
     if ((mem_select_npoints = H5Sget_select_npoints(mem_space_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory dataspace is invalid")
     if ((file_select_npoints = H5Sget_select_npoints(file_space_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "file dataspace is invalid")
     assert((mem_select_npoints == file_select_npoints) && "memory selection num points != file selection num points");
 
 
     /* Determine whether it's possible to send the data as a binary blob instead of a JSON array */
     if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
     if ((is_variable_str = H5Tis_variable_str(mem_type_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
     /* Only perform a binary transfer for fixed-length datatype datasets with an
      * All or Hyperslab selection. Point selections are dealt with by POSTing the
@@ -2996,7 +3017,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         size_t dtype_size;
 
         if (0 == (dtype_size = H5Tget_size(mem_type_id)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
         /* Scatter the read data out to the supplied read buffer according to the mem_type_id
          * and mem_space_id given */
@@ -3088,10 +3109,10 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
     /* Determine whether it's possible to send the data as a binary blob instead of as JSON */
     if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
     if ((is_variable_str = H5Tis_variable_str(mem_type_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
     is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
 
@@ -3136,14 +3157,14 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type")
 
         if (RV_convert_dataspace_selection_to_string(file_space_id, &selection_body, NULL, is_transfer_binary) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't convert dataspace to string representation")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL, "can't convert dataspace selection to string representation")
     } /* end else */
 
     /* Verify that the number of selected points matches */
     if ((mem_select_npoints = H5Sget_select_npoints(mem_space_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory dataspace is invalid")
     if ((file_select_npoints = H5Sget_select_npoints(file_space_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataspace")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "file dataspace is invalid")
     assert((mem_select_npoints == file_select_npoints) && "memory selection num points != file selection num points");
 
     /* Setup the size of the data being transferred and the data buffer itself (for non-simple
@@ -3153,7 +3174,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         size_t dtype_size;
 
         if (0 == (dtype_size = H5Tget_size(mem_type_id)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
         write_body_len = (size_t) file_select_npoints * dtype_size;
     } /* end if */
@@ -3296,7 +3317,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Scopy(dset->u.dataset.space_id)) < 0)
-                FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTGET, FAIL, "can't get dataspace of dataset")
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace of dataset")
 
             break;
         } /* H5VL_DATASET_GET_SPACE */
@@ -3315,7 +3336,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Tcopy(dset->u.dataset.dtype_id)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCOPY, FAIL, "can't copy dataset's datatype")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy dataset's datatype")
 
             break;
         } /* H5VL_DATASET_GET_TYPE */
@@ -3412,9 +3433,9 @@ RV_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED *
     assert(H5I_DATASET == _dset->obj_type && "not a dataset");
 
     if (_dset->u.dataset.dtype_id >= 0 && H5Tclose(_dset->u.dataset.dtype_id) < 0)
-        FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
+        FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close dataset's datatype")
     if (_dset->u.dataset.space_id >= 0 && H5Sclose(_dset->u.dataset.space_id) < 0)
-        FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, FAIL, "can't close dataspace")
+        FUNC_DONE_ERROR(H5E_DATASPACE, H5E_CANTCLOSEOBJ, FAIL, "can't close dataset's dataspace")
 
     if (_dset->u.dataset.dapl_id >= 0) {
         if (_dset->u.dataset.dapl_id != H5P_DATASET_ACCESS_DEFAULT && H5Pclose(_dset->u.dataset.dapl_id) < 0)
@@ -3466,7 +3487,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
 
     /* Allocate and setup internal File struct */
     if (NULL == (new_file = (RV_object_t *) RV_malloc(sizeof(*new_file))))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate file object")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for file object")
 
     new_file->obj_type = H5I_FILE;
     new_file->u.file.intent = H5F_ACC_RDWR;
@@ -3666,7 +3687,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
 
     /* Allocate and setup internal File struct */
     if (NULL == (file = (RV_object_t *) RV_malloc(sizeof(*file))))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate file object")
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for file object")
 
     file->obj_type = H5I_FILE;
     file->u.file.intent = flags;
@@ -4144,7 +4165,7 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
 
     /* Allocate and setup internal Group struct */
     if (NULL == (new_group = (RV_object_t *) RV_malloc(sizeof(*new_group))))
-        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate group object")
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group object")
 
     new_group->obj_type = H5I_GROUP;
     new_group->u.group.gcpl_id = FAIL;
@@ -4181,7 +4202,7 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
 
         search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
         if (!search_ret || search_ret < 0)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate target for group link")
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate target for group link")
     } /* end if */
 
     {
@@ -4320,7 +4341,7 @@ RV_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char
 
     /* Allocate and setup internal Group struct */
     if (NULL == (group = (RV_object_t *) RV_malloc(sizeof(*group))))
-        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate group object")
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group object")
 
     group->obj_type = H5I_GROUP;
     group->u.group.gcpl_id = FAIL;
@@ -4395,7 +4416,7 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
             hid_t *ret_id = va_arg(arguments, hid_t *);
 
             if ((*ret_id = H5Pcopy(loc_obj->u.group.gcpl_id)) < 0)
-                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy Group GCPL")
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't get group's GCPL")
 
             break;
         } /* H5VL_GROUP_GET_GCPL */
@@ -4644,7 +4665,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                     search_ret = RV_find_object_by_path((RV_object_t *) hard_link_target_obj, hard_link_target_obj_loc_params.loc_data.loc_by_name.name,
                             &obj_type, RV_copy_object_URI_callback, NULL, temp_URI);
                     if (!search_ret || search_ret < 0)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't locate link target object")
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_PATH, FAIL, "can't locate link target object")
 
                     target_URI = temp_URI;
 
@@ -5344,7 +5365,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
             /* Retrieve the type of object being dealt with by querying the server */
             search_ret = RV_find_object_by_path(loc_obj, loc_params.loc_data.loc_by_name.name, &obj_type, NULL, NULL, NULL);
             if (!search_ret || search_ret < 0)
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTOPENOBJ, NULL, "can't find object by name")
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_PATH, NULL, "can't find object by name")
 
             break;
         } /* H5VL_OBJECT_BY_NAME */
@@ -5353,7 +5374,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
         case H5VL_OBJECT_BY_IDX:
         {
             /* XXX: */
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, NULL, "H5Oopen_by_idx is unsupported")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, NULL, "H5Oopen_by_idx is unsupported")
             break;
         } /* H5VL_OBJECT_BY_IDX */
 
@@ -5361,14 +5382,14 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
         case H5VL_OBJECT_BY_ADDR:
         {
             /* XXX: */
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, NULL, "H5Oopen_by_addr is unsupported")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, NULL, "H5Oopen_by_addr is unsupported")
             break;
         } /* H5VL_OBJECT_BY_ADDR */
 
         case H5VL_OBJECT_BY_SELF:
         case H5VL_OBJECT_BY_REF:
         default:
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, NULL, "invalid loc_params type")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, NULL, "invalid loc_params type")
     } /* end switch */
 
     /* Call the appropriate RV_*_open call based upon the object type */
@@ -5445,7 +5466,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
         case H5I_ERROR_STACK:
         case H5I_NTYPES:
         default:
-            FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTOPENOBJ, NULL, "invalid object type")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTOPENOBJ, NULL, "invalid object type")
     } /* end switch */
 
     if (opened_type) *opened_type = obj_type;
@@ -5594,7 +5615,7 @@ RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_typ
         } /* H5VL_REF_GET_TYPE */
 
         default:
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "unknown object operation")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "unknown object operation")
     } /* end switch */
 
 done:
@@ -5630,15 +5651,15 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
     switch (specific_type) {
         /* H5Oincr/decr_refcount */
         case H5VL_OBJECT_CHANGE_REF_COUNT:
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "H5Oincr_refcount and H5Odecr_refcount are unsupported")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Oincr_refcount and H5Odecr_refcount are unsupported")
 
         /* H5Oexists_by_name */
         case H5VL_OBJECT_EXISTS:
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "H5Oexists_by_name is unsupported")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Oexists_by_name is unsupported")
 
         /* H5Ovisit(_by_name) */
         case H5VL_OBJECT_VISIT:
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "H5Ovisit and H5Ovisit_by_name are unsupported")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Ovisit and H5Ovisit_by_name are unsupported")
 
         /* H5Rcreate */
         case H5VL_REF_CREATE:
@@ -5675,14 +5696,14 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
                 case H5R_BADTYPE:
                 case H5R_MAXTYPE:
                 default:
-                    FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "invalid ref type")
+                    FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_BADVALUE, FAIL, "invalid ref type")
             } /* end switch */
 
             break;
         } /* H5VL_REF_CREATE */
 
         default:
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "unknown object operation")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "unknown object operation")
     } /* end switch */
 
 done:
@@ -5728,7 +5749,7 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
         /* H5Oset_comment, H5Oset_comment_by_name, H5Oget_comment and H5Oget_comment_by_name */
         case H5VL_OBJECT_SET_COMMENT:
         case H5VL_OBJECT_GET_COMMENT:
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "object comments are deprecated in favor of use of object attributes")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "object comments are deprecated in favor of use of object attributes")
 
         /* H5Oget_info (_by_name/_by_idx) */
         case H5VL_OBJECT_GET_INFO:
@@ -5785,7 +5806,7 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
                         case H5I_ERROR_STACK:
                         case H5I_NTYPES:
                         default:
-                            FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "loc_id object is not a group, datatype or dataset")
+                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "loc_id object is not a group, datatype or dataset")
                     } /* end switch */
 
                     break;
@@ -5801,7 +5822,7 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
                     search_ret = RV_find_object_by_path(loc_obj, loc_params.loc_data.loc_by_name.name, &obj_type,
                             RV_copy_object_URI_callback, NULL, temp_URI);
                     if (!search_ret || search_ret < 0)
-                        FUNC_GOTO_ERROR(H5E_VOL, H5E_PATH, FAIL, "can't locate object")
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, FAIL, "can't locate object")
 
                     /* Redirect cURL from the base URL to
                      * "/groups/<id>", "/datasets/<id>" or "/datatypes/<id>",
@@ -5845,7 +5866,7 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
                         case H5I_ERROR_STACK:
                         case H5I_NTYPES:
                         default:
-                            FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "loc_id object is not a group, datatype or dataset")
+                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "loc_id object is not a group, datatype or dataset")
                     } /* end switch */
 
                     break;
@@ -5855,14 +5876,14 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
                 case H5VL_OBJECT_BY_IDX:
                 {
                     /* XXX: */
-                    FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "H5Oget_info_by_idx is unsupported")
+                    FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Oget_info_by_idx is unsupported")
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
 
                 case H5VL_OBJECT_BY_ADDR:
                 case H5VL_OBJECT_BY_REF:
                 default:
-                    FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "invalid loc_params type")
+                    FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid loc_params type")
             } /* end switch */
 
             /* Make a GET request to the server to retrieve the number of attributes attached to the object */
@@ -5870,7 +5891,7 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
             /* Setup the "Host: " header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
             strcpy(host_header, host_string);
 
@@ -5880,11 +5901,11 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
             printf("  - Retrieving object info\n\n");
@@ -5894,11 +5915,11 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
             printf("   \\********************************/\n\n");
 #endif
 
-            CURL_PERFORM(curl, H5E_VOL, H5E_CANTGET, FAIL);
+            CURL_PERFORM(curl, H5E_OBJECT, H5E_CANTGET, FAIL);
 
             /* Retrieve the attribute count for the object */
             if (RV_parse_response(response_buffer.buffer, NULL, &attr_count, RV_retrieve_attribute_count_callback) < 0)
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "can't retrieve object attribute count")
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't retrieve object attribute count")
 
             assert(attr_count >= 0);
             obj_info->num_attrs = (hsize_t) attr_count;
@@ -5907,7 +5928,7 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
         } /* H5VL_OBJECT_GET_INFO */
 
         default:
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "unknown object operation")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "unknown object operation")
     } /* end switch */
 
 done:
@@ -6803,7 +6824,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
             search_ret = RV_find_object_by_path(parent_obj, link_dir_name, &obj_type,
                     RV_copy_object_URI_callback, NULL, temp_URI);
             if (!search_ret || search_ret < 0)
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't locate parent group")
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate parent group")
 
 #ifdef PLUGIN_DEBUG
             printf("  - Found new parent group %s at end of path chain\n\n", temp_URI);
@@ -6913,7 +6934,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
         case H5I_ERROR_STACK:
         case H5I_NTYPES:
         default:
-            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "target object not a group, datatype or dataset")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "target object not a group, datatype or dataset")
     } /* end switch */
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
@@ -7000,7 +7021,7 @@ done:
 
 
 /*-------------------------------------------------------------------------
- * Function:    RV_convert_datatype_to_string
+ * Function:    RV_convert_datatype_to_JSON
  *
  * Purpose:     Given a datatype, this function creates a JSON-formatted
  *              string representation of the datatype.
@@ -7020,7 +7041,7 @@ done:
  *              July, 2017
  */
 static herr_t
-RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested)
+RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested)
 {
     H5T_class_t   type_class;
     const char   *leading_string = "\"type\": "; /* Leading string for all datatypes */
@@ -7055,7 +7076,7 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for converted datatype's string buffer")
 
 #ifdef PLUGIN_DEBUG
-    printf("  - Initial datatype-to-string buffer size is %zu\n\n", out_string_len);
+    printf("  - Initial datatype-to-JSON buffer size is %zu\n\n", out_string_len);
 #endif
 
     /* Keep track of the current position in the resulting string so everything
@@ -7259,8 +7280,8 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
                 if ((compound_member = H5Tget_member_type(type_id, (unsigned) i)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound datatype member")
 
-                if (RV_convert_datatype_to_string(compound_member, &compound_member_strings[i], NULL, FALSE) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert compound datatype member to string representation")
+                if (RV_convert_datatype_to_JSON(compound_member, &compound_member_strings[i], NULL, FALSE) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert compound datatype member to JSON representation")
 
                 if (NULL == (compound_member_name = H5Tget_member_name(type_id, (unsigned) i)))
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound datatype member name")
@@ -7456,8 +7477,8 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
             if ((type_is_committed = H5Tcommitted(type_base_class)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine if array base datatype is committed")
 
-            if (RV_convert_datatype_to_string(type_base_class, &array_base_type, &array_base_type_len, TRUE) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert datatype to string representation")
+            if (RV_convert_datatype_to_JSON(type_base_class, &array_base_type, &array_base_type_len, TRUE) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert datatype to JSON representation")
 
             /* Check whether the buffer needs to be grown */
             bytes_to_print = array_base_type_len + strlen(array_shape) + (strlen(fmt_string) - 4) + 1;
@@ -7529,7 +7550,7 @@ RV_convert_datatype_to_string(hid_t type_id, char **type_body, size_t *type_body
 done:
     if (ret_value >= 0) {
 #ifdef PLUGIN_DEBUG
-        printf("  - Final datatype-to-string buffer size is %td\n\n", out_string_curr_pos - out_string);
+        printf("  - Final datatype-to-JSON buffer size is %td\n\n", out_string_curr_pos - out_string);
 #endif
 
         *type_body = out_string;
@@ -7565,11 +7586,11 @@ done:
         RV_free(enum_mapping);
 
     return ret_value;
-} /* end RV_convert_datatype_to_string() */
+} /* end RV_convert_datatype_to_JSON() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    RV_convert_string_to_datatype
+ * Function:    RV_convert_JSON_to_datatype
  *
  * Purpose:     Given a JSON string representation of a datatype, creates
  *              and returns an hid_t for the datatype using H5Tcreate().
@@ -7617,7 +7638,7 @@ done:
  *              July, 2017
  */
 static hid_t
-RV_convert_string_to_datatype(const char *type)
+RV_convert_JSON_to_datatype(const char *type)
 {
     const char  *class_keys[] = { "type", "class", (const char *) 0 };
     const char  *type_base_keys[] = { "type", "base", (const char *) 0 };
@@ -7635,18 +7656,18 @@ RV_convert_string_to_datatype(const char *type)
     hid_t        ret_value = FAIL;
 
 #ifdef PLUGIN_DEBUG
-    printf("Converting String-to-Datatype buffer %s to hid_t\n", type);
+    printf("Converting JSON-to-Datatype buffer %s to hid_t\n", type);
 #endif
 
     /* Retrieve the datatype class */
     if (NULL == (parse_tree = yajl_tree_parse(type, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "JSON parse tree creation failed")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed")
 
     if (NULL == (key_obj = yajl_tree_get(parse_tree, class_keys, yajl_t_string)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't parse datatype from string representation")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't parse datatype from JSON representation")
 
     if (NULL == (datatype_class = YAJL_GET_STRING(key_obj)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't parse datatype from string representation")
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't parse datatype from JSON representation")
 
     /* Create the appropriate datatype or copy an existing one */
     if (!strcmp(datatype_class, "H5T_INTEGER")) {
@@ -7654,10 +7675,10 @@ RV_convert_string_to_datatype(const char *type)
         char    *type_base = NULL;
 
         if (NULL == (key_obj = yajl_tree_get(parse_tree, type_base_keys, yajl_t_string)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type")
 
         if (NULL == (type_base = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type")
 
         if (is_predefined) {
             hbool_t  is_unsigned;
@@ -7766,6 +7787,7 @@ RV_convert_string_to_datatype(const char *type)
                     } /* end else */
 
                     break;
+
                 default:
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unknown predefined integer datatype")
             } /* end switch */
@@ -7783,10 +7805,10 @@ RV_convert_string_to_datatype(const char *type)
         char    *type_base = NULL;
 
         if (NULL == (key_obj = yajl_tree_get(parse_tree, type_base_keys, yajl_t_string)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type")
 
         if (NULL == (type_base = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type")
 
         if (is_predefined) {
             char *type_base_ptr = type_base + 10;
@@ -7816,6 +7838,7 @@ RV_convert_string_to_datatype(const char *type)
                     predefined_type = (*(type_base_ptr + 2) == 'L') ? H5T_IEEE_F64LE : H5T_IEEE_F64BE;
 
                     break;
+
                 default:
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unknown predefined floating-point datatype")
             } /* end switch */
@@ -7842,7 +7865,7 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Retrieve the string datatype's length and check if it's a variable-length string */
         if (NULL == (key_obj = yajl_tree_get(parse_tree, length_keys, yajl_t_any)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype length")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's length")
 
         is_variable_str = YAJL_IS_STRING(key_obj);
 
@@ -7853,10 +7876,10 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Retrieve and check the string datatype's character set */
         if (NULL == (key_obj = yajl_tree_get(parse_tree, charSetKeys, yajl_t_string)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype character set")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's character set")
 
         if (NULL == (charSet = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype character set")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's character set")
 
 #ifdef PLUGIN_DEBUG
         printf("  - charSet: %s\n", charSet);
@@ -7869,15 +7892,15 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Retrieve and check the string datatype's string padding */
         if (NULL == (key_obj = yajl_tree_get(parse_tree, strPadKeys, yajl_t_string)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype padding")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's padding type")
 
         if (NULL == (strPad = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve string datatype padding")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's padding type")
 
         /* Currently, only H5T_STR_NULLPAD string padding is supported for fixed-length strings
          * and H5T_STR_NULLTERM for variable-length strings */
         if (strcmp(strPad, is_variable_str ? "H5T_STR_NULLTERM" : "H5T_STR_NULLPAD"))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported string padding for string datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported string padding type for string datatype")
 
 #ifdef PLUGIN_DEBUG
             printf("  - String padding: %s\n\n", strPad);
@@ -7888,13 +7911,13 @@ RV_convert_string_to_datatype(const char *type)
         if (fixed_length < 0) FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype length")
 
         if ((datatype = H5Tcreate(H5T_STRING, is_variable_str ? H5T_VARIABLE : (size_t) fixed_length)) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create string datatype")
 
         if (H5Tset_cset(datatype, H5T_CSET_ASCII) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't set character set for dataset string datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't set character set for string datatype")
 
         if (H5Tset_strpad(datatype, is_variable_str ? H5T_STR_NULLTERM : H5T_STR_NULLPAD) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't set string padding for dataset string datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't set string padding for string datatype")
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_OPAQUE")) {
         /* XXX: Need support for opaque types */
@@ -7913,7 +7936,7 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Retrieve the compound member fields array */
         if (NULL == (key_obj = yajl_tree_get(parse_tree, field_keys, yajl_t_array)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve compound datatype members array")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve compound datatype's members array")
 
         if (NULL == (compound_member_type_array = (hid_t *) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*compound_member_type_array))))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate compound datatype")
@@ -7936,12 +7959,12 @@ RV_convert_string_to_datatype(const char *type)
             size_t   j;
 
             if (NULL == (compound_member_field = YAJL_GET_ARRAY(key_obj)->values[i]))
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound field member %zu information", i)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't get compound field member %zu information", i)
 
             for (j = 0; j < YAJL_GET_OBJECT(compound_member_field)->len; j++) {
                 if (!strcmp(YAJL_GET_OBJECT(compound_member_field)->keys[j], "name"))
                     if (NULL == (compound_member_names[i] = YAJL_GET_STRING(YAJL_GET_OBJECT(compound_member_field)->values[j])))
-                        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound field member %zu name", j)
+                        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't get compound field member %zu name", j)
             } /* end for */
         } /* end for */
 
@@ -7952,7 +7975,7 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Start the search from the "fields" JSON key */
         if (NULL == (type_section_ptr = strstr(type, "\"fields\"")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't find \"fields\" information section in datatype string")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find \"fields\" information section in datatype string")
 
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
             size_t  type_section_len = 0;
@@ -7962,7 +7985,7 @@ RV_convert_string_to_datatype(const char *type)
 
             /* Find the beginning of the "type" section for this Compound Datatype member */
             if (NULL == (type_section_ptr = strstr(type_section_ptr, "\"type\"")))
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't find \"type\" information section in datatype string")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find \"type\" information section in datatype string")
 
             /* Search for the initial '{' brace that begins the subsection and set the initial value for the depth
              * counter, to keep track of brace depth level inside the subsection
@@ -7973,7 +7996,7 @@ RV_convert_string_to_datatype(const char *type)
                  * the JSON must be misformatted
                  */
                 if (!current_symbol)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't locate beginning of \"type\" subsection - misformatted JSON")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't locate beginning of \"type\" subsection - misformatted JSON")
 
             depth_counter++;
 
@@ -7993,7 +8016,7 @@ RV_convert_string_to_datatype(const char *type)
                  * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
                  */
                 if (!current_symbol)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't locate end of \"type\" subsection - stray '{' is likely")
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't locate end of \"type\" subsection - stray '{' is likely")
 
                 if (current_symbol == '{')
                     depth_counter++;
@@ -8017,8 +8040,8 @@ RV_convert_string_to_datatype(const char *type)
             printf("  - Compound datatype member %zu type string len: %zu\n", i, type_section_len);
 #endif
 
-            if ((compound_member_type_array[i] = RV_convert_string_to_datatype(tmp_cmpd_type_buffer)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert compound datatype member %zu from string representation", i)
+            if ((compound_member_type_array[i] = RV_convert_JSON_to_datatype(tmp_cmpd_type_buffer)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert compound datatype member %zu from JSON representation", i)
 
             total_type_size += H5Tget_size(compound_member_type_array[i]);
 
@@ -8046,7 +8069,7 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Retrieve the array dimensions */
         if (NULL == (key_obj = yajl_tree_get(parse_tree, dims_keys, yajl_t_array)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve array datatype dimensions")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve array datatype's dimensions")
 
         if (NULL == (array_dims = (hsize_t *) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*array_dims))))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array dimensions")
@@ -8067,9 +8090,9 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Locate the beginning and end braces of the "base" section for the array datatype */
         if (NULL == (base_type_substring_ptr = strstr(type, "\"base\"")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't find \"base\" type information in datatype string")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find \"base\" type information in datatype string")
         if (NULL == (base_type_substring_ptr = strstr(base_type_substring_ptr, "{")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "incorrectly formatted \"base\" type information in datatype string")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "incorrectly formatted \"base\" type information in datatype string")
 
         /* To find the end of the "base type" section, a quick solution is to repeatedly search for
          * '{' symbols, matching this with the same number of searches for '}', and taking the final
@@ -8110,11 +8133,11 @@ RV_convert_string_to_datatype(const char *type)
         array_base_type_substring[type_string_len + base_type_substring_len + 1] = '\0';
 
         /* Convert the string representation of the array's base datatype to an hid_t */
-        if ((base_type_id = RV_convert_string_to_datatype(array_base_type_substring)) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert string representation of array base datatype to a usable form")
+        if ((base_type_id = RV_convert_JSON_to_datatype(array_base_type_substring)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert JSON representation of array base datatype to a usable form")
 
         if ((datatype = H5Tarray_create2(base_type_id, (unsigned) i, array_dims)) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "creating array datatype failed")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create array datatype")
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_ENUM")) {
         const char * const  type_string = "{\"type\":"; /* Gets prepended to the enum "base" datatype substring */
@@ -8130,11 +8153,11 @@ RV_convert_string_to_datatype(const char *type)
 
         /* Locate the beginning and end braces of the "base" section for the enum datatype */
         if (NULL == (base_section_ptr = strstr(type, "\"base\"")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "incorrectly formatted datatype string - missing \"base\" datatype section")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "incorrectly formatted datatype string - missing \"base\" datatype section")
         if (NULL == (base_section_ptr = strstr(base_section_ptr, "{")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "incorrectly formatted \"base\" datatype section in datatype string")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "incorrectly formatted \"base\" datatype section in datatype string")
         if (NULL == (base_section_end = strstr(base_section_ptr, "}")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "incorrectly formatted \"base\" datatype section in datatype string")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "incorrectly formatted \"base\" datatype section in datatype string")
 
         /* Allocate enough memory to hold the "base" information substring, plus a few bytes for
          * the leading "type:" string and enclosing braces
@@ -8161,25 +8184,25 @@ RV_convert_string_to_datatype(const char *type)
 #endif
 
         /* Convert the enum's base datatype substring into an hid_t for use in the following H5Tenum_create call */
-        if ((enum_base_type = RV_convert_string_to_datatype(tmp_enum_base_type_buffer)) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert enum datatype's base datatype section from string into datatype")
+        if ((enum_base_type = RV_convert_JSON_to_datatype(tmp_enum_base_type_buffer)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert enum datatype's base datatype section from JSON into datatype")
 
 #ifdef PLUGIN_DEBUG
         printf("Converted enum base datatype to hid_t\n\n");
 #endif
 
         if ((datatype = H5Tenum_create(enum_base_type)) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create datatype")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create enum datatype")
 
         if (NULL == (key_obj = yajl_tree_get(parse_tree, mapping_keys, yajl_t_object)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve enum mapping from enum string representation")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve enum mapping from enum JSON representation")
 
         /* Retrieve the name and value of each member in the enum mapping, inserting them into the enum type as new members */
         for (i = 0; i < YAJL_GET_OBJECT(key_obj)->len; i++) {
             long long val;
 
             if (!YAJL_IS_INTEGER(YAJL_GET_OBJECT(key_obj)->values[i]))
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "enum member %zu value is not an integer", i)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "enum member %zu value is not an integer", i)
 
             val = YAJL_GET_INTEGER(YAJL_GET_OBJECT(key_obj)->values[i]);
 
@@ -8195,19 +8218,19 @@ RV_convert_string_to_datatype(const char *type)
         char *type_base;
 
         if (NULL == (key_obj = yajl_tree_get(parse_tree, type_base_keys, yajl_t_string)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type")
 
         if (NULL == (type_base = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve datatype base type")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type")
 
         if (!strcmp(type_base, "H5T_STD_REF_OBJ")) {
             if ((datatype = H5Tcopy(H5T_STD_REF_OBJ)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy object reference datatype")
-        }
+        } /* end if */
         else if (!strcmp(type_base, "H5T_STD_REF_DSETREG")) {
             if ((datatype = H5Tcopy(H5T_STD_REF_DSETREG)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy region reference datatype")
-        }
+        } /* end else if */
         else
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid reference type")
     } /* end if */
@@ -8217,7 +8240,7 @@ RV_convert_string_to_datatype(const char *type)
     ret_value = datatype;
 
 #ifdef PLUGIN_DEBUG
-    printf("Converted String-to-Datatype buffer to hid_t ID %ld\n\n", datatype);
+    printf("Converted JSON-to-Datatype buffer to hid_t ID %ld\n\n", datatype);
 #endif
 
 done:
@@ -8227,7 +8250,7 @@ done:
         if (compound_member_type_array) {
             while (FAIL != compound_member_type_array[i])
                 if (H5Tclose(compound_member_type_array[i]) < 0)
-                    FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
+                    FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close compound datatype members")
         } /* end if */
     } /* end if */
 
@@ -8251,7 +8274,7 @@ done:
         yajl_tree_free(parse_tree);
 
     return ret_value;
-} /* end RV_convert_string_to_datatype() */
+} /* end RV_convert_JSON_to_datatype() */
 
 
 /*-------------------------------------------------------------------------
@@ -8338,7 +8361,7 @@ RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_le
             case H5I_ERROR_STACK:
             case H5I_NTYPES:
             default:
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid ref obj. type")
+                FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_BADVALUE, FAIL, "invalid ref obj. type")
         } /* end switch */
 
         snprintf(out_curr_pos, OBJECT_REF_STRING_LEN, "%s/%s", prefix_table[prefix_index], ref_array[i].ref_obj_URI);
@@ -8504,7 +8527,7 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
 
         /* Start by locating the beginning of the "type" subsection, as indicated by the JSON "type" key */
         if (NULL == (type_section_ptr = strstr(type, "\"type\"")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't find \"type\" information section in datatype string")
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find \"type\" information section in datatype string")
 
         /* Search for the initial '{' brace that begins the subsection and set the initial value for the depth
          * counter, to keep track of brace depth level inside the subsectjon
@@ -8515,7 +8538,7 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
              * the JSON must be misformatted
              */
             if (!current_symbol)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't locate beginning of \"type\" subsection - misformatted JSON")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't locate beginning of \"type\" subsection - misformatted JSON")
 
         depth_counter++;
 
@@ -8535,7 +8558,7 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
              * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
              */
             if (!current_symbol)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't locate end of \"type\" subsection - stray '{' is likely")
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't locate end of \"type\" subsection - stray '{' is likely")
 
             if (current_symbol == '{')
                 depth_counter++;
@@ -8556,8 +8579,8 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
         substring_allocated = TRUE;
     } /* end if */
 
-    if ((datatype = RV_convert_string_to_datatype(type_string)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL, "can't convert string representation to datatype")
+    if ((datatype = RV_convert_JSON_to_datatype(type_string)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL, "can't convert JSON representation to datatype")
 
     ret_value = datatype;
 
@@ -8599,14 +8622,14 @@ RV_parse_dataspace(char *space)
     assert(space);
 
     if (NULL == (parse_tree = yajl_tree_parse(space, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "JSON parse tree creation failed")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed")
 
     /* Retrieve the Dataspace type */
     if (NULL == (key_obj = yajl_tree_get(parse_tree, class_keys, yajl_t_string)))
-        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace class")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_PARSEERROR, FAIL, "can't retrieve dataspace class")
 
     if (NULL == (dataspace_type = YAJL_GET_STRING(key_obj)))
-        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace class")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_PARSEERROR, FAIL, "can't retrieve dataspace class")
 
     /* Create the appropriate type of Dataspace */
     if (!strcmp(dataspace_type, "H5S_NULL")) {
@@ -8625,7 +8648,7 @@ RV_parse_dataspace(char *space)
         size_t      i;
 
         if (NULL == (dims_obj = yajl_tree_get(parse_tree, dims_keys, yajl_t_array)))
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace dims")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_PARSEERROR, FAIL, "can't retrieve dataspace dims")
 
         /* Check to see whether the maximum dimension size is specified as part of the
          * dataspace's JSON representation
@@ -8690,7 +8713,7 @@ done:
 
 
 /*-------------------------------------------------------------------------
- * Function:    RV_convert_dataspace_shape_to_string
+ * Function:    RV_convert_dataspace_shape_to_JSON
  *
  * Purpose:     Given an HDF5 dataspace, converts the shape and maximum
  *              dimension size of the dataspace into JSON. The resulting
@@ -8703,7 +8726,7 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **maxdims_body)
+RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **maxdims_body)
 {
     H5S_class_t  space_type;
     hsize_t     *dims = NULL;
@@ -8760,7 +8783,7 @@ RV_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **m
             int                 bytes_printed;
 
             if ((space_ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't get number of dimensions in dataspace")
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of dimensions in dataspace")
 
             if (shape_out_string)
                 if (NULL == (dims = (hsize_t *) RV_malloc((size_t) space_ndims * sizeof(*dims))))
@@ -8771,7 +8794,7 @@ RV_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **m
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate memory for dataspace maximum dimension sizes")
 
             if (H5Sget_simple_extent_dims(space_id, dims, maxdims) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't retrieve dataspace dimensions and maximum dimension sizes")
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace dimensions and maximum dimension sizes")
 
             /* Add the JSON key prefixes to their respective buffers */
             if (shape_out_string) {
@@ -8803,7 +8826,7 @@ RV_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **m
                                     shape_out_string_curr_pos, H5E_DATASPACE, FAIL);
 
                     if ((bytes_printed = sprintf(shape_out_string_curr_pos, "%s%llu", i > 0 ? "," : "", dims[i])) < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "sprintf error")
+                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
                     shape_out_string_curr_pos += bytes_printed;
                 } /* end if */
 
@@ -8821,7 +8844,7 @@ RV_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **m
                     } /* end if */
                     else {
                         if ((bytes_printed = sprintf(maxdims_out_string_curr_pos, "%s%llu", i > 0 ? "," : "", maxdims[i])) < 0)
-                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "sprintf error")
+                            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
                         maxdims_out_string_curr_pos += bytes_printed;
                     } /* end else */
                 } /* end if */
@@ -8836,7 +8859,7 @@ RV_convert_dataspace_shape_to_string(hid_t space_id, char **shape_body, char **m
         case H5S_SCALAR: /* Should have already been handled above */
         case H5S_NO_CLASS:
         default:
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't get dataspace type")
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "invalid dataspace type")
     } /* end switch */
 
 done:
@@ -8859,7 +8882,7 @@ done:
         RV_free(dims);
 
     return ret_value;
-} /* end RV_convert_dataspace_shape_to_string() */
+} /* end RV_convert_dataspace_shape_to_JSON() */
 
 
 /*-------------------------------------------------------------------------
@@ -8927,7 +8950,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "not a dataspace")
 
     if ((ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOUNT, FAIL, "can't retrieve dataspace dimensionality")
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace dimensionality")
 
     if (req_param) {
         /* Format the selection in a manner such that it can be used as a request parameter in
@@ -8941,7 +8964,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
             case H5S_SEL_NONE:
                 break;
             case H5S_SEL_POINTS:
-                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "point selections are unsupported as a HTTP request parameter")
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_UNSUPPORTED, FAIL, "point selections are unsupported as a HTTP request parameter")
 
             case H5S_SEL_HYPERSLABS:
                 /* Format the hyperslab selection according to the 'select' request/query parameter.
@@ -8963,7 +8986,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
 
                 /* XXX: Currently only regular hyperslabs supported */
                 if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't get regular hyperslab selection")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get regular hyperslab selection")
 
                 strcat(out_string_curr_pos++, "[");
 
@@ -9103,7 +9126,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
 
                 /* XXX: Currently only regular hyperslabs supported */
                 if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "can't get regular hyperslab selection")
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get regular hyperslab selection")
 
                 for (i = 0; i < (size_t) ndims; i++) {
                     if ((bytes_printed = sprintf(start_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), start[i])) < 0)
@@ -9236,18 +9259,18 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property value for link creation property list ID")
 
     /* Form the Datatype portion of the Dataset create request */
-    if (RV_convert_datatype_to_string(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL, "can't convert datatype to string representation")
+    if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL, "can't convert dataset's datatype to JSON representation")
 
     /* If the Dataspace of the Dataset was not specified as H5P_DEFAULT, parse it. */
     if (H5P_DEFAULT != space_id)
-        if (RV_convert_dataspace_shape_to_string(space_id, &shape_body, &maxdims_body) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL, "can't parse Dataset shape parameters")
+        if (RV_convert_dataspace_shape_to_JSON(space_id, &shape_body, &maxdims_body) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL, "can't convert dataset's dataspace to JSON representation")
 
     /* If the DCPL was not specified as H5P_DEFAULT, form the Dataset Creation Properties portion of the Dataset create request */
     if (H5P_DATASET_CREATE_DEFAULT != dcpl)
-        if (RV_parse_dataset_creation_properties(dcpl, &creation_properties_body, &creation_properties_body_len) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL, "can't parse Dataset Creation Properties")
+        if (RV_convert_dataset_creation_properties_to_JSON(dcpl, &creation_properties_body, &creation_properties_body_len) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL, "can't convert Dataset Creation Properties to JSON representation")
 
 #ifdef PLUGIN_DEBUG
     printf("  - Dataset creation properties body: %s\n", creation_properties_body);
@@ -9350,7 +9373,7 @@ done:
 
 
 /*-------------------------------------------------------------------------
- * Function:    RV_parse_dataset_creation_properties
+ * Function:    RV_convert_dataset_creation_properties_to_JSON
  *
  * Purpose:     Given a DCPL during a dataset create operation, converts
  *              all of the Dataset Creation Properties, such as the
@@ -9365,7 +9388,7 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_parse_dataset_creation_properties(hid_t dcpl, char **creation_properties_body, size_t *creation_properties_body_len)
+RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_properties_body, size_t *creation_properties_body_len)
 {
     const char * const  leading_string = "\"creationProperties\": {";
     H5D_alloc_time_t    alloc_time;
@@ -10011,4 +10034,4 @@ done:
         RV_free(chunk_dims_string);
 
     return ret_value;
-} /* end RV_parse_dataset_creation_properties() */
+} /* end RV_convert_dataset_creation_properties_to_JSON() */
