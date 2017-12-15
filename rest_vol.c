@@ -916,8 +916,6 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
     char        *url_encoded_attr_name = NULL;
     void        *ret_value = NULL;
 
-    /* XXX: Handle H5Acreate_by_name */
-
 #ifdef PLUGIN_DEBUG
     printf("Received Attribute create call with following parameters:\n");
     printf("  - Attribute Name: %s\n", attr_name);
@@ -942,11 +940,31 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
 
     new_attribute->obj_type = H5I_ATTR;
     new_attribute->domain = parent->domain; /* Store pointer to file that the newly-created attribute is in */
-    new_attribute->u.attribute.parent_obj = parent;
     new_attribute->u.attribute.dtype_id = FAIL;
     new_attribute->u.attribute.space_id = FAIL;
     new_attribute->u.attribute.acpl_id = FAIL;
     new_attribute->u.attribute.attr_name = NULL;
+
+    /* If this is a call to H5Acreate_by_name, locate the real parent object */
+    if (H5VL_OBJECT_BY_NAME == loc_params.type) {
+        htri_t search_ret;
+
+        new_attribute->u.attribute.parent_obj_type = H5I_UNINIT;
+
+        search_ret = RV_find_object_by_path(parent, loc_params.loc_data.loc_by_name.name, &new_attribute->u.attribute.parent_obj_type,
+                RV_copy_object_URI_callback, NULL, new_attribute->u.attribute.parent_obj_URI);
+        if (!search_ret || search_ret < 0)
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, NULL, "can't locate object that attribute is to be attached to")
+
+#ifdef PLUGIN_DEBUG
+        printf("  - New parent object type: %d\n", new_attribute->u.attribute.parent_obj_type);
+        printf("  - New parent object URI: %s\n\n", new_attribute->u.attribute.parent_obj_URI);
+#endif
+    } /* end if */
+    else {
+        new_attribute->u.attribute.parent_obj_type = parent->obj_type;
+        strncpy(new_attribute->u.attribute.parent_obj_URI, parent->URI, URI_MAX_LENGTH);
+    } /* end else */
 
     /* Copy the ACPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Aget_create_plist() will function correctly
@@ -1027,21 +1045,21 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
      * or
      * "/datasets/<id>/attributes/<attr name>",
      * depending on the type of the object the attribute is being attached to. */
-    switch (parent->obj_type) {
+    switch (new_attribute->u.attribute.parent_obj_type) {
         case H5I_FILE:
         case H5I_GROUP:
             snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                     base_URL, parent->URI, url_encoded_attr_name);
+                     base_URL, new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
             break;
 
         case H5I_DATATYPE:
             snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                     base_URL, parent->URI, url_encoded_attr_name);
+                     base_URL, new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
             break;
 
         case H5I_DATASET:
             snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                     base_URL, parent->URI, url_encoded_attr_name);
+                     base_URL, new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
             break;
 
         case H5I_ATTR:
@@ -1166,21 +1184,64 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
           || H5I_DATASET == parent->obj_type)
           && "parent object not a group, datatype or dataset");
 
-    /* XXX: Eventually implement H5Aopen_by_idx() */
-    if (loc_params.type == H5VL_OBJECT_BY_IDX)
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL, "H5Aopen_by_idx is currently unsupported")
-
     /* Allocate and setup internal Attribute struct */
     if (NULL == (attribute = (RV_object_t *) RV_malloc(sizeof(*attribute))))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute object")
 
     attribute->obj_type = H5I_ATTR;
     attribute->domain = parent->domain; /* Store pointer to file that the opened Dataset is within */
-    attribute->u.attribute.parent_obj = parent;
     attribute->u.attribute.dtype_id = FAIL;
     attribute->u.attribute.space_id = FAIL;
     attribute->u.attribute.acpl_id = FAIL;
     attribute->u.attribute.attr_name = NULL;
+
+    /* Set the parent object's type and URI in the attribute's appropriate fields */
+    switch (loc_params.type) {
+        /* H5Aopen */
+        case H5VL_OBJECT_BY_SELF:
+        {
+            attribute->u.attribute.parent_obj_type = parent->obj_type;
+            strncpy(attribute->u.attribute.parent_obj_URI, parent->URI, URI_MAX_LENGTH);
+            break;
+        } /* H5VL_OBJECT_BY_SELF */
+
+        /* H5Aopen_by_name */
+        case H5VL_OBJECT_BY_NAME:
+        {
+            htri_t search_ret;
+
+            /* If this is a call to H5Aopen_by_name, locate the real object that the attribute
+             * is attached to by searching the given path
+             */
+
+            attribute->u.attribute.parent_obj_type = H5I_UNINIT;
+
+            search_ret = RV_find_object_by_path(parent, loc_params.loc_data.loc_by_name.name, &attribute->u.attribute.parent_obj_type,
+                    RV_copy_object_URI_callback, NULL, attribute->u.attribute.parent_obj_URI);
+            if (!search_ret || search_ret < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, NULL, "can't locate object that attribute is attached to")
+
+#ifdef PLUGIN_DEBUG
+            printf("  - New parent object type: %d\n", attribute->u.attribute.parent_obj_type);
+            printf("  - New parent object URI: %s\n\n", attribute->u.attribute.parent_obj_URI);
+#endif
+
+            break;
+        } /* H5VL_OBJECT_BY_NAME */
+
+        /* H5Aopen_by_idx */
+        case H5VL_OBJECT_BY_IDX:
+        {
+            /* XXX: */
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL, "H5Aopen_by_idx is unsupported")
+            break;
+        } /* H5VL_OBJECT_BY_IDX */
+
+        case H5VL_OBJECT_BY_REF:
+        case H5VL_OBJECT_BY_ADDR:
+        default:
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid loc_params type")
+    } /* end switch */
 
     /* Make a GET request to the server to retrieve information about the attribute */
 
@@ -1209,21 +1270,21 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
      * or
      * "/datasets/<id>/attributes/<attr name>",
      * depending on the type of the object the attribute is attached to. */
-    switch (parent->obj_type) {
+    switch (attribute->u.attribute.parent_obj_type) {
         case H5I_FILE:
         case H5I_GROUP:
             snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                     base_URL, parent->URI, url_encoded_attr_name);
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
             break;
 
         case H5I_DATATYPE:
             snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                     base_URL, parent->URI, url_encoded_attr_name);
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
             break;
 
         case H5I_DATASET:
             snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                     base_URL, parent->URI, url_encoded_attr_name);
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
             break;
 
         case H5I_ATTR:
@@ -1388,21 +1449,21 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED dxpl_id
      * or
      * "/datasets/<id>/attributes/<attr name>/value",
      * depending on the type of the object the attribute is attached to. */
-    switch (attribute->u.attribute.parent_obj->obj_type) {
+    switch (attribute->u.attribute.parent_obj_type) {
         case H5I_FILE:
         case H5I_GROUP:
             snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s/value",
-                     base_URL, attribute->u.attribute.parent_obj->URI, url_encoded_attr_name);
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
             break;
 
         case H5I_DATATYPE:
             snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s/value",
-                     base_URL, attribute->u.attribute.parent_obj->URI, url_encoded_attr_name);
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
             break;
 
         case H5I_DATASET:
             snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s/value",
-                     base_URL, attribute->u.attribute.parent_obj->URI, url_encoded_attr_name);
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
             break;
 
         case H5I_ATTR:
@@ -1548,21 +1609,21 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
      * or
      * "/datasets/<id>/attributes/<attr name>/value",
      * depending on the type of the object the attribute is attached to. */
-    switch (attribute->u.attribute.parent_obj->obj_type) {
+    switch (attribute->u.attribute.parent_obj_type) {
         case H5I_FILE:
         case H5I_GROUP:
             snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s/value",
-                     base_URL, attribute->u.attribute.parent_obj->URI, url_encoded_attr_name);
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
             break;
 
         case H5I_DATATYPE:
             snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s/value",
-                     base_URL, attribute->u.attribute.parent_obj->URI, url_encoded_attr_name);
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
             break;
 
         case H5I_DATASET:
             snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s/value",
-                     base_URL, attribute->u.attribute.parent_obj->URI, url_encoded_attr_name);
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
             break;
 
         case H5I_ATTR:
@@ -3897,35 +3958,18 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_ATTR_UN
                  void H5_ATTR_UNUSED **req, va_list arguments)
 {
     RV_object_t *file = (RV_object_t *) obj;
-    size_t       host_header_len = 0;
-    char        *host_header = NULL;
     herr_t       ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
     printf("Received File-specific call with following parameters:\n");
     printf("  - Specific Type: %d\n", specific_type);
-    printf("  - File URI: %s\n", file->URI);
-    printf("  - File Pathname: %s\n\n", file->domain->u.file.filepath_name);
+    if (file) {
+        printf("  - File URI: %s\n", file->URI);
+        printf("  - File Pathname: %s\n\n", file->domain->u.file.filepath_name);
+    }
 #endif
 
-    assert(H5I_FILE == file->obj_type && "not a file");
-
-    /* Setup the "Host: " header */
-    host_header_len = strlen(file->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
-
-    strcpy(host_header, host_string);
-
-    curl_headers = curl_slist_append(curl_headers, strncat(host_header, file->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
-
-    /* Disable use of Expect: 100 Continue HTTP response */
-    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+    if (file) assert(H5I_FILE == file->obj_type && "not a file");
 
     switch (specific_type) {
         /* H5Fflush */
@@ -3949,14 +3993,6 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_ATTR_UN
     } /* end switch */
 
 done:
-    if (host_header)
-        RV_free(host_header);
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    } /* end if */
-
     return ret_value;
 } /* end RV_file_specific() */
 

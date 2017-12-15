@@ -1249,7 +1249,7 @@ test_unused_file_API_calls(void)
         hid_t                obj_id;
         void                *file_handle;
 
-        if (H5Fis_accessible(FILENAME, H5P_DEFAULT) >= 0)
+        if (H5Fis_accessible(FILENAME, fapl_id) >= 0)
             TEST_ERROR
         if (H5Fflush(file_id, H5F_SCOPE_GLOBAL) >= 0)
             TEST_ERROR
@@ -2267,7 +2267,7 @@ test_create_attribute_on_dataset(void)
         goto error;
     }
 
-    if ((attr_id = H5Aopen(dset_id, ATTRIBUTE_CREATE_ON_DATASET_ATTR_NAME2, H5P_DEFAULT)) < 0) {
+    if ((attr_id2 = H5Aopen(dset_id, ATTRIBUTE_CREATE_ON_DATASET_ATTR_NAME2, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't open attribute\n");
         goto error;
@@ -2285,7 +2285,7 @@ test_create_attribute_on_dataset(void)
         goto error;
     }
 
-    if ((attr_id = H5Aopen_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATASET_DSET_NAME,
+    if ((attr_id2 = H5Aopen_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATASET_DSET_NAME,
             ATTRIBUTE_CREATE_ON_DATASET_ATTR_NAME2, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't open attribute by name\n");
@@ -2505,15 +2505,17 @@ test_create_attribute_on_datatype(void)
             TEST_ERROR
 #endif
 
-        if ((/*attr_id = */H5Aopen_by_idx(dtype_id, "/" ATTRIBUTE_CREATE_ON_DATATYPE_DTYPE_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        if ((/*attr_id = */H5Aopen_by_idx(dtype_id, "/" ATTRIBUTE_CREATE_ON_DATATYPE_DTYPE_NAME,
+                H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) >= 0) {
             H5_FAILED();
-            printf("    couldn't open attribute by index\n");
+            printf("    unsupported API succeeded!\n");
             goto error;
         }
 
-        if ((/*attr_id2 = */H5Aopen_by_idx(dtype_id, "/" ATTRIBUTE_CREATE_ON_DATATYPE_DTYPE_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        if ((/*attr_id2 = */H5Aopen_by_idx(dtype_id, "/" ATTRIBUTE_CREATE_ON_DATATYPE_DTYPE_NAME,
+                H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) >= 0) {
             H5_FAILED();
-            printf("    couldn't open attribute by index\n");
+            printf("    unsupported API succeeded!\n");
             goto error;
         }
     } H5E_END_TRY;

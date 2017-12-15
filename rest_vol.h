@@ -78,11 +78,12 @@ typedef struct RV_dataset_t {
 } RV_dataset_t;
 
 typedef struct RV_attr_t {
-    RV_object_t *parent_obj;
-    hid_t        space_id;
-    hid_t        dtype_id;
-    hid_t        acpl_id;
-    char        *attr_name;
+    H5I_type_t  parent_obj_type;
+    char        parent_obj_URI[URI_MAX_LENGTH];
+    hid_t       space_id;
+    hid_t       dtype_id;
+    hid_t       acpl_id;
+    char       *attr_name;
 } RV_attr_t;
 
 typedef struct RV_datatype_t {
