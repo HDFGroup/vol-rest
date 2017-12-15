@@ -4172,9 +4172,7 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
 {
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *new_group = NULL;
-    const char  *path_basename = RV_basename(name);
     curl_off_t   create_request_body_len = 0;
-    hbool_t      empty_dirname;
     size_t       create_request_nalloc = 0;
     size_t       host_header_len = 0;
     char        *host_header = NULL;
@@ -4219,49 +4217,56 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
     else
         new_group->u.group.gcpl_id = H5P_GROUP_CREATE_DEFAULT;
 
-    /* In case the user specified a path which contains multiple groups on the way to the
-     * one which this group will ultimately be linked under, extract out the path to the
-     * final group in the chain */
-    if (NULL == (path_dirname = RV_dirname(name)))
-        FUNC_GOTO_ERROR(H5E_SYM, H5E_BADVALUE, NULL, "invalid pathname for group link")
-    empty_dirname = !strcmp(path_dirname, "");
+    /* If this is not a H5Gcreate_anon call, create a link for the Group
+     * to link it into the file structure
+     */
+    if (name) {
+        const char *path_basename = RV_basename(name);
+        hbool_t     empty_dirname;
+
+        /* In case the user specified a path which contains multiple groups on the way to the
+         * one which this group will ultimately be linked under, extract out the path to the
+         * final group in the chain */
+        if (NULL == (path_dirname = RV_dirname(name)))
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_BADVALUE, NULL, "invalid pathname for group link")
+        empty_dirname = !strcmp(path_dirname, "");
 
 #ifdef PLUGIN_DEBUG
-    printf("  - Group path dirname is: %s\n\n", path_dirname);
+        printf("  - Group path dirname is: %s\n\n", path_dirname);
 #endif
 
-    /* If the path to the final group in the chain wasn't empty, get the URI of the final
-     * group in order to correctly link this group into the file structure. Otherwise,
-     * the supplied parent group is the one housing this group, so just use its URI.
-     */
-    if (!empty_dirname) {
-        H5I_type_t obj_type = H5I_GROUP;
-        htri_t     search_ret;
+        /* If the path to the final group in the chain wasn't empty, get the URI of the final
+         * group in order to correctly link this group into the file structure. Otherwise,
+         * the supplied parent group is the one housing this group, so just use its URI.
+         */
+        if (!empty_dirname) {
+            H5I_type_t obj_type = H5I_GROUP;
+            htri_t     search_ret;
 
-        search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
-        if (!search_ret || search_ret < 0)
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate target for group link")
+            search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
+            if (!search_ret || search_ret < 0)
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate target for group link")
+        } /* end if */
+
+        {
+            const char * const fmt_string = "{"
+                                                "\"link\": {"
+                                                    "\"id\": \"%s\", "
+                                                    "\"name\": \"%s\""
+                                                "}"
+                                            "}";
+
+            /* Form the request body to link the new group to the parent object */
+            create_request_nalloc = strlen(fmt_string) + strlen(path_basename) + (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
+            if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group create request body")
+
+            if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string,
+                    empty_dirname ? parent->URI : target_URI, path_basename)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error")
+        }
     } /* end if */
-
-    {
-        const char * const fmt_string = "{"
-                                            "\"link\": {"
-                                                "\"id\": \"%s\", "
-                                                "\"name\": \"%s\""
-                                            "}"
-                                        "}";
-
-        /* Form the request body to link the new group to the parent object */
-        create_request_nalloc = strlen(fmt_string) + strlen(path_basename) + (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
-        if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group create request body")
-
-        if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string,
-                empty_dirname ? parent->URI : target_URI,
-                path_basename)
-            ) < 0)
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error")
-    }
 
     /* Setup the "Host: " header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
@@ -4285,9 +4290,9 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body ? create_request_body : ""))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL POST data: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, create_request_body_len))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, create_request_body ? create_request_body_len : 0))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL POST data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
@@ -4772,8 +4777,9 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
         {
             H5L_type_t  link_type;
             const char *file_path, *link_target;
-            size_t      link_target_buf_size;
-            void       *link_target_buf;
+            unsigned    elink_flags;
+            size_t      elink_buf_size;
+            void       *elink_buf;
 
             if (H5Pget(lcpl_id, H5VL_PROP_LINK_TYPE, &link_type) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's type")
@@ -4783,16 +4789,21 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "unsupported link type")
 
             /* Retrieve the buffer containing the external link's information */
-            if (H5Pget(lcpl_id, H5VL_PROP_LINK_UDATA_SIZE, &link_target_buf_size) < 0)
+            if (H5Pget(lcpl_id, H5VL_PROP_LINK_UDATA_SIZE, &elink_buf_size) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for external link's information buffer size")
-            if (H5Pget(lcpl_id, H5VL_PROP_LINK_UDATA, &link_target_buf) < 0)
+            if (H5Pget(lcpl_id, H5VL_PROP_LINK_UDATA, &elink_buf) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for external link's information buffer")
 
+#if 0
             /* The first byte of the link_target_buf contains the external link's version
              * and flags
              */
             file_path = (const char *) link_target_buf + 1;
             link_target = file_path + (strlen(file_path) + 1);
+#endif
+
+            if (H5Lunpack_elink_val(elink_buf, elink_buf_size, &elink_flags, &file_path, &link_target) < 0)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't unpack contents of external link buffer")
 
             {
                 const char * const fmt_string = "{\"h5domain\": \"%s\", \"h5path\": \"%s\"}";

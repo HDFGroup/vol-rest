@@ -72,13 +72,15 @@
  *                                                   *
  *****************************************************/
 
-#define GROUP_CREATE_INVALID_LOC_ID_GNAME "/test_group"
+#define GROUP_CREATE_INVALID_LOC_ID_GNAME    "/test_group"
 
-#define GROUP_CREATE_UNDER_ROOT_GNAME "/group_under_root"
+#define GROUP_CREATE_UNDER_ROOT_GNAME        "/group_under_root"
 
-#define GROUP_CREATE_UNDER_GROUP_REL_GNAME "group_under_group2"
+#define GROUP_CREATE_UNDER_GROUP_REL_GNAME   "group_under_group2"
 
-#define NONEXISTENT_GROUP_TEST_GNAME "/nonexistent_group"
+#define GROUP_CREATE_ANONYMOUS_GROUP_NAME    "anon_group"
+
+#define NONEXISTENT_GROUP_TEST_GNAME         "/nonexistent_group"
 
 #define GROUP_PROPERTY_LIST_TEST_GROUP_NAME1 "property_list_test_group1"
 #define GROUP_PROPERTY_LIST_TEST_GROUP_NAME2 "property_list_test_group2"
@@ -122,6 +124,10 @@
 #define ATTRIBUTE_GET_INFO_TEST_ATTR_DTYPE H5T_NATIVE_INT
 #define ATTRIBUTE_GET_INFO_TEST_ATTR_NAME  "get_info_test_attr"
 
+#define ATTRIBUTE_GET_SPACE_TYPE_TEST_SPACE_RANK 2
+#define ATTRIBUTE_GET_SPACE_TYPE_TEST_ATTR_NAME  "get_space_type_test_attr"
+#define ATTRIBUTE_GET_SPACE_TYPE_TEST_ATTR_DTYPE H5T_STD_U8LE
+
 #define ATTRIBUTE_GET_NAME_TEST_ATTRIBUTE_NAME "retrieve_attr_name_test"
 #define ATTRIBUTE_GET_NAME_TEST_ATTRIBUTE_TYPE H5T_NATIVE_INT
 #define ATTRIBUTE_GET_NAME_TEST_SPACE_RANK     2
@@ -140,9 +146,18 @@
 #define ATTRIBUTE_READ_TEST_SPACE_RANK      2
 #define ATTRIBUTE_READ_TEST_ATTR_NAME       "read_test_attr"
 
+#define ATTRIBUTE_RENAME_TEST_SPACE_RANK 2
+#define ATTRIBUTE_RENAME_TEST_ATTR_NAME  "rename_test_attr"
+#define ATTRIBUTE_RENAME_TEST_NEW_NAME   "renamed_attr"
+#define ATTRIBUTE_RENAME_TEST_ATTR_DTYPE H5T_NATIVE_INT
+
 #define ATTRIBUTE_GET_NUM_ATTRS_TEST_ATTRIBUTE_NAME "get_num_attrs_test_attribute"
 #define ATTRIBUTE_GET_NUM_ATTRS_TEST_ATTRIBUTE_TYPE H5T_NATIVE_INT
 #define ATTRIBUTE_GET_NUM_ATTRS_TEST_SPACE_RANK     2
+
+#define ATTRIBUTE_UNUSED_APIS_TEST_SPACE_RANK 2
+#define ATTRIBUTE_UNUSED_APIS_TEST_ATTR_NAME  "unused_apis_attr"
+#define ATTRIBUTE_UNUSED_APIS_TEST_ATTR_DTYPE H5T_NATIVE_INT
 
 #define ATTRIBUTE_PROPERTY_LIST_TEST_SUBGROUP_NAME   "attribute_property_list_test_group"
 #define ATTRIBUTE_PROPERTY_LIST_TEST_ATTRIBUTE_NAME1 "property_list_test_attribute1"
@@ -276,6 +291,15 @@
 #define DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPE      H5T_NATIVE_INT
 #define DATASET_DATA_VERIFY_WRITE_TEST_DSET_NAME       "dataset_data_verification"
 #define DATASET_DATA_VERIFY_WRITE_TEST_DIM_SIZE        5
+
+#define DATASET_SET_EXTENT_TEST_SPACE_RANK 2
+#define DATASET_SET_EXTENT_TEST_DSET_NAME  "set_extent_test_dset"
+#define DATASET_SET_EXTENT_TEST_DSET_DTYPE H5T_NATIVE_INT
+
+#define DATASET_UNUSED_APIS_TEST_SPACE_RANK 2
+#define DATASET_UNUSED_APIS_TEST_DSET_NAME  "unused_apis_dset"
+#define DATASET_UNUSED_APIS_TEST_DSET_DTYPE H5T_NATIVE_INT
+
 
 #define DATASET_PROPERTY_LIST_TEST_SUBGROUP_NAME "dataset_property_list_test_group"
 #define DATASET_PROPERTY_LIST_TEST_SPACE_RANK    2
@@ -478,8 +502,7 @@ static int test_create_attribute_on_root(void);
 static int test_create_attribute_on_dataset(void);
 static int test_create_attribute_on_datatype(void);
 static int test_get_attribute_info(void);
-static int test_get_attribute_space(void);
-static int test_get_attribute_type(void);
+static int test_get_attribute_space_and_type(void);
 static int test_get_attribute_name(void);
 static int test_create_attribute_with_space_in_name(void);
 static int test_delete_attribute(void);
@@ -517,17 +540,13 @@ static int test_read_dataset_large_all(void);
 static int test_read_dataset_large_hyperslab(void);
 static int test_read_dataset_large_point_selection(void);
 static int test_write_dataset_data_verification(void);
-static int test_dataset_iterate(void);
-static int test_dataset_fill(void);
 static int test_dataset_set_extent(void);
-static int test_dataset_scatter_gather(void);
 static int test_unused_dataset_API_calls(void);
 static int test_dataset_property_lists(void);
 
 /* Link interface tests */
 static int test_create_hard_link(void);
 static int test_create_hard_link_same_loc(void);
-static int test_open_object_by_hard_link(void);
 static int test_create_soft_link_existing_relative(void);
 static int test_create_soft_link_existing_absolute(void);
 static int test_create_soft_link_dangling_relative(void);
@@ -535,7 +554,6 @@ static int test_create_soft_link_dangling_absolute(void);
 static int test_open_object_by_soft_link(void);
 static int test_create_external_link(void);
 static int test_open_object_by_external_link(void);
-static int test_unpack_elink_val(void);
 static int test_create_user_defined_link(void);
 static int test_h5l_register_unregister_is_registered(void);
 static int test_delete_link(void);
@@ -622,8 +640,7 @@ static int (*attribute_tests[])(void) = {
         test_create_attribute_on_dataset,
         test_create_attribute_on_datatype,
         test_get_attribute_info,
-        test_get_attribute_space,
-        test_get_attribute_type,
+        test_get_attribute_space_and_type,
         test_get_attribute_name,
         test_create_attribute_with_space_in_name,
         test_delete_attribute,
@@ -663,10 +680,7 @@ static int (*dataset_tests[])(void) = {
         test_read_dataset_large_hyperslab,
         test_read_dataset_large_point_selection,
         test_write_dataset_data_verification,
-        test_dataset_iterate,
-        test_dataset_fill,
         test_dataset_set_extent,
-        test_dataset_scatter_gather,
         test_unused_dataset_API_calls,
         test_dataset_property_lists,
         NULL
@@ -675,7 +689,6 @@ static int (*dataset_tests[])(void) = {
 static int (*link_tests[])(void) = {
         test_create_hard_link,
         test_create_hard_link_same_loc,
-        test_open_object_by_hard_link,
         test_create_soft_link_existing_relative,
         test_create_soft_link_existing_absolute,
         test_create_soft_link_dangling_relative,
@@ -683,7 +696,6 @@ static int (*link_tests[])(void) = {
         test_open_object_by_soft_link,
         test_create_external_link,
         test_open_object_by_external_link,
-        test_unpack_elink_val,
         test_create_user_defined_link,
         test_h5l_register_unregister_is_registered,
         test_delete_link,
@@ -1330,7 +1342,6 @@ test_file_property_lists(void)
     }
 
 
-
     if ((file_id1 = H5Fcreate(FILE_PROPERTY_LIST_TEST_FNAME1, H5F_ACC_TRUNC, fcpl_id1, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't create file\n");
@@ -1380,27 +1391,6 @@ test_file_property_lists(void)
         goto error;
     }
 
-    /* Check that both FAPLs have the REST VOL set on them */
-    {
-        void *vol_info;
-
-        if (NULL == (vol_info = H5Pget_vol_info(fapl_id1))) {
-            H5_FAILED();
-            printf("    couldn't retrieve VOL info from FAPL\n");
-            goto error;
-        }
-
-
-
-        if (NULL == (vol_info = H5Pget_vol_info(fapl_id2))) {
-            H5_FAILED();
-            printf("    couldn't retrieve VOL infor from FAPL\n");
-            goto error;
-        }
-
-
-    }
-
     /* Now close the property lists and files and see if we can still retrieve copies of
      * the property lists upon opening (instead of creating) a file
      */
@@ -1435,7 +1425,7 @@ test_file_property_lists(void)
         goto error;
     }
 
-    if ((fcpl_id1 = H5Fget_create_plist(file_id2)) < 0) {
+    if ((fcpl_id2 = H5Fget_create_plist(file_id2)) < 0) {
         H5_FAILED();
         printf("    couldn't get property list\n");
         goto error;
@@ -1661,13 +1651,68 @@ error:
 static int
 test_create_anonymous_group(void)
 {
+    hid_t file_id = -1;
+    hid_t container_group = -1, new_group_id = -1;
+    hid_t fapl_id = -1;
+
     TESTING("create anonymous group")
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, GROUP_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open group\n");
+        goto error;
+    }
+
+    if ((new_group_id = H5Gcreate_anon(file_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create anonymous group\n");
+        goto error;
+    }
+
+    if (H5Olink(new_group_id, container_group, GROUP_CREATE_ANONYMOUS_GROUP_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't link anonymous group into file structure\n");
+        goto error;
+    }
+
+    if (H5Gclose(new_group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Gclose(new_group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
@@ -2669,28 +2714,197 @@ error:
 }
 
 static int
-test_get_attribute_space(void)
+test_get_attribute_space_and_type(void)
 {
+    hsize_t attr_dims[ATTRIBUTE_GET_SPACE_TYPE_TEST_SPACE_RANK];
+    size_t  i;
+    htri_t  attr_exists;
+    hid_t   file_id = -1, fapl_id = -1;
+    hid_t   container_group = -1;
+    hid_t   attr_id = -1;
+    hid_t   attr_space_id = -1;
+    hid_t   tmp_type_id = -1;
+    hid_t   tmp_space_id = -1;
+
     TESTING("retrieve attribute dataspace")
 
-    SKIPPED();
+    srand((unsigned) time(NULL));
+
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, ATTRIBUTE_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    for (i = 0; i < ATTRIBUTE_GET_SPACE_TYPE_TEST_SPACE_RANK; i++)
+        attr_dims[i] = (hsize_t) (rand() % 64 + 1);
+
+    if ((attr_space_id = H5Screate_simple(ATTRIBUTE_GET_SPACE_TYPE_TEST_SPACE_RANK, attr_dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((attr_id = H5Acreate2(container_group, ATTRIBUTE_GET_SPACE_TYPE_TEST_ATTR_NAME, ATTRIBUTE_GET_SPACE_TYPE_TEST_ATTR_DTYPE,
+            attr_space_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create attribute\n");
+        goto error;
+    }
+
+    /* Verify the attribute has been created */
+    if ((attr_exists = H5Aexists(container_group, ATTRIBUTE_GET_SPACE_TYPE_TEST_ATTR_NAME)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if attribute exists\n");
+        goto error;
+    }
+
+    if (!attr_exists) {
+        H5_FAILED();
+        printf("    attribute did not exist\n");
+        goto error;
+    }
+
+    /* Retrieve the attribute's datatype and dataspace and verify them */
+    if ((tmp_type_id = H5Aget_type(attr_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't retrieve attribute's datatype\n");
+        goto error;
+    }
+
+    if ((tmp_space_id = H5Aget_space(attr_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't retrieve attribute's dataspace\n");
+        goto error;
+    }
+
+    {
+        hsize_t space_dims[ATTRIBUTE_GET_SPACE_TYPE_TEST_SPACE_RANK];
+        htri_t  types_equal = H5Tequal(tmp_type_id, ATTRIBUTE_GET_SPACE_TYPE_TEST_ATTR_DTYPE);
+
+        if (types_equal < 0) {
+            H5_FAILED();
+            printf("    datatype was invalid\n");
+            goto error;
+        }
+
+        if (!types_equal) {
+            H5_FAILED();
+            printf("    attribute's datatype did not match\n");
+            goto error;
+        }
+
+        if (H5Sget_simple_extent_dims(tmp_space_id, space_dims, NULL) < 0)
+            TEST_ERROR
+
+        for (i = 0; i < ATTRIBUTE_GET_SPACE_TYPE_TEST_SPACE_RANK; i++)
+            if (space_dims[i] != attr_dims[i]) {
+                H5_FAILED();
+                printf("    dataspace dims didn't match\n");
+                goto error;
+            }
+    }
+
+
+    /* Now close the attribute and verify that this still works after opening an
+     * attribute instead of creating it
+     */
+    if (H5Aclose(attr_id) < 0)
+        TEST_ERROR
+    if (H5Tclose(tmp_type_id) < 0)
+        TEST_ERROR
+    if (H5Sclose(tmp_space_id) < 0)
+        TEST_ERROR
+
+    if ((attr_id = H5Aopen(container_group, ATTRIBUTE_GET_SPACE_TYPE_TEST_ATTR_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open attribute\n");
+        goto error;
+    }
+
+    if ((tmp_type_id = H5Aget_type(attr_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't retrieve attribute's datatype\n");
+        goto error;
+    }
+
+    if ((tmp_space_id = H5Aget_space(attr_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't retrieve attribute's dataspace\n");
+        goto error;
+    }
+
+    {
+        hsize_t space_dims[ATTRIBUTE_GET_SPACE_TYPE_TEST_SPACE_RANK];
+        htri_t  types_equal = H5Tequal(tmp_type_id, ATTRIBUTE_GET_SPACE_TYPE_TEST_ATTR_DTYPE);
+
+        if (types_equal < 0) {
+            H5_FAILED();
+            printf("    datatype was invalid\n");
+            goto error;
+        }
+
+        if (!types_equal) {
+            H5_FAILED();
+            printf("    attribute's datatype did not match\n");
+            goto error;
+        }
+
+        if (H5Sget_simple_extent_dims(tmp_space_id, space_dims, NULL) < 0)
+            TEST_ERROR
+
+        for (i = 0; i < ATTRIBUTE_GET_SPACE_TYPE_TEST_SPACE_RANK; i++)
+            if (space_dims[i] != attr_dims[i]) {
+                H5_FAILED();
+                printf("    dataspace dims didn't match\n");
+                goto error;
+            }
+    }
+
+    if (H5Sclose(tmp_space_id) < 0)
+        TEST_ERROR
+    if (H5Sclose(attr_space_id) < 0)
+        TEST_ERROR
+    if (H5Tclose(tmp_type_id) < 0)
+        TEST_ERROR
+    if (H5Aclose(attr_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
-    return 1;
-}
+    H5E_BEGIN_TRY {
+        H5Sclose(tmp_space_id);
+        H5Sclose(attr_space_id);
+        H5Tclose(tmp_type_id);
+        H5Aclose(attr_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
 
-static int
-test_get_attribute_type(void)
-{
-    TESTING("retrieve attribute datatype")
-
-    SKIPPED();
-
-    return 0;
-
-error:
     return 1;
 }
 
@@ -3363,16 +3577,91 @@ error:
 static int
 test_rename_attribute(void)
 {
+    hsize_t attr_dims[ATTRIBUTE_RENAME_TEST_SPACE_RANK];
+    size_t  i;
+    htri_t  attr_exists;
+    hid_t   file_id = -1, fapl_id = -1;
+    hid_t   container_group = -1;
+    hid_t   attr_id = -1;
+    hid_t   attr_space_id = -1;
+
     TESTING("rename an attribute")
 
-    /* H5Arename */
-    /* H5Arename_by_name */
+    srand((unsigned) time(NULL));
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0){
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, ATTRIBUTE_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    for (i = 0; i < ATTRIBUTE_RENAME_TEST_SPACE_RANK; i++)
+        attr_dims[i] = (hsize_t) (rand() % 64 + 1);
+
+    if ((attr_space_id = H5Screate_simple(ATTRIBUTE_RENAME_TEST_SPACE_RANK, attr_dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((attr_id = H5Acreate2(container_group, ATTRIBUTE_RENAME_TEST_ATTR_NAME, ATTRIBUTE_RENAME_TEST_ATTR_DTYPE,
+            attr_space_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create attribute\n");
+        goto error;
+    }
+
+    if (H5Arename(container_group, ATTRIBUTE_RENAME_TEST_ATTR_NAME, ATTRIBUTE_RENAME_TEST_NEW_NAME) >= 0) {
+        H5_FAILED();
+        printf("    unsupported API succeeded!\n");
+        goto error;
+    }
+
+    if (H5Arename_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, ATTRIBUTE_RENAME_TEST_ATTR_NAME, ATTRIBUTE_RENAME_TEST_NEW_NAME, H5P_DEFAULT) >= 0) {
+        H5_FAILED();
+        printf("    unsupported API succeeded!\n");
+        goto error;
+    }
+
+
+    if (H5Sclose(attr_space_id) < 0)
+        TEST_ERROR
+    if (H5Aclose(attr_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Sclose(attr_space_id);
+        H5Aclose(attr_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
@@ -3528,15 +3817,80 @@ error:
 static int
 test_unused_attribute_API_calls(void)
 {
+    hsize_t attr_dims[ATTRIBUTE_UNUSED_APIS_TEST_SPACE_RANK];
+    size_t  i;
+    hid_t   file_id = -1, fapl_id = -1;
+    hid_t   container_group = -1;
+    hid_t   attr_id = -1;
+    hid_t   attr_space_id = -1;
+
     TESTING("unused attribute API calls")
 
-    /* H5Aget_storage_size */
+    if (RVinit() < 0)
+        TEST_ERROR
 
-    SKIPPED();
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, ATTRIBUTE_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    for (i = 0; i < ATTRIBUTE_UNUSED_APIS_TEST_SPACE_RANK; i++)
+        attr_dims[i] = (hsize_t) (rand() % 64 + 1);
+
+    if ((attr_space_id = H5Screate_simple(ATTRIBUTE_UNUSED_APIS_TEST_SPACE_RANK, attr_dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((attr_id = H5Acreate2(container_group, ATTRIBUTE_UNUSED_APIS_TEST_ATTR_NAME, ATTRIBUTE_UNUSED_APIS_TEST_ATTR_DTYPE,
+            attr_space_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create attribute\n");
+        goto error;
+    }
+
+    H5E_BEGIN_TRY {
+        if (H5Aget_storage_size(attr_id) > 0)
+            TEST_ERROR
+    } H5E_END_TRY;
+
+    if (H5Sclose(attr_space_id) < 0)
+        TEST_ERROR
+    if (H5Aclose(attr_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Sclose(attr_space_id);
+        H5Aclose(attr_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
@@ -6103,72 +6457,174 @@ error:
 }
 
 static int
-test_dataset_iterate(void)
-{
-    TESTING("dataset iteration")
-
-    SKIPPED();
-
-    return 0;
-
-error:
-    return 1;
-}
-
-static int
-test_dataset_fill(void)
-{
-    TESTING("H5Dfill")
-
-    SKIPPED();
-
-    return 0;
-
-error:
-    return 1;
-}
-
-static int
 test_dataset_set_extent(void)
 {
+    hsize_t dims[DATASET_SET_EXTENT_TEST_SPACE_RANK];
+    hsize_t new_dims[DATASET_SET_EXTENT_TEST_SPACE_RANK];
+    size_t  i;
+    hid_t   file_id = -1, fapl_id = -1;
+    hid_t   container_group = -1;
+    hid_t   dset_id = -1;
+    hid_t   fspace_id = -1;
+
     TESTING("set dataset extent")
 
-    SKIPPED();
+    srand((unsigned) time(NULL));
+
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, DATASET_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    for (i = 0; i < DATASET_SET_EXTENT_TEST_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % 64 + 1);
+    for (i = 0; i < DATASET_SET_EXTENT_TEST_SPACE_RANK; i++)
+        new_dims[i] = (hsize_t) (rand() % 64 + 1);
+
+    if ((fspace_id = H5Screate_simple(DATASET_SET_EXTENT_TEST_SPACE_RANK, dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(container_group, DATASET_SET_EXTENT_TEST_DSET_NAME, DATASET_SET_EXTENT_TEST_DSET_DTYPE,
+            fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    H5E_BEGIN_TRY {
+        if (H5Dset_extent(dset_id, new_dims) >= 0) {
+            H5_FAILED();
+            printf("    unsupported API succeeded!\n");
+            goto error;
+        }
+    } H5E_END_TRY;
+
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
-    return 1;
-}
+    H5E_BEGIN_TRY {
+        H5Sclose(fspace_id);
+        H5Dclose(dset_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
 
-static int
-test_dataset_scatter_gather(void)
-{
-    TESTING("dataset scatter/gather")
-
-    SKIPPED();
-
-    return 0;
-
-error:
     return 1;
 }
 
 static int
 test_unused_dataset_API_calls(void)
 {
+    hsize_t dims[DATASET_UNUSED_APIS_TEST_SPACE_RANK];
+    size_t  i;
+    hid_t   file_id = -1, fapl_id = -1;
+    hid_t   container_group = -1;
+    hid_t   dset_id = -1;
+    hid_t   fspace_id = -1;
+
     TESTING("unused dataset API calls")
 
-    /* H5Dget_storage_size */
-    /* H5Dget_offset */
-    /* H5Dvlen_reclaim */
-    /* H5Dvlen_get_buf_size */
+    srand((unsigned) time(NULL));
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, DATASET_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    for (i = 0; i < DATASET_UNUSED_APIS_TEST_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % 64 + 1);
+
+    if ((fspace_id = H5Screate_simple(DATASET_UNUSED_APIS_TEST_SPACE_RANK, dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(container_group, DATASET_UNUSED_APIS_TEST_DSET_NAME, DATASET_UNUSED_APIS_TEST_DSET_DTYPE,
+            fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    H5E_BEGIN_TRY {
+        if (H5Dget_storage_size(dset_id) > 0)
+            TEST_ERROR
+        if (H5Dget_offset(dset_id) != HADDR_UNDEF)
+            TEST_ERROR
+    } H5E_END_TRY;
+
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Sclose(fspace_id);
+        H5Dclose(dset_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
@@ -6716,19 +7172,6 @@ error:
 }
 
 static int
-test_open_object_by_hard_link(void)
-{
-    TESTING("open object in file by using a hard link")
-
-    SKIPPED();
-
-    return 0;
-
-error:
-    return 1;
-}
-
-static int
 test_create_soft_link_existing_relative(void)
 {
     TESTING("create soft link to existing object by relative path")
@@ -6930,19 +7373,6 @@ static int
 test_open_object_by_external_link(void)
 {
     TESTING("open object in file by using an external link")
-
-    SKIPPED();
-
-    return 0;
-
-error:
-    return 1;
-}
-
-static int
-test_unpack_elink_val(void)
-{
-    TESTING("H5Lunpack_elink_val")
 
     SKIPPED();
 
