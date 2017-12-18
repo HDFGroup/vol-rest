@@ -28,7 +28,6 @@
 /* XXX: Implement _iterate functions */
 /* XXX: Eventually replace CURL PUT calls with CURLOPT_UPLOAD calls */
 /* XXX: Attempt to eliminate all use of globals/static variables */
-/* XXX: Create a table of all the hard-coded JSON keys used so these can be modified in the future if desired */
 
 #include "H5private.h"       /* XXX: Temporarily needed; Generic Functions */
 #include "H5Ppublic.h"       /* Property Lists    */
@@ -1232,7 +1231,6 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
         /* H5Aopen_by_idx */
         case H5VL_OBJECT_BY_IDX:
         {
-            /* XXX: */
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL, "H5Aopen_by_idx is unsupported")
             break;
         } /* H5VL_OBJECT_BY_IDX */
@@ -1544,7 +1542,6 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
     size_t       write_body_len = 0;
     size_t       host_header_len = 0;
     char        *host_header = NULL;
-    char        *write_body = NULL;
     char        *url_encoded_attr_name = NULL;
     char         request_url[URL_MAX_LENGTH];
     herr_t       ret_value = SUCCEED;
@@ -1568,19 +1565,13 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
     if ((is_variable_str = H5Tis_variable_str(dtype_id)) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
-    is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
-
     if ((file_select_npoints = H5Sget_select_npoints(attribute->u.attribute.space_id)) < 0)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "attribute's dataspace is invalid")
 
     if (0 == (dtype_size = H5Tget_size(dtype_id)))
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
-    if (!is_transfer_binary) {
-        /* XXX: */
-    } /* end if */
-    else
-        write_body_len = (size_t) file_select_npoints * dtype_size;
+    write_body_len = (size_t) file_select_npoints * dtype_size;
 
     /* Setup the "Host: " header */
     host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
@@ -1595,7 +1586,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
     /* Instruct cURL on which type of transfer to perform, binary or JSON */
-    curl_headers = curl_slist_append(curl_headers, is_transfer_binary ? "Content-Type: application/octet-stream" : "Content-Type: application/json");
+    curl_headers = curl_slist_append(curl_headers, "Content-Type: application/octet-stream");
 
     /* URL-encode the attribute name to ensure that the resulting URL for the write
      * operation contains no illegal characters
@@ -1647,7 +1638,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT"))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, is_transfer_binary ? (const char *) buf : write_body))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, (const char *) buf))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) write_body_len)) /* XXX: unsafe cast */
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
@@ -1670,8 +1661,6 @@ done:
     printf("Attribute write response buffer: %s\n\n", response_buffer.buffer);
 #endif
 
-    if (write_body)
-        RV_free(write_body);
     if (host_header)
         RV_free(host_header);
     if (url_encoded_attr_name)
@@ -1740,7 +1729,6 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
                 /* H5Aget_info */
                 case H5VL_OBJECT_BY_SELF:
                 {
-                    /* XXX: */
                     FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL, "H5Aget_info is unsupported")
                     break;
                 } /* H5VL_OBJECT_BY_SELF */
@@ -1748,7 +1736,6 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
                 /* H5Aget_info_by_name */
                 case H5VL_OBJECT_BY_NAME:
                 {
-                    /* XXX: */
                     attr_name = va_arg(arguments, const char *);
 
                     FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL, "H5Aget_info_by_name is unsupported")
@@ -1758,7 +1745,6 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
                 /* H5Aget_info_by_idx */
                 case H5VL_OBJECT_BY_IDX:
                 {
-                    /* XXX: */
                     FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL, "H5Aget_info_by_idx is unsupported")
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
@@ -1797,7 +1783,6 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
                 /* H5Aget_name_by_idx */
                 case H5VL_OBJECT_BY_IDX:
                 {
-                    /* XXX: Handle _by_idx case */
                     FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL, "H5Aget_name_by_idx is unsupported")
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
@@ -1917,7 +1902,6 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                 /* H5Adelete_by_idx */
                 case H5VL_OBJECT_BY_IDX:
                 {
-                    /* XXX: */
                     FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL, "H5Adelete_by_idx is unsupported")
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
@@ -4162,9 +4146,6 @@ RV_file_close(void *file, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
  *
  * Programmer:  Jordan Henderson
  *              March, 2017
- *
- *              XXX: Implement the case of creating intermediate
- *              groups if this property is set in the GCPL
  */
 static void *
 RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name, hid_t gcpl_id,
@@ -4504,7 +4485,6 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
                 /* H5Gget_info_by_idx */
                 case H5VL_OBJECT_BY_IDX:
                 {
-                    /* XXX: */
                     FUNC_GOTO_ERROR(H5E_SYM, H5E_UNSUPPORTED, FAIL, "H5Gget_info_by_idx is unsupported")
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
@@ -4784,7 +4764,6 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
             if (H5Pget(lcpl_id, H5VL_PROP_LINK_TYPE, &link_type) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's type")
 
-            /* XXX: For now, no support for user-defined links, beyond external links */
             if (H5L_TYPE_EXTERNAL != link_type)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "unsupported link type")
 
@@ -4793,14 +4772,6 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for external link's information buffer size")
             if (H5Pget(lcpl_id, H5VL_PROP_LINK_UDATA, &elink_buf) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for external link's information buffer")
-
-#if 0
-            /* The first byte of the link_target_buf contains the external link's version
-             * and flags
-             */
-            file_path = (const char *) link_target_buf + 1;
-            link_target = file_path + (strlen(file_path) + 1);
-#endif
 
             if (H5Lunpack_elink_val(elink_buf, elink_buf_size, &elink_flags, &file_path, &link_target) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't unpack contents of external link buffer")
@@ -5019,7 +4990,6 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
                 /* H5Lget_info */
                 case H5VL_OBJECT_BY_SELF:
                 {
-                    /* XXX: */
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lget_info is unsupported")
                     break;
                 } /* H5VL_OBJECT_BY_SELF */
@@ -5027,7 +4997,6 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
                 /* H5Lget_info_by_idx */
                 case H5VL_OBJECT_BY_IDX:
                 {
-                    /* XXX: */
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lget_info_by_idx is unsupported")
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
@@ -5045,7 +5014,6 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
         /* H5Lget_name_by_idx */
         case H5VL_LINK_GET_NAME:
         {
-            /* XXX: */
             FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lget_name_by_idx is unsupported")
             break;
         } /* H5VL_LINK_GET_NAME */
@@ -5057,7 +5025,6 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
                 /* H5Lget_val */
                 case H5VL_OBJECT_BY_SELF:
                 {
-                    /* XXX: */
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lget_val is unsupported")
                     break;
                 } /* H5VL_OBJECT_BY_SELF */
@@ -5065,7 +5032,6 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
                 /* H5Lget_val_by_idx */
                 case H5VL_OBJECT_BY_IDX:
                 {
-                    /* XXX: */
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lget_val_by_idx is unsupported")
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
@@ -5159,7 +5125,6 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                 /* H5Ldelete_by_idx */
                 case H5VL_OBJECT_BY_IDX:
                 {
-                    /* XXX: */
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Ldelete_by_idx is unsupported")
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
@@ -5294,7 +5259,6 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                     /* H5Literate */
                     case H5VL_OBJECT_BY_SELF:
                     {
-                        /* XXX: */
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Literate is unsupported")
                         break;
                     } /* H5VL_OBJECT_BY_SELF */
@@ -5302,7 +5266,6 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                     /* H5Literate_by_name */
                     case H5VL_OBJECT_BY_NAME:
                     {
-                        /* XXX: */
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Literate_by_name is unsupported")
                         break;
                     } /* H5VL_OBJECT_BY_NAME */
@@ -5319,7 +5282,6 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                     /* H5Lvisit */
                     case H5VL_OBJECT_BY_SELF:
                     {
-                        /* XXX: */
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lvisit is unsupported")
                         break;
                     } /* H5VL_OBJECT_BY_SELF */
@@ -5327,7 +5289,6 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                     /* H5Lvisit_by_name */
                     case H5VL_OBJECT_BY_NAME:
                     {
-                        /* XXX: */
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lvisit_by_name is unsupported")
                         break;
                     } /* H5VL_OBJECT_BY_NAME */
@@ -5422,7 +5383,6 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
         /* H5Oopen_by_idx */
         case H5VL_OBJECT_BY_IDX:
         {
-            /* XXX: */
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, NULL, "H5Oopen_by_idx is unsupported")
             break;
         } /* H5VL_OBJECT_BY_IDX */
@@ -5430,7 +5390,6 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
         /* H5Oopen_by_addr */
         case H5VL_OBJECT_BY_ADDR:
         {
-            /* XXX: */
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, NULL, "H5Oopen_by_addr is unsupported")
             break;
         } /* H5VL_OBJECT_BY_ADDR */
@@ -5590,7 +5549,6 @@ RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_typ
             if (H5R_DATASET_REGION != ((rv_obj_ref_t *) ref)->ref_type)
                 FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_BADVALUE, FAIL, "not a dataset region reference")
 
-            /* XXX: */
             FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_UNSUPPORTED, FAIL, "region references are currently unsupported")
 
             break;
@@ -5649,7 +5607,6 @@ RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_typ
 
                 case H5R_DATASET_REGION:
                 {
-                    /* XXX: */
                     FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_BADVALUE, FAIL, "region references are currently unsupported")
                     break;
                 } /* H5R_DATASET_REGION */
@@ -5924,7 +5881,6 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
                 /* H5Oget_info_by_idx */
                 case H5VL_OBJECT_BY_IDX:
                 {
-                    /* XXX: */
                     FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Oget_info_by_idx is unsupported")
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
@@ -6644,7 +6600,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                             *
      ***************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, filters_keys, yajl_t_array))) {
-        /* XXX: support for filters */
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "dataset filters are unsupported")
     } /* end if */
 
 
@@ -7198,8 +7154,6 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                                                  "\"base\": \"%s\""
                                              "}";
 
-            /* XXX: Need support for non-predefined integer and float types */
-
             /* Convert the class and name of the datatype to JSON */
             if (NULL == (type_name = RV_convert_predefined_datatype_to_string(type_id)))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype")
@@ -7551,11 +7505,17 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
         } /* H5T_ARRAY */
 
         case H5T_BITFIELD:
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype")
+        {
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - bitfield")
             break;
+        } /* H5T_BITFIELD */
+
         case H5T_OPAQUE:
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype")
+        {
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - opaque")
             break;
+        } /* H5T_OPAQUE */
+
         case H5T_REFERENCE:
         {
             htri_t             is_obj_ref;
@@ -7585,11 +7545,17 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
         } /* H5T_REFERENCE */
 
         case H5T_VLEN:
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype")
+        {
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - VLEN")
             break;
+        } /* H5T_VLEN */
+
         case H5T_TIME:
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype")
+        {
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - time")
             break;
+        } /* H5T_TIME */
+
         case H5T_NO_CLASS:
         case H5T_NCLASSES:
         default:
@@ -7845,7 +7811,7 @@ RV_convert_JSON_to_datatype(const char *type)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy predefined integer datatype")
         } /* end if */
         else {
-            /* XXX: Need support for non-predefined integer types */
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "non-predefined integer types are unsupported")
         } /* end else */
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_FLOAT")) {
@@ -7896,7 +7862,7 @@ RV_convert_JSON_to_datatype(const char *type)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy predefined floating-point datatype")
         } /* end if */
         else {
-            /* XXX: need support for non-predefined float types */
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "non-predefined floating-point types are unsupported")
         } /* end else */
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_STRING")) {
@@ -7969,7 +7935,6 @@ RV_convert_JSON_to_datatype(const char *type)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't set string padding for string datatype")
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_OPAQUE")) {
-        /* XXX: Need support for opaque types */
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - opaque")
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_COMPOUND")) {
@@ -9012,10 +8977,14 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
             case H5S_SEL_ALL:
             case H5S_SEL_NONE:
                 break;
+
             case H5S_SEL_POINTS:
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_UNSUPPORTED, FAIL, "point selections are unsupported as a HTTP request parameter")
 
             case H5S_SEL_HYPERSLABS:
+            {
+                htri_t is_regular;
+
                 /* Format the hyperslab selection according to the 'select' request/query parameter.
                  * This is composed of N triplets, one for each dimension of the dataspace, and looks like:
                  *
@@ -9033,9 +9002,11 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                 if (NULL == (block = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*block))))
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'block' values")
 
-                /* XXX: Currently only regular hyperslabs supported */
-                if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
+                if ((is_regular = H5Sget_regular_hyperslab(space_id, start, stride, count, block)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get regular hyperslab selection")
+
+                if (!is_regular)
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_UNSUPPORTED, FAIL, "non-regular hyperslabs are unsupported")
 
                 strcat(out_string_curr_pos++, "[");
 
@@ -9064,6 +9035,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                 strcat(out_string_curr_pos++, "]");
 
                 break;
+            } /* H5S_SEL_HYPERSLABS */
 
             case H5S_SEL_ERROR:
             case H5S_SEL_N:
@@ -9082,6 +9054,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
             case H5S_SEL_ALL:
             case H5S_SEL_NONE:
                 break;
+
             case H5S_SEL_POINTS:
             {
                 const char * const points_str = "\"points\": [";
@@ -9136,6 +9109,8 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
 
             case H5S_SEL_HYPERSLABS:
             {
+                htri_t is_regular;
+
                 /* Format the hyperslab selection according to the 'start', 'stop' and 'step' keys
                  * in a JSON request body. This looks like:
                  *
@@ -9173,9 +9148,11 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                 strcat(stop_body_curr_pos++, "[");
                 strcat(stop_body_curr_pos++, "[");
 
-                /* XXX: Currently only regular hyperslabs supported */
-                if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
+                if ((is_regular = H5Sget_regular_hyperslab(space_id, start, stride, count, block)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get regular hyperslab selection")
+
+                if (!is_regular)
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_UNSUPPORTED, FAIL, "non-regular hyperslabs are unsupported")
 
                 for (i = 0; i < (size_t) ndims; i++) {
                     if ((bytes_printed = sprintf(start_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), start[i])) < 0)
@@ -9668,7 +9645,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                 out_string_curr_pos += null_value_len;
             } /* end if */
             else {
-                /* XXX: Support for fill values */
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset fill values are unsupported")
             } /* end else */
         } /* end if */
     }
