@@ -612,6 +612,8 @@ static int test_H5P_DEFAULT(void);
 
 static int cleanup(void);
 
+static hid_t generate_random_datatype(void);
+
 static int (*setup_tests[])(void) = {
         test_setup_plugin,
         NULL
@@ -6552,12 +6554,13 @@ error:
 static int
 test_unused_dataset_API_calls(void)
 {
-    hsize_t dims[DATASET_UNUSED_APIS_TEST_SPACE_RANK];
-    size_t  i;
-    hid_t   file_id = -1, fapl_id = -1;
-    hid_t   container_group = -1;
-    hid_t   dset_id = -1;
-    hid_t   fspace_id = -1;
+    H5D_space_status_t allocation;
+    hsize_t            dims[DATASET_UNUSED_APIS_TEST_SPACE_RANK];
+    size_t             i;
+    hid_t              file_id = -1, fapl_id = -1;
+    hid_t              container_group = -1;
+    hid_t              dset_id = -1;
+    hid_t              fspace_id = -1;
 
     TESTING("unused dataset API calls")
 
@@ -6598,6 +6601,8 @@ test_unused_dataset_API_calls(void)
 
     H5E_BEGIN_TRY {
         if (H5Dget_storage_size(dset_id) > 0)
+            TEST_ERROR
+        if (H5Dget_space_status(dset_id, &allocation) > 0)
             TEST_ERROR
         if (H5Dget_offset(dset_id) != HADDR_UNDEF)
             TEST_ERROR
@@ -8945,6 +8950,8 @@ test_h5o_copy(void)
 {
     TESTING("object copy")
 
+    /* H5Ocopy */
+
     SKIPPED();
 
     return 0;
@@ -9354,6 +9361,8 @@ static int
 test_get_region(void)
 {
     TESTING("get region for region reference")
+
+    /* H5Rget_region */
 
     SKIPPED();
 
@@ -10682,6 +10691,151 @@ cleanup(void)
 
 error:
     return 1;
+}
+
+/* Helper function to generate a random HDF5 datatype in order to thoroughly
+ * test the REST VOL plugin's support for datatypes
+ */
+static hid_t
+generate_random_datatype(void)
+{
+    hid_t datatype = -1;
+
+    srand((unsigned) time(NULL));
+
+    switch (rand() % H5T_NCLASSES) {
+        case_integer:
+        case H5T_INTEGER:
+        {
+
+        }
+
+        case_float:
+        case H5T_FLOAT:
+
+        case_time:
+        case H5T_TIME:
+        {
+            /* Time datatype is unsupported, try again */
+            switch (rand() % H5T_NCLASSES) {
+                case H5T_INTEGER:   goto case_integer;
+                case H5T_FLOAT:     goto case_float;
+                case H5T_TIME:      goto case_time;
+                case H5T_STRING:    goto case_string;
+                case H5T_BITFIELD:  goto case_bitfield;
+                case H5T_OPAQUE:    goto case_opaque;
+                case H5T_COMPOUND:  goto case_compound;
+                case H5T_REFERENCE: goto case_reference;
+                case H5T_ENUM:      goto case_enum;
+                case H5T_VLEN:      goto case_vlen;
+                case H5T_ARRAY:     goto case_array;
+                default:
+                    H5_FAILED();
+                    printf("    invalid value for goto\n");
+                    break;
+            }
+
+            break;
+        }
+
+        case_string:
+        case H5T_STRING:
+
+        case_bitfield:
+        case H5T_BITFIELD:
+        {
+            /* Bitfield datatype is unsupported, try again */
+            switch (rand() % H5T_NCLASSES) {
+                case H5T_INTEGER:   goto case_integer;
+                case H5T_FLOAT:     goto case_float;
+                case H5T_TIME:      goto case_time;
+                case H5T_STRING:    goto case_string;
+                case H5T_BITFIELD:  goto case_bitfield;
+                case H5T_OPAQUE:    goto case_opaque;
+                case H5T_COMPOUND:  goto case_compound;
+                case H5T_REFERENCE: goto case_reference;
+                case H5T_ENUM:      goto case_enum;
+                case H5T_VLEN:      goto case_vlen;
+                case H5T_ARRAY:     goto case_array;
+                default:
+                    H5_FAILED();
+                    printf("    invalid value for goto\n");
+                    break;
+            }
+
+            break;
+        }
+
+        case_opaque:
+        case H5T_OPAQUE:
+        {
+            /* Opaque datatype is unsupported, try again */
+            switch (rand() % H5T_NCLASSES) {
+                case H5T_INTEGER:   goto case_integer;
+                case H5T_FLOAT:     goto case_float;
+                case H5T_TIME:      goto case_time;
+                case H5T_STRING:    goto case_string;
+                case H5T_BITFIELD:  goto case_bitfield;
+                case H5T_OPAQUE:    goto case_opaque;
+                case H5T_COMPOUND:  goto case_compound;
+                case H5T_REFERENCE: goto case_reference;
+                case H5T_ENUM:      goto case_enum;
+                case H5T_VLEN:      goto case_vlen;
+                case H5T_ARRAY:     goto case_array;
+                default:
+                    H5_FAILED();
+                    printf("    invalid value for goto\n");
+                    break;
+            }
+
+            break;
+        }
+
+        case_compound:
+        case H5T_COMPOUND:
+
+        case_reference:
+        case H5T_REFERENCE:
+
+        case_enum:
+        case H5T_ENUM:
+
+        case_vlen:
+        case H5T_VLEN:
+        {
+            /* Variable-length datatypes are unsupported, try again */
+            switch (rand() % H5T_NCLASSES) {
+                case H5T_INTEGER:   goto case_integer;
+                case H5T_FLOAT:     goto case_float;
+                case H5T_TIME:      goto case_time;
+                case H5T_STRING:    goto case_string;
+                case H5T_BITFIELD:  goto case_bitfield;
+                case H5T_OPAQUE:    goto case_opaque;
+                case H5T_COMPOUND:  goto case_compound;
+                case H5T_REFERENCE: goto case_reference;
+                case H5T_ENUM:      goto case_enum;
+                case H5T_VLEN:      goto case_vlen;
+                case H5T_ARRAY:     goto case_array;
+                default:
+                    H5_FAILED();
+                    printf("    invalid value for goto\n");
+                    break;
+            }
+
+            break;
+        }
+
+        case_array:
+        case H5T_ARRAY:
+
+
+        default:
+            H5_FAILED();
+            printf("    invalid datatype class\n");
+            break;
+    } /* end if */
+
+    return datatype;
 }
 
 int
