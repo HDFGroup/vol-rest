@@ -401,6 +401,13 @@
 #define GENERIC_DATATYPE_OPEN_TEST_TYPE_NAME "generic_datatype_open_test"
 #define GENERIC_DATATYPE_OPEN_TEST_TYPE_SIZE 50
 
+#define H5O_CLOSE_TEST_SPACE_RANK 2
+#define H5O_CLOSE_TEST_DSET_DTYPE H5T_NATIVE_INT
+#define H5O_CLOSE_TEST_TYPE_DTYPE H5T_STRING
+#define H5O_CLOSE_TEST_TYPE_SIZE  30
+#define H5O_CLOSE_TEST_DSET_NAME  "h5o_close_test_dset"
+#define H5O_CLOSE_TEST_TYPE_NAME  "h5o_close_test_type"
+
 #define OBJ_REF_GET_TYPE_TEST_SUBGROUP_NAME "obj_ref_get_obj_type_test"
 #define OBJ_REF_GET_TYPE_TEST_DSET_NAME "ref_dset"
 #define OBJ_REF_GET_TYPE_TEST_TYPE_NAME "ref_dtype"
@@ -8887,16 +8894,49 @@ error:
 static int
 test_incr_decr_refcount(void)
 {
+    hid_t file_id = -1, fapl_id = -1;
+
     TESTING("H5Oincr/decr_refcount")
 
-    /* H5Oincr_refcount */
-    /* H5Odecr_refcount */
+    if (RVinit() < 0)
+        TEST_ERROR
 
-    SKIPPED();
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    H5E_BEGIN_TRY {
+        if (H5Oincr_refcount(file_id) >= 0)
+            TEST_ERROR
+        if (H5Odecr_refcount(file_id) >= 0)
+            TEST_ERROR
+    } H5E_END_TRY;
+
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
@@ -8916,13 +8956,120 @@ error:
 static int
 test_h5o_close(void)
 {
+    hsize_t dims[H5O_CLOSE_TEST_SPACE_RANK];
+    size_t  i;
+    hid_t   file_id = -1, fapl_id = -1;
+    hid_t   container_group = -1, group_id = -1;
+    hid_t   fspace_id = -1;
+    hid_t   dtype_id = -1;
+    hid_t   dset_id = -1;
+
     TESTING("H5Oclose")
 
-    SKIPPED();
+    srand((unsigned) time(NULL));
+
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, OBJECT_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    for (i = 0; i < H5O_CLOSE_TEST_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % 64 + 1);
+
+    if ((fspace_id = H5Screate_simple(H5O_CLOSE_TEST_SPACE_RANK, dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(container_group, H5O_CLOSE_TEST_DSET_NAME, H5O_CLOSE_TEST_DSET_DTYPE,
+            fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    if ((dtype_id = H5Tcreate(H5O_CLOSE_TEST_TYPE_DTYPE, H5O_CLOSE_TEST_TYPE_SIZE)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create datatype\n");
+        goto error;
+    }
+
+    if (H5Tcommit2(container_group, H5O_CLOSE_TEST_TYPE_NAME, dtype_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't commit datatype\n");
+        goto error;
+    }
+
+
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Tclose(dtype_id) < 0)
+        TEST_ERROR
+
+    if ((group_id = H5Oopen(file_id, "/", H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open group with H5Oopen()\n");
+        goto error;
+    }
+
+    if ((dset_id = H5Oopen(file_id, "/" OBJECT_TEST_GROUP_NAME "/" H5O_CLOSE_TEST_DSET_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open dataset with H5Oopen()\n");
+        goto error;
+    }
+
+    if ((dtype_id = H5Oopen(file_id, "/" OBJECT_TEST_GROUP_NAME "/" H5O_CLOSE_TEST_TYPE_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open datatype with H5Oopen()\n");
+        goto error;
+    }
+
+    if (H5Oclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Oclose(dtype_id) < 0)
+        TEST_ERROR
+    if (H5Oclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Sclose(fspace_id);
+        H5Tclose(dtype_id);
+        H5Dclose(dset_id);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
@@ -9522,7 +9669,7 @@ test_read_dataset_w_obj_refs(void)
                 if (NULL == (URI = RVget_uri(file_id)))
                     TEST_ERROR
 
-                    break;
+                break;
 
             case 1:
                 if (H5Rcreate(&ref_array[i], group_id, OBJ_REF_DATASET_READ_TEST_REF_TYPE_NAME, H5R_OBJECT, -1) < 0) {
@@ -9534,7 +9681,7 @@ test_read_dataset_w_obj_refs(void)
                 if (NULL == (URI = RVget_uri(ref_dtype_id)))
                     TEST_ERROR
 
-                    break;
+                break;
 
             case 2:
                 if (H5Rcreate(&ref_array[i], group_id, OBJ_REF_DATASET_READ_TEST_REF_DSET_NAME, H5R_OBJECT, -1) < 0) {
@@ -9546,7 +9693,7 @@ test_read_dataset_w_obj_refs(void)
                 if (NULL == (URI = RVget_uri(ref_dset_id)))
                     TEST_ERROR
 
-                    break;
+                break;
 
             default:
                 TEST_ERROR

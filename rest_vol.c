@@ -5457,8 +5457,14 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
             break;
         } /* H5VL_OBJECT_BY_ADDR */
 
-        case H5VL_OBJECT_BY_SELF:
+        /* H5Rdereference2 */
         case H5VL_OBJECT_BY_REF:
+        {
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, NULL, "H5Rdereference2 is unsupported")
+            break;
+        } /* H5VL_OBJECT_BY_REF */
+
+        case H5VL_OBJECT_BY_SELF:
         default:
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, NULL, "invalid loc_params type")
     } /* end switch */
