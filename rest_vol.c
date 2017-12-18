@@ -160,6 +160,53 @@ do {                                                                            
 } while (0)
 
 
+/* Macro borrowed from H5private.h to assign a value of a larger type to
+ * a variable of a smaller type
+ */
+#define ASSIGN_TO_SMALLER_SIZE(dst, dsttype, src, srctype)                                                      \
+{                                                                                                               \
+    srctype _tmp_src = (srctype)(src);                                                                          \
+    dsttype _tmp_dst = (dsttype)(_tmp_src);                                                                     \
+    assert(_tmp_src == (srctype)_tmp_dst);                                                                      \
+    (dst) = _tmp_dst;                                                                                           \
+}
+
+/* Macro borrowed from H5private.h to assign a value of a smaller, signed type
+ * to a variable of a larger, unsigned type
+ */
+#define ASSIGN_TO_LARGER_SIZE_SIGNED_TO_UNSIGNED(dst, dsttype, src, srctype)                                    \
+{                                                                                                               \
+    srctype _tmp_src = (srctype)(src);                                                                          \
+    dsttype _tmp_dst = (dsttype)(_tmp_src);                                                                     \
+    assert(_tmp_src >= 0);                                                                                      \
+    assert(_tmp_src == _tmp_dst);                                                                               \
+    (dst) = _tmp_dst;                                                                                           \
+}
+
+/* Macro borrowed from H5private.h to assign a value between two types of the
+ * same size, where the source type is a signed type and the destination type
+ * is an unsigned type
+ */
+#define ASSIGN_TO_SAME_SIZE_SIGNED_TO_UNSIGNED(dst, dsttype, src, srctype)                                      \
+{                                                                                                               \
+    srctype _tmp_src = (srctype)(src);                                                                          \
+    dsttype _tmp_dst = (dsttype)(_tmp_src);                                                                     \
+    assert(_tmp_src >= 0);                                                                                      \
+    assert(_tmp_src == (srctype)_tmp_dst);                                                                      \
+    (dst) = _tmp_dst;                                                                                           \
+}
+
+/*
+ * A macro borrowed from H5private.h for detecting over/under-flow when casting
+ * between types
+ */
+#define H5_CHECK_OVERFLOW(var, vartype, casttype)                                                               \
+{                                                                                                               \
+    casttype _tmp_overflow = (casttype)(var);                                                                   \
+    assert((var) == (vartype)_tmp_overflow);                                                                    \
+}
+
+
 /* Occasionally, some arguments passed to a callback by use of va_arg
  * are not utilized in the particular section of the callback. This
  * macro is for silencing compiler warnings about those arguments.
@@ -1536,7 +1583,6 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
     RV_object_t *attribute = (RV_object_t *) attr;
     H5T_class_t  dtype_class;
     hssize_t     file_select_npoints;
-    hbool_t      is_transfer_binary = FALSE;
     htri_t       is_variable_str;
     size_t       dtype_size;
     size_t       write_body_len = 0;
@@ -1634,13 +1680,16 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
     } /* end switch */
 
+    /* Check to make sure that the size of the write body can safely be cast to a curl_off_t */
+    H5_CHECK_OVERFLOW(write_body_len, size_t, curl_off_t);
+
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT"))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, (const char *) buf))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) write_body_len)) /* XXX: unsafe cast */
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) write_body_len))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
@@ -2682,8 +2731,13 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
         if (RV_setup_dataset_create_request_body(obj, name, dcpl_id, &create_request_body, &tmp_len) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, NULL, "can't convert dataset creation parameters to JSON")
 
-        /* XXX: unsafe cast */
-        create_request_body_len = (curl_off_t) tmp_len;
+        /* Check to make sure that the size of the create request HTTP body can safely be cast to a curl_off_t */
+        if (sizeof(curl_off_t) < sizeof(size_t))
+            ASSIGN_TO_LARGER_SIZE_SIGNED_TO_UNSIGNED(create_request_body_len, curl_off_t, tmp_len, size_t)
+        else if (sizeof(curl_off_t) > sizeof(size_t))
+            ASSIGN_TO_SMALLER_SIZE(create_request_body_len, curl_off_t, tmp_len, size_t)
+        else
+            ASSIGN_TO_SAME_SIZE_SIGNED_TO_UNSIGNED(create_request_body_len, curl_off_t, tmp_len, size_t)
     }
 
     /* Setup the "Host: " header */
@@ -3025,7 +3079,13 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         selection_body[0] = '{'; selection_body[selection_body_len + 1] = '}';
         selection_body[selection_body_len + 2] = '\0';
 
-        write_len = (curl_off_t) (selection_body_len + 2); /* XXX: unsafe cast */
+        /* Check to make sure that the size of the selection HTTP body can safely be cast to a curl_off_t */
+        if (sizeof(curl_off_t) < sizeof(size_t))
+            ASSIGN_TO_LARGER_SIZE_SIGNED_TO_UNSIGNED(write_len, curl_off_t, selection_body_len + 2, size_t)
+        else if (sizeof(curl_off_t) > sizeof(size_t))
+            ASSIGN_TO_SMALLER_SIZE(write_len, curl_off_t, selection_body_len + 2, size_t)
+        else
+            ASSIGN_TO_SAME_SIZE_SIGNED_TO_UNSIGNED(write_len, curl_off_t, selection_body_len + 2, size_t)
 
 #ifdef PLUGIN_DEBUG
         printf("Point sel list after shifting: %s\n\n", selection_body);
@@ -3257,13 +3317,16 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
                                           is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? "?select=" : "",
                                           is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? selection_body : "");
 
+    /* Check to make sure that the size of the write body can safely be cast to a curl_off_t */
+    H5_CHECK_OVERFLOW(write_body_len, size_t, curl_off_t);
+
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT"))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, is_transfer_binary ? (const char *) buf : write_body))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) write_body_len)) /* XXX: unsafe cast */
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) write_body_len))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
@@ -8983,8 +9046,6 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
 
             case H5S_SEL_HYPERSLABS:
             {
-                htri_t is_regular;
-
                 /* Format the hyperslab selection according to the 'select' request/query parameter.
                  * This is composed of N triplets, one for each dimension of the dataspace, and looks like:
                  *
@@ -9002,11 +9063,8 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                 if (NULL == (block = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*block))))
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'block' values")
 
-                if ((is_regular = H5Sget_regular_hyperslab(space_id, start, stride, count, block)) < 0)
+                if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get regular hyperslab selection")
-
-                if (!is_regular)
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_UNSUPPORTED, FAIL, "non-regular hyperslabs are unsupported")
 
                 strcat(out_string_curr_pos++, "[");
 
@@ -9109,8 +9167,6 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
 
             case H5S_SEL_HYPERSLABS:
             {
-                htri_t is_regular;
-
                 /* Format the hyperslab selection according to the 'start', 'stop' and 'step' keys
                  * in a JSON request body. This looks like:
                  *
@@ -9148,11 +9204,8 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                 strcat(stop_body_curr_pos++, "[");
                 strcat(stop_body_curr_pos++, "[");
 
-                if ((is_regular = H5Sget_regular_hyperslab(space_id, start, stride, count, block)) < 0)
+                if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get regular hyperslab selection")
-
-                if (!is_regular)
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_UNSUPPORTED, FAIL, "non-regular hyperslabs are unsupported")
 
                 for (i = 0; i < (size_t) ndims; i++) {
                     if ((bytes_printed = sprintf(start_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), start[i])) < 0)

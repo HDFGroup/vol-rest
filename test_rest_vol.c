@@ -573,7 +573,6 @@ static int test_create_committed_datatype_combinations(void);
 static int test_create_dataset_with_committed_type(void);
 static int test_create_attribute_with_committed_type(void);
 static int test_delete_committed_type(void);
-static int test_get_type_info(void);
 static int test_unused_datatype_API_calls(void);
 static int test_datatype_property_lists(void);
 
@@ -717,7 +716,6 @@ static int (*type_tests[])(void) = {
         test_create_dataset_with_committed_type,
         test_create_attribute_with_committed_type,
         test_delete_committed_type,
-        test_get_type_info,
         test_unused_datatype_API_calls,
         test_datatype_property_lists,
         NULL
@@ -8382,19 +8380,6 @@ error:
         RVterm();
     } H5E_END_TRY;
 
-    return 1;
-}
-
-static int
-test_get_type_info(void)
-{
-    TESTING("get existing committed datatype info")
-
-    SKIPPED();
-
-    return 0;
-
-error:
     return 1;
 }
 
