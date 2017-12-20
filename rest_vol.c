@@ -28,6 +28,7 @@
 /* XXX: Implement _iterate functions */
 /* XXX: Eventually replace CURL PUT calls with CURLOPT_UPLOAD calls */
 /* XXX: Attempt to eliminate all use of globals/static variables */
+/* XXX: Fix up url-encoding for link names every place it can be used */
 
 #include "H5private.h"       /* XXX: Temporarily needed; Generic Functions */
 #include "H5Ppublic.h"       /* Property Lists    */
@@ -385,10 +386,11 @@ static herr_t RV_parse_response(char *HTTP_response, void *callback_data_in, voi
 
 /* Set of callbacks for H5VL_rest_parse_response() */
 static herr_t RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
-static herr_t RV_get_link_type_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
-static herr_t RV_retrieve_attribute_count_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_get_obj_type_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_retrieve_object_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_group_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
-static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out);
+static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 
 /* Helper function to find an object given a starting object to search from and a path */
 static htri_t RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
@@ -1770,9 +1772,6 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
             H5VL_loc_params_t  loc_params = va_arg(arguments, H5VL_loc_params_t);
             H5A_info_t        *attr_info = va_arg(arguments, H5A_info_t *);
             const char        *attr_name = NULL;
-
-            /* Initialize struct to 0 */
-            memset(attr_info, 0, sizeof(*attr_info));
 
             switch (loc_params.type) {
                 /* H5Aget_info */
@@ -4514,9 +4513,6 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
             H5VL_loc_params_t  loc_params = va_arg(arguments, H5VL_loc_params_t);
             H5G_info_t        *group_info = va_arg(arguments, H5G_info_t *);
 
-            /* Initialize struct to 0 */
-            memset(group_info, 0, sizeof(*group_info));
-
             switch (loc_params.type) {
                 /* H5Gget_info */
                 case H5VL_OBJECT_BY_SELF:
@@ -4744,6 +4740,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                 case H5VL_OBJECT_BY_NAME:
                 {
                     H5I_type_t obj_type = H5I_UNINIT;
+
 #ifdef PLUGIN_DEBUG
                     printf("  - Link target loc params by name: %s\n", hard_link_target_obj_loc_params.loc_data.loc_by_name.name);
 #endif
@@ -4997,65 +4994,70 @@ static herr_t
 RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
             hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    RV_object_t *link = (RV_object_t *) obj;
-    hbool_t      curl_perform = FALSE;
+    RV_object_t *loc_obj = (RV_object_t *) obj;
     size_t       host_header_len = 0;
     char        *host_header = NULL;
+    char        *link_dir_name = NULL;
     char         request_url[URL_MAX_LENGTH];
     herr_t       ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
     printf("Received Link get call with following parameters:\n");
     printf("  - Get type: %d\n", get_type);
-    printf("  - Link URI: %s\n", link->URI);
-    printf("  - Link File: %s\n\n", link->domain->u.file.filepath_name);
+    printf("  - Link URI: %s\n", loc_obj->URI);
+    printf("  - Link File: %s\n\n", loc_obj->domain->u.file.filepath_name);
 #endif
-
-    if (curl_perform) {
-        /* Setup the "Host: " header */
-        host_header_len = strlen(link->domain->u.file.filepath_name) + strlen(host_string) + 1;
-        if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
-
-        strcpy(host_header, host_string);
-
-        curl_headers = curl_slist_append(curl_headers, strncat(host_header, link->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
-
-        /* Disable use of Expect: 100 Continue HTTP response */
-        curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-        /* Redirect cURL from the base URL to "/groups/<id>/links/<name>" to get information about the link */
-        /* snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links/%s", base_URL, link->obj.); */
-
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
-
-#ifdef PLUGIN_DEBUG
-        printf("  - Retrieving link info\n\n");
-
-        printf("   /********************************\\\n");
-        printf("-> | Making a request to the server |\n");
-        printf("   \\********************************/\n\n");
-#endif
-
-        CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
-    } /* end if */
 
     switch (get_type) {
         /* H5Lget_info */
         case H5VL_LINK_GET_INFO:
         {
+            H5L_info_t *link_info = va_arg(arguments, H5L_info_t *);
+
             switch (loc_params.type) {
                 /* H5Lget_info */
-                case H5VL_OBJECT_BY_SELF:
+                case H5VL_OBJECT_BY_NAME:
                 {
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lget_info is unsupported")
+                    hbool_t empty_dirname;
+                    char    temp_URI[URI_MAX_LENGTH];
+
+                    /* In case the user specified a path which contains any groups on the way to the
+                     * link in question, extract out the path to the final group in the chain */
+                    if (NULL == (link_dir_name = RV_dirname(loc_params.loc_data.loc_by_name.name)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get path dirname")
+                    empty_dirname = !strcmp(link_dir_name, "");
+
+#ifdef PLUGIN_DEBUG
+                    printf("  - Path Dirname: %s\n\n", link_dir_name);
+#endif
+
+                    /* If the path to the final group in the chain wasn't empty, get the URI of the final
+                     * group and search for the link in question within that group. Otherwise, the
+                     * supplied parent group is the one that should be housing the link, so search from
+                     * there.
+                     */
+                    if (!empty_dirname) {
+                        H5I_type_t obj_type = H5I_GROUP;
+                        htri_t     search_ret;
+
+                        search_ret = RV_find_object_by_path(loc_obj, link_dir_name, &obj_type,
+                                RV_copy_object_URI_callback, NULL, temp_URI);
+                        if (!search_ret || search_ret < 0)
+                            FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate parent group")
+
+#ifdef PLUGIN_DEBUG
+                        printf("  - Found new parent group %s at end of path chain\n\n", temp_URI);
+#endif
+                    } /* end if */
+
+                    snprintf(request_url, URL_MAX_LENGTH,
+                             "%s/groups/%s/links/%s",
+                             base_URL,
+                             empty_dirname ? loc_obj->URI : temp_URI,
+                             RV_basename(loc_params.loc_data.loc_by_name.name));
+
                     break;
-                } /* H5VL_OBJECT_BY_SELF */
+                } /* H5VL_OBJECT_BY_NAME */
 
                 /* H5Lget_info_by_idx */
                 case H5VL_OBJECT_BY_IDX:
@@ -5064,12 +5066,47 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
 
-                case H5VL_OBJECT_BY_NAME:
+                case H5VL_OBJECT_BY_SELF:
                 case H5VL_OBJECT_BY_ADDR:
                 case H5VL_OBJECT_BY_REF:
                 default:
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
             } /* end switch */
+
+            /* Make a GET request to the server to retrieve the number of attributes attached to the object */
+
+            /* Setup the "Host: " header */
+            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
+            if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+
+            strcpy(host_header, host_string);
+
+            curl_headers = curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+
+            /* Disable use of Expect: 100 Continue HTTP response */
+            curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+
+#ifdef PLUGIN_DEBUG
+            printf("  - Retrieving object info\n\n");
+
+            printf("   /********************************\\\n");
+            printf("-> | Making a request to the server |\n");
+            printf("   \\********************************/\n\n");
+#endif
+
+            CURL_PERFORM(curl, H5E_OBJECT, H5E_CANTGET, FAIL);
+
+            /* Retrieve the link info */
+            if (RV_parse_response(response_buffer.buffer, NULL, link_info, RV_get_link_info_callback) < 0)
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't retrieve object info")
 
             break;
         } /* H5VL_LINK_GET_INFO */
@@ -5118,14 +5155,14 @@ done:
     printf("Link Get response buffer: %s\n\n", response_buffer.buffer);
 #endif
 
-    if (curl_perform) {
-        if (host_header)
-            RV_free(host_header);
+    if (link_dir_name)
+        RV_free(link_dir_name);
+    if (host_header)
+        RV_free(host_header);
 
-        if (curl_headers) {
-            curl_slist_free_all(curl_headers);
-            curl_headers = NULL;
-        } /* end if */
+    if (curl_headers) {
+        curl_slist_free_all(curl_headers);
+        curl_headers = NULL;
     } /* end if */
 
     return ret_value;
@@ -5831,14 +5868,14 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
         {
             H5VL_loc_params_t  loc_params = va_arg(arguments, H5VL_loc_params_t);
             H5O_info_t        *obj_info = va_arg(arguments, H5O_info_t *);
-            long long          attr_count = 0;
-
-            memset(obj_info, 0, sizeof(H5O_info_t));
+            H5I_type_t         obj_type;
 
             switch (loc_params.type) {
                 /* H5Oget_info */
                 case H5VL_OBJECT_BY_SELF:
                 {
+                    obj_type = loc_obj->obj_type;
+
                     /* Redirect cURL from the base URL to
                      * "/groups/<id>", "/datasets/<id>" or "/datatypes/<id>",
                      * depending on the type of the object. Also set the
@@ -5848,21 +5885,18 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
                         case H5I_FILE:
                         case H5I_GROUP:
                         {
-                            obj_info->type = H5O_TYPE_GROUP;
                             snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, loc_obj->URI);
                             break;
                         } /* H5I_FILE H5I_GROUP */
 
                         case H5I_DATATYPE:
                         {
-                            obj_info->type = H5O_TYPE_NAMED_DATATYPE;
                             snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL, loc_obj->URI);
                             break;
                         } /* H5I_DATATYPE */
 
                         case H5I_DATASET:
                         {
-                            obj_info->type = H5O_TYPE_DATASET;
                             snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL, loc_obj->URI);
                             break;
                         } /* H5I_DATASET */
@@ -5890,9 +5924,10 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
                 /* H5Oget_info_by_name */
                 case H5VL_OBJECT_BY_NAME:
                 {
-                    H5I_type_t obj_type = H5I_UNINIT;
-                    htri_t     search_ret;
-                    char       temp_URI[URI_MAX_LENGTH];
+                    htri_t search_ret;
+                    char   temp_URI[URI_MAX_LENGTH];
+
+                    obj_type = H5I_UNINIT;
 
                     search_ret = RV_find_object_by_path(loc_obj, loc_params.loc_data.loc_by_name.name, &obj_type,
                             RV_copy_object_URI_callback, NULL, temp_URI);
@@ -5908,21 +5943,18 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
                         case H5I_FILE:
                         case H5I_GROUP:
                         {
-                            obj_info->type = H5O_TYPE_GROUP;
                             snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, temp_URI);
                             break;
                         } /* H5I_FILE H5I_GROUP */
 
                         case H5I_DATATYPE:
                         {
-                            obj_info->type = H5O_TYPE_NAMED_DATATYPE;
                             snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL, temp_URI);
                             break;
                         } /* H5I_DATATYPE */
 
                         case H5I_DATASET:
                         {
-                            obj_info->type = H5O_TYPE_DATASET;
                             snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL, temp_URI);
                             break;
                         } /* H5I_DATASET */
@@ -5992,11 +6024,18 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
             CURL_PERFORM(curl, H5E_OBJECT, H5E_CANTGET, FAIL);
 
             /* Retrieve the attribute count for the object */
-            if (RV_parse_response(response_buffer.buffer, NULL, &attr_count, RV_retrieve_attribute_count_callback) < 0)
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't retrieve object attribute count")
+            if (RV_parse_response(response_buffer.buffer, NULL, obj_info, RV_retrieve_object_info_callback) < 0)
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't retrieve object info")
 
-            assert(attr_count >= 0);
-            obj_info->num_attrs = (hsize_t) attr_count;
+            /* Set the type of the object */
+            if (H5I_GROUP == obj_type)
+                obj_info->type = H5O_TYPE_GROUP;
+            else if (H5I_DATATYPE == obj_type)
+                obj_info->type = H5O_TYPE_NAMED_DATATYPE;
+            else if (H5I_DATASET == obj_type)
+                obj_info->type = H5O_TYPE_DATASET;
+            else
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "object type is not group, datatype or dataset")
 
             break;
         } /* H5VL_OBJECT_GET_INFO */
@@ -6197,17 +6236,30 @@ done:
  *              July, 2017
  */
 static herr_t
-RV_copy_object_URI_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
     const char *soft_link_class_keys[] = { "link", "class", (const char *) 0 };
     const char *hard_link_keys[] = { "link", "id", (const char *) 0 };
     const char *object_create_keys[] = { "id", (const char *) 0 };
     const char *root_group_keys[] = { "root", (const char *) 0 };
-    yajl_val    parse_tree, key_obj;
+    yajl_val    parse_tree = NULL, key_obj;
     char       *parsed_string;
     herr_t      ret_value = SUCCEED;
 
     assert(callback_data_out && "invalid URI pointer");
+
+    /* In order to handle the special case of the path ".", which corresponds to the
+     * current group, this callback is usually reached with the callback_data_in
+     * parameter being manually set as a pointer to the supplied group in this case only.
+     * While ugly, it supports much cleaner code elsewhere by shifting the responsibility
+     * for this case to one single point and also prevents this plugin from making an
+     * unnecessary extra call to the server to retrieve the URI of the supplied group,
+     * whose URI is already known.
+     */
+    if (callback_data_in) {
+        strncpy((char *) callback_data_out, ((RV_object_t *) callback_data_in)->URI, URI_MAX_LENGTH);
+        FUNC_GOTO_DONE(SUCCEED);
+    } /* end if */
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
@@ -6279,14 +6331,14 @@ done:
 
 
 /*-------------------------------------------------------------------------
- * Function:    RV_get_link_type_callback
+ * Function:    RV_get_obj_type_callback
  *
  * Purpose:     A callback for RV_parse_response which will search
- *              an HTTP response for the type of an object and copy that
- *              type into the callback_data_out parameter, which should be
- *              a H5I_type_t *. This callback is used to help H5Oopen
- *              determine what type of object it is working with and make
- *              the appropriate object open call.
+ *              an HTTP response for the type of an object that a link
+ *              points to and copy that type into the callback_data_out
+ *              parameter, which should be a H5I_type_t *. This callback
+ *              is used to help H5Oopen determine what type of object it
+ *              is working with and make the appropriate object open call.
  *
  * Return:      Non-negative on success/Negative on failure
  *
@@ -6294,11 +6346,11 @@ done:
  *              September, 2017
  */
 static herr_t
-RV_get_link_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+RV_get_obj_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
     const char *soft_link_class_keys[] = { "link", "class", (const char *) 0 };
     const char *link_collection_keys[] = { "link", "collection", (const char *) 0 };
-    yajl_val    parse_tree, key_obj;
+    yajl_val    parse_tree = NULL, key_obj;
     char       *parsed_string;
     herr_t      ret_value = SUCCEED;
 
@@ -6307,9 +6359,9 @@ RV_get_link_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_dat
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
 
-    /* To handle the awkward case of soft and external links, which do not return an "ID",
-     * first check for the link class field and short circuit if it is found to be
-     * equal to "H5L_TYPE_SOFT"
+    /* To handle the awkward case of soft and external links, which do not have the link
+     * collection element, first check for the link class field and short circuit if it
+     * is found not to be equal to "H5L_TYPE_HARD"
      */
     if (NULL != (key_obj = yajl_tree_get(parse_tree, soft_link_class_keys, yajl_t_string))) {
         char *link_type;
@@ -6317,8 +6369,7 @@ RV_get_link_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_dat
         if (NULL == (link_type = YAJL_GET_STRING(key_obj)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link type failed")
 
-        if (!strcmp(link_type, "H5L_TYPE_SOFT") || !strcmp(link_type, "H5L_TYPE_EXTERNAL") ||
-                !strcmp(link_type, "H5L_TYPE_UD"))
+        if (strcmp(link_type, "H5L_TYPE_HARD"))
             FUNC_GOTO_DONE(SUCCEED);
     } /* end if */
 
@@ -6346,18 +6397,78 @@ done:
         yajl_tree_free(parse_tree);
 
     return ret_value;
-} /* end RV_get_link_type_callback() */
+} /* end RV_get_obj_type_callback() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    RV_retrieve_attribute_count_callback
+ * Function:    RV_get_link_info_callback
+ *
+ * Purpose:     A callback for RV_parse_response which will search an HTTP
+ *              response for information about a link, such as the link
+ *              type, and copy that info into the callback_data_out
+ *              parameter, which should be a H5L_info_t *. This callback
+ *              is used specifically for H5Lget_info (_by_idx). Currently
+ *              only the link class is returned by this function. All
+ *              other information in the H5L_info_t struct is
+ *              initialized to 0.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              December, 2017
+ */
+static herr_t
+RV_get_link_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+{
+    const char *link_class_keys[] = { "link", "class", (const char *) 0 };
+    H5L_info_t *link_info = (H5L_info_t *) callback_data_out;
+    yajl_val    parse_tree = NULL, key_obj;
+    char       *parsed_string;
+    herr_t      ret_value = SUCCEED;
+
+    assert(link_info && "invalid link info pointer");
+
+    memset(link_info, 0, sizeof(H5L_info_t));
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+
+    /* Retrieve the link's class */
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, link_class_keys, yajl_t_string)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object parent collection failed")
+
+    if (!YAJL_IS_STRING(key_obj))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned object parent collection is not a string")
+
+    if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object parent collection failed")
+
+    if (!strcmp(parsed_string, "H5L_TYPE_HARD"))
+        link_info->type = H5L_TYPE_HARD;
+    else if (!strcmp(parsed_string, "H5L_TYPE_SOFT"))
+        link_info->type = H5L_TYPE_SOFT;
+    else if (!strcmp(parsed_string, "H5L_TYPE_EXTERNAL"))
+        link_info->type = H5L_TYPE_EXTERNAL;
+    else
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "invalid link class")
+
+done:
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    return ret_value;
+} /* end RV_get_link_info_callback() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_retrieve_object_info_callback
  *
  * Purpose:     A callback for RV_parse_response which will search
- *              an HTTP response for the number of attributes on an object
- *              and copy that number into the callback_data_out parameter,
- *              which should be a long long *. This callback is used to
- *              help H5Oget_info fill out a H5O_info_t struct corresponding
- *              to the info about an object.
+ *              an HTTP response for info about an object and copy that
+ *              info into the callback_data_out parameter, which should be
+ *              a H5O_info_t *. This callback is used to help H5Oget_info;
+ *              currently the number of attributes on an object is the
+ *              only relevant information returned.
  *
  * Return:      Non-negative on success/Negative on failure
  *
@@ -6365,14 +6476,17 @@ done:
  *              November, 2017
  */
 static herr_t
-RV_retrieve_attribute_count_callback(char *HTTP_response,
+RV_retrieve_object_info_callback(char *HTTP_response,
     void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
     const char *attribute_count_keys[] = { "attributeCount", (const char *) 0 };
-    yajl_val    parse_tree, key_obj;
+    H5O_info_t *obj_info = (H5O_info_t *) callback_data_out;
+    yajl_val    parse_tree = NULL, key_obj;
     herr_t      ret_value = SUCCEED;
 
-    assert(callback_data_out && "invalid attribute count pointer");
+    assert(obj_info && "invalid attribute count pointer");
+
+    memset(obj_info, 0, sizeof(*obj_info));
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
@@ -6384,14 +6498,16 @@ RV_retrieve_attribute_count_callback(char *HTTP_response,
     if (!YAJL_IS_INTEGER(key_obj))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned object attribute count is not an integer")
 
-    *((long long *) callback_data_out) = YAJL_GET_INTEGER(key_obj);
+    assert(YAJL_GET_INTEGER(key_obj) >= 0);
+
+    obj_info->num_attrs = YAJL_GET_INTEGER(key_obj);
 
 done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
     return ret_value;
-} /* end RV_retrieve_attribute_count_callback() */
+} /* end RV_retrieve_object_info_callback() */
 
 
 /*-------------------------------------------------------------------------
@@ -6418,10 +6534,12 @@ RV_get_group_info_callback(char *HTTP_response,
 {
     const char *group_link_count_keys[] = { "linkCount", (const char *) 0 };
     H5G_info_t *info = (H5G_info_t *) callback_data_out;
-    yajl_val    parse_tree, key_obj;
+    yajl_val    parse_tree = NULL, key_obj;
     herr_t      ret_value = SUCCEED;
 
-    assert(callback_data_out && "invalid group info pointer");
+    assert(info && "invalid group info pointer");
+
+    memset(info, 0, sizeof(*info));
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
@@ -6495,11 +6613,11 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
     const char *filters_keys[]                = { "filters", (const char *) 0 };
     const char *layout_keys[]                 = { "layout", (const char *) 0 };
     const char *track_times_keys[]            = { "trackTimes", (const char *) 0 };
-    yajl_val    parse_tree, creation_properties_obj, key_obj;
+    yajl_val    parse_tree = NULL, creation_properties_obj, key_obj;
     hid_t      *DCPL = (hid_t *) callback_data_out;
     herr_t      ret_value = SUCCEED;
 
-    assert(callback_data_out && "invalid DCPL pointer");
+    assert(DCPL && "invalid DCPL pointer");
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
@@ -6832,10 +6950,20 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
           && "parent object not a file or group");
 
     /* XXX: Try to better organize the unknown object type case */
-    /* XXX: support for url-encoding link names */
 
     /* In order to not confuse the server, make sure the path has no leading spaces */
     while (*obj_path == ' ') obj_path++;
+
+    /* Handle the awkward case where "." is being searched for, by just supplying the
+     * optional callback with the supplied parent object and letting it do special
+     * processing. This can avoid unnecessarily making a trip to the server to retrieve
+     * information about an object that is already known.
+     */
+    if (!strcmp(obj_path, ".")) {
+        *target_object_type = H5I_GROUP;
+        callback_data_in = parent_obj;
+        FUNC_GOTO_DONE(TRUE);
+    } /* end if */
 
     /* Check to see whether the path references the root group, which is a case that
      * must be specially handled
@@ -6956,7 +7084,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
         printf("  - Found link for object of unknown type; capturing link type\n\n");
 #endif
 
-        if (RV_parse_response(response_buffer.buffer, NULL, target_object_type, RV_get_link_type_callback) < 0)
+        if (RV_parse_response(response_buffer.buffer, NULL, target_object_type, RV_get_obj_type_callback) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link type")
     } /* end if */
 
@@ -7027,13 +7155,15 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
     if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get HTTP response code")
 
-    if (obj_found_callback && RV_parse_response(response_buffer.buffer,
-            callback_data_in, callback_data_out, obj_found_callback) < 0)
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "can't perform callback operation")
-
     ret_value = HTTP_SUCCESS(http_response);
 
 done:
+    if (ret_value >= 0) {
+        if (obj_found_callback && RV_parse_response(response_buffer.buffer,
+                    callback_data_in, callback_data_out, obj_found_callback) < 0)
+                FUNC_DONE_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "can't perform callback operation")
+    } /* end if */
+
     if (link_dir_name)
         RV_free(link_dir_name);
     if (host_header)
