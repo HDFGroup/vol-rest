@@ -3476,9 +3476,6 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
                     hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
     RV_object_t *dset = (RV_object_t *) obj;
-    size_t       host_header_len = 0;
-    char        *host_header = NULL;
-    char         request_url[URL_MAX_LENGTH];
     herr_t       ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -3505,14 +3502,6 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
     } /* end switch */
 
 done:
-    if (host_header)
-        RV_free(host_header);
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    } /* end if */
-
     return ret_value;
 } /* end RV_dataset_specific() */
 
@@ -5724,7 +5713,10 @@ RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_typ
             H5R_type_t  ref_type = va_arg(arguments, H5R_type_t);
             void       *ref = va_arg(arguments, void *);
 
-            if (H5R_DATASET_REGION != ((rv_obj_ref_t *) ref)->ref_type)
+            /* Though the actual ref type should be stored in the ref itself, we take the user's
+             * passed in ref type at face value here.
+             */
+            if (H5R_DATASET_REGION != ref_type)
                 FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_BADVALUE, FAIL, "not a dataset region reference")
 
             FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_UNSUPPORTED, FAIL, "region references are currently unsupported")
@@ -6998,6 +6990,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      ******************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, fill_value_keys, yajl_t_any))) {
         /* XXX: support for fill values */
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "dataset fill values are unsupported")
     } /* end if */
 
 
@@ -7010,6 +7003,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                             *
      ***************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, filters_keys, yajl_t_array))) {
+        /* XXX: support for filters */
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "dataset filters are unsupported")
     } /* end if */
 
@@ -7058,7 +7052,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
             printf("    - Dims: [ ");
             for (i = 0; i < YAJL_GET_ARRAY(chunk_dims_obj)->len; i++) {
                 if (i > 0) printf(", ");
-                printf("%zu", chunk_dims[i]);
+                printf("%llu", chunk_dims[i]);
             }
             printf(" ]\n");
 #endif
@@ -10076,6 +10070,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                 out_string_curr_pos += null_value_len;
             } /* end if */
             else {
+                /* XXX: Support for fill values */
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset fill values are unsupported")
             } /* end else */
         } /* end if */
