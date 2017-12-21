@@ -567,9 +567,6 @@ static int test_object_creation_by_absolute_path(void);
 static int test_absolute_vs_relative_path(void);
 static int test_double_init_free(void);
 static int test_url_encoding(void);
-static int test_H5P_DEFAULT(void);
-
-static int cleanup(void);
 
 static hid_t generate_random_datatype(H5T_class_t parent_class);
 
@@ -713,7 +710,6 @@ static int (*misc_tests[])(void) = {
         test_absolute_vs_relative_path,
         test_double_init_free,
         test_url_encoding,
-        test_H5P_DEFAULT,
         NULL
 };
 
@@ -1806,12 +1802,11 @@ test_unused_group_API_calls(void)
 {
     TESTING("unused group API calls")
 
+    /* None currently that aren't planned to be used */
+
     SKIPPED();
 
     return 0;
-
-error:
-    return 1;
 }
 
 static int
@@ -4985,15 +4980,22 @@ test_create_dataset_array_types(void)
     hsize_t dset_dims[DATASET_ARRAY_TYPE_TEST_SHAPE_RANK];
     hsize_t array_dims1[DATASET_ARRAY_TYPE_TEST_RANK1];
     hsize_t array_dims2[DATASET_ARRAY_TYPE_TEST_RANK2];
+#if 0
     hsize_t array_dims3[DATASET_ARRAY_TYPE_TEST_RANK3];
+#endif
     size_t  i;
     hid_t   file_id = -1, fapl_id = -1;
     hid_t   container_group = -1, group_id = -1;
-    hid_t   dset_id1 = -1, dset_id2 = -1, dset_id3 = -1;
+    hid_t   dset_id1 = -1, dset_id2 = -1;
     hid_t   fspace_id = -1;
-    hid_t   array_type_id1 = -1, array_type_id2 = -1, array_type_id3 = -1;
-    hid_t   array_base_type_id1 = -1, array_base_type_id2 = -1, array_base_type_id3 = -1;
+    hid_t   array_type_id1 = -1, array_type_id2 = -1;
+    hid_t   array_base_type_id1 = -1, array_base_type_id2 = -1;
+#if 0
+    hid_t   array_base_type_id3 = -1;
+    hid_t   array_type_id3 = -1;
     hid_t   nested_type_id = -1;
+    hid_t   dset_id3 = -1;
+#endif
     hid_t   non_predefined_type_id = -1;
 
     TESTING("dataset creation w/ array types")
@@ -7534,12 +7536,11 @@ test_unused_datatype_API_calls(void)
 {
     TESTING("unused datatype API calls")
 
+    /* None currently that aren't planned to be used */
+
     SKIPPED();
 
     return 0;
-
-error:
-    return 1;
 }
 
 static int
@@ -9078,12 +9079,11 @@ test_unused_link_API_calls(void)
 {
     TESTING("unused link API calls")
 
+    /* None currently that aren't planned to be used */
+
     SKIPPED();
 
     return 0;
-
-error:
-    return 1;
 }
 
 
@@ -11261,31 +11261,6 @@ error:
     return 1;
 }
 
-/* Large test to ensure that H5P_DEFAULT works correctly in all of the places that it can be used */
-static int
-test_H5P_DEFAULT(void)
-{
-    TESTING("use of H5P_DEFAULT")
-
-    SKIPPED();
-
-    return 0;
-
-error:
-    return 1;
-}
-
-static int
-cleanup(void)
-{
-    /* Delete the top-level domain */
-
-    return 0;
-
-error:
-    return 1;
-}
-
 /* Helper function to generate a random HDF5 datatype in order to thoroughly
  * test the REST VOL plugin's support for datatypes
  */
@@ -11954,14 +11929,10 @@ main( int argc, char** argv )
 
     puts("All REST VOL plugin tests passed");
 
-    if (cleanup() < 0)
-        puts("cleanup failed");
-
     return 0;
 
 error:
     printf("*** %d TEST%s FAILED ***\n", nerrors, nerrors > 1 ? "S" : "");
-    if (cleanup() < 0)
-        puts("cleanup failed");
+
     return 1;
 }
