@@ -391,6 +391,10 @@
 #define GET_LINK_INFO_TEST_SOFT_LINK_NAME "soft_link"
 #define GET_LINK_INFO_TEST_EXT_LINK_NAME  "ext_link"
 
+#define GET_LINK_VAL_TEST_SUBGROUP_NAME  "get_link_val_test"
+#define GET_LINK_VAL_TEST_SOFT_LINK_NAME "soft_link"
+#define GET_LINK_VAL_TEST_EXT_LINK_NAME  "ext_link"
+
 /*****************************************************
  *                                                   *
  *            Plugin Object test defines             *
@@ -8036,16 +8040,279 @@ error:
 static int
 test_get_link_val(void)
 {
+    H5L_info_t  link_info;
+    const char *ext_link_filename;
+    const char *ext_link_val;
+    unsigned    ext_link_flags;
+    htri_t      link_exists;
+    size_t      link_val_buf_size;
+    char       *link_val_buf = NULL;
+    hid_t       file_id = -1, fapl_id = -1;
+    hid_t       container_group = -1, group_id = -1;
+
     TESTING("get link value")
 
-    /* H5Lget_val */
-    /* H5Lget_val_by_idx */
+    if (RVinit() < 0)
+        TEST_ERROR
 
-    SKIPPED();
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, LINK_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, GET_LINK_VAL_TEST_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
+    if (H5Lcreate_soft("/" LINK_TEST_GROUP_NAME "/" GET_LINK_VAL_TEST_SUBGROUP_NAME, group_id, GET_LINK_VAL_TEST_SOFT_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't create soft link\n");
+        goto error;
+    }
+
+    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't create external link\n");
+        goto error;
+    }
+
+    /* Verify the links have been created */
+    if ((link_exists = H5Lexists(group_id, GET_LINK_VAL_TEST_SOFT_LINK_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if link exists\n");
+        goto error;
+    }
+
+    if (!link_exists) {
+        H5_FAILED();
+        printf("    link did not exist\n");
+        goto error;
+    }
+
+    if ((link_exists = H5Lexists(group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if external link exists\n");
+        goto error;
+    }
+
+    if (!link_exists) {
+        H5_FAILED();
+        printf("    external link did not exist\n");
+        goto error;
+    }
+
+    memset(&link_info, 0, sizeof(link_info));
+
+    if (H5Lget_info(group_id, GET_LINK_VAL_TEST_SOFT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't get soft link info\n");
+        goto error;
+    }
+
+    if (link_info.type != H5L_TYPE_SOFT) {
+        H5_FAILED();
+        printf("    incorrect link type returned\n");
+        goto error;
+    }
+
+    link_val_buf_size = link_info.u.val_size;
+    if (NULL == (link_val_buf = (char *) malloc(link_val_buf_size)))
+        TEST_ERROR
+
+    if (H5Lget_val(group_id, GET_LINK_VAL_TEST_SOFT_LINK_NAME, link_val_buf, link_val_buf_size, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't get soft link val\n");
+        goto error;
+    }
+
+    if (strcmp(link_val_buf, "/" LINK_TEST_GROUP_NAME "/" GET_LINK_VAL_TEST_SUBGROUP_NAME)) {
+        H5_FAILED();
+        printf("    soft link value did not match\n");
+        goto error;
+    }
+
+    memset(&link_info, 0, sizeof(link_info));
+
+    if (H5Lget_info(group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't get external link info\n");
+        goto error;
+    }
+
+    if (link_info.type != H5L_TYPE_EXTERNAL) {
+        H5_FAILED();
+        printf("    incorrect link type returned\n");
+        goto error;
+    }
+
+    if (link_info.u.val_size > link_val_buf_size) {
+        char *tmp_realloc;
+
+        link_val_buf_size *= 2;
+
+        if (NULL == (tmp_realloc = (char *) realloc(link_val_buf, link_val_buf_size)))
+            TEST_ERROR
+        link_val_buf = tmp_realloc;
+    }
+
+    if (H5Lget_val(group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, link_val_buf, link_val_buf_size, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't get external link val\n");
+        goto error;
+    }
+
+    if (H5Lunpack_elink_val(link_val_buf, link_val_buf_size, &ext_link_flags, &ext_link_filename, &ext_link_val) < 0) {
+        H5_FAILED();
+        printf("    couldn't unpack external link value buffer\n");
+        goto error;
+    }
+
+    if (strcmp(ext_link_filename, EXTERNAL_LINK_TEST_FILE_NAME)) {
+        H5_FAILED();
+        printf("    external link target file did not match\n");
+        goto error;
+    }
+
+    if (strcmp(ext_link_val, "/")) {
+        H5_FAILED();
+        printf("    external link value did not match\n");
+        goto error;
+    }
+
+    H5E_BEGIN_TRY {
+        memset(&link_info, 0, sizeof(link_info));
+
+        if (H5Lget_info(group_id, GET_LINK_VAL_TEST_SOFT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
+            H5_FAILED();
+            printf("    couldn't get soft link info\n");
+            goto error;
+        }
+
+        if (link_info.type != H5L_TYPE_SOFT) {
+            H5_FAILED();
+            printf("    incorrect link type returned\n");
+            goto error;
+        }
+
+        if (link_info.u.val_size > link_val_buf_size) {
+            char *tmp_realloc;
+
+            link_val_buf_size *= 2;
+
+            if (NULL == (tmp_realloc = (char *) realloc(link_val_buf, link_val_buf_size)))
+                TEST_ERROR
+            link_val_buf = tmp_realloc;
+        }
+
+        if (H5Lget_val_by_idx(group_id, ".", H5_INDEX_CRT_ORDER, H5_ITER_INC, 0, link_val_buf, link_val_buf_size, H5P_DEFAULT) >= 0) {
+            H5_FAILED();
+            printf("    unsupported API succeeded!\n");
+            goto error;
+        }
+
+#if 0
+        if (strcmp(link_val_buf, "/" LINK_TEST_GROUP_NAME "/" GET_LINK_VAL_TEST_SUBGROUP_NAME)) {
+            H5_FAILED();
+            printf("    soft link value did not match\n");
+            goto error;
+        }
+#endif
+
+        memset(&link_info, 0, sizeof(link_info));
+
+        if (H5Lget_info(group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
+            H5_FAILED();
+            printf("    couldn't get external link info\n");
+            goto error;
+        }
+
+        if (link_info.type != H5L_TYPE_EXTERNAL) {
+            H5_FAILED();
+            printf("    incorrect link type returned\n");
+            goto error;
+        }
+
+        if (link_info.u.val_size > link_val_buf_size) {
+            char *tmp_realloc;
+
+            link_val_buf_size *= 2;
+
+            if (NULL == (tmp_realloc = (char *) realloc(link_val_buf, link_val_buf_size)))
+                TEST_ERROR
+            link_val_buf = tmp_realloc;
+        }
+
+        if (H5Lget_val_by_idx(group_id, ".", H5_INDEX_CRT_ORDER, H5_ITER_INC, 0, link_val_buf, link_val_buf_size, H5P_DEFAULT) >= 0) {
+            H5_FAILED();
+            printf("    unsupported API succeeded!\n");
+            goto error;
+        }
+
+#if 0
+        if (H5Lunpack_elink_val(link_val_buf, link_val_buf_size, &ext_link_flags, &ext_link_filename, &ext_link_val) < 0) {
+            H5_FAILED();
+            printf("    couldn't unpack external link value buffer\n");
+            goto error;
+        }
+
+        if (strcmp(ext_link_filename, EXTERNAL_LINK_TEST_FILE_NAME)) {
+            H5_FAILED();
+            printf("    external link target file did not match\n");
+            goto error;
+        }
+
+        if (strcmp(ext_link_val, "/")) {
+            H5_FAILED();
+            printf("    external link value did not match\n");
+            goto error;
+        }
+#endif
+    } H5E_END_TRY;
+
+    if (link_val_buf) {
+        free(link_val_buf);
+        link_val_buf = NULL;
+    }
+
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        if (link_val_buf) free(link_val_buf);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 

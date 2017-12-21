@@ -388,6 +388,7 @@ static herr_t RV_parse_response(char *HTTP_response, void *callback_data_in, voi
 static herr_t RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_obj_type_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_retrieve_object_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_group_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
@@ -4995,9 +4996,11 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
             hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
+    hbool_t      empty_dirname;
     size_t       host_header_len = 0;
     char        *host_header = NULL;
     char        *link_dir_name = NULL;
+    char         temp_URI[URI_MAX_LENGTH];
     char         request_url[URL_MAX_LENGTH];
     herr_t       ret_value = SUCCEED;
 
@@ -5018,9 +5021,6 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
                 /* H5Lget_info */
                 case H5VL_OBJECT_BY_NAME:
                 {
-                    hbool_t empty_dirname;
-                    char    temp_URI[URI_MAX_LENGTH];
-
                     /* In case the user specified a path which contains any groups on the way to the
                      * link in question, extract out the path to the final group in the chain */
                     if (NULL == (link_dir_name = RV_dirname(loc_params.loc_data.loc_by_name.name)))
@@ -5095,7 +5095,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
-            printf("  - Retrieving object info\n\n");
+            printf("  - Retrieving link info\n\n");
 
             printf("   /********************************\\\n");
             printf("-> | Making a request to the server |\n");
@@ -5106,7 +5106,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
 
             /* Retrieve the link info */
             if (RV_parse_response(response_buffer.buffer, NULL, link_info, RV_get_link_info_callback) < 0)
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't retrieve object info")
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't retrieve link info")
 
             break;
         } /* H5VL_LINK_GET_INFO */
@@ -5121,11 +5121,48 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
         /* H5Lget_val */
         case H5VL_LINK_GET_VAL:
         {
+            void   *out_buf = va_arg(arguments, void *);
+            size_t  buf_size = va_arg(arguments, size_t);
+
             switch (loc_params.type) {
                 /* H5Lget_val */
-                case H5VL_OBJECT_BY_SELF:
+                case H5VL_OBJECT_BY_NAME:
                 {
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lget_val is unsupported")
+                    /* In case the user specified a path which contains any groups on the way to the
+                     * link in question, extract out the path to the final group in the chain */
+                    if (NULL == (link_dir_name = RV_dirname(loc_params.loc_data.loc_by_name.name)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get path dirname")
+                    empty_dirname = !strcmp(link_dir_name, "");
+
+#ifdef PLUGIN_DEBUG
+                    printf("  - Path Dirname: %s\n\n", link_dir_name);
+#endif
+
+                    /* If the path to the final group in the chain wasn't empty, get the URI of the final
+                     * group and search for the link in question within that group. Otherwise, the
+                     * supplied parent group is the one that should be housing the link, so search from
+                     * there.
+                     */
+                    if (!empty_dirname) {
+                        H5I_type_t obj_type = H5I_GROUP;
+                        htri_t     search_ret;
+
+                        search_ret = RV_find_object_by_path(loc_obj, link_dir_name, &obj_type,
+                                RV_copy_object_URI_callback, NULL, temp_URI);
+                        if (!search_ret || search_ret < 0)
+                            FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate parent group")
+
+#ifdef PLUGIN_DEBUG
+                        printf("  - Found new parent group %s at end of path chain\n\n", temp_URI);
+#endif
+                    } /* end if */
+
+                    snprintf(request_url, URL_MAX_LENGTH,
+                            "%s/groups/%s/links/%s",
+                            base_URL,
+                            empty_dirname ? loc_obj->URI : temp_URI,
+                            RV_basename(loc_params.loc_data.loc_by_name.name));
+
                     break;
                 } /* H5VL_OBJECT_BY_SELF */
 
@@ -5136,12 +5173,47 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
 
-                case H5VL_OBJECT_BY_NAME:
+                case H5VL_OBJECT_BY_SELF:
                 case H5VL_OBJECT_BY_ADDR:
                 case H5VL_OBJECT_BY_REF:
                 default:
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
             } /* end switch */
+
+            /* Make a GET request to the server to retrieve the number of attributes attached to the object */
+
+            /* Setup the "Host: " header */
+            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
+            if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+
+            strcpy(host_header, host_string);
+
+            curl_headers = curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+
+            /* Disable use of Expect: 100 Continue HTTP response */
+            curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+
+#ifdef PLUGIN_DEBUG
+            printf("  - Retrieving link value\n\n");
+
+            printf("   /********************************\\\n");
+            printf("-> | Making a request to the server |\n");
+            printf("   \\********************************/\n\n");
+#endif
+
+            CURL_PERFORM(curl, H5E_OBJECT, H5E_CANTGET, FAIL);
+
+            /* Retrieve the link value */
+            if (RV_parse_response(response_buffer.buffer, &buf_size, out_buf, RV_get_link_val_callback) < 0)
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't retrieve link value")
 
             break;
         } /* H5VL_LINK_GET_VAL */
@@ -6316,7 +6388,7 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned URI is not a string")
 
             if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of URI failed")
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "URI was NULL")
         } /* end else */
     } /* end else */
 
@@ -6381,7 +6453,7 @@ RV_get_obj_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned object parent collection is not a string")
 
     if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object parent collection failed")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "object parent collection string was NULL")
 
     if (!strcmp(parsed_string, "groups"))
         *((H5I_type_t *) callback_data_out) = H5I_GROUP;
@@ -6408,8 +6480,9 @@ done:
  *              type, and copy that info into the callback_data_out
  *              parameter, which should be a H5L_info_t *. This callback
  *              is used specifically for H5Lget_info (_by_idx). Currently
- *              only the link class is returned by this function. All
- *              other information in the H5L_info_t struct is
+ *              only the link class, and for soft, external and
+ *              user-defined links, the link value, is returned by this
+ *              function. All other information in the H5L_info_t struct is
  *              initialized to 0.
  *
  * Return:      Non-negative on success/Negative on failure
@@ -6441,7 +6514,7 @@ RV_get_link_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_dat
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned object parent collection is not a string")
 
     if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object parent collection failed")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "object parent collection string was NULL")
 
     if (!strcmp(parsed_string, "H5L_TYPE_HARD"))
         link_info->type = H5L_TYPE_HARD;
@@ -6452,12 +6525,162 @@ RV_get_link_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_dat
     else
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "invalid link class")
 
+    /* If this is not a hard link, determine the value for the 'val_size' field corresponding
+     * to the size of a soft, external or user-defined link's value, including the NULL terminator
+     */
+    if (strcmp(parsed_string, "H5L_TYPE_HARD"))
+        if (RV_parse_response(HTTP_response, &link_info->u.val_size, NULL, RV_get_link_val_callback) < 0)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "can't retrieve link value size")
+
 done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
     return ret_value;
 } /* end RV_get_link_info_callback() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_get_link_val_callback
+ *
+ * Purpose:     A callback for RV_parse_response which will search an HTTP
+ *              response for a link's value, and do one of two things,
+ *              based on the value of the buffer size given through the
+ *              callback_data_in parameter.
+ *
+ *              If the buffer size given is non-positive, this callback
+ *              will just set the buffer size parameter to be the size
+ *              needed to actually store the link's value.
+ *
+ *              If the buffer size given is positive, this callback will
+ *              copy the link's value into the callback_data_out
+ *              parameter, which should be a char *, corresponding to the
+ *              link value buffer, of size equal to the given buffer size
+ *              parameter.
+ *
+ *              This callback is used by H5Lget_info to store the size of
+ *              the link's value in an H5L_info_t struct's 'val_size'
+ *              field, and also by H5Lget_val (_by_idx) to actually
+ *              retrieve the link's value.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              December, 2017
+ */
+static herr_t
+RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+{
+    const char *link_class_keys[] = { "link", "class", (const char *) 0 };
+    const char *link_val_keys[] = { "link", "h5path", (const char *) 0 };
+    yajl_val    parse_tree = NULL, key_obj;
+    size_t     *in_buf_size = (size_t *) callback_data_in;
+    char       *link_path;
+    char       *link_class;
+    char       *out_buf = (char *) callback_data_out;
+    herr_t      ret_value = SUCCEED;
+
+    assert(in_buf_size && "invalid buffer size pointer");
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+
+    /* Retrieve the link's class */
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, link_class_keys, yajl_t_string)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link class failed")
+
+    if (!YAJL_IS_STRING(key_obj))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned link class is not a string")
+
+    if (NULL == (link_class = YAJL_GET_STRING(key_obj)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "link class was NULL")
+
+    if (!strcmp(link_class, "H5L_TYPE_HARD"))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "H5Lget_val should not be called for hard links")
+
+    /* Retrieve the link's value */
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, link_val_keys, yajl_t_string)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link value failed")
+
+    if (!YAJL_IS_STRING(key_obj))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned link value is not a string")
+
+    if (NULL == (link_path = YAJL_GET_STRING(key_obj)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "link value was NULL")
+
+    if (!strcmp(link_class, "H5L_TYPE_SOFT")) {
+        if ((!*in_buf_size) || (*in_buf_size < 0)) {
+            /* If the buffer size was specified as non-positive, simply set the size that
+             * the buffer needs to be to contain the link value, which should just be
+             * large enough to contain the link's target path
+             */
+            *in_buf_size = strlen(link_path) + 1;
+        } /* end if */
+        else {
+            if (out_buf)
+                strncpy(out_buf, link_path, *in_buf_size);
+        } /* end else */
+    } /* end if */
+    else {
+        const char *link_domain_keys[] = { "link", "h5domain", (const char *) 0 };
+        yajl_val    link_domain_obj;
+        unsigned    link_version;
+        unsigned    link_flags;
+        char       *link_domain;
+
+        if (NULL == (link_domain_obj = yajl_tree_get(parse_tree, link_domain_keys, yajl_t_string)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of external link domain failed")
+
+        if (!YAJL_IS_STRING(link_domain_obj))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned external link domain is not a string")
+
+        if (NULL == (link_domain = YAJL_GET_STRING(link_domain_obj)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "link domain was NULL")
+
+        /* Process external links; user-defined links are currently unsupported */
+        if ((!*in_buf_size) || (*in_buf_size < 0)) {
+            /* If the buffer size was specified as non-positive, simply set the size that
+             * the buffer needs to be to contain the link value, which should contain
+             * the link's flags, target file and target path in the case of external links
+             */
+            *in_buf_size = 1 + (strlen(link_domain) + 1) + (strlen(link_path) + 1);
+        } /* end if */
+        else {
+            uint8_t *p = (uint8_t *) out_buf;
+
+            /* Pack an external link's flags, target object and target file into a single buffer
+             * for later unpacking with H5Lunpack_elink_val(). Note that the implementation
+             * for unpacking the external link buffer may change in the future and thus this
+             * implementation for packing it up will have to change as well.
+             */
+
+            /* First pack the link version and flags into the output buffer */
+            link_version = 0;
+            link_flags = 0;
+
+            /* The correct usage should be H5L_EXT_VERSION and H5L_EXT_FLAGS_ALL, but these
+             * are not currently exposed to the VOL
+             */
+            /* *p++ = (H5L_EXT_VERSION << 4) | H5L_EXT_FLAGS_ALL; */
+
+            *p++ = (link_version << 4) | link_flags;
+
+            /* Next copy the external link's target filename into the link value buffer */
+            strncpy((char *) p, link_domain, *in_buf_size - 1);
+            p += strlen(link_domain) + 1;
+
+            /* Finally comes the external link's target path */
+            /* XXX: __strncpy_sse2_unaligned */
+            strncpy((char *) p, link_path, *in_buf_size - (strlen(link_path) + 1));
+        } /* end else */
+    } /* end else */
+
+done:
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    return ret_value;
+} /* end RV_get_link_val_callback() */
 
 
 /*-------------------------------------------------------------------------
