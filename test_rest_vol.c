@@ -31,6 +31,11 @@
 
 #define ARRAY_LENGTH(array) sizeof(array) / sizeof(array[0])
 
+/* Uncomment to prevent large tests (e.g. ones that allocate
+ * gigabytes of memory) from running
+ */
+#define NO_LARGE_TESTS
+
 
 /* The HSDS endpoint and authentication information */
 #define URL getenv("HSDS_ENDPOINT")
@@ -47,6 +52,9 @@
  * of development
  */
 #define COMPOUND_TYPE_MAX_MEMBERS 4
+
+/* The maximum size of a dimension in an HDF5 dataspace */
+#define MAX_DIM_SIZE 64
 
 #define FILENAME "/home/test_user1/new_file"
 
@@ -115,7 +123,6 @@
 #define ATTRIBUTE_CREATE_ON_DATASET_ATTR_NAME2      "attr_on_dataset2"
 
 #define ATTRIBUTE_CREATE_ON_DATATYPE_SPACE_RANK 2
-#define ATTRIBUTE_CREATE_ON_DATATYPE_DTYPE_SIZE 50
 #define ATTRIBUTE_CREATE_ON_DATATYPE_DTYPE_NAME "datatype_with_attr"
 #define ATTRIBUTE_CREATE_ON_DATATYPE_ATTR_NAME  "attr_on_datatype"
 #define ATTRIBUTE_CREATE_ON_DATATYPE_ATTR_NAME2 "attr_on_datatype2"
@@ -169,56 +176,50 @@
 
 #define DATASET_CREATE_UNDER_ROOT_DSET_NAME  "/dset_under_root"
 #define DATASET_CREATE_UNDER_ROOT_SPACE_RANK 2
-#define DATASET_CREATE_UNDER_ROOT_NX         100
-#define DATASET_CREATE_UNDER_ROOT_NY         100
 
 #define DATASET_CREATE_ANONYMOUS_DATASET_NAME "anon_dset"
 #define DATASET_CREATE_ANONYMOUS_SPACE_RANK   2
-#define DATASET_CREATE_ANONYMOUS_NX           100
-#define DATASET_CREATE_ANONYMOUS_NY           100
 
 #define DATASET_CREATE_UNDER_EXISTING_SPACE_RANK 2
 #define DATASET_CREATE_UNDER_EXISTING_DSET_NAME  "nested_dset"
-#define DATASET_CREATE_UNDER_EXISTING_NX         256
-#define DATASET_CREATE_UNDER_EXISTING_NY         256
 
 /* Defines for testing the plugin's ability to parse different types
  * of Datatypes for Dataset creation
  */
-#define DATASET_PREDEFINED_TYPE_TEST_SHAPE_RANK    2
+#define DATASET_PREDEFINED_TYPE_TEST_SPACE_RANK    2
 #define DATASET_PREDEFINED_TYPE_TEST_BASE_NAME     "predefined_type_dset"
 #define DATASET_PREDEFINED_TYPE_TEST_SUBGROUP_NAME "predefined_type_dataset_test"
 
 #define DATASET_STRING_TYPE_TEST_STRING_LENGTH  40
-#define DATASET_STRING_TYPE_TEST_SHAPE_RANK     2
+#define DATASET_STRING_TYPE_TEST_SPACE_RANK     2
 #define DATASET_STRING_TYPE_TEST_DSET_NAME1     "fixed_length_string_dset"
 #define DATASET_STRING_TYPE_TEST_DSET_NAME2     "variable_length_string_dset"
 #define DATASET_STRING_TYPE_TEST_SUBGROUP_NAME  "string_type_dataset_test"
 
 #define DATASET_ENUM_TYPE_TEST_VAL_BASE_NAME "INDEX"
 #define DATASET_ENUM_TYPE_TEST_SUBGROUP_NAME "enum_type_dataset_test"
-#define DATASET_ENUM_TYPE_TEST_SHAPE_RANK    2
+#define DATASET_ENUM_TYPE_TEST_SPACE_RANK    2
 #define DATASET_ENUM_TYPE_TEST_DSET_NAME1    "enum_native_dset"
 #define DATASET_ENUM_TYPE_TEST_DSET_NAME2    "enum_non_native_dset"
 
-#define DATASET_ARRAY_TYPE_TEST_NON_PREDEFINED_SIZE 20
-#define DATASET_ARRAY_TYPE_TEST_SHAPE_RANK          2
-#define DATASET_ARRAY_TYPE_TEST_SUBGROUP_NAME       "array_type_dataset_test"
-#define DATASET_ARRAY_TYPE_TEST_DSET_NAME1          "array_type_test1"
-#define DATASET_ARRAY_TYPE_TEST_DSET_NAME2          "array_type_test2"
-#define DATASET_ARRAY_TYPE_TEST_DSET_NAME3          "array_type_test3"
-#define DATASET_ARRAY_TYPE_TEST_DSET_NAME4          "array_type_test4"
-#define DATASET_ARRAY_TYPE_TEST_RANK1               2
-#define DATASET_ARRAY_TYPE_TEST_RANK2               2
-#define DATASET_ARRAY_TYPE_TEST_RANK3               2
-#define DATASET_ARRAY_TYPE_TEST_RANK4               2
+#define DATASET_ARRAY_TYPE_TEST_SUBGROUP_NAME "array_type_dataset_test"
+#define DATASET_ARRAY_TYPE_TEST_DSET_NAME1    "array_type_test1"
+#define DATASET_ARRAY_TYPE_TEST_DSET_NAME2    "array_type_test2"
+#if 0
+#define DATASET_ARRAY_TYPE_TEST_DSET_NAME3    "array_type_test3"
+#endif
+#define DATASET_ARRAY_TYPE_TEST_SPACE_RANK    2
+#define DATASET_ARRAY_TYPE_TEST_RANK1         2
+#define DATASET_ARRAY_TYPE_TEST_RANK2         2
+#if 0
+#define DATASET_ARRAY_TYPE_TEST_RANK3         2
+#endif
 
-#define DATASET_COMPOUND_TYPE_TEST_MAX_SUBTYPE_SIZE 8
-#define DATASET_COMPOUND_TYPE_TEST_MAX_SUBTYPES     10
-#define DATASET_COMPOUND_TYPE_TEST_MAX_PASSES       5
-#define DATASET_COMPOUND_TYPE_TEST_DSET_RANK        2
-#define DATASET_COMPOUND_TYPE_TEST_DSET_NAME        "compound_type_test"
-#define DATASET_COMPOUND_TYPE_TEST_SUBGROUP_NAME    "compound_type_dataset_test"
+#define DATASET_COMPOUND_TYPE_TEST_SUBGROUP_NAME "compound_type_dataset_test"
+#define DATASET_COMPOUND_TYPE_TEST_DSET_NAME     "compound_type_test"
+#define DATASET_COMPOUND_TYPE_TEST_MAX_SUBTYPES  10
+#define DATASET_COMPOUND_TYPE_TEST_MAX_PASSES    5
+#define DATASET_COMPOUND_TYPE_TEST_DSET_RANK     2
 
 /* Defines for testing the plugin's ability to parse different
  * Dataset shapes for creation
@@ -241,9 +242,8 @@
 #define DATASET_CREATION_PROPERTIES_TEST_MIN_DENSE                 8
 #define DATASET_CREATION_PROPERTIES_TEST_SHAPE_RANK                3
 
-#define DATASET_CREATE_COMBINATIONS_TEST_NUM_ITERATIONS 10
-
 #define DATASET_SMALL_WRITE_TEST_ALL_DSET_SPACE_RANK 3
+#define DATASET_SMALL_WRITE_TEST_ALL_DSET_DTYPESIZE  sizeof(int)
 #define DATASET_SMALL_WRITE_TEST_ALL_DSET_DTYPE      H5T_NATIVE_INT
 #define DATASET_SMALL_WRITE_TEST_ALL_DSET_NAME       "dataset_write_small_all"
 
@@ -251,14 +251,30 @@
 #define DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_DTYPESIZE  sizeof(int)
 #define DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_DTYPE      H5T_NATIVE_INT
 #define DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_NAME       "dataset_write_small_hyperslab"
-#define DATASET_SMALL_WRITE_TEST_HYPERSLAB_DIM_SIZE        10
 
 #define DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DSET_SPACE_RANK 3
 #define DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DSET_DTYPESIZE  sizeof(int)
 #define DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DSET_DTYPE      H5T_NATIVE_INT
-#define DATASET_SMALL_WRITE_TEST_POINT_SELECTION_NUM_POINTS      DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DIM_SIZE
+#define DATASET_SMALL_WRITE_TEST_POINT_SELECTION_NUM_POINTS      10
 #define DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DSET_NAME       "dataset_write_small_point_selection"
-#define DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DIM_SIZE        10
+
+#ifndef NO_LARGE_TESTS
+#define DATASET_LARGE_WRITE_TEST_ALL_DSET_SPACE_RANK 3
+#define DATASET_LARGE_WRITE_TEST_ALL_DSET_DTYPESIZE  sizeof(int)
+#define DATASET_LARGE_WRITE_TEST_ALL_DSET_DTYPE      H5T_NATIVE_INT
+#define DATASET_LARGE_WRITE_TEST_ALL_DSET_NAME       "dataset_write_large_all"
+
+#define DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK 3
+#define DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_DTYPESIZE  sizeof(int)
+#define DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_DTYPE      H5T_NATIVE_INT
+#define DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_NAME       "dataset_write_large_hyperslab"
+
+#define DATASET_LARGE_WRITE_TEST_POINT_SELECTION_DSET_SPACE_RANK 3
+#define DATASET_LARGE_WRITE_TEST_POINT_SELECTION_DSET_DTYPESIZE  sizeof(int)
+#define DATASET_LARGE_WRITE_TEST_POINT_SELECTION_DSET_DTYPE      H5T_NATIVE_INT
+#define DATASET_LARGE_WRITE_TEST_POINT_SELECTION_NUM_POINTS      10
+#define DATASET_LARGE_WRITE_TEST_POINT_SELECTION_DSET_NAME       "dataset_write_large_point_selection"
+#endif
 
 #define DATASET_SMALL_READ_TEST_ALL_DSET_SPACE_RANK 3
 #define DATASET_SMALL_READ_TEST_ALL_DSET_DTYPESIZE  sizeof(int)
@@ -269,20 +285,35 @@
 #define DATASET_SMALL_READ_TEST_HYPERSLAB_DSET_DTYPESIZE  sizeof(int)
 #define DATASET_SMALL_READ_TEST_HYPERSLAB_DSET_DTYPE      H5T_NATIVE_INT
 #define DATASET_SMALL_READ_TEST_HYPERSLAB_DSET_NAME       "dataset_read_small_hyperslab"
-#define DATASET_SMALL_READ_TEST_HYPERSLAB_DIM_SIZE        10
 
 #define DATASET_SMALL_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK 3
 #define DATASET_SMALL_READ_TEST_POINT_SELECTION_DSET_DTYPESIZE  sizeof(int)
 #define DATASET_SMALL_READ_TEST_POINT_SELECTION_DSET_DTYPE      H5T_NATIVE_INT
-#define DATASET_SMALL_READ_TEST_POINT_SELECTION_NUM_POINTS      DATASET_SMALL_READ_TEST_POINT_SELECTION_DIM_SIZE
+#define DATASET_SMALL_READ_TEST_POINT_SELECTION_NUM_POINTS      10
 #define DATASET_SMALL_READ_TEST_POINT_SELECTION_DSET_NAME       "dataset_read_small_point_selection"
-#define DATASET_SMALL_READ_TEST_POINT_SELECTION_DIM_SIZE        10
+
+#ifndef NO_LARGE_TESTS
+#define DATASET_LARGE_READ_TEST_ALL_DSET_SPACE_RANK 3
+#define DATASET_LARGE_READ_TEST_ALL_DSET_DTYPESIZE  sizeof(int)
+#define DATASET_LARGE_READ_TEST_ALL_DSET_DTYPE      H5T_NATIVE_INT
+#define DATASET_LARGE_READ_TEST_ALL_DSET_NAME       "dataset_read_large_all"
+
+#define DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK 3
+#define DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_DTYPESIZE  sizeof(int)
+#define DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_DTYPE      H5T_NATIVE_INT
+#define DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_NAME       "dataset_read_large_hyperslab"
+
+#define DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK 3
+#define DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPESIZE  sizeof(int)
+#define DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPE      H5T_NATIVE_INT
+#define DATASET_LARGE_READ_TEST_POINT_SELECTION_NUM_POINTS      10
+#define DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_NAME       "dataset_read_large_point_selection"
+#endif
 
 #define DATASET_DATA_VERIFY_WRITE_TEST_DSET_SPACE_RANK 3
 #define DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE  sizeof(int)
 #define DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPE      H5T_NATIVE_INT
 #define DATASET_DATA_VERIFY_WRITE_TEST_DSET_NAME       "dataset_data_verification"
-#define DATASET_DATA_VERIFY_WRITE_TEST_DIM_SIZE        5
 
 #define DATASET_SET_EXTENT_TEST_SPACE_RANK 2
 #define DATASET_SET_EXTENT_TEST_DSET_NAME  "set_extent_test_dset"
@@ -307,11 +338,9 @@
 
 #define DATATYPE_CREATE_TEST_DATASET_DIMS  2
 
-#define DATATYPE_CREATE_TEST_STRING_LENGTH 40
-#define DATATYPE_CREATE_TEST_TYPE_NAME     "test_type"
+#define DATATYPE_CREATE_TEST_TYPE_NAME "test_type"
 
-#define DATATYPE_CREATE_ANONYMOUS_TYPE_LENGTH 25
-#define DATATYPE_CREATE_ANONYMOUS_TYPE_NAME   "anon_type"
+#define DATATYPE_CREATE_ANONYMOUS_TYPE_NAME "anon_type"
 
 #define DATASET_CREATE_WITH_DATATYPE_TEST_DATASET_DIMS 2
 #define DATASET_CREATE_WITH_DATATYPE_TEST_TYPE_NAME    "committed_type_test_dtype1"
@@ -335,13 +364,14 @@
 
 #define HARD_LINK_TEST_LINK_NAME     "test_link"
 #define SOFT_LINK_TEST_LINK_NAME     "softlink"
-#define SOFT_LINK_TEST_LINK_PATH     "/softlink"
 #define EXTERNAL_LINK_TEST_FILE_NAME "/home/test_user1/ext_link_file"
 #define EXTERNAL_LINK_TEST_LINK_NAME "ext_link"
 
 #define H5L_SAME_LOC_TEST_DSET_SPACE_RANK 2
 #define H5L_SAME_LOC_TEST_GROUP_NAME      "h5l_same_loc_test_group"
+#if 0
 #define H5L_SAME_LOC_TEST_LINK_NAME1      "h5l_same_loc_test_link1"
+#endif
 #define H5L_SAME_LOC_TEST_LINK_NAME2      "h5l_same_loc_test_link2"
 #define H5L_SAME_LOC_TEST_DSET_NAME       "h5l_same_loc_test_dset"
 
@@ -382,7 +412,6 @@
 #define GENERIC_GROUP_OPEN_TEST_GROUP_NAME "generic_group_open_test"
 
 #define GENERIC_DATATYPE_OPEN_TEST_TYPE_NAME "generic_datatype_open_test"
-#define GENERIC_DATATYPE_OPEN_TEST_TYPE_SIZE 50
 
 #define H5O_CLOSE_TEST_SPACE_RANK 2
 #define H5O_CLOSE_TEST_DSET_NAME  "h5o_close_test_dset"
@@ -415,16 +444,14 @@
  *                                                   *
  *****************************************************/
 
-#define OPEN_LINK_WITHOUT_SLASH_DSET_DIMS 2
-#define OPEN_LINK_WITHOUT_SLASH_DSET_NAME "link_without_slash_test_dset"
+#define OPEN_LINK_WITHOUT_SLASH_DSET_SPACE_RANK 2
+#define OPEN_LINK_WITHOUT_SLASH_DSET_NAME       "link_without_slash_test_dset"
 
 #define OBJECT_CREATE_BY_ABSOLUTE_PATH_TEST_CONTAINER_GROUP_NAME "absolute_path_test_container_group"
 #define OBJECT_CREATE_BY_ABSOLUTE_PATH_TEST_SUBGROUP_NAME        "absolute_path_test_subgroup"
 #define OBJECT_CREATE_BY_ABSOLUTE_PATH_TEST_DTYPE_NAME           "absolute_path_test_dtype"
 #define OBJECT_CREATE_BY_ABSOLUTE_PATH_TEST_DSET_NAME            "absolute_path_test_dset"
 #define OBJECT_CREATE_BY_ABSOLUTE_PATH_TEST_DSET_SPACE_RANK      3
-#define OBJECT_CREATE_BY_ABSOLUTE_PATH_TEST_DSET_DIM_SIZE        5
-#define OBJECT_CREATE_BY_ABSOLUTE_PATH_TEST_DTYPE_SIZE           30
 
 #define ABSOLUTE_VS_RELATIVE_PATH_TEST_CONTAINER_GROUP_NAME "absolute_vs_relative_test_container_group"
 #define ABSOLUTE_VS_RELATIVE_PATH_TEST_DSET1_NAME           "absolute_vs_relative_test_dset1"
@@ -434,13 +461,11 @@
 #define ABSOLUTE_VS_RELATIVE_PATH_TEST_DSET5_NAME           "absolute_vs_relative_test_dset5"
 #define ABSOLUTE_VS_RELATIVE_PATH_TEST_DSET6_NAME           "absolute_vs_relative_test_dset6"
 #define ABSOLUTE_VS_RELATIVE_PATH_TEST_DSET_SPACE_RANK      3
-#define ABSOLUTE_VS_RELATIVE_PATH_TEST_DSET_DIM_SIZE        5
 
-#define URL_ENCODING_TEST_DSET_DIM_SIZE 10
-#define URL_ENCODING_TEST_SPACE_RANK    2
-#define URL_ENCODING_TEST_GROUP_NAME    "url_encoding_group !*'();:@&=+$,?#[]-.<>\\\\^`{}|~"
-#define URL_ENCODING_TEST_DSET_NAME     "url_encoding_dset !*'();:@&=+$,?#[]-.<>\\\\^`{}|~"
-#define URL_ENCODING_TEST_ATTR_NAME     "url_encoding_attr !*'();:@&=+$,?#[]-.<>\\\\^`{}|~"
+#define URL_ENCODING_TEST_SPACE_RANK 2
+#define URL_ENCODING_TEST_GROUP_NAME "url_encoding_group !*'();:@&=+$,?#[]-.<>\\\\^`{}|~"
+#define URL_ENCODING_TEST_DSET_NAME  "url_encoding_dset !*'();:@&=+$,?#[]-.<>\\\\^`{}|~"
+#define URL_ENCODING_TEST_ATTR_NAME  "url_encoding_attr !*'();:@&=+$,?#[]-.<>\\\\^`{}|~"
 
 
 /* Plugin initialization/termination test */
@@ -494,19 +519,22 @@ static int test_create_dataset_enum_types(void);
 static int test_create_dataset_array_types(void);
 static int test_create_dataset_shapes(void);
 static int test_create_dataset_creation_properties(void);
-static int test_create_dataset_large_datatype(void);
 static int test_write_dataset_small_all(void);
 static int test_write_dataset_small_hyperslab(void);
 static int test_write_dataset_small_point_selection(void);
+#ifndef NO_LARGE_TESTS
 static int test_write_dataset_large_all(void);
 static int test_write_dataset_large_hyperslab(void);
 static int test_write_dataset_large_point_selection(void);
+#endif
 static int test_read_dataset_small_all(void);
 static int test_read_dataset_small_hyperslab(void);
 static int test_read_dataset_small_point_selection(void);
+#ifndef NO_LARGE_TESTS
 static int test_read_dataset_large_all(void);
 static int test_read_dataset_large_hyperslab(void);
 static int test_read_dataset_large_point_selection(void);
+#endif
 static int test_write_dataset_data_verification(void);
 static int test_dataset_set_extent(void);
 static int test_unused_dataset_API_calls(void);
@@ -629,19 +657,22 @@ static int (*dataset_tests[])(void) = {
         test_create_dataset_array_types,
         test_create_dataset_shapes,
         test_create_dataset_creation_properties,
-        test_create_dataset_large_datatype,
         test_write_dataset_small_all,
         test_write_dataset_small_hyperslab,
         test_write_dataset_small_point_selection,
+#ifndef NO_LARGE_TESTS
         test_write_dataset_large_all,
         test_write_dataset_large_hyperslab,
         test_write_dataset_large_point_selection,
+#endif
         test_read_dataset_small_all,
         test_read_dataset_small_hyperslab,
         test_read_dataset_small_point_selection,
+#ifndef NO_LARGE_TESTS
         test_read_dataset_large_all,
         test_read_dataset_large_hyperslab,
         test_read_dataset_large_point_selection,
+#endif
         test_write_dataset_data_verification,
         test_dataset_set_extent,
         test_unused_dataset_API_calls,
@@ -974,7 +1005,8 @@ static int
 test_get_file_intent(void)
 {
     unsigned file_intent;
-    hsize_t  space_dims[FILE_INTENT_TEST_DSET_RANK] = { 10, 10 };
+    hsize_t  space_dims[FILE_INTENT_TEST_DSET_RANK];
+    size_t   i;
     hid_t    file_id = -1, fapl_id = -1;
     hid_t    dset_id = -1;
     hid_t    dset_dtype = -1;
@@ -1024,6 +1056,9 @@ test_get_file_intent(void)
         printf("    received incorrect file intent\n");
         goto error;
     }
+
+    for (i = 0; i < FILE_INTENT_TEST_DSET_RANK; i++)
+        space_dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((space_id = H5Screate_simple(FILE_INTENT_TEST_DSET_RANK, space_dims, NULL)) < 0)
         TEST_ERROR
@@ -2018,7 +2053,7 @@ test_create_attribute_on_root(void)
     }
 
     for (i = 0; i < ATTRIBUTE_CREATE_ON_ROOT_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((space_id = H5Screate_simple(ATTRIBUTE_CREATE_ON_ROOT_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -2220,9 +2255,9 @@ test_create_attribute_on_dataset(void)
     }
 
     for (i = 0; i < ATTRIBUTE_CREATE_ON_DATASET_DSET_SPACE_RANK; i++)
-        dset_dims[i] = (hsize_t) rand() % 64 + 1;
+        dset_dims[i] = (hsize_t) rand() % MAX_DIM_SIZE + 1;
     for (i = 0; i < ATTRIBUTE_CREATE_ON_DATASET_ATTR_SPACE_RANK; i++)
-        attr_dims[i] = (hsize_t) rand() % 64 + 1;
+        attr_dims[i] = (hsize_t) rand() % MAX_DIM_SIZE + 1;
 
     if ((dset_space_id = H5Screate_simple(ATTRIBUTE_CREATE_ON_DATASET_DSET_SPACE_RANK, dset_dims, NULL)) < 0)
         TEST_ERROR
@@ -2451,7 +2486,7 @@ test_create_attribute_on_datatype(void)
     }
 
     for (i = 0; i < ATTRIBUTE_CREATE_ON_DATATYPE_SPACE_RANK; i++)
-        dims[i] = (hsize_t) rand() % 64 + 1;
+        dims[i] = (hsize_t) rand() % MAX_DIM_SIZE + 1;
 
     if ((space_id = H5Screate_simple(ATTRIBUTE_CREATE_ON_DATATYPE_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -2638,7 +2673,7 @@ test_get_attribute_info(void)
     }
 
     for (i = 0; i < ATTRIBUTE_GET_INFO_TEST_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((space_id = H5Screate_simple(ATTRIBUTE_GET_INFO_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -2756,7 +2791,7 @@ test_get_attribute_space_and_type(void)
     }
 
     for (i = 0; i < ATTRIBUTE_GET_SPACE_TYPE_TEST_SPACE_RANK; i++)
-        attr_dims[i] = (hsize_t) (rand() % 64 + 1);
+        attr_dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((attr_space_id = H5Screate_simple(ATTRIBUTE_GET_SPACE_TYPE_TEST_SPACE_RANK, attr_dims, NULL)) < 0)
         TEST_ERROR
@@ -2962,7 +2997,7 @@ test_get_attribute_name(void)
     }
 
     for (i = 0; i < ATTRIBUTE_GET_NAME_TEST_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((space_id = H5Screate_simple(ATTRIBUTE_GET_NAME_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -3118,7 +3153,7 @@ test_create_attribute_with_space_in_name(void)
     }
 
     for (i = 0; i < ATTRIBUTE_CREATE_WITH_SPACE_IN_NAME_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((space_id = H5Screate_simple(ATTRIBUTE_CREATE_WITH_SPACE_IN_NAME_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -3214,7 +3249,7 @@ test_delete_attribute(void)
     }
 
     for (i = 0; i < ATTRIBUTE_DELETION_TEST_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((space_id = H5Screate_simple(ATTRIBUTE_DELETION_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -3383,7 +3418,7 @@ test_write_attribute(void)
     }
 
     for (i = 0; i < ATTRIBUTE_WRITE_TEST_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((space_id = H5Screate_simple(ATTRIBUTE_WRITE_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -3495,7 +3530,7 @@ test_read_attribute(void)
     }
 
     for (i = 0; i < ATTRIBUTE_READ_TEST_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((space_id = H5Screate_simple(ATTRIBUTE_READ_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -3637,7 +3672,7 @@ test_rename_attribute(void)
     }
 
     for (i = 0; i < ATTRIBUTE_RENAME_TEST_SPACE_RANK; i++)
-        attr_dims[i] = (hsize_t) (rand() % 64 + 1);
+        attr_dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((attr_space_id = H5Screate_simple(ATTRIBUTE_RENAME_TEST_SPACE_RANK, attr_dims, NULL)) < 0)
         TEST_ERROR
@@ -3747,7 +3782,7 @@ test_get_number_attributes(void)
     }
 
     for (i = 0; i < ATTRIBUTE_GET_NUM_ATTRS_TEST_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((space_id = H5Screate_simple(ATTRIBUTE_GET_NUM_ATTRS_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -3899,7 +3934,7 @@ test_unused_attribute_API_calls(void)
     }
 
     for (i = 0; i < ATTRIBUTE_UNUSED_APIS_TEST_SPACE_RANK; i++)
-        attr_dims[i] = (hsize_t) (rand() % 64 + 1);
+        attr_dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((attr_space_id = H5Screate_simple(ATTRIBUTE_UNUSED_APIS_TEST_SPACE_RANK, attr_dims, NULL)) < 0)
         TEST_ERROR
@@ -3995,7 +4030,7 @@ test_attribute_property_lists(void)
     }
 
     for (i = 0; i < ATTRIBUTE_PROPERTY_LIST_TEST_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((space_id = H5Screate_simple(ATTRIBUTE_PROPERTY_LIST_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -4196,6 +4231,7 @@ static int
 test_create_dataset_under_root(void)
 {
     hsize_t dims[DATASET_CREATE_UNDER_ROOT_SPACE_RANK];
+    size_t  i;
     hid_t   file_id = -1, fapl_id = -1;
     hid_t   dset_id = -1;
     hid_t   dset_dtype = -1;
@@ -4217,8 +4253,8 @@ test_create_dataset_under_root(void)
         goto error;
     }
 
-    dims[0] = DATASET_CREATE_UNDER_ROOT_NY;
-    dims[1] = DATASET_CREATE_UNDER_ROOT_NX;
+    for (i = 0; i < DATASET_CREATE_UNDER_ROOT_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((fspace_id = H5Screate_simple(DATASET_CREATE_UNDER_ROOT_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -4268,6 +4304,7 @@ static int
 test_create_anonymous_dataset(void)
 {
     hsize_t dims[DATASET_CREATE_ANONYMOUS_SPACE_RANK];
+    size_t  i;
     hid_t   file_id = -1, fapl_id = -1;
     hid_t   container_group = -1;
     hid_t   dset_id = -1;
@@ -4296,8 +4333,8 @@ test_create_anonymous_dataset(void)
         goto error;
     }
 
-    dims[0] = DATASET_CREATE_ANONYMOUS_NY;
-    dims[1] = DATASET_CREATE_ANONYMOUS_NX;
+    for (i = 0; i < DATASET_CREATE_ANONYMOUS_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((fspace_id = H5Screate_simple(DATASET_CREATE_ANONYMOUS_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -4354,6 +4391,7 @@ static int
 test_create_dataset_under_existing_group(void)
 {
     hsize_t dims[DATASET_CREATE_UNDER_EXISTING_SPACE_RANK];
+    size_t  i;
     hid_t   file_id = -1, fapl_id = -1;
     hid_t   group_id = -1;
     hid_t   dset_id = -1;
@@ -4382,8 +4420,8 @@ test_create_dataset_under_existing_group(void)
         goto error;
     }
 
-    dims[0] = DATASET_CREATE_UNDER_EXISTING_NY;
-    dims[1] = DATASET_CREATE_UNDER_EXISTING_NX;
+    for (i = 0; i < DATASET_CREATE_UNDER_EXISTING_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((fspace_id = H5Screate_simple(DATASET_CREATE_UNDER_EXISTING_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -4476,13 +4514,14 @@ test_create_dataset_predefined_types(void)
     }
 
     for (i = 0; i < ARRAY_LENGTH(predefined_type_test_table); i++) {
-        hsize_t dims[DATASET_PREDEFINED_TYPE_TEST_SHAPE_RANK];
+        hsize_t dims[DATASET_PREDEFINED_TYPE_TEST_SPACE_RANK];
+        size_t  j;
         char    name[100];
 
-        dims[0] = (hsize_t) (rand() % 64 + 1);
-        dims[1] = (hsize_t) (rand() % 64 + 1);
+        for (j = 0; j < DATASET_PREDEFINED_TYPE_TEST_SPACE_RANK; j++)
+            dims[j] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
-        if ((fspace_id = H5Screate_simple(DATASET_PREDEFINED_TYPE_TEST_SHAPE_RANK, dims, NULL)) < 0)
+        if ((fspace_id = H5Screate_simple(DATASET_PREDEFINED_TYPE_TEST_SPACE_RANK, dims, NULL)) < 0)
             TEST_ERROR
 
         sprintf(name, "%s%zu", DATASET_PREDEFINED_TYPE_TEST_BASE_NAME, i);
@@ -4540,7 +4579,8 @@ error:
 static int
 test_create_dataset_string_types(void)
 {
-    hsize_t dims[DATASET_STRING_TYPE_TEST_SHAPE_RANK];
+    hsize_t dims[DATASET_STRING_TYPE_TEST_SPACE_RANK];
+    size_t  i;
     hid_t   file_id = -1, fapl_id = -1;
     hid_t   container_group = -1, group_id = -1;
     hid_t   dset_id_fixed = -1, dset_id_variable = -1;
@@ -4587,10 +4627,10 @@ test_create_dataset_string_types(void)
         goto error;
     }
 
-    dims[0] = (hsize_t) (rand() % 64 + 1);
-    dims[1] = (hsize_t) (rand() % 64 + 1);
+    for (i = 0; i < DATASET_STRING_TYPE_TEST_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
-    if ((fspace_id = H5Screate_simple(DATASET_STRING_TYPE_TEST_SHAPE_RANK, dims, NULL)) < 0)
+    if ((fspace_id = H5Screate_simple(DATASET_STRING_TYPE_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
     TESTING("dataset creation w/ fixed-length string type")
@@ -4671,7 +4711,7 @@ error:
 static int
 test_create_dataset_compound_types(void)
 {
-    hsize_t  dims[DATASET_COMPOUND_TYPE_TEST_DSET_RANK] = { 10, 5 };
+    hsize_t  dims[DATASET_COMPOUND_TYPE_TEST_DSET_RANK];
     size_t   i, j;
     hid_t    file_id = -1, fapl_id = -1;
     hid_t    container_group = -1, group_id = -1;
@@ -4708,6 +4748,9 @@ test_create_dataset_compound_types(void)
         printf("    couldn't create container sub-group\n");
         goto error;
     }
+
+    for (i = 0; i < DATASET_COMPOUND_TYPE_TEST_DSET_RANK; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((fspace_id = H5Screate_simple(DATASET_COMPOUND_TYPE_TEST_DSET_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -4827,7 +4870,7 @@ error:
 static int
 test_create_dataset_enum_types(void)
 {
-    hsize_t dims[DATASET_ENUM_TYPE_TEST_SHAPE_RANK];
+    hsize_t dims[DATASET_ENUM_TYPE_TEST_SPACE_RANK];
     size_t  i;
     hid_t   file_id = -1, fapl_id = -1;
     hid_t   container_group = -1, group_id = -1;
@@ -4893,10 +4936,10 @@ test_create_dataset_enum_types(void)
             TEST_ERROR
     }
 
-    dims[0] = (hsize_t) (rand() % 64 + 1);
-    dims[1] = (hsize_t) (rand() % 64 + 1);
+    for (i = 0; i < DATASET_ENUM_TYPE_TEST_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
-    if ((fspace_id = H5Screate_simple(DATASET_ENUM_TYPE_TEST_SHAPE_RANK, dims, NULL)) < 0)
+    if ((fspace_id = H5Screate_simple(DATASET_ENUM_TYPE_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
     TESTING("dataset creation w/ native integer enum type")
@@ -4977,7 +5020,7 @@ error:
 static int
 test_create_dataset_array_types(void)
 {
-    hsize_t dset_dims[DATASET_ARRAY_TYPE_TEST_SHAPE_RANK];
+    hsize_t dset_dims[DATASET_ARRAY_TYPE_TEST_SPACE_RANK];
     hsize_t array_dims1[DATASET_ARRAY_TYPE_TEST_RANK1];
     hsize_t array_dims2[DATASET_ARRAY_TYPE_TEST_RANK2];
 #if 0
@@ -5028,7 +5071,7 @@ test_create_dataset_array_types(void)
 
     /* Test creation of array with some different types */
     for (i = 0; i < DATASET_ARRAY_TYPE_TEST_RANK1; i++)
-        array_dims1[i] = (hsize_t) (rand() % 64 + 1);
+        array_dims1[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((array_base_type_id1 = generate_random_datatype(H5T_ARRAY)) < 0)
         TEST_ERROR
@@ -5040,7 +5083,7 @@ test_create_dataset_array_types(void)
     }
 
     for (i = 0; i < DATASET_ARRAY_TYPE_TEST_RANK2; i++)
-        array_dims2[i] = (hsize_t) (rand() % 64 + 1);
+        array_dims2[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((array_base_type_id2 = generate_random_datatype(H5T_ARRAY)) < 0)
         TEST_ERROR
@@ -5054,7 +5097,7 @@ test_create_dataset_array_types(void)
 #if 0
     /* Test nested arrays */
     for (i = 0; i < DATASET_ARRAY_TYPE_TEST_RANK4; i++)
-        array_dims3[i] = (hsize_t) (rand() % 64 + 1);
+        array_dims3[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((array_base_type_id3 = generate_random_datatype(H5T_ARRAY)) < 0)
         TEST_ERROR
@@ -5072,10 +5115,10 @@ test_create_dataset_array_types(void)
     }
 #endif
 
-    dset_dims[0] = (hsize_t) (rand() % 64 + 1);
-    dset_dims[1] = (hsize_t) (rand() % 64 + 1);
+    for (i = 0; i < DATASET_ARRAY_TYPE_TEST_SPACE_RANK; i++)
+        dset_dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
-    if ((fspace_id = H5Screate_simple(DATASET_ARRAY_TYPE_TEST_SHAPE_RANK, dset_dims, NULL)) < 0)
+    if ((fspace_id = H5Screate_simple(DATASET_ARRAY_TYPE_TEST_SPACE_RANK, dset_dims, NULL)) < 0)
         TEST_ERROR
 
     if ((dset_id1 = H5Dcreate2(group_id, DATASET_ARRAY_TYPE_TEST_DSET_NAME1, array_type_id1, fspace_id,
@@ -5243,7 +5286,7 @@ test_create_dataset_shapes(void)
         }
 
         for (j = 0; j < (size_t) ndims; j++)
-            dims[j] = (hsize_t) (rand() % 64 + 1);
+            dims[j] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
         if ((space_id = H5Screate_simple(ndims, dims, NULL)) < 0) {
             H5_FAILED();
@@ -5343,7 +5386,7 @@ test_create_dataset_creation_properties(void)
     }
 
     for (i = 0; i < DATASET_CREATION_PROPERTIES_TEST_SHAPE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((fspace_id = H5Screate_simple(DATASET_CREATION_PROPERTIES_TEST_SHAPE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -5602,30 +5645,11 @@ error:
     return 1;
 }
 
-/* Test creating a Dataset with a large Datatype to ensure
- * that the plugin grows the string buffer correctly without
- * corrupting memory. This will typically only be a problem
- * for Array and Compound Datatypes where Datatypes can be
- * nested inside to an arbitrary depth.
- */
-static int
-test_create_dataset_large_datatype(void)
-{
-    TESTING("create dataset with a large datatype")
-
-    SKIPPED();
-
-    return 0;
-
-error:
-    return 1;
-}
-
 static int
 test_write_dataset_small_all(void)
 {
     hssize_t  space_npoints;
-    hsize_t   dims[DATASET_SMALL_WRITE_TEST_ALL_DSET_SPACE_RANK];
+    hsize_t   dims[DATASET_SMALL_WRITE_TEST_ALL_DSET_SPACE_RANK] = { 10, 5, 3 };
     size_t    i;
     hid_t     file_id = -1, fapl_id = -1;
     hid_t     container_group = -1;
@@ -5654,10 +5678,6 @@ test_write_dataset_small_all(void)
         printf("    couldn't open container group\n");
         goto error;
     }
-
-    dims[0] = 4;
-    dims[1] = 6;
-    dims[2] = 8;
 
     if ((fspace_id = H5Screate_simple(DATASET_SMALL_WRITE_TEST_ALL_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -5693,7 +5713,7 @@ test_write_dataset_small_all(void)
         goto error;
     }
 
-    if (NULL == (data = malloc((hsize_t) space_npoints * sizeof(int))))
+    if (NULL == (data = malloc((hsize_t) space_npoints * DATASET_SMALL_WRITE_TEST_ALL_DSET_DTYPESIZE)))
         TEST_ERROR
 
     for (i = 0; i < (hsize_t) space_npoints; i++)
@@ -5748,7 +5768,7 @@ test_write_dataset_small_hyperslab(void)
     hsize_t  stride[DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK];
     hsize_t  count[DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK];
     hsize_t  block[DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK];
-    hsize_t  dims[DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK];
+    hsize_t  dims[DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK] = { 10, 5, 3 };
     size_t   i, data_size;
     hid_t    file_id = -1, fapl_id = -1;
     hid_t    container_group = -1;
@@ -5778,8 +5798,6 @@ test_write_dataset_small_hyperslab(void)
         goto error;
     }
 
-    dims[0] = dims[1] = dims[2] = DATASET_SMALL_WRITE_TEST_HYPERSLAB_DIM_SIZE;
-
     if ((fspace_id = H5Screate_simple(DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
     if ((mspace_id = H5Screate_simple(DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK - 1, dims, NULL)) < 0)
@@ -5802,10 +5820,14 @@ test_write_dataset_small_hyperslab(void)
     for (i = 0; i < data_size / DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_DTYPESIZE; i++)
         ((int *) data)[i] = (int) i;
 
-    start[0] = start[1] = start[2] = 0;
-    stride[0] = stride[1] = stride[2] = 1;
-    count[0] = dims[0]; count[1] = dims[1]; count[2] = 1;
-    block[0] = block[1] = block[2] = 1;
+    for (i = 0; i < DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK; i++) {
+        start[i] = 0;
+        stride[i] = 1;
+        count[i] = dims[i];
+        block[i] = 1;
+    }
+    
+    count[2] = 1;
 
     if (H5Sselect_hyperslab(fspace_id, H5S_SELECT_SET, start, stride, count, block) < 0)
         TEST_ERROR
@@ -5859,7 +5881,7 @@ static int
 test_write_dataset_small_point_selection(void)
 {
     hsize_t  points[DATASET_SMALL_WRITE_TEST_POINT_SELECTION_NUM_POINTS * DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DSET_SPACE_RANK];
-    hsize_t  dims[DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DSET_SPACE_RANK];
+    hsize_t  dims[DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DSET_SPACE_RANK] = { 10, 10, 10 };
     size_t   i, data_size;
     hid_t    file_id = -1, fapl_id = -1;
     hid_t    container_group = -1;
@@ -5888,8 +5910,6 @@ test_write_dataset_small_point_selection(void)
         printf("    couldn't open container group\n");
         goto error;
     }
-
-    dims[0] = dims[1] = dims[2] = DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DIM_SIZE;
 
     if ((fspace_id = H5Screate_simple(DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -5964,29 +5984,235 @@ error:
     return 1;
 }
 
+#ifndef NO_LARGE_TESTS
 static int
 test_write_dataset_large_all(void)
 {
+    hssize_t  space_npoints;
+    hsize_t   dims[DATASET_LARGE_WRITE_TEST_ALL_DSET_SPACE_RANK] = { 750, 750, 750 };
+    size_t    i, data_size;
+    hid_t     file_id = -1, fapl_id = -1;
+    hid_t     container_group = -1;
+    hid_t     dset_id = -1;
+    hid_t     fspace_id = -1;
+    void     *data = NULL;
+
     TESTING("write to large dataset w/ H5S_ALL")
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, DATASET_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((fspace_id = H5Screate_simple(DATASET_LARGE_WRITE_TEST_ALL_DSET_SPACE_RANK, dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(container_group, DATASET_LARGE_WRITE_TEST_ALL_DSET_NAME, DATASET_LARGE_WRITE_TEST_ALL_DSET_DTYPE,
+            fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    /* Close the dataset and dataspace to ensure that retrieval of file space ID is working */
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dopen2(file_id, "/" DATASET_TEST_GROUP_NAME "/" DATASET_LARGE_WRITE_TEST_ALL_DSET_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open dataset\n");
+        goto error;
+    }
+
+    if ((fspace_id = H5Dget_space(dset_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't get dataset dataspace\n");
+        goto error;
+    }
+
+    if ((space_npoints = H5Sget_simple_extent_npoints(fspace_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't get dataspace num points\n");
+        goto error;
+    }
+
+    if (NULL == (data = malloc((hsize_t) space_npoints * DATASET_LARGE_WRITE_TEST_ALL_DSET_DTYPESIZE)))
+        TEST_ERROR
+
+    for (i = 0; i < (hsize_t) space_npoints; i++)
+        ((int *) data)[i] = (int) i;
+
+    if (H5Dwrite(dset_id, DATASET_LARGE_WRITE_TEST_ALL_DSET_DTYPE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
+        H5_FAILED();
+        printf("    couldn't write to dataset\n");
+        goto error;
+    }
+
+    if (data) {
+        free(data);
+        data = NULL;
+    }
+
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Sclose(fspace_id);
+        H5Dclose(dset_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
 static int
 test_write_dataset_large_hyperslab(void)
 {
+    hsize_t  start[DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK];
+    hsize_t  stride[DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK];
+    hsize_t  count[DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK];
+    hsize_t  block[DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK];
+    hsize_t  dims[DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK] = { 750, 750, 750 };
+    size_t   i, data_size;
+    hid_t    file_id = -1, fapl_id = -1;
+    hid_t    container_group = -1;
+    hid_t    dset_id = -1;
+    hid_t    mspace_id = -1, fspace_id = -1;
+    void    *data = NULL;
+
     TESTING("write to large dataset w/ hyperslab selection")
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, DATASET_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((fspace_id = H5Screate_simple(DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK, dims, NULL)) < 0)
+        TEST_ERROR
+    if ((mspace_id = H5Screate_simple(DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK, dims - 1, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(container_group, DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_NAME, DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_DTYPE,
+            fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    for (i = 0, data_size = 1; i < DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK - 1; i++)
+        data_size *= dims[i];
+    data_size *= DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_DTYPESIZE;
+
+    if (NULL == (data = malloc(data_size)))
+        TEST_ERROR
+
+    for (i = 0; i < data_size / DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_DTYPESIZE; i++)
+        ((int *) data)[i] = (int) i;
+
+    for (i = 0; i < DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK; i++) {
+        start[i] = 0;
+        stride[i] = 1;
+        count[i] = dims[i];
+        block[i] = 1;
+    }
+
+    count[2] = 1;
+
+    if (H5Sselect_hyperslab(fspace_id, H5S_SELECT_SET, start, stride, count, block) < 0)
+        TEST_ERROR
+
+    if (H5Dwrite(dset_id, DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_DTYPE, mspace_id, fspace_id, H5P_DEFAULT, data) < 0) {
+        H5_FAILED();
+        printf("    couldn't write to dataset\n");
+        goto error;
+    }
+
+    if (data) {
+        free(data);
+        data = NULL;
+    }
+
+    if (H5Sclose(mspace_id) < 0)
+        TEST_ERROR
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        if (data) free(data);
+        H5Sclose(mspace_id);
+        H5Sclose(fspace_id);
+        H5Dclose(dset_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
@@ -6002,11 +6228,12 @@ test_write_dataset_large_point_selection(void)
 error:
     return 1;
 }
+#endif
 
 static int
 test_read_dataset_small_all(void)
 {
-    hsize_t  dims[DATASET_SMALL_READ_TEST_ALL_DSET_SPACE_RANK];
+    hsize_t  dims[DATASET_SMALL_READ_TEST_ALL_DSET_SPACE_RANK] = { 10, 5, 3 };
     size_t   i, data_size;
     hid_t    file_id = -1, fapl_id = -1;
     hid_t    container_group = -1;
@@ -6036,8 +6263,6 @@ test_read_dataset_small_all(void)
         goto error;
     }
 
-    dims[0] = dims[1] = dims[2] = 5;
-
     if ((fspace_id = H5Screate_simple(DATASET_SMALL_READ_TEST_ALL_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
@@ -6057,12 +6282,9 @@ test_read_dataset_small_all(void)
 
     if (H5Dread(dset_id, DATASET_SMALL_READ_TEST_ALL_DSET_DTYPE, H5S_ALL, H5S_ALL, H5P_DEFAULT, read_buf) < 0) {
         H5_FAILED();
-        printf("    couldn't read dataset\n");
+        printf("    couldn't read from dataset\n");
         goto error;
     }
-
-    for (i = 0; i < data_size / DATASET_SMALL_READ_TEST_ALL_DSET_DTYPESIZE; i++)
-        printf("%zu: %d.\n", i, ((int *) read_buf)[i]);
 
     if (read_buf) {
         free(read_buf);
@@ -6107,7 +6329,7 @@ test_read_dataset_small_hyperslab(void)
     hsize_t  stride[DATASET_SMALL_READ_TEST_HYPERSLAB_DSET_SPACE_RANK];
     hsize_t  count[DATASET_SMALL_READ_TEST_HYPERSLAB_DSET_SPACE_RANK];
     hsize_t  block[DATASET_SMALL_READ_TEST_HYPERSLAB_DSET_SPACE_RANK];
-    hsize_t  dims[DATASET_SMALL_READ_TEST_HYPERSLAB_DSET_SPACE_RANK];
+    hsize_t  dims[DATASET_SMALL_READ_TEST_HYPERSLAB_DSET_SPACE_RANK] = { 10, 5, 3 };
     size_t   i, data_size;
     hid_t    file_id = -1, fapl_id = -1;
     hid_t    container_group = -1;
@@ -6137,8 +6359,6 @@ test_read_dataset_small_hyperslab(void)
         goto error;
     }
 
-    dims[0] = dims[1] = dims[2] = DATASET_SMALL_READ_TEST_HYPERSLAB_DIM_SIZE;
-
     if ((fspace_id = H5Screate_simple(DATASET_SMALL_READ_TEST_HYPERSLAB_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
     if ((mspace_id = H5Screate_simple(DATASET_SMALL_READ_TEST_HYPERSLAB_DSET_SPACE_RANK - 1, dims, NULL)) < 0)
@@ -6151,10 +6371,14 @@ test_read_dataset_small_hyperslab(void)
         goto error;
     }
 
-    start[0] = start[1] = start[2] = 0;
-    stride[0] = stride[1] = stride[2] = 1;
-    count[0] = dims[0]; count[1] = dims[1]; count[2] = 1;
-    block[0] = block[1] = block[2] = 1;
+    for (i = 0; i < DATASET_SMALL_READ_TEST_HYPERSLAB_DSET_SPACE_RANK; i++) {
+        start[i] = 0;
+        stride[i] = 1;
+        count[i] = dims[i];
+        block[i] = 1;
+    }
+
+    count[2] = 1;
 
     if (H5Sselect_hyperslab(fspace_id, H5S_SELECT_SET, start, stride, count, block) < 0)
         TEST_ERROR
@@ -6171,9 +6395,6 @@ test_read_dataset_small_hyperslab(void)
         printf("    couldn't read from dataset\n");
         goto error;
     }
-
-    for (i = 0; i < data_size / DATASET_SMALL_READ_TEST_HYPERSLAB_DSET_DTYPESIZE; i++)
-        printf("%zu: %d\n", i, ((int *) read_buf)[i]);
 
     if (read_buf) {
         free(read_buf);
@@ -6218,7 +6439,7 @@ static int
 test_read_dataset_small_point_selection(void)
 {
     hsize_t  points[DATASET_SMALL_READ_TEST_POINT_SELECTION_NUM_POINTS * DATASET_SMALL_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK];
-    hsize_t  dims[DATASET_SMALL_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK];
+    hsize_t  dims[DATASET_SMALL_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK] = { 10, 10, 10 };
     hsize_t  mspace_dims[] = { DATASET_SMALL_READ_TEST_POINT_SELECTION_NUM_POINTS };
     size_t   i, data_size;
     hid_t    file_id = -1, fapl_id = -1;
@@ -6249,8 +6470,6 @@ test_read_dataset_small_point_selection(void)
         printf("    couldn't open container group\n");
         goto error;
     }
-
-    dims[0] = dims[1] = dims[2] = DATASET_SMALL_READ_TEST_POINT_SELECTION_DIM_SIZE;
 
     if ((fspace_id = H5Screate_simple(DATASET_SMALL_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -6327,29 +6546,208 @@ error:
     return 1;
 }
 
+#ifndef NO_LARGE_TESTS
 static int
 test_read_dataset_large_all(void)
 {
+    hsize_t  dims[DATASET_LARGE_READ_TEST_ALL_DSET_SPACE_RANK] = { 750, 750, 750 };
+    size_t   i, data_size;
+    hid_t    file_id = -1, fapl_id = -1;
+    hid_t    container_group = -1;
+    hid_t    dset_id = -1;
+    hid_t    fspace_id = -1;
+    void    *read_buf = NULL;
+
     TESTING("read from large dataset w/ H5S_ALL")
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, DATASET_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((fspace_id = H5Screate_simple(DATASET_LARGE_READ_TEST_ALL_DSET_SPACE_RANK, dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(container_group, DATASET_LARGE_READ_TEST_ALL_DSET_NAME, DATASET_LARGE_READ_TEST_ALL_DSET_DTYPE,
+            fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    for (i = 0, data_size = 1; i < DATASET_LARGE_READ_TEST_ALL_DSET_SPACE_RANK; i++)
+        data_size *= dims[i];
+    data_size *= DATASET_LARGE_READ_TEST_ALL_DSET_DTYPESIZE;
+
+    if (NULL == (read_buf = malloc(data_size)))
+        TEST_ERROR
+
+    if (H5Dread(dset_id, DATASET_LARGE_READ_TEST_ALL_DSET_DTYPE, H5S_ALL, H5S_ALL, H5P_DEFAULT, read_buf) < 0) {
+        H5_FAILED();
+        printf("    couldn't read from dataset\n");
+        goto error;
+    }
+
+    if (read_buf) {
+        free(read_buf);
+        read_buf = NULL;
+    }
+
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        if (read_buf) free(read_buf);
+        H5Sclose(fspace_id);
+        H5Dclose(dset_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
 static int
 test_read_dataset_large_hyperslab(void)
 {
+    hsize_t  start[DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK];
+    hsize_t  stride[DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK];
+    hsize_t  count[DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK];
+    hsize_t  block[DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK];
+    hsize_t  dims[DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK] = { 750, 750, 750 };
+    size_t   i, data_size;
+    hid_t    file_id = -1, fapl_id = -1;
+    hid_t    container_group = -1;
+    hid_t    dset_id = -1;
+    hid_t    mspace_id = -1, fspace_id = -1;
+    void    *read_buf = NULL;
+
     TESTING("read from large dataset w/ hyperslab selection")
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, DATASET_TEST_GROUP_NAME, H5P_DEFAULT)) < 0){
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((fspace_id = H5Screate_simple(DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK, dims, NULL)) < 0)
+        TEST_ERROR
+    if ((mspace_id = H5Screate_simple(DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK - 1, dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(container_group, DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_NAME, DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_DTYPE,
+            fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    for (i = 0; i < DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK; i++) {
+        start[i] = 0;
+        stride[i] = 1;
+        count[i] = dims[i];
+        block[i] = 1;
+    }
+
+    count[2] = 1;
+
+    if (H5Sselect_hyperslab(fspace_id, H5S_SELECT_SET, start, stride, count, block) < 0)
+        TEST_ERROR
+
+    for (i = 0, data_size = 1; i < DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK - 1; i++)
+        data_size *= dims[i];
+    data_size *= DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_DTYPESIZE;
+
+    if (NULL == (read_buf = malloc(data_size)))
+        TEST_ERROR
+
+    if (H5Dread(dset_id, DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_DTYPE, mspace_id, fspace_id, H5P_DEFAULT, read_buf) < 0) {
+        H5_FAILED();
+        printf("    couldn't read from dataset\n");
+        goto error;
+    }
+
+    if (read_buf) {
+        free(read_buf);
+        read_buf = NULL;
+    }
+
+    if (H5Sclose(mspace_id) < 0)
+        TEST_ERROR
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Sclose(mspace_id);
+        H5Sclose(fspace_id);
+        H5Dclose(dset_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
@@ -6365,6 +6763,7 @@ test_read_dataset_large_point_selection(void)
 error:
     return 1;
 }
+#endif
 
 static int
 test_write_dataset_data_verification(void)
@@ -6400,7 +6799,8 @@ test_write_dataset_data_verification(void)
         goto error;
     }
 
-    dims[0] = dims[1] = dims[2] = DATASET_DATA_VERIFY_WRITE_TEST_DIM_SIZE;
+    for (i = 0; i < DATASET_DATA_VERIFY_WRITE_TEST_DSET_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((fspace_id = H5Screate_simple(DATASET_DATA_VERIFY_WRITE_TEST_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -6543,9 +6943,9 @@ test_dataset_set_extent(void)
     }
 
     for (i = 0; i < DATASET_SET_EXTENT_TEST_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
     for (i = 0; i < DATASET_SET_EXTENT_TEST_SPACE_RANK; i++)
-        new_dims[i] = (hsize_t) (rand() % 64 + 1);
+        new_dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((fspace_id = H5Screate_simple(DATASET_SET_EXTENT_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -6636,7 +7036,7 @@ test_unused_dataset_API_calls(void)
     }
 
     for (i = 0; i < DATASET_UNUSED_APIS_TEST_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((fspace_id = H5Screate_simple(DATASET_UNUSED_APIS_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -6738,7 +7138,7 @@ test_dataset_property_lists(void)
     }
 
     for (i = 0; i < DATASET_PROPERTY_LIST_TEST_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
     for (i = 0; i < DATASET_PROPERTY_LIST_TEST_SPACE_RANK; i++)
         chunk_dims[i] = (hsize_t) (rand() % (int) dims[i] + 1);
 
@@ -7199,6 +7599,7 @@ static int
 test_create_dataset_with_committed_type(void)
 {
     hsize_t dims[DATASET_CREATE_WITH_DATATYPE_TEST_DATASET_DIMS];
+    size_t  i;
     hid_t   file_id = -1, fapl_id = -1;
     hid_t   container_group = -1;
     hid_t   dset_id = -1;
@@ -7264,8 +7665,8 @@ test_create_dataset_with_committed_type(void)
         goto error;
     }
 
-    dims[0] = (hsize_t) (rand() % 64 + 1);
-    dims[1] = (hsize_t) (rand() % 64 + 1);
+    for (i = 0; i < DATATYPE_CREATE_TEST_DATASET_DIMS; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((fspace_id = H5Screate_simple(DATATYPE_CREATE_TEST_DATASET_DIMS, dims, NULL)) < 0)
         TEST_ERROR
@@ -7374,7 +7775,7 @@ test_create_attribute_with_committed_type(void)
     }
 
     for (i = 0; i < ATTRIBUTE_CREATE_WITH_DATATYPE_TEST_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((space_id = H5Screate_simple(ATTRIBUTE_CREATE_WITH_DATATYPE_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -7828,7 +8229,7 @@ test_create_hard_link_same_loc(void)
 
     memset(dims, 0, sizeof(dims));
     for (i = 0; i < H5L_SAME_LOC_TEST_DSET_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((space_id = H5Screate_simple(H5L_SAME_LOC_TEST_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -8202,7 +8603,7 @@ test_copy_link(void)
     }
 
     for (i = 0; i < COPY_LINK_TEST_DSET_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((space_id = H5Screate_simple(COPY_LINK_TEST_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -8376,7 +8777,7 @@ test_move_link(void)
     }
 
     for (i = 0; i < MOVE_LINK_TEST_DSET_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((space_id = H5Screate_simple(MOVE_LINK_TEST_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -9127,7 +9528,7 @@ test_open_dataset_generically(void)
     }
 
     for (i = 0; i < GENERIC_DATASET_OPEN_TEST_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((fspace_id = H5Screate_simple(GENERIC_DATASET_OPEN_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -9519,7 +9920,7 @@ test_h5o_close(void)
     }
 
     for (i = 0; i < H5O_CLOSE_TEST_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % 64 + 1);
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((fspace_id = H5Screate_simple(H5O_CLOSE_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -10559,7 +10960,8 @@ error:
 static int
 test_open_link_without_leading_slash(void)
 {
-    hsize_t dims[OPEN_LINK_WITHOUT_SLASH_DSET_DIMS] = { 5, 10 };
+    hsize_t dims[OPEN_LINK_WITHOUT_SLASH_DSET_SPACE_RANK];
+    size_t  i;
     hid_t   file_id = -1, fapl_id = -1;
     hid_t   container_group = -1;
     hid_t   group_id = -1;
@@ -10589,7 +10991,10 @@ test_open_link_without_leading_slash(void)
         goto error;
     }
 
-    if ((space_id = H5Screate_simple(OPEN_LINK_WITHOUT_SLASH_DSET_DIMS, dims, NULL)) < 0)
+    for (i = 0; i < OPEN_LINK_WITHOUT_SLASH_DSET_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
+
+    if ((space_id = H5Screate_simple(OPEN_LINK_WITHOUT_SLASH_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
@@ -10717,7 +11122,7 @@ test_object_creation_by_absolute_path(void)
 
     /* Next try to create a dataset nested at the end of this group chain by using an absolute pathname */
     for (i = 0; i < OBJECT_CREATE_BY_ABSOLUTE_PATH_TEST_DSET_SPACE_RANK; i++)
-        dims[i] = OBJECT_CREATE_BY_ABSOLUTE_PATH_TEST_DSET_DIM_SIZE;
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((fspace_id = H5Screate_simple(OBJECT_CREATE_BY_ABSOLUTE_PATH_TEST_DSET_SPACE_RANK, dims, NULL)) <0)
         TEST_ERROR
@@ -10879,7 +11284,7 @@ test_absolute_vs_relative_path(void)
     }
 
     for (i = 0; i < ABSOLUTE_VS_RELATIVE_PATH_TEST_DSET_SPACE_RANK; i++)
-        dims[i] = ABSOLUTE_VS_RELATIVE_PATH_TEST_DSET_DIM_SIZE;
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
     if ((fspace_id = H5Screate_simple(ABSOLUTE_VS_RELATIVE_PATH_TEST_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -11170,7 +11575,7 @@ test_url_encoding(void)
     }
 
     for (i = 0; i < URL_ENCODING_TEST_SPACE_RANK; i++)
-        dims[i] = URL_ENCODING_TEST_DSET_DIM_SIZE;
+        dims[i] = (hsize_t) (rand() % 64 + 1);
 
     if ((space_id = H5Screate_simple(URL_ENCODING_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
@@ -11857,7 +12262,7 @@ generate_random_datatype(H5T_class_t parent_class)
                 TEST_ERROR
 
             for (i = 0; i < ndims; i++)
-                array_dims[i] = (hsize_t) (rand() % 64 + 1);
+                array_dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
             if ((base_datatype = generate_random_datatype(H5T_ARRAY)) < 0) {
                 H5_FAILED();
