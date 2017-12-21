@@ -8769,6 +8769,18 @@ RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_le
     out_curr_pos = out;
 
     for (i = 0; i < ref_array_len; i++) {
+        if (!strcmp(ref_array[i].ref_obj_URI, "")) {
+            memset(out_curr_pos, 0, OBJECT_REF_STRING_LEN);
+
+#ifdef PLUGIN_DEBUG
+            printf("  - Ref. array[%zu] = %s\n", i, out_curr_pos);
+#endif
+
+            out_curr_pos += OBJECT_REF_STRING_LEN;
+
+            continue;
+        }
+
         switch (ref_array[i].ref_obj_type) {
             case H5I_FILE:
             case H5I_GROUP:
@@ -8880,7 +8892,14 @@ RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
          * past the prefix in order to get to the real URI.
          */
         URI_start = ref_buf + (i * OBJECT_REF_STRING_LEN);
-        while ('/' != *URI_start) URI_start++;
+        while (*URI_start && *URI_start != '/') URI_start++;
+
+        /* Handle empty ref data */
+        if (!*URI_start) {
+            out[i].ref_obj_URI[0] = '\0';
+            continue;
+        } /* end if */
+
         URI_start++;
 
         strncpy(out[i].ref_obj_URI, URI_start, OBJECT_REF_STRING_LEN);

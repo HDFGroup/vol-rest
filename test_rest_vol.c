@@ -10373,7 +10373,7 @@ test_write_dataset_w_obj_refs_empty_data(void)
     hid_t         dset_id = -1;
     hid_t         space_id = -1;
 
-    TESTING("write to a dataset w/ object reference type; partially initialized ref. data")
+    TESTING("write to a dataset w/ object reference type and some empty data")
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -10417,7 +10417,7 @@ test_write_dataset_w_obj_refs_empty_data(void)
     for (i = 0, ref_array_size = 1; i < OBJ_REF_DATASET_EMPTY_WRITE_TEST_SPACE_RANK; i++)
         ref_array_size *= dims[i];
 
-    if (NULL == (ref_array = (rv_obj_ref_t *) malloc(ref_array_size * sizeof(*ref_array))))
+    if (NULL == (ref_array = (rv_obj_ref_t *) calloc(1, ref_array_size * sizeof(*ref_array))))
         TEST_ERROR
 
     for (i = 0; i < dims[0]; i++) {
@@ -10450,13 +10450,11 @@ test_write_dataset_w_obj_refs_empty_data(void)
         }
     }
 
-    H5E_BEGIN_TRY {
-        if (H5Dwrite(dset_id, H5T_STD_REF_OBJ, H5S_ALL, H5S_ALL, H5P_DEFAULT, ref_array) >= 0) {
-            H5_FAILED();
-            printf("    object ref. dataset write w/ partially initialized data succeeded!\n");
-            goto error;
-        }
-    } H5E_END_TRY;
+    if (H5Dwrite(dset_id, H5T_STD_REF_OBJ, H5S_ALL, H5S_ALL, H5P_DEFAULT, ref_array) < 0) {
+        H5_FAILED();
+        printf("    couldn't write to dataset\n");
+        goto error;
+    }
 
     if (ref_array) {
         free(ref_array);
