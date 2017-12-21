@@ -272,7 +272,6 @@
 #define DATASET_LARGE_WRITE_TEST_POINT_SELECTION_DSET_SPACE_RANK 3
 #define DATASET_LARGE_WRITE_TEST_POINT_SELECTION_DSET_DTYPESIZE  sizeof(int)
 #define DATASET_LARGE_WRITE_TEST_POINT_SELECTION_DSET_DTYPE      H5T_NATIVE_INT
-#define DATASET_LARGE_WRITE_TEST_POINT_SELECTION_NUM_POINTS      10
 #define DATASET_LARGE_WRITE_TEST_POINT_SELECTION_DSET_NAME       "dataset_write_large_point_selection"
 #endif
 
@@ -306,7 +305,6 @@
 #define DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK 3
 #define DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPESIZE  sizeof(int)
 #define DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPE      H5T_NATIVE_INT
-#define DATASET_LARGE_READ_TEST_POINT_SELECTION_NUM_POINTS      10
 #define DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_NAME       "dataset_read_large_point_selection"
 #endif
 
@@ -5989,7 +5987,7 @@ static int
 test_write_dataset_large_all(void)
 {
     hssize_t  space_npoints;
-    hsize_t   dims[DATASET_LARGE_WRITE_TEST_ALL_DSET_SPACE_RANK] = { 750, 750, 750 };
+    hsize_t   dims[DATASET_LARGE_WRITE_TEST_ALL_DSET_SPACE_RANK] = { 600, 600, 600 };
     size_t    i, data_size;
     hid_t     file_id = -1, fapl_id = -1;
     hid_t     container_group = -1;
@@ -6107,7 +6105,7 @@ test_write_dataset_large_hyperslab(void)
     hsize_t  stride[DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK];
     hsize_t  count[DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK];
     hsize_t  block[DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK];
-    hsize_t  dims[DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK] = { 750, 750, 750 };
+    hsize_t  dims[DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK] = { 600, 600, 600 };
     size_t   i, data_size;
     hid_t    file_id = -1, fapl_id = -1;
     hid_t    container_group = -1;
@@ -6139,7 +6137,7 @@ test_write_dataset_large_hyperslab(void)
 
     if ((fspace_id = H5Screate_simple(DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
-    if ((mspace_id = H5Screate_simple(DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK, dims - 1, NULL)) < 0)
+    if ((mspace_id = H5Screate_simple(DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
     if ((dset_id = H5Dcreate2(container_group, DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_NAME, DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_DTYPE,
@@ -6149,7 +6147,7 @@ test_write_dataset_large_hyperslab(void)
         goto error;
     }
 
-    for (i = 0, data_size = 1; i < DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK - 1; i++)
+    for (i = 0, data_size = 1; i < DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_SPACE_RANK; i++)
         data_size *= dims[i];
     data_size *= DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_DTYPESIZE;
 
@@ -6165,8 +6163,6 @@ test_write_dataset_large_hyperslab(void)
         count[i] = dims[i];
         block[i] = 1;
     }
-
-    count[2] = 1;
 
     if (H5Sselect_hyperslab(fspace_id, H5S_SELECT_SET, start, stride, count, block) < 0)
         TEST_ERROR
@@ -6550,7 +6546,7 @@ error:
 static int
 test_read_dataset_large_all(void)
 {
-    hsize_t  dims[DATASET_LARGE_READ_TEST_ALL_DSET_SPACE_RANK] = { 750, 750, 750 };
+    hsize_t  dims[DATASET_LARGE_READ_TEST_ALL_DSET_SPACE_RANK] = { 600, 600, 600 };
     size_t   i, data_size;
     hid_t    file_id = -1, fapl_id = -1;
     hid_t    container_group = -1;
@@ -6646,7 +6642,7 @@ test_read_dataset_large_hyperslab(void)
     hsize_t  stride[DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK];
     hsize_t  count[DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK];
     hsize_t  block[DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK];
-    hsize_t  dims[DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK] = { 750, 750, 750 };
+    hsize_t  dims[DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK] = { 600, 600, 600 };
     size_t   i, data_size;
     hid_t    file_id = -1, fapl_id = -1;
     hid_t    container_group = -1;
@@ -6678,7 +6674,7 @@ test_read_dataset_large_hyperslab(void)
 
     if ((fspace_id = H5Screate_simple(DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
-    if ((mspace_id = H5Screate_simple(DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK - 1, dims, NULL)) < 0)
+    if ((mspace_id = H5Screate_simple(DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
     if ((dset_id = H5Dcreate2(container_group, DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_NAME, DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_DTYPE,
@@ -6695,12 +6691,10 @@ test_read_dataset_large_hyperslab(void)
         block[i] = 1;
     }
 
-    count[2] = 1;
-
     if (H5Sselect_hyperslab(fspace_id, H5S_SELECT_SET, start, stride, count, block) < 0)
         TEST_ERROR
 
-    for (i = 0, data_size = 1; i < DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK - 1; i++)
+    for (i = 0, data_size = 1; i < DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_SPACE_RANK; i++)
         data_size *= dims[i];
     data_size *= DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_DTYPESIZE;
 
@@ -6754,13 +6748,114 @@ error:
 static int
 test_read_dataset_large_point_selection(void)
 {
+    hsize_t *points = NULL;
+    hsize_t  dims[DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK] = { 600, 600, 600 };
+    size_t   i, data_size;
+    hid_t    file_id = -1, fapl_id = -1;
+    hid_t    container_group = -1;
+    hid_t    dset_id = -1;
+    hid_t    fspace_id = -1;
+    void    *data = NULL;
+
     TESTING("read from large dataset w/ point selection")
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, DATASET_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((fspace_id = H5Screate_simple(DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK, dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(container_group, DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_NAME, DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPE,
+            fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    for (i = 0, data_size = 1; i < DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK; i++)
+        data_size *= dims[i];
+    data_size = DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPESIZE;
+
+    if (NULL == (data = malloc(data_size)))
+        TEST_ERROR
+    if (NULL == (points = malloc(data_size / DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPESIZE)))
+        TEST_ERROR
+
+    /* Select the entire dataspace */
+    for (i = 0; i < data_size / DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPESIZE; i++) {
+        points[(i * DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK)] = (i % (dims[0] * dims[1])) % dims[1];
+        points[(i * DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK) + 1] = (i % (dims[0] * dims[1])) / dims[0];
+        points[(i * DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK) + 2] = (i / (dims[0] * dims[1]));
+    }
+
+    if (H5Sselect_elements(fspace_id, H5S_SELECT_SET, data_size / DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPESIZE, points) < 0) {
+        H5_FAILED();
+        printf("    couldn't select points\n");
+        goto error;
+    }
+
+    if (H5Dread(dset_id, DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPE, H5S_ALL, fspace_id, H5P_DEFAULT, data) < 0) {
+        H5_FAILED();
+        printf("    couldn't read from dataset\n");
+        goto error;
+    }
+
+    if (data) {
+        free(data);
+        data = NULL;
+    }
+
+    if (points) {
+        free(points);
+        points = NULL;
+    }
+
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        if (data) free(data);
+        if (points) free(points);
+        H5Sclose(fspace_id);
+        H5Dclose(dset_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 #endif
