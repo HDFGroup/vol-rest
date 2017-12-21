@@ -532,7 +532,6 @@ static int test_open_object_by_soft_link(void);
 static int test_create_external_link(void);
 static int test_open_object_by_external_link(void);
 static int test_create_user_defined_link(void);
-static int test_h5l_register_unregister_is_registered(void);
 static int test_delete_link(void);
 static int test_copy_link(void);
 static int test_move_link(void);
@@ -675,7 +674,6 @@ static int (*link_tests[])(void) = {
         test_create_external_link,
         test_open_object_by_external_link,
         test_create_user_defined_link,
-        test_h5l_register_unregister_is_registered,
         test_delete_link,
         test_copy_link,
         test_move_link,
@@ -8137,19 +8135,6 @@ test_create_user_defined_link(void)
     TESTING("create user-defined link")
 
     /* H5Lcreate_ud */
-
-    SKIPPED();
-
-    return 0;
-
-error:
-    return 1;
-}
-
-static int
-test_h5l_register_unregister_is_registered(void)
-{
-    TESTING("H5Lregister/unregister/is_registered")
 
     SKIPPED();
 
