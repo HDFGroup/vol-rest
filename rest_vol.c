@@ -294,6 +294,21 @@ static struct {
     size_t  buffer_size;
 } response_buffer;
 
+/*
+ * A struct which is filled out and passed to the callback function
+ * RV_link_iter_callback when performing link iteration through the
+ * calling of H5Literate (_by_name)/H5Lvisit (_by_name).
+ */
+typedef struct link_iter_data {
+    H5_iter_order_t  iter_order;
+    H5L_iterate_t    iter_op;
+    H5_index_t       index_type;
+    hbool_t          is_recursive;
+    hsize_t         *idx_p;
+    hid_t            group_id;
+    void            *op_data;
+} link_iter_data;
+
 /* Host header string for specifying the host (Domain) for requests */
 const char * const host_string = "Host: ";
 
@@ -389,6 +404,7 @@ static herr_t RV_copy_object_URI_callback(char *HTTP_response, void *callback_da
 static herr_t RV_get_obj_type_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_retrieve_object_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_group_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
@@ -5067,7 +5083,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
             /* Setup the "Host: " header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
             strcpy(host_header, host_string);
 
@@ -5077,11 +5093,11 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
             printf("  - Retrieving link info\n\n");
@@ -5091,11 +5107,11 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
             printf("   \\********************************/\n\n");
 #endif
 
-            CURL_PERFORM(curl, H5E_OBJECT, H5E_CANTGET, FAIL);
+            CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
 
             /* Retrieve the link info */
             if (RV_parse_response(response_buffer.buffer, NULL, link_info, RV_get_link_info_callback) < 0)
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't retrieve link info")
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link info")
 
             break;
         } /* H5VL_LINK_GET_INFO */
@@ -5174,7 +5190,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
             /* Setup the "Host: " header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
 
             strcpy(host_header, host_string);
 
@@ -5184,11 +5200,11 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
             printf("  - Retrieving link value\n\n");
@@ -5198,11 +5214,11 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
             printf("   \\********************************/\n\n");
 #endif
 
-            CURL_PERFORM(curl, H5E_OBJECT, H5E_CANTGET, FAIL);
+            CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
 
             /* Retrieve the link value */
             if (RV_parse_response(response_buffer.buffer, &buf_size, out_buf, RV_get_link_val_callback) < 0)
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't retrieve link value")
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link value")
 
             break;
         } /* H5VL_LINK_GET_VAL */
@@ -5246,9 +5262,11 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                  hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
+    hbool_t      empty_dirname;
     size_t       host_header_len = 0;
     char        *host_header = NULL;
     char        *link_path_dirname = NULL;
+    char         temp_URI[URI_MAX_LENGTH];
     char         request_url[URL_MAX_LENGTH];
     char        *url_encoded_link_name = NULL;
     herr_t       ret_value = SUCCEED;
@@ -5336,10 +5354,8 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
         /* H5Lexists */
         case H5VL_LINK_EXISTS:
         {
-            hbool_t  empty_dirname;
-            htri_t  *ret = va_arg(arguments, htri_t *);
-            char     target_URI[URI_MAX_LENGTH];
-            long     http_response;
+            htri_t *ret = va_arg(arguments, htri_t *);
+            long    http_response;
 
             /* In case the user specified a path which contains multiple groups on the way to the
              * link in question, extract out the path to the final group in the chain */
@@ -5356,7 +5372,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                 htri_t     search_ret;
 
                 search_ret = RV_find_object_by_path(loc_obj, link_path_dirname, &obj_type, RV_copy_object_URI_callback,
-                        NULL, target_URI);
+                        NULL, temp_URI);
                 if (!search_ret || search_ret < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_PATH, FAIL, "can't locate parent group for link")
             } /* end if */
@@ -5370,7 +5386,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             snprintf(request_url, URL_MAX_LENGTH,
                      "%s/groups/%s/links/%s",
                      base_URL,
-                     empty_dirname ? loc_obj->URI : target_URI,
+                     empty_dirname ? loc_obj->URI : temp_URI,
                      url_encoded_link_name);
 
             /* Setup cURL to make the GET request */
@@ -5413,54 +5429,94 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
         /* H5Literate/visit (_by_name) */
         case H5VL_LINK_ITER:
         {
-            hbool_t is_iterate = va_arg(arguments, int);
+            link_iter_data iter_data;
 
-            if (is_iterate) {
-                switch (loc_params.type) {
-                    /* H5Literate */
-                    case H5VL_OBJECT_BY_SELF:
-                    {
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Literate is unsupported")
-                        break;
-                    } /* H5VL_OBJECT_BY_SELF */
+            iter_data.is_recursive = va_arg(arguments, int);
+            iter_data.index_type   = va_arg(arguments, H5_index_t);
+            iter_data.iter_order   = va_arg(arguments, H5_iter_order_t);
+            iter_data.idx_p        = va_arg(arguments, hsize_t *);
+            iter_data.iter_op      = va_arg(arguments, H5L_iterate_t);
+            iter_data.op_data      = va_arg(arguments, void *);
 
-                    /* H5Literate_by_name */
-                    case H5VL_OBJECT_BY_NAME:
-                    {
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Literate_by_name is unsupported")
-                        break;
-                    } /* H5VL_OBJECT_BY_NAME */
+            /* XXX: Since the VOL doesn't directly pass down the group's hid_t, explicitly open the group
+             * here so that a valid hid_t can be passed to the user's link iteration callback.
+             */
 
-                    case H5VL_OBJECT_BY_IDX:
-                    case H5VL_OBJECT_BY_ADDR:
-                    case H5VL_OBJECT_BY_REF:
-                    default:
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
-                } /* end switch */
-            } /* end if */
-            else {
-                switch (loc_params.type) {
-                    /* H5Lvisit */
-                    case H5VL_OBJECT_BY_SELF:
-                    {
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lvisit is unsupported")
-                        break;
-                    } /* H5VL_OBJECT_BY_SELF */
+            switch (loc_params.type) {
+                /* H5Literate/H5Lvisit */
+                case H5VL_OBJECT_BY_SELF:
+                {
+                    snprintf(request_url, URL_MAX_LENGTH,
+                             "%s/groups/%s/links",
+                             base_URL,
+                             loc_obj->URI);
 
-                    /* H5Lvisit_by_name */
-                    case H5VL_OBJECT_BY_NAME:
-                    {
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lvisit_by_name is unsupported")
-                        break;
-                    } /* H5VL_OBJECT_BY_NAME */
+                    break;
+                } /* H5VL_OBJECT_BY_SELF */
 
-                    case H5VL_OBJECT_BY_IDX:
-                    case H5VL_OBJECT_BY_ADDR:
-                    case H5VL_OBJECT_BY_REF:
-                    default:
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
-                } /* end switch */
-            } /* end else */
+                /* H5Literate_by_name/H5Lvisit_by_name */
+                case H5VL_OBJECT_BY_NAME:
+                {
+                    H5I_type_t obj_type = H5I_GROUP;
+                    htri_t     search_ret;
+
+                    search_ret = RV_find_object_by_path(loc_obj, loc_params.loc_data.loc_by_name.name,
+                            &obj_type, RV_copy_object_URI_callback, NULL, temp_URI);
+                    if (!search_ret || search_ret < 0)
+                        FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate parent group")
+
+#ifdef PLUGIN_DEBUG
+                    printf("  - Found parent group %s at end of path chain\n\n", temp_URI);
+#endif
+
+                    snprintf(request_url, URL_MAX_LENGTH,
+                             "%s/groups/%s/links",
+                             base_URL,
+                             temp_URI);
+
+                    break;
+                } /* H5VL_OBJECT_BY_NAME */
+
+                case H5VL_OBJECT_BY_IDX:
+                case H5VL_OBJECT_BY_ADDR:
+                case H5VL_OBJECT_BY_REF:
+                default:
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
+            } /* end switch */
+
+            /* Make a GET request to the server to retrieve all of the links in the given group */
+
+            /* Setup the "Host: " header */
+            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
+            if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+
+            strcpy(host_header, host_string);
+
+            curl_headers = curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+
+            /* Disable use of Expect: 100 Continue HTTP response */
+            curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+
+#ifdef PLUGIN_DEBUG
+            printf("  - Retrieving all links in group\n\n");
+
+            printf("   /********************************\\\n");
+            printf("-> | Making a request to the server |\n");
+            printf("   \\********************************/\n\n");
+#endif
+
+            CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
+
+            if (RV_parse_response(response_buffer.buffer, &iter_data, NULL, RV_link_iter_callback) < 0)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't iterate over links")
 
             break;
         } /* H5VL_LINK_ITER */
@@ -6486,6 +6542,7 @@ static herr_t
 RV_get_link_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
     const char *link_class_keys[] = { "link", "class", (const char *) 0 };
+    const char *link_class_keys2[] = { "class", (const char *) 0 };
     H5L_info_t *link_info = (H5L_info_t *) callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;
     char       *parsed_string;
@@ -6499,8 +6556,10 @@ RV_get_link_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_dat
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
 
     /* Retrieve the link's class */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, link_class_keys, yajl_t_string)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object parent collection failed")
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, link_class_keys, yajl_t_string))) {
+        if (NULL == (key_obj = yajl_tree_get(parse_tree, link_class_keys2, yajl_t_string)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object parent collection failed")
+    }
 
     if (!YAJL_IS_STRING(key_obj))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned object parent collection is not a string")
@@ -6563,8 +6622,10 @@ done:
 static herr_t
 RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
-    const char *link_class_keys[] = { "link", "class", (const char *) 0 };
-    const char *link_val_keys[] = { "link", "h5path", (const char *) 0 };
+    const char *link_class_keys[] =  { "link", "class", (const char *) 0 };
+    const char *link_class_keys2[] = { "class", (const char *) 0 };
+    const char *link_val_keys[] =    { "link", "h5path", (const char *) 0 };
+    const char *link_val_keys2[] =   { "h5path", (const char *) 0 };
     yajl_val    parse_tree = NULL, key_obj;
     size_t     *in_buf_size = (size_t *) callback_data_in;
     char       *link_path;
@@ -6578,8 +6639,10 @@ RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *call
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
 
     /* Retrieve the link's class */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, link_class_keys, yajl_t_string)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link class failed")
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, link_class_keys, yajl_t_string))) {
+        if (NULL == (key_obj = yajl_tree_get(parse_tree, link_class_keys2, yajl_t_string)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link class failed")
+    }
 
     if (!YAJL_IS_STRING(key_obj))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned link class is not a string")
@@ -6591,8 +6654,10 @@ RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *call
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "H5Lget_val should not be called for hard links")
 
     /* Retrieve the link's value */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, link_val_keys, yajl_t_string)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link value failed")
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, link_val_keys, yajl_t_string))) {
+        if (NULL == (key_obj = yajl_tree_get(parse_tree, link_val_keys2, yajl_t_string)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link value failed")
+    }
 
     if (!YAJL_IS_STRING(key_obj))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned link value is not a string")
@@ -6673,6 +6738,234 @@ done:
 
     return ret_value;
 } /* end RV_get_link_val_callback() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_link_iter_callback
+ *
+ * Purpose:     A callback for RV_parse_response which will search an HTTP
+ *              response for links in a group and iterate through them,
+ *              setting up a H5L_info_t struct and calling the supplied
+ *              callback function for each link. The callback_data_in
+ *              parameter should be a link_iter_data struct *, containing
+ *              all the data necessary for link iteration, such as the
+ *              callback function, iteration order, index type, etc.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              December, 2017
+ */
+static herr_t
+RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+{
+    link_iter_data *iter_data = (link_iter_data *) callback_data_in;
+    const char     *links_keys[] = { "links", (const char *) 0 };
+    const char     *link_name_keys[] = { "title", (const char *) 0 };
+    H5L_info_t      cur_link_info;
+    yajl_val        parse_tree = NULL, key_obj, link_obj, link_name_obj;
+    herr_t          callback_ret;
+    size_t          last_idx;
+    size_t          num_links;
+    size_t          depth_counter = 0;
+    char           *link_section_ptr;
+    char           *advancement_ptr;
+    char           *cur_link_name;
+    char            current_symbol;
+    herr_t          ret_value = SUCCEED;
+
+    assert(iter_data && "invalid link iteration data pointer");
+
+    /* If this is a call to H5Lvisit, make a copy of the HTTP response since the
+     * buffer that cURL writes to is currently global and will be changed when the
+     * next request is made to the server when recursing into a subgroup to iterate
+     * over its links.
+     */
+    if (iter_data->is_recursive) {
+        /* XXX: Handle H5Lvisit from changing the buffer */
+    } /* end if */
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, links_keys, yajl_t_array)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of links object failed")
+
+    num_links = YAJL_GET_ARRAY(key_obj)->len;
+
+    /* Find the beginning of the "links" section */
+    if (NULL == (link_section_ptr = strstr(HTTP_response, "\"links\"")))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't find \"links\" information section in HTTP response")
+
+    /* Begin iteration */
+    switch (iter_data->iter_order) {
+        case H5_ITER_NATIVE:
+        case H5_ITER_INC:
+        {
+            for (last_idx = (iter_data->idx_p ? *iter_data->idx_p : 0); last_idx < num_links; last_idx++) {
+                link_obj = YAJL_GET_ARRAY(key_obj)->values[last_idx];
+
+                /* Get the current link's name */
+                if (NULL == (link_name_obj = yajl_tree_get(link_obj, link_name_keys, yajl_t_string)))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link name failed")
+
+                if (NULL == (cur_link_name = YAJL_GET_STRING(link_name_obj)))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "returned linked name was NULL")
+
+#ifdef PLUGIN_DEBUG
+                printf("  - Current link name: %s\n", cur_link_name);
+#endif
+
+                /* Find the beginning and end of the JSON section for this link */
+                if (NULL == (link_section_ptr = strstr(link_section_ptr, "{")))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't find start of current link's JSON section")
+                depth_counter++;
+                advancement_ptr = link_section_ptr + 1;
+
+                /* Continue forward through the string buffer character-by-character, incrementing the depth counter
+                 * for each '{' found and decrementing it for each '}' found, until the depth counter reaches 0 once
+                 * again, signalling the end of the link subsection
+                 */
+                /* XXX: Note that this approach will have problems with '{' or '}' appearing inside the link subsection
+                 * where one would not normally expect it, such as in a link name, and will either cause early termination
+                 * (an incomplete JSON representation) or will throw the below error about not being able to locate the end
+                 * of the link subsection.
+                 */
+                while (depth_counter) {
+                    current_symbol = *advancement_ptr++;
+
+                    /* If we reached the end of the string before finding the end of the link subsection, something is
+                     * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
+                     */
+                    if (!current_symbol)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't locate end of link subsection - stray '{' is likely")
+
+                    if (current_symbol == '{')
+                        depth_counter++;
+                    else if (current_symbol == '}')
+                        depth_counter--;
+                } /* end while */
+
+                /* Since it is not important if we destroy the contents of the HTTP response buffer,
+                 * NULL terminators will be placed in the buffer strategically at the end of each link
+                 * subsection, in order to "extract out" that subsection, corresponding to each individual
+                 * link, and pass it to the "get link info" callback.
+                 */
+                *advancement_ptr = '\0';
+
+#ifdef PLUGIN_DEBUG
+                printf("  - Current link JSON: %s\n", link_section_ptr);
+#endif
+
+                /* Fill out a H5L_info_t struct for this link */
+                if (RV_parse_response(link_section_ptr, NULL, &cur_link_info, RV_get_link_info_callback) < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "couldn't get link info")
+
+                /* Call the user's callback */
+                callback_ret = iter_data->iter_op(iter_data->group_id, cur_link_name, &cur_link_info, iter_data->op_data);
+                if (callback_ret < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret, "H5Literate/H5Lvisit (_by_name) user callback failed")
+                else if (callback_ret > 0)
+                    FUNC_GOTO_DONE(callback_ret)
+
+                /* Continue on to the next link subsection */
+                link_section_ptr = advancement_ptr + 1;
+            } /* end for */
+
+            break;
+        } /* H5_ITER_INC H5_ITER_NATIVE */
+
+        case H5_ITER_DEC:
+        {
+            for (last_idx = (iter_data->idx_p ? *iter_data->idx_p : num_links - 1); last_idx >= 0; last_idx--) {
+                link_obj = YAJL_GET_ARRAY(key_obj)->values[last_idx];
+
+                /* Get the current link's name */
+                if (NULL == (link_name_obj = yajl_tree_get(link_obj, link_name_keys, yajl_t_string)))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link name failed")
+
+                if (NULL == (cur_link_name = YAJL_GET_STRING(link_name_obj)))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "returned linked name was NULL")
+
+#ifdef PLUGIN_DEBUG
+                printf("  - Current link name: %s\n", cur_link_name);
+#endif
+
+                /* Find the beginning and end of the JSON section for this link */
+                if (NULL == (link_section_ptr = strstr(link_section_ptr, "{")))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't find start of current link's JSON section")
+                depth_counter++;
+                advancement_ptr = link_section_ptr + 1;
+
+                /* Continue forward through the string buffer character-by-character, incrementing the depth counter
+                 * for each '{' found and decrementing it for each '}' found, until the depth counter reaches 0 once
+                 * again, signalling the end of the link subsection
+                 */
+                /* XXX: Note that this approach will have problems with '{' or '}' appearing inside the link subsection
+                 * where one would not normally expect it, such as in a link name, and will either cause early termination
+                 * (an incomplete JSON representation) or will throw the below error about not being able to locate the end
+                 * of the link subsection.
+                 */
+                while (depth_counter) {
+                    current_symbol = *advancement_ptr++;
+
+                    /* If we reached the end of the string before finding the end of the link subsection, something is
+                     * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
+                     */
+                    if (!current_symbol)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't locate end of link subsection - stray '{' is likely")
+
+                    if (current_symbol == '{')
+                        depth_counter++;
+                    else if (current_symbol == '}')
+                        depth_counter--;
+                } /* end while */
+
+                /* Since it is not important if we destroy the contents of the HTTP response buffer,
+                 * NULL terminators will be placed in the buffer strategically at the end of each link
+                 * subsection, in order to "extract out" that subsection, corresponding to each individual
+                 * link, and pass it to the "get link info" callback.
+                 */
+                *advancement_ptr = '\0';
+
+#ifdef PLUGIN_DEBUG
+                printf("  - Current link JSON: %s\n", link_section_ptr);
+#endif
+
+                /* Fill out a H5L_info_t struct for this link */
+                if (RV_parse_response(link_section_ptr, NULL, &cur_link_info, RV_get_link_info_callback) < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "couldn't get link info")
+
+                /* Call the user's callback */
+                callback_ret = iter_data->iter_op(iter_data->group_id, cur_link_name, &cur_link_info, iter_data->op_data);
+                if (callback_ret < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret, "H5Literate/H5Lvisit (_by_name) user callback failed")
+                else if (callback_ret > 0)
+                    FUNC_GOTO_DONE(callback_ret)
+
+                if (last_idx == 0) break;
+
+                /* Continue on to the next link subsection */
+                link_section_ptr = advancement_ptr + 1;
+            } /* end for */
+
+            break;
+        } /* H5_ITER_DEC */
+
+        case H5_ITER_UNKNOWN:
+        case H5_ITER_N:
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "unknown link iteration order")
+    } /* end switch */
+
+done:
+    /* Keep track of the last index where we left off */
+    if (iter_data->idx_p && ret_value >= 0)
+        *iter_data->idx_p = last_idx;
+
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    return ret_value;
+} /* end RV_link_iter_callback() */
 
 
 /*-------------------------------------------------------------------------
@@ -8998,7 +9291,7 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
         /* XXX: Note that this approach will have problems with '{' or '}' appearing inside the "type" subsection
          * where one would not normally expect it, such as in a compound datatype field name, and will either
          * cause early termination (an incomplete JSON representation) or will throw the below error about not
-         * being able to locate the end of the "type" substring.
+         * being able to locate the end of the "type" subsection.
          */
         while (depth_counter) {
             current_symbol = *advancement_ptr++;
