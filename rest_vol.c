@@ -405,7 +405,8 @@ static herr_t RV_get_obj_type_callback(char *HTTP_response, void *callback_data_
 static herr_t RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
-static herr_t RV_retrieve_object_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_get_attr_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_get_object_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_group_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 
@@ -720,7 +721,8 @@ H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const
     size_t URL_len = 0;
     herr_t ret_value;
 
-    assert(URL && "must specify a base URL");
+    if (!URL)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "must specify a base URL")
 
     if (REST_g < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_UNINITIALIZED, FAIL, "REST VOL plugin not initialized")
@@ -737,7 +739,7 @@ H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const
      */
     URL_len = strlen(URL);
     if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTALLOC, FAIL, "can't allocate space for necessary base URL")
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space for necessary base URL")
 
     strncpy(base_URL, URL, URL_len);
     base_URL[URL_len] = '\0';
@@ -761,7 +763,7 @@ const char *
 RVget_uri(hid_t obj_id)
 {
     RV_object_t *VOL_obj;
-    char               *ret_value = NULL;
+    char        *ret_value = NULL;
 
     if (NULL == (VOL_obj = (RV_object_t *) H5VL_object(obj_id)))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, NULL, "invalid identifier")
@@ -989,11 +991,11 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
     printf("  - Parent Object Type: %d\n", parent->obj_type);
 #endif
 
-    assert((H5I_FILE == parent->obj_type
-          || H5I_GROUP == parent->obj_type
-          || H5I_DATATYPE == parent->obj_type
-          || H5I_DATASET == parent->obj_type)
-          && "parent object not a group, datatype or dataset");
+    if (   H5I_FILE != parent->obj_type
+        && H5I_GROUP != parent->obj_type
+        && H5I_DATATYPE != parent->obj_type
+        && H5I_DATASET != parent->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a group, datatype or dataset")
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -1243,11 +1245,11 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
     printf("  - Parent Object Type: %d\n", parent->obj_type);
 #endif
 
-    assert((H5I_FILE == parent->obj_type
-          || H5I_GROUP == parent->obj_type
-          || H5I_DATATYPE == parent->obj_type
-          || H5I_DATASET == parent->obj_type)
-          && "parent object not a group, datatype or dataset");
+    if (   H5I_FILE != parent->obj_type
+        && H5I_GROUP != parent->obj_type
+        && H5I_DATATYPE != parent->obj_type
+        && H5I_DATASET != parent->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a group, datatype or dataset")
 
     /* Allocate and setup internal Attribute struct */
     if (NULL == (attribute = (RV_object_t *) RV_malloc(sizeof(*attribute))))
@@ -1463,8 +1465,10 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED dxpl_id
     char         request_url[URL_MAX_LENGTH];
     herr_t       ret_value = SUCCEED;
 
-    assert(buf);
-    assert(H5I_ATTR == attribute->obj_type && "not an attribute");
+    if (H5I_ATTR != attribute->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not an attribute")
+    if (!buf)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "read buffer was NULL")
 
 #ifdef PLUGIN_DEBUG
     printf("Received Attribute read call with following parameters:\n");
@@ -1611,8 +1615,10 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
     char         request_url[URL_MAX_LENGTH];
     herr_t       ret_value = SUCCEED;
 
-    assert(buf);
-    assert(H5I_ATTR == attribute->obj_type && "not an attribute");
+    if (H5I_ATTR != attribute->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not an attribute")
+    if (!buf)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "write buffer was NULL")
 
     /* Check for write access */
     if (!(attribute->domain->u.file.intent & H5F_ACC_RDWR))
@@ -1788,7 +1794,9 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
         {
             H5VL_loc_params_t  loc_params = va_arg(arguments, H5VL_loc_params_t);
             H5A_info_t        *attr_info = va_arg(arguments, H5A_info_t *);
-            const char        *attr_name = NULL;
+
+            /* XXX: unused until support for H5Aget_info (_by_name) is implemented */
+            UNUSED_VAR(attr_info);
 
             switch (loc_params.type) {
                 /* H5Aget_info */
@@ -1801,7 +1809,10 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
                 /* H5Aget_info_by_name */
                 case H5VL_OBJECT_BY_NAME:
                 {
-                    attr_name = va_arg(arguments, const char *);
+                    const char *attr_name = va_arg(arguments, const char *);
+
+                    /* XXX: Unused until support for H5Aget_info_by_name is implemented */
+                    UNUSED_VAR(attr_name);
 
                     FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL, "H5Aget_info_by_name is unsupported")
                     break;
@@ -2245,7 +2256,8 @@ RV_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
     printf("  - Attribute Domain path: %s\n", _attr->domain->u.file.filepath_name);
 #endif
 
-    assert(H5I_ATTR == _attr->obj_type && "not an attribute");
+    if (H5I_ATTR != _attr->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not an attribute")
 
     if (_attr->u.attribute.attr_name)
         RV_free(_attr->u.attribute.attr_name);
@@ -2262,6 +2274,7 @@ RV_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
 
     RV_free(_attr);
 
+done:
     return ret_value;
 } /* end RV_attr_close() */
 
@@ -2310,8 +2323,8 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
     printf("  - Parent Object type: %d\n\n", parent->obj_type);
 #endif
 
-    assert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
-          && "parent object not a file or group");
+    if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a file or group")
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -2512,8 +2525,8 @@ RV_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const c
     printf("  - Parent object type: %d\n", parent->obj_type);
 #endif
 
-    assert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
-          && "parent object not a file or group");
+    if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a file or group")
 
     /* Allocate and setup internal Datatype struct */
     if (NULL == (datatype = (RV_object_t *) RV_malloc(sizeof(*datatype))))
@@ -2587,7 +2600,8 @@ RV_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t H5_ATTR_UNUSED dx
     printf("  - Datatype File: %s\n\n", dtype->domain->u.file.filepath_name);
 #endif
 
-    assert(H5I_DATATYPE == dtype->obj_type && "not a datatype");
+    if (H5I_DATATYPE != dtype->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a datatype")
 
     switch (get_type) {
         case H5VL_DATATYPE_GET_BINARY:
@@ -2649,7 +2663,8 @@ RV_datatype_close(void *dt, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **
     printf("  - URI: %s\n\n", _dtype->URI);
 #endif
 
-    assert(H5I_DATATYPE == _dtype->obj_type && "not a datatype");
+    if (H5I_DATATYPE != _dtype->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a datatype")
 
     if (_dtype->u.datatype.dtype_id >= 0 && H5Tclose(_dtype->u.datatype.dtype_id) < 0)
         FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
@@ -2661,6 +2676,7 @@ RV_datatype_close(void *dt, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **
 
     RV_free(_dtype);
 
+done:
     return ret_value;
 } /* end RV_datatype_close() */
 
@@ -2702,8 +2718,8 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
     printf("  - Parent Object Type: %d\n\n", parent->obj_type);
 #endif
 
-    assert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
-          && "parent object not a file or group");
+    if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a file or group")
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -2876,8 +2892,8 @@ RV_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
     printf("  - Parent Object Type: %d\n", parent->obj_type);
 #endif
 
-    assert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
-          && "parent object not a file or group");
+    if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a file or group")
 
     /* Allocate and setup internal Dataset struct */
     if (NULL == (dataset = (RV_object_t *) RV_malloc(sizeof(*dataset))))
@@ -2969,8 +2985,10 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     char          request_url[URL_MAX_LENGTH];
     herr_t        ret_value = SUCCEED;
 
-    assert(buf);
-    assert(H5I_DATASET == dataset->obj_type && "not a dataset");
+    if (H5I_DATASET != dataset->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a dataset")
+    if (!buf)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "read buffer was NULL")
 
 #ifdef PLUGIN_DEBUG
     printf("Received Dataset read call with following parameters:\n");
@@ -3033,7 +3051,8 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory dataspace is invalid")
     if ((file_select_npoints = H5Sget_select_npoints(file_space_id)) < 0)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "file dataspace is invalid")
-    assert((mem_select_npoints == file_select_npoints) && "memory selection num points != file selection num points");
+    if (mem_select_npoints != file_select_npoints)
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory selection num points != file selection num points")
 
 
     /* Determine whether it's possible to send the data as a binary blob instead of a JSON array */
@@ -3212,8 +3231,10 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     char          request_url[URL_MAX_LENGTH];
     herr_t        ret_value = SUCCEED;
 
-    assert(buf);
-    assert(H5I_DATASET == dataset->obj_type && "not a dataset");
+    if (H5I_DATASET != dataset->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a dataset")
+    if (!buf)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "write buffer was NULL")
 
     /* Check for write access */
     if (!(dataset->domain->u.file.intent & H5F_ACC_RDWR))
@@ -3288,7 +3309,9 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory dataspace is invalid")
     if ((file_select_npoints = H5Sget_select_npoints(file_space_id)) < 0)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "file dataspace is invalid")
-    assert((mem_select_npoints == file_select_npoints) && "memory selection num points != file selection num points");
+    if (mem_select_npoints != file_select_npoints)
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory selection num points != file selection num points")
+
 
     /* Setup the size of the data being transferred and the data buffer itself (for non-simple
      * types like object references or variable length types)
@@ -3408,7 +3431,8 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl
     printf("  - Dataset File: %s\n\n", dset->domain->u.file.filepath_name);
 #endif
 
-    assert(H5I_DATASET == dset->obj_type && "not a dataset");
+    if (H5I_DATASET != dset->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a dataset")
 
     switch (get_type) {
         /* H5Dget_access_plist */
@@ -3501,7 +3525,8 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
     printf("  - Dataset File: %s\n\n", dset->domain->u.file.filepath_name);
 #endif
 
-    assert(H5I_DATASET == dset->obj_type && "not a dataset");
+    if (H5I_DATASET != dset->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a dataset")
 
     switch (specific_type) {
         /* H5Dset_extent */
@@ -3545,7 +3570,8 @@ RV_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED *
     printf("  - URI: %s\n\n", _dset->URI);
 #endif
 
-    assert(H5I_DATASET == _dset->obj_type && "not a dataset");
+    if (H5I_DATASET != _dset->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a dataset")
 
     if (_dset->u.dataset.dtype_id >= 0 && H5Tclose(_dset->u.dataset.dtype_id) < 0)
         FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close dataset's datatype")
@@ -3564,6 +3590,7 @@ RV_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED *
 
     RV_free(_dset);
 
+done:
     return ret_value;
 } /* end RV_dataset_close() */
 
@@ -3920,6 +3947,9 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
     printf("  - File Pathname: %s\n\n", _obj->domain->u.file.filepath_name);
 #endif
 
+    if (H5I_FILE != _obj->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a file")
+
     switch (get_type) {
         /* H5Fget_access_plist */
         case H5VL_FILE_GET_FAPL:
@@ -4021,7 +4051,8 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_ATTR_UN
     }
 #endif
 
-    if (file) assert(H5I_FILE == file->obj_type && "not a file");
+    if (file && H5I_FILE != file->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a file")
 
     switch (specific_type) {
         /* H5Fflush */
@@ -4067,14 +4098,15 @@ RV_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list ar
     RV_object_t          *file = (RV_object_t *) obj;
     herr_t                ret_value = SUCCEED;
 
-    assert(H5I_FILE == file->obj_type && "not a file");
-
 #ifdef PLUGIN_DEBUG
     printf("Received file optional call with following parameters:\n");
     printf("  - Call type: %d\n", optional_type);
     printf("  - File URI: %s\n", file->URI);
     printf("  - File Pathname: %s\n\n", file->domain->u.file.filepath_name);
 #endif
+
+    if (H5I_FILE != file->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a file")
 
     switch (optional_type) {
         /* H5Freopen */
@@ -4181,7 +4213,8 @@ RV_file_close(void *file, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
     printf("  - DXPL: %ld\n\n", dxpl_id);
 #endif
 
-    assert(H5I_FILE == _file->obj_type && "not a file");
+    if (H5I_FILE != _file->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a file")
 
     if (_file->u.file.filepath_name)
         RV_free(_file->u.file.filepath_name);
@@ -4198,6 +4231,7 @@ RV_file_close(void *file, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 
     RV_free(_file);
 
+done:
     return ret_value;
 } /* end RV_file_close() */
 
@@ -4241,8 +4275,8 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
     printf("  - Parent Object Type: %d\n\n", parent->obj_type);
 #endif
 
-    assert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
-          && "parent object not a file or group");
+    if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a file or group")
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -4428,8 +4462,8 @@ RV_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char
     printf("  - Parent Object Type: %d\n", parent->obj_type);
 #endif
 
-    assert((H5I_FILE == parent->obj_type || H5I_GROUP == parent->obj_type)
-            && "parent object not a file or group");
+    if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a file or group")
 
     /* Allocate and setup internal Group struct */
     if (NULL == (group = (RV_object_t *) RV_malloc(sizeof(*group))))
@@ -4497,9 +4531,8 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
     printf("  - Object File: %s\n", loc_obj->domain->u.file.filepath_name);
 #endif
 
-    assert(( H5I_GROUP == loc_obj->obj_type
-          || H5I_FILE == loc_obj->obj_type)
-          && "not a group");
+    if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a group")
 
     switch (get_type) {
         /* H5Gget_create_plist */
@@ -4644,7 +4677,8 @@ RV_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
     printf("  - DXPL: %ld\n\n", dxpl_id);
 #endif
 
-    assert(H5I_GROUP == _grp->obj_type && "not a group");
+    if (H5I_GROUP != _grp->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a group")
 
     if (_grp->u.group.gcpl_id >= 0) {
         if (_grp->u.group.gcpl_id != H5P_GROUP_CREATE_DEFAULT && H5Pclose(_grp->u.group.gcpl_id) < 0)
@@ -4653,6 +4687,7 @@ RV_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
 
     RV_free(_grp);
 
+done:
     return ret_value;
 } /* end RV_group_close() */
 
@@ -4709,9 +4744,10 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
     } /* end if */
 
     /* Validate loc_id and check for write access on the file */
-    assert((H5I_FILE == new_link_loc_obj->obj_type || H5I_GROUP == new_link_loc_obj->obj_type)
-          && "link location object not a file or group");
-    assert(loc_params.loc_data.loc_by_name.name);
+    if (H5I_FILE != new_link_loc_obj->obj_type && H5I_GROUP != new_link_loc_obj->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link location object not a file or group")
+    if (!loc_params.loc_data.loc_by_name.name)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link name data was NULL")
 
     if (!(new_link_loc_obj->domain->u.file.intent & H5F_ACC_RDWR))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
@@ -4954,6 +4990,8 @@ RV_link_copy(void *src_obj, H5VL_loc_params_t loc_params1,
 {
     herr_t ret_value = SUCCEED;
 
+    FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lcopy is unsupported")
+
 done:
     return ret_value;
 } /* end RV_link_copy() */
@@ -4979,6 +5017,8 @@ RV_link_move(void *src_obj, H5VL_loc_params_t loc_params1,
              hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
 {
     herr_t ret_value = SUCCEED;
+
+    FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lmove is unsupported")
 
 done:
     return ret_value;
@@ -5277,9 +5317,8 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
     printf("  - Link URI: %s\n", loc_obj->URI);
 #endif
 
-    assert((H5I_FILE == loc_obj->obj_type || H5I_GROUP == loc_obj->obj_type)
-              && "parent object not a file or group");
-
+    if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "parent object not a file or group")
 
     switch (specific_type) {
         /* H5Ldelete */
@@ -5580,8 +5619,8 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
     printf("  - Object Type: %d\n", loc_obj->obj_type);
 #endif
 
-    assert((H5I_FILE == loc_obj->obj_type || H5I_GROUP == loc_obj->obj_type)
-                && "loc_id object not a file or group");
+    if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a file or group")
 
     switch (loc_params.type) {
         /* H5Oopen */
@@ -5727,6 +5766,8 @@ RV_object_copy(void *src_obj, H5VL_loc_params_t loc_params1, const char *src_nam
 {
     herr_t ret_value = SUCCEED;
 
+    FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Ocopy is unsupported")
+
 done:
     return ret_value;
 } /* end RV_object_copy() */
@@ -5768,6 +5809,10 @@ RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_typ
             hid_t      *ret = va_arg(arguments, hid_t *);
             H5R_type_t  ref_type = va_arg(arguments, H5R_type_t);
             void       *ref = va_arg(arguments, void *);
+
+            /* XXX: Unused until support for region references can be implemented */
+            UNUSED_VAR(ret);
+            UNUSED_VAR(ref);
 
             /* Though the actual ref type should be stored in the ref itself, we take the user's
              * passed in ref type at face value here.
@@ -5921,6 +5966,9 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
 
                 case H5R_DATASET_REGION:
                 {
+                    /* XXX: Unused until support for region references can be implemented */
+                    UNUSED_VAR(space_id);
+
                     FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_UNSUPPORTED, FAIL, "region references are currently unsupported")
                     break;
                 } /* H5R_DATASET_REGION */
@@ -5964,11 +6012,11 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
     char                    request_url[URL_MAX_LENGTH];
     herr_t                  ret_value = SUCCEED;
 
-    assert(( H5I_FILE == loc_obj->obj_type
-          || H5I_DATATYPE == loc_obj->obj_type
-          || H5I_DATASET == loc_obj->obj_type
-          || H5I_GROUP == loc_obj->obj_type)
-          && "not a group, dataset or datatype");
+    if (   H5I_FILE != loc_obj->obj_type
+        && H5I_GROUP != loc_obj->obj_type
+        && H5I_DATATYPE != loc_obj->obj_type
+        && H5I_DATASET != loc_obj->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a group, dataset or datatype")
 
 #ifdef PLUGIN_DEBUG
     printf("Received object optional call with following parameters:\n");
@@ -6144,8 +6192,8 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
             CURL_PERFORM(curl, H5E_OBJECT, H5E_CANTGET, FAIL);
 
             /* Retrieve the attribute count for the object */
-            if (RV_parse_response(response_buffer.buffer, NULL, obj_info, RV_retrieve_object_info_callback) < 0)
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't retrieve object info")
+            if (RV_parse_response(response_buffer.buffer, NULL, obj_info, RV_get_object_info_callback) < 0)
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't get object info")
 
             /* Set the type of the object */
             if (H5I_GROUP == obj_type)
@@ -6328,7 +6376,8 @@ RV_parse_response(char *HTTP_response, void *callback_data_in, void *callback_da
 {
     herr_t ret_value = SUCCEED;
 
-    assert(HTTP_response);
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response was NULL")
 
     if (parse_callback && parse_callback(HTTP_response, callback_data_in, callback_data_out) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "can't perform callback operation")
@@ -6358,15 +6407,18 @@ done:
 static herr_t
 RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
-    const char *soft_link_class_keys[] = { "link", "class", (const char *) 0 };
-    const char *hard_link_keys[] = { "link", "id", (const char *) 0 };
-    const char *object_create_keys[] = { "id", (const char *) 0 };
-    const char *root_group_keys[] = { "root", (const char *) 0 };
-    yajl_val    parse_tree = NULL, key_obj;
-    char       *parsed_string;
-    herr_t      ret_value = SUCCEED;
+    const char  *soft_link_class_keys[] = { "link", "class", (const char *) 0 };
+    const char  *hard_link_keys[] = { "link", "id", (const char *) 0 };
+    const char  *object_create_keys[] = { "id", (const char *) 0 };
+    const char  *root_group_keys[] = { "root", (const char *) 0 };
+    RV_object_t *in_group = (RV_object_t *) callback_data_in;
+    yajl_val     parse_tree = NULL, key_obj;
+    char        *parsed_string;
+    char        *buf_out = (char *) callback_data_out;
+    herr_t       ret_value = SUCCEED;
 
-    assert(callback_data_out && "invalid URI pointer");
+    if (!buf_out)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "out buffer was NULL")
 
     /* In order to handle the special case of the path ".", which corresponds to the
      * current group, this callback is usually reached with the callback_data_in
@@ -6376,13 +6428,13 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
      * unnecessary extra call to the server to retrieve the URI of the supplied group,
      * whose URI is already known.
      */
-    if (callback_data_in) {
-        strncpy((char *) callback_data_out, ((RV_object_t *) callback_data_in)->URI, URI_MAX_LENGTH);
+    if (in_group) {
+        strncpy(buf_out, in_group->URI, URI_MAX_LENGTH);
         FUNC_GOTO_DONE(SUCCEED);
     } /* end if */
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed")
 
     /* To handle the awkward case of soft and external links, which do not return an "ID",
      * first check for the link class field and short circuit if it is found to be
@@ -6392,7 +6444,7 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
         char *link_type;
 
         if (NULL == (link_type = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link type failed")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "link type string was NULL")
 
         if (!strcmp(link_type, "H5L_TYPE_SOFT") || !strcmp(link_type, "H5L_TYPE_EXTERNAL") ||
                 !strcmp(link_type, "H5L_TYPE_UD"))
@@ -6405,10 +6457,10 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
     key_obj = yajl_tree_get(parse_tree, hard_link_keys, yajl_t_string);
     if (key_obj) {
         if (!YAJL_IS_STRING(key_obj))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned URI is not a string")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned URI is not a string")
 
         if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of URI failed")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "URI was NULL")
     } /* end if */
     else {
         /* Could not find the object's URI by the sequence "link" -> "id". Try looking
@@ -6418,10 +6470,10 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
         key_obj = yajl_tree_get(parse_tree, object_create_keys, yajl_t_string);
         if (key_obj) {
             if (!YAJL_IS_STRING(key_obj))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned URI is not a string")
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned URI is not a string")
 
             if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of URI failed")
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "URI was NULL")
         } /* end if */
         else {
             /* Could not find the object's URI by the JSON key "id". Try looking for
@@ -6430,17 +6482,17 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
              * the root group of a file.
              */
             if (NULL == (key_obj = yajl_tree_get(parse_tree, root_group_keys, yajl_t_string)))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of URI failed")
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "retrieval of URI failed")
 
             if (!YAJL_IS_STRING(key_obj))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned URI is not a string")
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned URI is not a string")
 
             if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "URI was NULL")
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "URI was NULL")
         } /* end else */
     } /* end else */
 
-    strncpy((char *) callback_data_out, parsed_string, URI_MAX_LENGTH);
+    strncpy(buf_out, parsed_string, URI_MAX_LENGTH);
 
 done:
     if (parse_tree)
@@ -6470,14 +6522,16 @@ RV_get_obj_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data
 {
     const char *soft_link_class_keys[] = { "link", "class", (const char *) 0 };
     const char *link_collection_keys[] = { "link", "collection", (const char *) 0 };
+    H5I_type_t *obj_type = (H5I_type_t *) callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;
     char       *parsed_string;
     herr_t      ret_value = SUCCEED;
 
-    assert(callback_data_out && "invalid object type pointer");
+    if (!obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "object type pointer was NULL")
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed")
 
     /* To handle the awkward case of soft and external links, which do not have the link
      * collection element, first check for the link class field and short circuit if it
@@ -6487,7 +6541,7 @@ RV_get_obj_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data
         char *link_type;
 
         if (NULL == (link_type = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link type failed")
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "link type string was NULL")
 
         if (strcmp(link_type, "H5L_TYPE_HARD"))
             FUNC_GOTO_DONE(SUCCEED);
@@ -6495,22 +6549,22 @@ RV_get_obj_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data
 
     /* Retrieve the object's type */
     if (NULL == (key_obj = yajl_tree_get(parse_tree, link_collection_keys, yajl_t_string)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object parent collection failed")
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "retrieval of object parent collection failed")
 
     if (!YAJL_IS_STRING(key_obj))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned object parent collection is not a string")
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned object parent collection is not a string")
 
     if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "object parent collection string was NULL")
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "object parent collection string was NULL")
 
     if (!strcmp(parsed_string, "groups"))
-        *((H5I_type_t *) callback_data_out) = H5I_GROUP;
+        *obj_type = H5I_GROUP;
     else if (!strcmp(parsed_string, "datasets"))
-        *((H5I_type_t *) callback_data_out) = H5I_DATASET;
+        *obj_type = H5I_DATASET;
     else if (!strcmp(parsed_string, "datatypes"))
-        *((H5I_type_t *) callback_data_out) = H5I_DATATYPE;
+        *obj_type = H5I_DATATYPE;
     else
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "invalid object type")
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid object type")
 
 done:
     if (parse_tree)
@@ -6548,24 +6602,25 @@ RV_get_link_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_dat
     char       *parsed_string;
     herr_t      ret_value = SUCCEED;
 
-    assert(link_info && "invalid link info pointer");
+    if (!link_info)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link info pointer was NULL")
 
     memset(link_info, 0, sizeof(H5L_info_t));
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "parsing JSON failed")
 
     /* Retrieve the link's class */
     if (NULL == (key_obj = yajl_tree_get(parse_tree, link_class_keys, yajl_t_string))) {
         if (NULL == (key_obj = yajl_tree_get(parse_tree, link_class_keys2, yajl_t_string)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object parent collection failed")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of object parent collection failed")
     }
 
     if (!YAJL_IS_STRING(key_obj))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned object parent collection is not a string")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned object parent collection is not a string")
 
     if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "object parent collection string was NULL")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "object parent collection string was NULL")
 
     if (!strcmp(parsed_string, "H5L_TYPE_HARD"))
         link_info->type = H5L_TYPE_HARD;
@@ -6574,14 +6629,14 @@ RV_get_link_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_dat
     else if (!strcmp(parsed_string, "H5L_TYPE_EXTERNAL"))
         link_info->type = H5L_TYPE_EXTERNAL;
     else
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "invalid link class")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid link class")
 
     /* If this is not a hard link, determine the value for the 'val_size' field corresponding
      * to the size of a soft, external or user-defined link's value, including the NULL terminator
      */
     if (strcmp(parsed_string, "H5L_TYPE_HARD"))
         if (RV_parse_response(HTTP_response, &link_info->u.val_size, NULL, RV_get_link_val_callback) < 0)
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "can't retrieve link value size")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link value size")
 
 done:
     if (parse_tree)
@@ -6633,37 +6688,38 @@ RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *call
     char       *out_buf = (char *) callback_data_out;
     herr_t      ret_value = SUCCEED;
 
-    assert(in_buf_size && "invalid buffer size pointer");
+    if (!in_buf_size)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "buffer size point was NULL")
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "parsing JSON failed")
 
     /* Retrieve the link's class */
     if (NULL == (key_obj = yajl_tree_get(parse_tree, link_class_keys, yajl_t_string))) {
         if (NULL == (key_obj = yajl_tree_get(parse_tree, link_class_keys2, yajl_t_string)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link class failed")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link class failed")
     }
 
     if (!YAJL_IS_STRING(key_obj))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned link class is not a string")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link class is not a string")
 
     if (NULL == (link_class = YAJL_GET_STRING(key_obj)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "link class was NULL")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "link class was NULL")
 
     if (!strcmp(link_class, "H5L_TYPE_HARD"))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "H5Lget_val should not be called for hard links")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "H5Lget_val should not be called for hard links")
 
     /* Retrieve the link's value */
     if (NULL == (key_obj = yajl_tree_get(parse_tree, link_val_keys, yajl_t_string))) {
         if (NULL == (key_obj = yajl_tree_get(parse_tree, link_val_keys2, yajl_t_string)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of link value failed")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link value failed")
     }
 
     if (!YAJL_IS_STRING(key_obj))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned link value is not a string")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link value is not a string")
 
     if (NULL == (link_path = YAJL_GET_STRING(key_obj)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "link value was NULL")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "link value was NULL")
 
     if (!strcmp(link_class, "H5L_TYPE_SOFT")) {
         if ((!*in_buf_size) || (*in_buf_size < 0)) {
@@ -6686,13 +6742,13 @@ RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *call
         char       *link_domain;
 
         if (NULL == (link_domain_obj = yajl_tree_get(parse_tree, link_domain_keys, yajl_t_string)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of external link domain failed")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of external link domain failed")
 
         if (!YAJL_IS_STRING(link_domain_obj))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned external link domain is not a string")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned external link domain is not a string")
 
         if (NULL == (link_domain = YAJL_GET_STRING(link_domain_obj)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "link domain was NULL")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "link domain was NULL")
 
         /* Process external links; user-defined links are currently unsupported */
         if ((!*in_buf_size) || (*in_buf_size < 0)) {
@@ -6773,7 +6829,8 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
     char            current_symbol;
     herr_t          ret_value = SUCCEED;
 
-    assert(iter_data && "invalid link iteration data pointer");
+    if (!iter_data)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link iteration data pointer was NULL")
 
     /* If this is a call to H5Lvisit, make a copy of the HTTP response since the
      * buffer that cURL writes to is currently global and will be changed when the
@@ -6785,10 +6842,10 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
     } /* end if */
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "parsing JSON failed")
 
     if (NULL == (key_obj = yajl_tree_get(parse_tree, links_keys, yajl_t_array)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of links object failed")
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of links object failed")
 
     num_links = YAJL_GET_ARRAY(key_obj)->len;
 
@@ -6809,7 +6866,7 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link name failed")
 
                 if (NULL == (cur_link_name = YAJL_GET_STRING(link_name_obj)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "returned linked name was NULL")
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned linked name was NULL")
 
 #ifdef PLUGIN_DEBUG
                 printf("  - Current link name: %s\n", cur_link_name);
@@ -6858,7 +6915,7 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
 
                 /* Fill out a H5L_info_t struct for this link */
                 if (RV_parse_response(link_section_ptr, NULL, &cur_link_info, RV_get_link_info_callback) < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "couldn't get link info")
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "couldn't get link info")
 
                 /* Call the user's callback */
                 callback_ret = iter_data->iter_op(iter_data->group_id, cur_link_name, &cur_link_info, iter_data->op_data);
@@ -6884,7 +6941,7 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link name failed")
 
                 if (NULL == (cur_link_name = YAJL_GET_STRING(link_name_obj)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "returned linked name was NULL")
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned linked name was NULL")
 
 #ifdef PLUGIN_DEBUG
                 printf("  - Current link name: %s\n", cur_link_name);
@@ -6933,7 +6990,7 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
 
                 /* Fill out a H5L_info_t struct for this link */
                 if (RV_parse_response(link_section_ptr, NULL, &cur_link_info, RV_get_link_info_callback) < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "couldn't get link info")
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "couldn't get link info")
 
                 /* Call the user's callback */
                 callback_ret = iter_data->iter_op(iter_data->group_id, cur_link_name, &cur_link_info, iter_data->op_data);
@@ -6953,7 +7010,7 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
 
         case H5_ITER_UNKNOWN:
         case H5_ITER_N:
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "unknown link iteration order")
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "unknown link iteration order")
     } /* end switch */
 
 done:
@@ -6969,7 +7026,40 @@ done:
 
 
 /*-------------------------------------------------------------------------
- * Function:    RV_retrieve_object_info_callback
+ * Function:    RV_get_attr_info_callback
+ *
+ * Purpose:     A callback for RV_parse_response which will search
+ *              an HTTP response for info about an attribute and copy that
+ *              info into the callback_data_out parameter, which should be
+ *              a H5A_info_t *. This callback is used to help
+ *              H5Aget_info (_by_name/_by_idx); currently the H5A_info_t
+ *              struct is just initialized to 0, as HSDS does not have any
+ *              provisions for returning any of the relevant information
+ *              in the H5A_info_t struct.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              December, 2017
+ */
+static herr_t
+RV_get_attr_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+{
+    H5A_info_t *attr_info = (H5A_info_t *) callback_data_out;
+    herr_t      ret_value = SUCCEED;
+
+    if (!attr_info)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "attribute info pointer was NULL")
+
+    memset(attr_info, 0, sizeof(*attr_info));
+
+done:
+    return ret_value;
+} /* end RV_get_attr_info_callback() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_get_object_info_callback
  *
  * Purpose:     A callback for RV_parse_response which will search
  *              an HTTP response for info about an object and copy that
@@ -6984,7 +7074,7 @@ done:
  *              November, 2017
  */
 static herr_t
-RV_retrieve_object_info_callback(char *HTTP_response,
+RV_get_object_info_callback(char *HTTP_response,
     void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
     const char *attribute_count_keys[] = { "attributeCount", (const char *) 0 };
@@ -6992,21 +7082,23 @@ RV_retrieve_object_info_callback(char *HTTP_response,
     yajl_val    parse_tree = NULL, key_obj;
     herr_t      ret_value = SUCCEED;
 
-    assert(obj_info && "invalid attribute count pointer");
+    if (!obj_info)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "object info pointer was NULL")
 
     memset(obj_info, 0, sizeof(*obj_info));
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed")
 
     /* Retrieve the object's attribute count */
     if (NULL == (key_obj = yajl_tree_get(parse_tree, attribute_count_keys, yajl_t_number)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of object attribute count failed")
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "retrieval of object attribute count failed")
 
     if (!YAJL_IS_INTEGER(key_obj))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned object attribute count is not an integer")
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned object attribute count is not an integer")
 
-    assert(YAJL_GET_INTEGER(key_obj) >= 0);
+    if (YAJL_GET_INTEGER(key_obj) < 0)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned object attribute count was negative")
 
     obj_info->num_attrs = YAJL_GET_INTEGER(key_obj);
 
@@ -7015,7 +7107,7 @@ done:
         yajl_tree_free(parse_tree);
 
     return ret_value;
-} /* end RV_retrieve_object_info_callback() */
+} /* end RV_get_object_info_callback() */
 
 
 /*-------------------------------------------------------------------------
@@ -7041,32 +7133,35 @@ RV_get_group_info_callback(char *HTTP_response,
     void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
     const char *group_link_count_keys[] = { "linkCount", (const char *) 0 };
-    H5G_info_t *info = (H5G_info_t *) callback_data_out;
+    H5G_info_t *group_info = (H5G_info_t *) callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;
     herr_t      ret_value = SUCCEED;
 
-    assert(info && "invalid group info pointer");
+    if (!group_info)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "group info pointer was NULL")
 
-    memset(info, 0, sizeof(*info));
+    memset(group_info, 0, sizeof(*group_info));
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_PARSEERROR, FAIL, "parsing JSON failed")
 
     /* Retrieve the group's link count */
     if (NULL == (key_obj = yajl_tree_get(parse_tree, group_link_count_keys, yajl_t_number)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of group link count failed")
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTGET, FAIL, "retrieval of group link count failed")
 
     if (!YAJL_IS_INTEGER(key_obj))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned group link count is not an integer")
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_BADVALUE, FAIL, "returned group link count is not an integer")
 
-    assert(YAJL_GET_INTEGER(key_obj) >= 0 && "group link count is not non-negative");
-    info->nlinks = (hsize_t) YAJL_GET_INTEGER(key_obj);
+    if (YAJL_GET_INTEGER(key_obj) < 0)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_BADVALUE, FAIL, "group link count was negative")
+
+    group_info->nlinks = (hsize_t) YAJL_GET_INTEGER(key_obj);
 
     /* Since the spec doesn't currently include provisions for the extra fields, set them to defaults */
     /* XXX: These defaults may be incorrect for applications to interpret */
-    info->storage_type = H5G_STORAGE_TYPE_SYMBOL_TABLE;
-    info->max_corder = 0;
-    info->mounted = FALSE;
+    group_info->storage_type = H5G_STORAGE_TYPE_SYMBOL_TABLE;
+    group_info->max_corder = 0;
+    group_info->mounted = FALSE;
 
 done:
     if (parse_tree)
@@ -7125,14 +7220,15 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
     hid_t      *DCPL = (hid_t *) callback_data_out;
     herr_t      ret_value = SUCCEED;
 
-    assert(DCPL && "invalid DCPL pointer");
+    if (!DCPL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "DCPL pointer was NULL")
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "parsing JSON failed")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "parsing JSON failed")
 
     /* Retrieve the creationProperties object */
     if (NULL == (creation_properties_obj = yajl_tree_get(parse_tree, creation_properties_keys, yajl_t_object)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of creationProperties object failed")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of creationProperties object failed")
 
 
     /********************************************************************************************
@@ -7148,7 +7244,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         char             *alloc_time_string;
 
         if (NULL == (alloc_time_string = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of space allocation time string failed")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "space allocation time string was NULL")
 
         if (!strcmp(alloc_time_string, "H5D_ALLOC_TIME_EARLY")) {
             alloc_time = H5D_ALLOC_TIME_EARLY;
@@ -7182,7 +7278,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         char     *crt_order_string;
 
         if (NULL == (crt_order_string = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of attribute creation order string failed")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "attribute creation order string was NULL")
 
         if (!strcmp(crt_order_string, "H5P_CRT_ORDER_INDEXED")) {
             crt_order_flags = H5P_CRT_ORDER_INDEXED | H5P_CRT_ORDER_TRACKED;
@@ -7216,19 +7312,19 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         yajl_val    sub_obj;
 
         if (NULL == (sub_obj = yajl_tree_get(key_obj, max_compact_keys, yajl_t_number)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of maxCompact attribute phase change value failed")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of maxCompact attribute phase change value failed")
 
         if (!YAJL_IS_INTEGER(sub_obj))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "return maxCompact attribute phase change value is not an integer")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "return maxCompact attribute phase change value is not an integer")
 
         if (YAJL_GET_INTEGER(sub_obj) >= 0)
             maxCompact = (unsigned) YAJL_GET_INTEGER(sub_obj);
 
         if (NULL == (sub_obj = yajl_tree_get(key_obj, min_dense_keys, yajl_t_number)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of minDense attribute phase change value failed")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of minDense attribute phase change value failed")
 
         if (!YAJL_IS_INTEGER(sub_obj))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "returned minDense attribute phase change value is not an integer")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "returned minDense attribute phase change value is not an integer")
 
         if (YAJL_GET_INTEGER(sub_obj) >= 0)
             minDense = (unsigned) YAJL_GET_INTEGER(sub_obj);
@@ -7256,7 +7352,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         char            *fill_time_str;
 
         if (NULL == (fill_time_str = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of fill time string failed")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "fill time string was NULL")
 
         if (!strcmp(fill_time_str, "H5D_FILL_TIME_ALLOC")) {
             fill_time = H5D_FILL_TIME_ALLOC;
@@ -7283,7 +7379,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      ******************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, fill_value_keys, yajl_t_any))) {
         /* XXX: support for fill values */
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "dataset fill values are unsupported")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset fill values are unsupported")
     } /* end if */
 
 
@@ -7297,7 +7393,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      ***************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, filters_keys, yajl_t_array))) {
         /* XXX: support for filters */
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "dataset filters are unsupported")
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset filters are unsupported")
     } /* end if */
 
 
@@ -7315,10 +7411,10 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         char       *layout_class;
 
         if (NULL == (sub_obj = yajl_tree_get(key_obj, layout_class_keys, yajl_t_string)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of layout class property failed")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of layout class property failed")
 
         if (NULL == (layout_class = YAJL_GET_STRING(sub_obj)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of layout class string failed")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "layout class string was NULL")
 
         if (!strcmp(layout_class, "H5D_CHUNKED")) {
             const char *chunk_dims_keys[] = { "dims", (const char *) 0 };
@@ -7326,16 +7422,16 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
             hsize_t     chunk_dims[DATASPACE_MAX_RANK];
 
             if (NULL == (chunk_dims_obj = yajl_tree_get(key_obj, chunk_dims_keys, yajl_t_array)))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of chunk dimensionality failed")
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of chunk dimensionality failed")
 
             for (i = 0; i < YAJL_GET_ARRAY(chunk_dims_obj)->len; i++) {
                 long long val;
 
                 if (!YAJL_IS_INTEGER(YAJL_GET_ARRAY(chunk_dims_obj)->values[i]))
-                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "one of the chunk dimension sizes was not an integer")
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "one of the chunk dimension sizes was not an integer")
 
                 if ((val = YAJL_GET_INTEGER(YAJL_GET_ARRAY(chunk_dims_obj)->values[i])) < 0)
-                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "one of the chunk dimension sizes was negative")
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "one of the chunk dimension sizes was negative")
 
                 chunk_dims[i] = (hsize_t) val;
             } /* end for */
@@ -7358,7 +7454,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
             yajl_val    external_storage_obj;
 
             if (NULL == (external_storage_obj = yajl_tree_get(key_obj, external_storage_keys, yajl_t_array)))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of external storage file extent array failed")
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of external storage file extent array failed")
 
 #ifdef PLUGIN_DEBUG
             printf("  - Setting contiguous layout on DCPL\n");
@@ -7390,7 +7486,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         char    *track_times_str;
 
         if (NULL == (track_times_str = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "retrieval of track times string failed")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "track times string was NULL")
 
         track_times = !strcmp(track_times_str, "true");
 
@@ -7453,11 +7549,14 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
     long     http_response;
     htri_t   ret_value = FAIL;
 
-    assert(parent_obj);
-    assert(obj_path);
-    assert(target_object_type);
-    assert((H5I_FILE == parent_obj->obj_type || H5I_GROUP == parent_obj->obj_type)
-          && "parent object not a file or group");
+    if (!parent_obj)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "parent object pointer was NULL")
+    if (H5I_FILE != parent_obj->obj_type && H5I_GROUP != parent_obj->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "parent object not a file or group")
+    if (!obj_path)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "target path was NULL")
+    if (!target_object_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "target object type pointer was NULL")
 
     /* XXX: Try to better organize the unknown object type case */
 
@@ -9042,9 +9141,12 @@ RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_le
     char   *out_curr_pos;
     herr_t  ret_value = SUCCEED;
 
-    assert(ref_array);
-    assert(buf_out);
-    assert(buf_out_len);
+    if (!ref_array)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "reference array pointer was NULL")
+    if (!buf_out)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "output buffer was NULL")
+    if (!buf_out_len)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "output buffer size pointer was NULL")
 
 #ifdef PLUGIN_DEBUG
     printf("  - Converting object ref. array to binary buffer\n\n");
@@ -9052,7 +9154,7 @@ RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_le
 
     out_len = ref_array_len * OBJECT_REF_STRING_LEN;
     if (NULL == (out = (char *) RV_malloc(out_len)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for object reference string buffer")
+        FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_CANTALLOC, FAIL, "can't allocate space for object reference string buffer")
     out_curr_pos = out;
 
     for (i = 0; i < ref_array_len; i++) {
@@ -9157,9 +9259,12 @@ RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
     size_t        out_len = 0;
     herr_t        ret_value = SUCCEED;
 
-    assert(ref_buf);
-    assert(buf_out);
-    assert(buf_out_len);
+    if (!ref_buf)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "reference string buffer was NULL")
+    if (!buf_out)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "output buffer was NULL")
+    if (!buf_out_len)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "output buffer size pointer was NULL")
 
 #ifdef PLUGIN_DEBUG
     printf("  - Converting binary buffer to ref. array\n\n");
@@ -9259,7 +9364,8 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
     char    *type_section_ptr = NULL;
     hid_t    ret_value = FAIL;
 
-    assert(type);
+    if (!type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "datatype JSON buffer was NULL")
 
     if (need_truncate) {
         size_t  substring_len;
@@ -9361,7 +9467,8 @@ RV_parse_dataspace(char *space)
     char       *dataspace_type = NULL;
     hid_t       ret_value = FAIL;
 
-    assert(space);
+    if (!space)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "dataspace string buffer was NULL")
 
     if (NULL == (parse_tree = yajl_tree_parse(space, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed")
@@ -9658,7 +9765,8 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string, size_t *selection_string_len, hbool_t req_param)
+RV_convert_dataspace_selection_to_string(hid_t space_id,
+    char **selection_string, size_t *selection_string_len, hbool_t req_param)
 {
     hsize_t *point_list = NULL;
     hsize_t *start = NULL;
@@ -9677,7 +9785,8 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
     int      ndims;
     herr_t   ret_value = SUCCEED;
 
-    assert(selection_string);
+    if (!selection_string)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "dataspace selection string was NULL")
 
     out_string_len = DATASPACE_SELECTION_STRING_DEFAULT_SIZE;
     if (NULL == (out_string = (char *) RV_malloc(out_string_len)))
@@ -9986,9 +10095,10 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
     int          bytes_printed = 0;
     herr_t       ret_value = SUCCEED;
 
-    assert(create_request_body);
-    assert((H5I_FILE == pobj->obj_type || H5I_GROUP == pobj->obj_type)
-              && "parent object not a file or group");
+    if (H5I_FILE != pobj->obj_type && H5I_GROUP != pobj->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "parent object not a file or group")
+    if (!create_request_body)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "dataset create request output buffer was NULL")
 
     /* Get the type ID */
     if (H5Pget(dcpl, H5VL_PROP_DSET_TYPE_ID, &type_id) < 0)
@@ -10676,7 +10786,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
             if ((ndims = H5Pget_chunk(dcpl, H5S_MAX_RANK + 1, chunk_dims)) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve dataset chunk dimensionality")
-            assert(ndims > 0 && "no chunk dimensionality specified");
+
+            if (!ndims)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "no chunk dimensionality specified")
 
             if (NULL == (chunk_dims_string = (char *) RV_malloc((size_t) ((ndims * MAX_NUM_LENGTH) + ndims + 3))))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for chunk dimensionality string")
