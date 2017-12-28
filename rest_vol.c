@@ -577,8 +577,8 @@ RVinit(void)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data_callback))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL write function: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
-    /* curl_easy_setopt(curl, CURLOPT_VERBOSE, 1); */
+#ifdef CURL_DEBUG
+    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
 #endif
 
     /* Register the plugin with HDF5's error reporting API */
@@ -859,7 +859,7 @@ RV_calloc(size_t size)
 
     if (size) {
 #ifdef TRACK_MEM_USAGE
-        if (NULL != (ret_value = rest_malloc(size)))
+        if (NULL != (ret_value = RV_malloc(size)))
             memset(ret_value, 0, size);
 #else
         ret_value = calloc(1, size);
@@ -907,7 +907,7 @@ RV_realloc(void *mem, size_t size)
 
                 ret_value = RV_malloc(size);
                 memcpy(ret_value, mem, MIN(size, block_size));
-                rest_free(mem);
+                RV_free(mem);
             } /* end if */
             else
                 ret_value = RV_malloc(size);
@@ -1037,11 +1037,6 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
                 RV_copy_object_URI_callback, NULL, new_attribute->u.attribute.parent_obj_URI);
         if (!search_ret || search_ret < 0)
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, NULL, "can't locate object that attribute is to be attached to")
-
-#ifdef PLUGIN_DEBUG
-        printf("  - New parent object type: %d\n", new_attribute->u.attribute.parent_obj_type);
-        printf("  - New parent object URI: %s\n\n", new_attribute->u.attribute.parent_obj_URI);
-#endif
     } /* end if */
     else {
         new_attribute->u.attribute.parent_obj_type = parent->obj_type;
@@ -1303,11 +1298,6 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
             if (!search_ret || search_ret < 0)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, NULL, "can't locate object that attribute is attached to")
 
-#ifdef PLUGIN_DEBUG
-            printf("  - New parent object type: %d\n", attribute->u.attribute.parent_obj_type);
-            printf("  - New parent object URI: %s\n\n", attribute->u.attribute.parent_obj_URI);
-#endif
-
             break;
         } /* H5VL_OBJECT_BY_NAME */
 
@@ -1385,10 +1375,6 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "parent object not a group, datatype or dataset")
     } /* end switch */
 
-#ifdef PLUGIN_DEBUG
-    printf("Accessing link: %s\n\n", request_url);
-#endif
-
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
@@ -1397,6 +1383,8 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
+    printf("Accessing link: %s\n\n", request_url);
+
     printf("   /********************************\\\n");
     printf("-> | Making a request to the server |\n");
     printf("   \\********************************/\n\n");
@@ -2192,10 +2180,6 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                     FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
             } /* end switch */
 
-#ifdef PLUGIN_DEBUG
-            printf("  - Attribute Delete URL: %s\n\n", request_url);
-#endif
-
             /* Setup the "Host: " header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
@@ -2216,6 +2200,8 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
+            printf("  - Attribute Delete URL: %s\n\n", request_url);
+
             printf("   /********************************\\\n");
             printf("-> | Making a request to the server |\n");
             printf("   \\********************************/\n\n");
@@ -2312,10 +2298,6 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                     FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
             } /* end switch */
 
-#ifdef PLUGIN_DEBUG
-            printf("  - Attribute existence check URL: %s\n\n", request_url);
-#endif
-
             /* Setup the "Host: " header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
@@ -2336,6 +2318,8 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
+            printf("  - Attribute existence check URL: %s\n\n", request_url);
+
             printf("   /********************************\\\n");
             printf("-> | Making a request to the server |\n");
             printf("   \\********************************/\n\n");
@@ -3280,10 +3264,6 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         else
             ASSIGN_TO_SAME_SIZE_SIGNED_TO_UNSIGNED(write_len, curl_off_t, selection_body_len + 2, size_t)
 
-#ifdef PLUGIN_DEBUG
-        printf("Point sel list after shifting: %s\n\n", selection_body);
-#endif
-
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, selection_body))
@@ -3881,9 +3861,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
         if (HTTP_SUCCESS(http_response)) {
 #ifdef PLUGIN_DEBUG
             printf("  - File existed and H5F_ACC_TRUNC specified; deleting file\n\n");
-#endif
 
-#ifdef PLUGIN_DEBUG
             printf("   /********************************\\\n");
             printf("-> | Making a request to the server |\n");
             printf("   \\********************************/\n\n");
@@ -6500,10 +6478,6 @@ dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *
 {
     *src_buf = response_buffer.buffer;
     *src_buf_bytes_used = *((size_t *) op_data);
-
-#ifdef PLUGIN_DEBUG
-    printf("Src_buf_bytes_used: %zu.\n", *src_buf_bytes_used);
-#endif
 
     return 0;
 } /* end dataset_read_scatter_op() */

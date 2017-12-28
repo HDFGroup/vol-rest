@@ -36,6 +36,9 @@ extern "C" {
 /* Uncomment to allow this VOL plugin to print out debugging information to stdout */
 /* #define PLUGIN_DEBUG */
 
+/* Uncomment to allow cURL to print out verbose information about the HTTP requests it makes */
+/* #define CURL_DEBUG */
+
 /* Uncomment to track memory usage in this VOL plugin. When calling H5VLrest_term(),
  * the plugin will throw an error if memory was still allocated at termination time,
  * generally signifying a memory leak in either the application code or in this plugin.
