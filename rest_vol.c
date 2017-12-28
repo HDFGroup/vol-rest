@@ -309,6 +309,18 @@ typedef struct link_iter_data {
     void            *op_data;
 } link_iter_data;
 
+/*
+ * A struct which is filled out during link iteration and contains
+ * all of the information needed to iterate through links by both
+ * alphabetical order and link creation order in increasing and
+ * decreasing fashion.
+ */
+typedef struct link_table_entry {
+    H5L_info_t  link_info;
+    double      crt_time;
+    char       *link_name;
+} link_table_entry;
+
 /* Host header string for specifying the host (Domain) for requests */
 const char * const host_string = "Host: ";
 
@@ -395,6 +407,9 @@ static char *RV_dirname(const char *path);
 
 /* H5Dscatter() callback for dataset reads */
 static herr_t dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *op_data);
+
+/* Qsort callback to sort links by creation order */
+static int cmp_links_by_creation_order(const void *link1, const void *link2);
 
 /* Helper function to parse an HTTP response according to the parse callback function */
 static herr_t RV_parse_response(char *HTTP_response, void *callback_data_in, void *callback_data_out, herr_t (*parse_callback)(char *, void *, void *));
@@ -6499,6 +6514,27 @@ dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *
 
 
 /*-------------------------------------------------------------------------
+ * Function:    cmp_links_by_creation_order
+ *
+ * Purpose:     Qsort callback to sort links by creation order when doing
+ *              link iteration
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              December, 2017
+ */
+static int
+cmp_links_by_creation_order(const void *link1, const void *link2)
+{
+    link_table_entry *_link1 = (link_table_entry *) link1;
+    link_table_entry *_link2 = (link_table_entry *) link2;
+
+    return ((_link1->crt_time > _link2->crt_time) - (_link1->crt_time < _link2->crt_time));
+} /* end cmp_links_by_creation_order() */
+
+
+/*-------------------------------------------------------------------------
  * Function:    RV_parse_response
  *
  * Purpose:     Helper function to simply ingest a string buffer containing
@@ -6879,13 +6915,16 @@ RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *call
     } /* end if */
     else {
         const char *link_domain_keys[] = { "link", "h5domain", (const char *) 0 };
+        const char *link_domain_keys2[] = { "h5domain", (const char *) 0 };
         yajl_val    link_domain_obj;
         unsigned    link_version;
         unsigned    link_flags;
         char       *link_domain;
 
-        if (NULL == (link_domain_obj = yajl_tree_get(parse_tree, link_domain_keys, yajl_t_string)))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of external link domain failed")
+        if (NULL == (link_domain_obj = yajl_tree_get(parse_tree, link_domain_keys, yajl_t_string))) {
+            if (NULL == (link_domain_obj = yajl_tree_get(parse_tree, link_domain_keys2, yajl_t_string)))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of external link domain failed")
+        }
 
         if (!YAJL_IS_STRING(link_domain_obj))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned external link domain is not a string")
@@ -6957,20 +6996,21 @@ done:
 static herr_t
 RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
-    link_iter_data *iter_data = (link_iter_data *) callback_data_in;
-    const char     *links_keys[] = { "links", (const char *) 0 };
-    const char     *link_name_keys[] = { "title", (const char *) 0 };
-    H5L_info_t      cur_link_info;
-    yajl_val        parse_tree = NULL, key_obj, link_obj, link_name_obj;
-    herr_t          callback_ret;
-    size_t          last_idx;
-    size_t          num_links;
-    size_t          depth_counter = 0;
-    char           *link_section_ptr;
-    char           *advancement_ptr;
-    char           *cur_link_name;
-    char            current_symbol;
-    herr_t          ret_value = SUCCEED;
+    link_table_entry *link_table = NULL;
+    link_iter_data   *iter_data = (link_iter_data *) callback_data_in;
+    const char       *links_keys[]              = { "links", (const char *) 0 };
+    const char       *link_name_keys[]          = { "title", (const char *) 0 };
+    const char       *link_creation_time_keys[] = { "created", (const char *) 0 };
+    yajl_val          parse_tree = NULL, key_obj;
+    yajl_val          link_obj, link_name_obj, link_create_time_obj;
+    herr_t            callback_ret;
+    size_t            i, last_idx;
+    size_t            num_links;
+    size_t            depth_counter = 0;
+    char             *link_section_ptr;
+    char             *advancement_ptr;
+    char              current_symbol;
+    herr_t            ret_value = SUCCEED;
 
     if (!iter_data)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link iteration data pointer was NULL")
@@ -6981,6 +7021,7 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
      * over its links.
      */
     if (iter_data->is_recursive) {
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lvisit is unsupported")
         /* XXX: Handle H5Lvisit from changing the buffer */
     } /* end if */
 
@@ -6992,9 +7033,117 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
 
     num_links = YAJL_GET_ARRAY(key_obj)->len;
 
+    /* Build a table of link information for each link so that we can sort in order
+     * of link creation if needed and can also work in decreasing order if desired
+     */
+    if (NULL == (link_table = RV_malloc(num_links * sizeof(*link_table))))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link table")
+
     /* Find the beginning of the "links" section */
     if (NULL == (link_section_ptr = strstr(HTTP_response, "\"links\"")))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't find \"links\" information section in HTTP response")
+
+    /* For each link, grab its name and creation order, then find its corresponding JSON
+     * subsection, place a NULL terminator at the end of it in order to "extract out" that
+     * subsection, and pass it to the "get link info" callback function in order to fill
+     * out a H5L_info_t struct for the link.
+     */
+    for (i = 0; i < num_links; i++) {
+        link_obj = YAJL_GET_ARRAY(key_obj)->values[i];
+
+        /* Get the current link's name */
+        if (NULL == (link_name_obj = yajl_tree_get(link_obj, link_name_keys, yajl_t_string)))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link name failed")
+
+        if (NULL == (link_table[i].link_name = YAJL_GET_STRING(link_name_obj)))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned linked name was NULL")
+
+#ifdef PLUGIN_DEBUG
+        printf("  - Link %zu name: %s\n", i, link_table[i].link_name);
+#endif
+
+        /* Get the current link's creation time */
+        if (NULL == (link_create_time_obj = yajl_tree_get(link_obj, link_creation_time_keys, yajl_t_number)))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link creation time failed")
+
+        if (!YAJL_IS_DOUBLE(link_create_time_obj))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link creation time is not a double")
+
+        link_table[i].crt_time = YAJL_GET_DOUBLE(link_create_time_obj);
+
+#ifdef PLUGIN_DEBUG
+        printf("  - Link %zu creation time: %f\n", i, link_table[i].crt_time);
+#endif
+
+
+        /* Process the JSON for the current link and fill out a H5L_info_t struct for it */
+
+        /* Find the beginning and end of the JSON section for this link */
+        if (NULL == (link_section_ptr = strstr(link_section_ptr, "{")))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't find start of current link's JSON section")
+        depth_counter++;
+        advancement_ptr = link_section_ptr + 1;
+
+        /* Continue forward through the string buffer character-by-character, incrementing the depth counter
+         * for each '{' found and decrementing it for each '}' found, until the depth counter reaches 0 once
+         * again, signalling the end of the link subsection
+         */
+        /* XXX: Note that this approach will have problems with '{' or '}' appearing inside the link subsection
+         * where one would not normally expect it, such as in a link name, and will either cause early termination
+         * (an incomplete JSON representation) or will throw the below error about not being able to locate the end
+         * of the link subsection.
+         */
+        while (depth_counter) {
+            current_symbol = *advancement_ptr++;
+
+            /* If we reached the end of the string before finding the end of the link subsection, something is
+             * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
+             */
+            if (!current_symbol)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't locate end of link subsection - stray '{' is likely")
+
+            if (current_symbol == '{')
+                depth_counter++;
+            else if (current_symbol == '}')
+                depth_counter--;
+        } /* end while */
+
+        /* Since it is not important if we destroy the contents of the HTTP response buffer,
+         * NULL terminators will be placed in the buffer strategically at the end of each link
+         * subsection, in order to "extract out" that subsection, corresponding to each individual
+         * link, and pass it to the "get link info" callback.
+         */
+        *advancement_ptr = '\0';
+
+#ifdef PLUGIN_DEBUG
+        printf("  - Link %zu JSON: %s\n", i, link_section_ptr);
+#endif
+
+        /* Fill out a H5L_info_t struct for this link */
+        if (RV_parse_response(link_section_ptr, NULL, &link_table[i].link_info, RV_get_link_info_callback) < 0)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "couldn't get link info")
+
+        /* Continue on to the next link subsection */
+        link_section_ptr = advancement_ptr + 1;
+    } /* end for */
+
+    /* This code assumes that links are returned in alphabetical order by default. If the user has requested them
+     * by creation order, sort them now. If, in the future, links are not returned in alphabetical order by default,
+     * this code should be changed to reflect this.
+     */
+    if (H5_INDEX_CRT_ORDER == iter_data->index_type)
+        qsort(link_table, num_links, sizeof(*link_table), cmp_links_by_creation_order);
+
+#ifdef PLUGIN_DEBUG
+    if (H5_INDEX_CRT_ORDER == iter_data->index_type) {
+        printf("  - Link table contents after sort by creation order:\n");
+        for (i = 0; i < num_links; i++) {
+            printf("  - Link %zu name: %s\n", i, link_table[i].link_name);
+            printf("  - Link %zu type: %d\n\n", i, link_table[i].link_info.type);
+        }
+        printf("\n\n");
+    }
+#endif
 
     /* Begin iteration */
     switch (iter_data->iter_order) {
@@ -7002,73 +7151,12 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
         case H5_ITER_INC:
         {
             for (last_idx = (iter_data->idx_p ? *iter_data->idx_p : 0); last_idx < num_links; last_idx++) {
-                link_obj = YAJL_GET_ARRAY(key_obj)->values[last_idx];
-
-                /* Get the current link's name */
-                if (NULL == (link_name_obj = yajl_tree_get(link_obj, link_name_keys, yajl_t_string)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link name failed")
-
-                if (NULL == (cur_link_name = YAJL_GET_STRING(link_name_obj)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned linked name was NULL")
-
-#ifdef PLUGIN_DEBUG
-                printf("  - Current link name: %s\n", cur_link_name);
-#endif
-
-                /* Find the beginning and end of the JSON section for this link */
-                if (NULL == (link_section_ptr = strstr(link_section_ptr, "{")))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't find start of current link's JSON section")
-                depth_counter++;
-                advancement_ptr = link_section_ptr + 1;
-
-                /* Continue forward through the string buffer character-by-character, incrementing the depth counter
-                 * for each '{' found and decrementing it for each '}' found, until the depth counter reaches 0 once
-                 * again, signalling the end of the link subsection
-                 */
-                /* XXX: Note that this approach will have problems with '{' or '}' appearing inside the link subsection
-                 * where one would not normally expect it, such as in a link name, and will either cause early termination
-                 * (an incomplete JSON representation) or will throw the below error about not being able to locate the end
-                 * of the link subsection.
-                 */
-                while (depth_counter) {
-                    current_symbol = *advancement_ptr++;
-
-                    /* If we reached the end of the string before finding the end of the link subsection, something is
-                     * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
-                     */
-                    if (!current_symbol)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't locate end of link subsection - stray '{' is likely")
-
-                    if (current_symbol == '{')
-                        depth_counter++;
-                    else if (current_symbol == '}')
-                        depth_counter--;
-                } /* end while */
-
-                /* Since it is not important if we destroy the contents of the HTTP response buffer,
-                 * NULL terminators will be placed in the buffer strategically at the end of each link
-                 * subsection, in order to "extract out" that subsection, corresponding to each individual
-                 * link, and pass it to the "get link info" callback.
-                 */
-                *advancement_ptr = '\0';
-
-#ifdef PLUGIN_DEBUG
-                printf("  - Current link JSON: %s\n", link_section_ptr);
-#endif
-
-                /* Fill out a H5L_info_t struct for this link */
-                if (RV_parse_response(link_section_ptr, NULL, &cur_link_info, RV_get_link_info_callback) < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "couldn't get link info")
-
                 /* Call the user's callback */
-                callback_ret = iter_data->iter_op(iter_data->group_id, cur_link_name, &cur_link_info, iter_data->op_data);
+                callback_ret = iter_data->iter_op(iter_data->group_id, link_table[last_idx].link_name, &link_table[last_idx].link_info, iter_data->op_data);
                 if (callback_ret < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret, "H5Literate/H5Lvisit (_by_name) user callback failed")
                 else if (callback_ret > 0)
                     FUNC_GOTO_DONE(callback_ret)
-
-                /* Continue on to the next link subsection */
-                link_section_ptr = advancement_ptr + 1;
             } /* end for */
 
             break;
@@ -7077,75 +7165,14 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
         case H5_ITER_DEC:
         {
             for (last_idx = (iter_data->idx_p ? *iter_data->idx_p : num_links - 1); last_idx >= 0; last_idx--) {
-                link_obj = YAJL_GET_ARRAY(key_obj)->values[last_idx];
-
-                /* Get the current link's name */
-                if (NULL == (link_name_obj = yajl_tree_get(link_obj, link_name_keys, yajl_t_string)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link name failed")
-
-                if (NULL == (cur_link_name = YAJL_GET_STRING(link_name_obj)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned linked name was NULL")
-
-#ifdef PLUGIN_DEBUG
-                printf("  - Current link name: %s\n", cur_link_name);
-#endif
-
-                /* Find the beginning and end of the JSON section for this link */
-                if (NULL == (link_section_ptr = strstr(link_section_ptr, "{")))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't find start of current link's JSON section")
-                depth_counter++;
-                advancement_ptr = link_section_ptr + 1;
-
-                /* Continue forward through the string buffer character-by-character, incrementing the depth counter
-                 * for each '{' found and decrementing it for each '}' found, until the depth counter reaches 0 once
-                 * again, signalling the end of the link subsection
-                 */
-                /* XXX: Note that this approach will have problems with '{' or '}' appearing inside the link subsection
-                 * where one would not normally expect it, such as in a link name, and will either cause early termination
-                 * (an incomplete JSON representation) or will throw the below error about not being able to locate the end
-                 * of the link subsection.
-                 */
-                while (depth_counter) {
-                    current_symbol = *advancement_ptr++;
-
-                    /* If we reached the end of the string before finding the end of the link subsection, something is
-                     * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
-                     */
-                    if (!current_symbol)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't locate end of link subsection - stray '{' is likely")
-
-                    if (current_symbol == '{')
-                        depth_counter++;
-                    else if (current_symbol == '}')
-                        depth_counter--;
-                } /* end while */
-
-                /* Since it is not important if we destroy the contents of the HTTP response buffer,
-                 * NULL terminators will be placed in the buffer strategically at the end of each link
-                 * subsection, in order to "extract out" that subsection, corresponding to each individual
-                 * link, and pass it to the "get link info" callback.
-                 */
-                *advancement_ptr = '\0';
-
-#ifdef PLUGIN_DEBUG
-                printf("  - Current link JSON: %s\n", link_section_ptr);
-#endif
-
-                /* Fill out a H5L_info_t struct for this link */
-                if (RV_parse_response(link_section_ptr, NULL, &cur_link_info, RV_get_link_info_callback) < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "couldn't get link info")
-
                 /* Call the user's callback */
-                callback_ret = iter_data->iter_op(iter_data->group_id, cur_link_name, &cur_link_info, iter_data->op_data);
+                callback_ret = iter_data->iter_op(iter_data->group_id, link_table[last_idx].link_name, &link_table[last_idx].link_info, iter_data->op_data);
                 if (callback_ret < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret, "H5Literate/H5Lvisit (_by_name) user callback failed")
                 else if (callback_ret > 0)
                     FUNC_GOTO_DONE(callback_ret)
 
                 if (last_idx == 0) break;
-
-                /* Continue on to the next link subsection */
-                link_section_ptr = advancement_ptr + 1;
             } /* end for */
 
             break;
@@ -7160,6 +7187,9 @@ done:
     /* Keep track of the last index where we left off */
     if (iter_data->idx_p && ret_value >= 0)
         *iter_data->idx_p = last_idx;
+
+    if (link_table)
+        RV_free(link_table);
 
     if (parse_tree)
         yajl_tree_free(parse_tree);
