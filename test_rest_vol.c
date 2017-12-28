@@ -2751,19 +2751,19 @@ test_get_attribute_info(void)
         goto error;
     }
 
+    if (H5Aget_info(attr_id, &attr_info) < 0) {
+        H5_FAILED();
+        printf("    couldn't get attribute info\n");
+        goto error;
+    }
+
+    if (H5Aget_info_by_name(container_group, ".", ATTRIBUTE_GET_INFO_TEST_ATTR_NAME, &attr_info, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't get attribute info by name\n");
+        goto error;
+    }
+
     H5E_BEGIN_TRY {
-        if (H5Aget_info(attr_id, &attr_info) >= 0) {
-            H5_FAILED();
-            printf("    unsupported API succeeded!\n");
-            goto error;
-        }
-
-        if (H5Aget_info_by_name(container_group, "/", ATTRIBUTE_GET_INFO_TEST_ATTR_NAME, &attr_info, H5P_DEFAULT) >= 0) {
-            H5_FAILED();
-            printf("    unsupported API succeeded!\n");
-            goto error;
-        }
-
         if (H5Aget_info_by_idx(container_group, "/", H5_INDEX_NAME, H5_ITER_INC, 0, &attr_info, H5P_DEFAULT) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded!\n");
