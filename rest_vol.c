@@ -6420,10 +6420,6 @@ write_data_callback(void *buffer, size_t size, size_t nmemb, void H5_ATTR_UNUSED
         response_buffer.curr_buf_ptr = tmp_realloc + (response_buffer.curr_buf_ptr - response_buffer.buffer);
         response_buffer.buffer = tmp_realloc;
         response_buffer.buffer_size *= 2;
-
-#ifdef PLUGIN_DEBUG
-        printf("  - Re-alloced response buffer to size %zu\n\n", response_buffer.buffer_size);
-#endif
     } /* end while */
 
     memcpy(response_buffer.curr_buf_ptr, buffer, data_size);
@@ -6596,6 +6592,8 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
     char        *buf_out = (char *) callback_data_out;
     herr_t       ret_value = SUCCEED;
 
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
     if (!buf_out)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "out buffer was NULL")
 
@@ -6706,6 +6704,8 @@ RV_get_obj_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data
     char       *parsed_string;
     herr_t      ret_value = SUCCEED;
 
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
     if (!obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "object type pointer was NULL")
 
@@ -6781,6 +6781,8 @@ RV_get_link_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_dat
     char       *parsed_string;
     herr_t      ret_value = SUCCEED;
 
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
     if (!link_info)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link info pointer was NULL")
 
@@ -6867,6 +6869,8 @@ RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *call
     char       *out_buf = (char *) callback_data_out;
     herr_t      ret_value = SUCCEED;
 
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
     if (!in_buf_size)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "buffer size point was NULL")
 
@@ -7012,6 +7016,8 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
     char              current_symbol;
     herr_t            ret_value = SUCCEED;
 
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
     if (!iter_data)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link iteration data pointer was NULL")
 
@@ -7221,6 +7227,8 @@ RV_get_attr_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_dat
     H5A_info_t *attr_info = (H5A_info_t *) callback_data_out;
     herr_t      ret_value = SUCCEED;
 
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
     if (!attr_info)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "attribute info pointer was NULL")
 
@@ -7255,6 +7263,8 @@ RV_get_object_info_callback(char *HTTP_response,
     yajl_val    parse_tree = NULL, key_obj;
     herr_t      ret_value = SUCCEED;
 
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
     if (!obj_info)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "object info pointer was NULL")
 
@@ -7310,6 +7320,8 @@ RV_get_group_info_callback(char *HTTP_response,
     yajl_val    parse_tree = NULL, key_obj;
     herr_t      ret_value = SUCCEED;
 
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
     if (!group_info)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "group info pointer was NULL")
 
@@ -7393,6 +7405,8 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
     hid_t      *DCPL = (hid_t *) callback_data_out;
     herr_t      ret_value = SUCCEED;
 
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
     if (!DCPL)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "DCPL pointer was NULL")
 
@@ -7940,7 +7954,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
     ret_value = HTTP_SUCCESS(http_response);
 
 done:
-    if (ret_value >= 0) {
+    if (ret_value > 0) {
         if (obj_found_callback && RV_parse_response(response_buffer.buffer,
                     callback_data_in, callback_data_out, obj_found_callback) < 0)
                 FUNC_DONE_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "can't perform callback operation")
