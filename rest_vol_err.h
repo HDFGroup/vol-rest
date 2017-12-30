@@ -96,10 +96,18 @@ extern hid_t h5_err_class_g;
  * should print additional information to stdout indented by at least four
  * spaces.
  */
+#ifdef PLUGIN_DEBUG
+#define TESTING(S)  {printf("Testing %-62s\n\n", S); fflush(stdout);}
+#define PASSED()    {puts("PASSED\n"); fflush(stdout);}
+#define H5_FAILED() {puts("*FAILED*\n"); fflush(stdout);}
+#define SKIPPED()   {puts("- SKIPPED -\n"); fflush(stdout);}
+#else
 #define TESTING(S)  {printf("Testing %-62s", S); fflush(stdout);}
 #define PASSED()    {puts("PASSED"); fflush(stdout);}
 #define H5_FAILED() {puts("*FAILED*"); fflush(stdout);}
-#define SKIPPED()   {puts(" - SKIPPED -"); fflush(stdout);}
+#define SKIPPED()   {puts("- SKIPPED -"); fflush(stdout);}
+#endif
+
 #define TEST_ERROR  {H5_FAILED(); AT(); goto error;}
 
 #ifdef __cplusplus

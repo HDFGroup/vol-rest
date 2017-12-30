@@ -552,6 +552,8 @@ static int test_group_property_lists(void);
 static int test_create_attribute_on_root(void);
 static int test_create_attribute_on_dataset(void);
 static int test_create_attribute_on_datatype(void);
+static int test_create_attribute_with_null_space(void);
+static int test_create_attribute_with_scalar_space(void);
 static int test_get_attribute_info(void);
 static int test_get_attribute_space_and_type(void);
 static int test_get_attribute_name(void);
@@ -569,6 +571,8 @@ static int test_attribute_property_lists(void);
 static int test_create_dataset_under_root(void);
 static int test_create_anonymous_dataset(void);
 static int test_create_dataset_under_existing_group(void);
+static int test_create_dataset_null_space(void);
+static int test_create_dataset_scalar_space(void);
 static int test_create_dataset_predefined_types(void);
 static int test_create_dataset_string_types(void);
 static int test_create_dataset_compound_types(void);
@@ -696,6 +700,8 @@ static int (*attribute_tests[])(void) = {
         test_create_attribute_on_root,
         test_create_attribute_on_dataset,
         test_create_attribute_on_datatype,
+        test_create_attribute_with_null_space,
+        test_create_attribute_with_scalar_space,
         test_get_attribute_info,
         test_get_attribute_space_and_type,
         test_get_attribute_name,
@@ -715,6 +721,8 @@ static int (*dataset_tests[])(void) = {
         test_create_dataset_under_root,
         test_create_anonymous_dataset,
         test_create_dataset_under_existing_group,
+        test_create_dataset_null_space,
+        test_create_dataset_scalar_space,
         test_create_dataset_predefined_types,
         test_create_dataset_string_types,
         test_create_dataset_compound_types,
@@ -891,6 +899,10 @@ test_create_file(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Setting up container groups\n");
+#endif
+
     /* Setup container groups for the different classes of tests */
     if ((group_id = H5Gcreate2(file_id, GROUP_TEST_GROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
@@ -998,6 +1010,10 @@ test_get_file_info(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving file info\n");
+#endif
+
     if (H5Fget_info2(file_id, &file_info) < 0) {
         H5_FAILED();
         printf("    couldn't get file info\n");
@@ -1040,6 +1056,10 @@ test_nonexistent_file(void)
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to open non-existent file\n");
+#endif
+
     H5E_BEGIN_TRY {
         if ((file_id = H5Fopen(NONEXISTENT_FILENAME, H5F_ACC_RDWR, fapl_id)) >= 0) {
             H5_FAILED();
@@ -1047,6 +1067,10 @@ test_nonexistent_file(void)
             goto error;
         }
     } H5E_END_TRY;
+
+#ifdef PLUGIN_DEBUG
+    puts("File open call successfully failed for non-existent file\n");
+#endif
 
     if (H5Pclose(fapl_id) < 0)
         TEST_ERROR
@@ -1094,6 +1118,10 @@ test_get_file_intent(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Checking to make sure H5F_ACC_TRUNC works correctly\n");
+#endif
+
     if (H5Fget_intent(file_id, &file_intent) < 0)
         TEST_ERROR
 
@@ -1113,6 +1141,10 @@ test_get_file_intent(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Checking to make sure H5F_ACC_RDONLY works correctly\n");
+#endif
+
     if (H5Fget_intent(file_id, &file_intent) < 0)
         TEST_ERROR
 
@@ -1130,6 +1162,10 @@ test_get_file_intent(void)
 
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Checking to make sure we can't create an object when H5F_ACC_RDONLY is specified\n");
+#endif
 
     /* Ensure that no objects can be created when a file is opened in read-only mode */
     H5E_BEGIN_TRY {
@@ -1149,6 +1185,10 @@ test_get_file_intent(void)
         printf("    couldn't open file\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Checking to make sure H5F_ACC_RDWR works correctly\n");
+#endif
 
     if (H5Fget_intent(file_id, &file_intent) < 0)
         TEST_ERROR
@@ -1210,6 +1250,10 @@ test_get_file_name(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving size of file name\n");
+#endif
+
     /* Retrieve the size of the file name */
     if ((file_name_buf_len = H5Fget_name(file_id, NULL, 0)) < 0)
         TEST_ERROR
@@ -1217,6 +1261,10 @@ test_get_file_name(void)
     /* Allocate buffer for file name */
     if (NULL == (file_name_buf = (char *) malloc((size_t) file_name_buf_len + 1)))
         TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving file name\n");
+#endif
 
     /* Retrieve the actual file name */
     if (H5Fget_name(file_id, file_name_buf, (size_t) file_name_buf_len + 1) < 0)
@@ -1270,6 +1318,10 @@ test_file_reopen(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Re-opening file\n");
+#endif
+
     if ((file_id2 = H5Freopen(file_id)) < 0) {
         H5_FAILED();
         printf("    couldn't re-open file\n");
@@ -1320,6 +1372,10 @@ test_unused_file_API_calls(void)
         printf("    couldn't open file\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Testing that all of the unused file API calls don't cause application issues\n");
+#endif
 
     H5E_BEGIN_TRY {
         H5AC_cache_config_t  mdc_config = { 0 };
@@ -1574,6 +1630,10 @@ test_create_group_invalid_loc_id(void)
     if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Trying to create a group with an invalid loc_id\n");
+#endif
+
     H5E_BEGIN_TRY {
         if ((group_id = H5Gcreate2(file_id, GROUP_CREATE_INVALID_LOC_ID_GNAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) >= 0) {
             H5_FAILED();
@@ -1581,6 +1641,10 @@ test_create_group_invalid_loc_id(void)
             goto error;
         }
     } H5E_END_TRY;
+
+#ifdef PLUGIN_DEBUG
+    puts("Group create call successfully failed with invalid loc_id\n");
+#endif
 
     if (H5Pclose(fapl_id) < 0)
         TEST_ERROR
@@ -1620,6 +1684,10 @@ test_create_group_under_root(void)
         printf("    couldn't open file\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Creating group under root group\n");
+#endif
 
     /* Create the group under the root group of the file */
     if ((group_id = H5Gcreate2(file_id, GROUP_CREATE_UNDER_ROOT_GNAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
@@ -1681,6 +1749,10 @@ test_create_group_under_existing_group(void)
         printf("    couldn't open group\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Creating group under non-root group\n");
+#endif
 
     /* Create a new Group under the already-existing parent Group using a relative path */
     if ((new_group_id = H5Gcreate2(parent_group_id, GROUP_CREATE_UNDER_GROUP_REL_GNAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
@@ -1745,11 +1817,19 @@ test_create_anonymous_group(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating anonymous group\n");
+#endif
+
     if ((new_group_id = H5Gcreate_anon(file_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create anonymous group\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Linking anonymous group into file structure\n");
+#endif
 
     if (H5Olink(new_group_id, container_group, GROUP_CREATE_ANONYMOUS_GROUP_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
@@ -1806,11 +1886,19 @@ test_get_group_info(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving group info with H5Gget_info\n");
+#endif
+
     if (H5Gget_info(file_id, &group_info) < 0) {
         H5_FAILED();
         printf("    couldn't get group info\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving group info with H5Gget_info_by_name\n");
+#endif
 
     if (H5Gget_info_by_name(file_id, "/", &group_info, H5P_DEFAULT) < 0) {
         H5_FAILED();
@@ -1819,6 +1907,10 @@ test_get_group_info(void)
     }
 
     H5E_BEGIN_TRY {
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving group info with H5Gget_info_by_idx\n");
+#endif
+
         if (H5Gget_info_by_idx(file_id, "/", H5_INDEX_NAME, H5_ITER_INC, 0, &group_info, H5P_DEFAULT) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded!\n");
@@ -1868,6 +1960,10 @@ test_nonexistent_group(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to open a non-existent group\n");
+#endif
+
     H5E_BEGIN_TRY {
         if ((group_id = H5Gopen2(file_id, NONEXISTENT_GROUP_TEST_GNAME, H5P_DEFAULT)) >= 0) {
             H5_FAILED();
@@ -1875,6 +1971,10 @@ test_nonexistent_group(void)
             goto error;
         }
     } H5E_END_TRY;
+
+#ifdef PLUGIN_DEBUG
+    puts("Group open call successfully failed for non-existent group\n");
+#endif
 
     if (H5Pclose(fapl_id) < 0)
         TEST_ERROR
@@ -1903,6 +2003,9 @@ test_unused_group_API_calls(void)
     TESTING("unused group API calls")
 
     /* None currently that aren't planned to be used */
+#ifdef PLUGIN_DEBUG
+    puts("Currently no APIs to test here\n");
+#endif
 
     SKIPPED();
 
@@ -1946,9 +2049,13 @@ test_group_property_lists(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Setting property on GCPL\n");
+#endif
+
     if (H5Pset_local_heap_size_hint(gcpl_id1, dummy_prop_val) < 0) {
         H5_FAILED();
-        printf("    couldn't set   property on GCPL\n");
+        printf("    couldn't set property on GCPL\n");
         goto error;
     }
 
@@ -1990,6 +2097,10 @@ test_group_property_lists(void)
         printf("    couldn't retrieve GCPL property value\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Checking that property value is retrieved correctly\n");
+#endif
 
     if (dummy_prop_val != GROUP_PROPERTY_LIST_TEST_DUMMY_VAL) {
         H5_FAILED();
@@ -2101,7 +2212,7 @@ test_create_attribute_on_root(void)
     hid_t   attr_dtype1 = -1, attr_dtype2 = -1;
     hid_t   space_id = -1;
 
-    TESTING("create, close and open attribute on root group")
+    TESTING("create, open and close attribute on root group")
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -2128,17 +2239,29 @@ test_create_attribute_on_root(void)
     if ((attr_dtype2 = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating attribute on root group with H5Acreate2\n");
+#endif
+
     if ((attr_id = H5Acreate2(file_id, ATTRIBUTE_CREATE_ON_ROOT_ATTR_NAME, attr_dtype1, space_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create attribute\n");
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating attribute on root group with H5Acreate_by_name\n");
+#endif
+
     if ((attr_id2 = H5Acreate_by_name(file_id, "/", ATTRIBUTE_CREATE_ON_ROOT_ATTR_NAME2, attr_dtype2, space_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create attribute on object by name\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the attributes exist\n");
+#endif
 
     /* Verify the attributes have been created */
     if ((attr_exists = H5Aexists(file_id, ATTRIBUTE_CREATE_ON_ROOT_ATTR_NAME)) < 0) {
@@ -2195,6 +2318,10 @@ test_create_attribute_on_root(void)
     if (H5Aclose(attr_id2) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to open the attributes with H5Aopen\n");
+#endif
+
     if ((attr_id = H5Aopen(file_id, ATTRIBUTE_CREATE_ON_ROOT_ATTR_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't open attribute\n");
@@ -2211,6 +2338,10 @@ test_create_attribute_on_root(void)
         TEST_ERROR
     if (H5Aclose(attr_id2) < 0)
         TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to open the attributes with H5Aopen_by_name\n");
+#endif
 
     if ((attr_id = H5Aopen_by_name(file_id, "/", ATTRIBUTE_CREATE_ON_ROOT_ATTR_NAME, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
@@ -2230,6 +2361,10 @@ test_create_attribute_on_root(void)
             TEST_ERROR
         if (H5Aclose(attr_id2) < 0)
             TEST_ERROR
+#endif
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to open the attributes with H5Aopen_by_idx\n");
 #endif
 
         if ((/*attr_id = */H5Aopen_by_idx(file_id, "/", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) >= 0) {
@@ -2343,6 +2478,10 @@ test_create_attribute_on_dataset(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating attribute on dataset with H5Acreate2\n");
+#endif
+
     if ((attr_id = H5Acreate2(dset_id, ATTRIBUTE_CREATE_ON_DATASET_ATTR_NAME, attr_dtype1,
             attr_space_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
@@ -2350,12 +2489,20 @@ test_create_attribute_on_dataset(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating attribute on dataset with H5Acreate_by_name\n");
+#endif
+
     if ((attr_id2 = H5Acreate_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATASET_DSET_NAME,
             ATTRIBUTE_CREATE_ON_DATASET_ATTR_NAME2, attr_dtype2, attr_space_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create attribute on object by name\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the attributes exist\n");
+#endif
 
     /* Verify the attributes have been created */
     if ((attr_exists = H5Aexists(dset_id, ATTRIBUTE_CREATE_ON_DATASET_ATTR_NAME)) < 0) {
@@ -2388,6 +2535,10 @@ test_create_attribute_on_dataset(void)
     if (H5Aclose(attr_id2) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to open the attributes with H5Aopen\n");
+#endif
+
     if ((attr_id = H5Aopen(dset_id, ATTRIBUTE_CREATE_ON_DATASET_ATTR_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't open attribute\n");
@@ -2404,6 +2555,10 @@ test_create_attribute_on_dataset(void)
         TEST_ERROR
     if (H5Aclose(attr_id2) < 0)
         TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to open the attributes with H5Aopen_by_name\n");
+#endif
 
     if ((attr_id = H5Aopen_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATASET_DSET_NAME,
             ATTRIBUTE_CREATE_ON_DATASET_ATTR_NAME, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
@@ -2425,6 +2580,10 @@ test_create_attribute_on_dataset(void)
             TEST_ERROR
         if (H5Aclose(attr_id2) < 0)
             TEST_ERROR
+#endif
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to open the attributes with H5Aopen_by_idx\n");
 #endif
 
         if ((/*attr_id = */H5Aopen_by_idx(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATASET_DSET_NAME,
@@ -2561,6 +2720,10 @@ test_create_attribute_on_datatype(void)
     if ((attr_dtype2 = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating attribute on datatype with H5Acreate2\n");
+#endif
+
     if ((attr_id = H5Acreate2(type_id, ATTRIBUTE_CREATE_ON_DATATYPE_ATTR_NAME, attr_dtype1,
             space_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
@@ -2568,12 +2731,20 @@ test_create_attribute_on_datatype(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating attribute on datatype with H5Acreate_by_name\n");
+#endif
+
     if ((attr_id2 = H5Acreate_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATATYPE_DTYPE_NAME,
             ATTRIBUTE_CREATE_ON_DATATYPE_ATTR_NAME2, attr_dtype2, space_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create attribute on datatype by name\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the attributes exist\n");
+#endif
 
     /* Verify the attributes have been created */
     if ((attr_exists = H5Aexists(type_id, ATTRIBUTE_CREATE_ON_DATATYPE_ATTR_NAME)) < 0) {
@@ -2606,6 +2777,10 @@ test_create_attribute_on_datatype(void)
     if (H5Aclose(attr_id2) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to open the attributes with H5Aopen\n");
+#endif
+
     if ((attr_id = H5Aopen(type_id, ATTRIBUTE_CREATE_ON_DATATYPE_ATTR_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't open attribute\n");
@@ -2622,6 +2797,10 @@ test_create_attribute_on_datatype(void)
         TEST_ERROR
     if (H5Aclose(attr_id2) < 0)
         TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to open the attributes with H5Aopen_by_name\n");
+#endif
 
     if ((attr_id = H5Aopen_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATATYPE_DTYPE_NAME,
             ATTRIBUTE_CREATE_ON_DATATYPE_ATTR_NAME, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
@@ -2643,6 +2822,10 @@ test_create_attribute_on_datatype(void)
             TEST_ERROR
         if (H5Aclose(attr_id2) < 0)
             TEST_ERROR
+#endif
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to open the attributes with H5Aopen_by_idx\n");
 #endif
 
         if ((/*attr_id = */H5Aopen_by_idx(type_id, "/" ATTRIBUTE_CREATE_ON_DATATYPE_DTYPE_NAME,
@@ -2699,6 +2882,32 @@ error:
         RVterm();
     } H5E_END_TRY;
 
+    return 1;
+}
+
+static int
+test_create_attribute_with_null_space(void)
+{
+    TESTING("create attribute with NULL dataspace")
+
+    SKIPPED();
+
+    return 0;
+
+error:
+    return 1;
+}
+
+static int
+test_create_attribute_with_scalar_space(void)
+{
+    TESTING("create attribute with SCALAR dataspace")
+
+    SKIPPED();
+
+    return 0;
+
+error:
     return 1;
 }
 
@@ -2766,11 +2975,19 @@ test_get_attribute_info(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving attribute's info with H5Aget_info\n");
+#endif
+
     if (H5Aget_info(attr_id, &attr_info) < 0) {
         H5_FAILED();
         printf("    couldn't get attribute info\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving attribute's info with H5Aget_info_by_name\n");
+#endif
 
     if (H5Aget_info_by_name(container_group, ".", ATTRIBUTE_GET_INFO_TEST_ATTR_NAME, &attr_info, H5P_DEFAULT) < 0) {
         H5_FAILED();
@@ -2779,6 +2996,10 @@ test_get_attribute_info(void)
     }
 
     H5E_BEGIN_TRY {
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving attribute's info with H5Aget_info_by_idx\n");
+#endif
+
         if (H5Aget_info_by_idx(container_group, "/", H5_INDEX_NAME, H5_ITER_INC, 0, &attr_info, H5P_DEFAULT) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded!\n");
@@ -2884,6 +3105,10 @@ test_get_attribute_space_and_type(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving attribute's datatype\n");
+#endif
+
     /* Retrieve the attribute's datatype and dataspace and verify them */
     if ((tmp_type_id = H5Aget_type(attr_id)) < 0) {
         H5_FAILED();
@@ -2891,11 +3116,20 @@ test_get_attribute_space_and_type(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving attribute's dataspace\n");
+#endif
+
+
     if ((tmp_space_id = H5Aget_space(attr_id)) < 0) {
         H5_FAILED();
         printf("    couldn't retrieve attribute's dataspace\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Checking to make sure the attribute's datatype and dataspace match what was provided at creation time\n");
+#endif
 
     {
         hsize_t space_dims[ATTRIBUTE_GET_SPACE_TYPE_TEST_SPACE_RANK];
@@ -2924,6 +3158,9 @@ test_get_attribute_space_and_type(void)
             }
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the previous checks hold true after closing and re-opening the attribute\n");
+#endif
 
     /* Now close the attribute and verify that this still works after opening an
      * attribute instead of creating it
@@ -3090,6 +3327,10 @@ test_get_attribute_name(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving size of attribute's name\n");
+#endif
+
     /* Retrieve the name buffer size */
     if ((name_buf_size = H5Aget_name(attr_id, 0, NULL)) < 0) {
         H5_FAILED();
@@ -3099,6 +3340,10 @@ test_get_attribute_name(void)
 
     if (NULL == (name_buf = (char *) malloc((size_t) name_buf_size + 1)))
         TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving attribute's name\n");
+#endif
 
     if (H5Aget_name(attr_id, (size_t) name_buf_size + 1, name_buf) < 0) {
         H5_FAILED();
@@ -3110,6 +3355,10 @@ test_get_attribute_name(void)
         printf("    retrieved attribute name didn't match\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that this still works after closing and re-opening the attribute\n");
+#endif
 
     /* Now close the attribute and verify that we can still retrieve the attribute's name after
      * opening (instead of creating) it
@@ -3225,6 +3474,10 @@ test_create_attribute_with_space_in_name(void)
 
     if ((attr_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to create an attribute with a space in its name\n");
+#endif
 
     if ((attr_id = H5Acreate2(container_group, ATTRIBUTE_CREATE_WITH_SPACE_IN_NAME_ATTR_NAME, attr_dtype,
             space_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
@@ -3343,6 +3596,10 @@ test_delete_attribute(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to delete attribute with H5Adelete\n");
+#endif
+
     /* Delete the attribute */
     if (H5Adelete(container_group, ATTRIBUTE_DELETION_TEST_ATTR_NAME) < 0) {
         H5_FAILED();
@@ -3387,6 +3644,10 @@ test_delete_attribute(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to delete attribute with H5Adelete_by_name\n");
+#endif
+
     /* Delete the attribute */
     if (H5Adelete_by_name(file_id, ATTRIBUTE_TEST_GROUP_NAME, ATTRIBUTE_DELETION_TEST_ATTR_NAME, H5P_DEFAULT) < 0) {
         H5_FAILED();
@@ -3406,6 +3667,10 @@ test_delete_attribute(void)
         printf("    attribute exists!\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to delete attribute with H5Adelete_by_idx\n");
+#endif
 
     H5E_BEGIN_TRY {
         if (H5Adelete_by_idx(file_id, ATTRIBUTE_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT) >= 0) {
@@ -3517,6 +3782,10 @@ test_write_attribute(void)
 
     for (i = 0; i < data_size / ATTRIBUTE_WRITE_TEST_ATTR_DTYPE_SIZE; i++)
         ((int *) data)[i] = (int) i;
+
+#ifdef PLUGIN_DEBUG
+    puts("Writing to the attribute\n");
+#endif
 
     if (H5Awrite(attr_id, ATTRIBUTE_WRITE_TEST_ATTR_DTYPE, data) < 0) {
         H5_FAILED();
@@ -3632,6 +3901,10 @@ test_read_attribute(void)
     for (i = 0; i < data_size / ATTRIBUTE_READ_TEST_ATTR_DTYPE_SIZE; i++)
         ((int *) data)[i] = (int) i;
 
+#ifdef PLUGIN_DEBUG
+    puts("Writing to the attribute\n");
+#endif
+
     if (H5Awrite(attr_id, ATTRIBUTE_READ_TEST_ATTR_DTYPE, data) < 0) {
         H5_FAILED();
         printf("    couldn't write to attribute\n");
@@ -3651,6 +3924,10 @@ test_read_attribute(void)
         printf("    couldn't open attribute\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Reading from the attribute\n");
+#endif
 
     if (H5Aread(attr_id, ATTRIBUTE_READ_TEST_ATTR_DTYPE, read_buf) < 0) {
         H5_FAILED();
@@ -3765,17 +4042,27 @@ test_rename_attribute(void)
         goto error;
     }
 
-    if (H5Arename(container_group, ATTRIBUTE_RENAME_TEST_ATTR_NAME, ATTRIBUTE_RENAME_TEST_NEW_NAME) >= 0) {
-        H5_FAILED();
-        printf("    unsupported API succeeded!\n");
-        goto error;
-    }
+    H5E_BEGIN_TRY {
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to rename the attribute with H5Arename\n");
+#endif
 
-    if (H5Arename_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, ATTRIBUTE_RENAME_TEST_ATTR_NAME, ATTRIBUTE_RENAME_TEST_NEW_NAME, H5P_DEFAULT) >= 0) {
-        H5_FAILED();
-        printf("    unsupported API succeeded!\n");
-        goto error;
-    }
+        if (H5Arename(container_group, ATTRIBUTE_RENAME_TEST_ATTR_NAME, ATTRIBUTE_RENAME_TEST_NEW_NAME) >= 0) {
+            H5_FAILED();
+            printf("    unsupported API succeeded!\n");
+            goto error;
+        }
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to rename the attribute with H5Arename_by_name\n");
+#endif
+
+        if (H5Arename_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, ATTRIBUTE_RENAME_TEST_ATTR_NAME, ATTRIBUTE_RENAME_TEST_NEW_NAME, H5P_DEFAULT) >= 0) {
+            H5_FAILED();
+            printf("    unsupported API succeeded!\n");
+            goto error;
+        }
+    } H5E_END_TRY;
 
 
     if (H5Sclose(attr_space_id) < 0)
@@ -3875,6 +4162,10 @@ test_get_number_attributes(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to retrieve the number of attributes on a group with H5Oget_info\n");
+#endif
+
     /* Now get the number of attributes from the group */
     if (H5Oget_info(container_group, &obj_info) < 0) {
         H5_FAILED();
@@ -3888,6 +4179,10 @@ test_get_number_attributes(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to retrieve the number of attributes on a group with H5Oget_info_by_name\n");
+#endif
+
     if (H5Oget_info_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, &obj_info, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't retrieve root group info\n");
@@ -3899,6 +4194,10 @@ test_get_number_attributes(void)
         printf("    invalid number of attributes received\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to retrieve the number of attributes on a group with H5Oget_info_by_idx\n");
+#endif
 
     H5E_BEGIN_TRY {
         if (H5Oget_info_by_idx(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, &obj_info, H5P_DEFAULT) >= 0) {
@@ -4014,6 +4313,10 @@ test_unused_attribute_API_calls(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Testing that all of the unused attribute API calls don't cause application issues\n");
+#endif
+
     H5E_BEGIN_TRY {
         if (H5Aget_storage_size(attr_id) > 0)
             TEST_ERROR
@@ -4111,6 +4414,10 @@ test_attribute_property_lists(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Setting property on ACPL\n");
+#endif
+
     if (H5Pset_char_encoding(acpl_id1, encoding) < 0) {
         H5_FAILED();
         printf("    couldn't set ACPL property value\n");
@@ -4180,6 +4487,10 @@ test_attribute_property_lists(void)
         printf("    couldn't retrieve ACPL property value\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Checking that property set on ACPL was retrieved correctly\n");
+#endif
 
     if (H5T_CSET_UTF8 != encoding) {
         H5_FAILED();
@@ -4327,6 +4638,10 @@ test_create_dataset_under_root(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating a dataset under the root group\n");
+#endif
+
     /* Create the Dataset under the root group of the file */
     if ((dset_id = H5Dcreate2(file_id, DATASET_CREATE_UNDER_ROOT_DSET_NAME, dset_dtype, fspace_id,
             H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
@@ -4407,11 +4722,19 @@ test_create_anonymous_dataset(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating an anonymous dataset\n");
+#endif
+
     if ((dset_id = H5Dcreate_anon(container_group, dset_dtype, fspace_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create dataset\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Linking the anonymous dataset into the file structure\n");
+#endif
 
     if (H5Olink(dset_id, container_group, DATASET_CREATE_ANONYMOUS_DATASET_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
@@ -4494,6 +4817,10 @@ test_create_dataset_under_existing_group(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating dataset under non-root group\n");
+#endif
+
     if ((dset_id = H5Dcreate2(group_id, DATASET_CREATE_UNDER_EXISTING_DSET_NAME, dset_dtype, fspace_id,
             H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
@@ -4531,6 +4858,30 @@ error:
         RVterm();
     } H5E_END_TRY;
 
+    return 1;
+}
+
+static int test_create_dataset_null_space(void)
+{
+    TESTING("create dataset with a NULL dataspace")
+
+    SKIPPED();
+
+    return 0;
+
+error:
+    return 1;
+}
+
+static int test_create_dataset_scalar_space(void)
+{
+    TESTING("create dataset with a SCALAR dataspace")
+
+    SKIPPED();
+
+    return 0;
+
+error:
     return 1;
 }
 
@@ -4577,6 +4928,10 @@ test_create_dataset_predefined_types(void)
         printf("    couldn't create sub-container group\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Creating datasets with the different predefined integer/floating-point datatypes\n");
+#endif
 
     for (i = 0; i < ARRAY_LENGTH(predefined_type_test_table); i++) {
         hsize_t dims[DATASET_PREDEFINED_TYPE_TEST_SPACE_RANK];
@@ -4698,7 +5053,9 @@ test_create_dataset_string_types(void)
     if ((fspace_id = H5Screate_simple(DATASET_STRING_TYPE_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
-    TESTING("dataset creation w/ fixed-length string type")
+#ifdef PLUGIN_DEBUG
+    puts("Creating dataset with fixed-length string datatype\n");
+#endif
 
     if ((dset_id_fixed = H5Dcreate2(group_id, DATASET_STRING_TYPE_TEST_DSET_NAME1, type_id_fixed, fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
@@ -4706,13 +5063,19 @@ test_create_dataset_string_types(void)
         goto error;
     }
 
-    TESTING("dataset creation w/ variable-length string type")
+#ifdef PLUGIN_DEBUG
+    puts("Creating dataset with variable-length string datatype\n");
+#endif
 
     if ((dset_id_variable = H5Dcreate2(group_id, DATASET_STRING_TYPE_TEST_DSET_NAME2, type_id_variable, fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create variable-length string dataset\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to re-open the datasets\n");
+#endif
 
     if (H5Dclose(dset_id_fixed) < 0)
         TEST_ERROR
@@ -4821,6 +5184,10 @@ test_create_dataset_compound_types(void)
         TEST_ERROR
 
     num_passes = (rand() % DATASET_COMPOUND_TYPE_TEST_MAX_PASSES) + 1;
+
+#ifdef PLUGIN_DEBUG
+    puts("Creating datasets with a variety of randomly-generated compound datatypes\n");
+#endif
 
     for (i = 0; i < (size_t) num_passes; i++) {
         size_t num_subtypes;
@@ -5007,7 +5374,9 @@ test_create_dataset_enum_types(void)
     if ((fspace_id = H5Screate_simple(DATASET_ENUM_TYPE_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
-    TESTING("dataset creation w/ native integer enum type")
+#ifdef PLUGIN_DEBUG
+    puts("Creating dataset with native enum datatype\n");
+#endif
 
     if ((dset_id_native = H5Dcreate2(group_id, DATASET_ENUM_TYPE_TEST_DSET_NAME1, enum_native, fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
@@ -5015,13 +5384,19 @@ test_create_dataset_enum_types(void)
         goto error;
     }
 
-    TESTING("dataset creation w/ non-native integer enum type")
+#ifdef PLUGIN_DEBUG
+    puts("Creating dataset with non-native enum datatype\n");
+#endif
 
     if ((dset_id_non_native = H5Dcreate2(group_id, DATASET_ENUM_TYPE_TEST_DSET_NAME2, enum_non_native, fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create non-native enum dataset\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to re-open the datasets\n");
+#endif
 
     if (H5Dclose(dset_id_native) < 0)
         TEST_ERROR
@@ -5186,6 +5561,10 @@ test_create_dataset_array_types(void)
     if ((fspace_id = H5Screate_simple(DATASET_ARRAY_TYPE_TEST_SPACE_RANK, dset_dims, NULL)) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating datasets with variet of randomly-generated array datatypes\n");
+#endif
+
     if ((dset_id1 = H5Dcreate2(group_id, DATASET_ARRAY_TYPE_TEST_DSET_NAME1, array_type_id1, fspace_id,
             H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
@@ -5207,6 +5586,10 @@ test_create_dataset_array_types(void)
         printf("    couldn't create nested array type dataset\n");
         goto error;
     }
+#endif
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to re-open the datasets\n");
 #endif
 
     if (H5Dclose(dset_id1) < 0)
@@ -5339,6 +5722,10 @@ test_create_dataset_shapes(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating datasets with a variety of randomly-generated dataspace shapes\n");
+#endif
+
     for (i = 0; i < DATASET_SHAPE_TEST_NUM_ITERATIONS; i++) {
         size_t j;
         char   name[100];
@@ -5459,6 +5846,10 @@ test_create_dataset_creation_properties(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating a variety of datasets with different creation properties\n");
+#endif
+
     /* Test the alloc time property */
     {
         H5D_alloc_time_t alloc_times[] = {
@@ -5466,7 +5857,9 @@ test_create_dataset_creation_properties(void)
                 H5D_ALLOC_TIME_INCR, H5D_ALLOC_TIME_LATE
         };
 
-        TESTING("dataset creation w/ different space-allocation times")
+#ifdef PLUGIN_DEBUG
+    puts("Testing the alloc time property\n");
+#endif
 
         if ((dcpl_id = H5Pcreate(H5P_DATASET_CREATE)) < 0)
             TEST_ERROR
@@ -5500,7 +5893,9 @@ test_create_dataset_creation_properties(void)
                 H5P_CRT_ORDER_TRACKED | H5P_CRT_ORDER_INDEXED
         };
 
-        TESTING("dataset creation w/ different creation orders")
+#ifdef PLUGIN_DEBUG
+    puts("Testing the attribute creation order property\n");
+#endif
 
         if ((dcpl_id = H5Pcreate(H5P_DATASET_CREATE)) < 0)
             TEST_ERROR
@@ -5529,7 +5924,9 @@ test_create_dataset_creation_properties(void)
 
     /* Test the attribute phase change property */
     {
-        TESTING("dataset creation w/ different attribute phase change settings")
+#ifdef PLUGIN_DEBUG
+    puts("Testing the attribute phase change property\n");
+#endif
 
         if ((dcpl_id = H5Pcreate(H5P_DATASET_CREATE)) < 0)
             TEST_ERROR
@@ -5558,7 +5955,9 @@ test_create_dataset_creation_properties(void)
                 H5D_FILL_TIME_NEVER
         };
 
-        TESTING("dataset creation w/ different fill times")
+#ifdef PLUGIN_DEBUG
+    puts("Testing the fill time property\n");
+#endif
 
         if ((dcpl_id = H5Pcreate(H5P_DATASET_CREATE)) < 0)
             TEST_ERROR
@@ -5601,7 +6000,9 @@ test_create_dataset_creation_properties(void)
                 H5D_COMPACT, H5D_CONTIGUOUS, H5D_CHUNKED
         };
 
-        TESTING("dataset creation w/ different layouts")
+#ifdef PLUGIN_DEBUG
+    puts("Testing the storage layout property\n");
+#endif
 
         if ((dcpl_id = H5Pcreate(H5P_DATASET_CREATE)) < 0)
             TEST_ERROR
@@ -5641,7 +6042,9 @@ test_create_dataset_creation_properties(void)
 
     /* Test the "track object times" property */
     {
-        TESTING("dataset creation w/ different 'track object times' settings")
+#ifdef PLUGIN_DEBUG
+    puts("Testing the object time tracking property\n");
+#endif
 
         if ((dcpl_id = H5Pcreate(H5P_DATASET_CREATE)) < 0)
             TEST_ERROR
@@ -5784,6 +6187,10 @@ test_write_dataset_small_all(void)
     for (i = 0; i < (hsize_t) space_npoints; i++)
         ((int *) data)[i] = (int) i;
 
+#ifdef PLUGIN_DEBUG
+    puts("Writing to entire dataset with a small amount of data\n");
+#endif
+
     if (H5Dwrite(dset_id, DATASET_SMALL_WRITE_TEST_ALL_DSET_DTYPE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
         H5_FAILED();
         printf("    couldn't write to dataset\n");
@@ -5897,6 +6304,10 @@ test_write_dataset_small_hyperslab(void)
     if (H5Sselect_hyperslab(fspace_id, H5S_SELECT_SET, start, stride, count, block) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Writing small amount of data to dataset using a hyperslab selection\n");
+#endif
+
     if (H5Dwrite(dset_id, DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_DTYPE, mspace_id, fspace_id, H5P_DEFAULT, data) < 0) {
         H5_FAILED();
         printf("    couldn't write to dataset\n");
@@ -6006,6 +6417,10 @@ test_write_dataset_small_point_selection(void)
         printf("    couldn't select points\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Writing a small amount of data to dataset using a point selection\n");
+#endif
 
     if (H5Dwrite(dset_id, DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DSET_DTYPE, H5S_ALL, fspace_id, H5P_DEFAULT, data) < 0) {
         H5_FAILED();
@@ -6124,6 +6539,10 @@ test_write_dataset_large_all(void)
     for (i = 0; i < (hsize_t) space_npoints; i++)
         ((int *) data)[i] = (int) i;
 
+#ifdef PLUGIN_DEBUG
+    puts("Writing to entire dataset with a large amount of data\n");
+#endif
+
     if (H5Dwrite(dset_id, DATASET_LARGE_WRITE_TEST_ALL_DSET_DTYPE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
         H5_FAILED();
         printf("    couldn't write to dataset\n");
@@ -6234,6 +6653,10 @@ test_write_dataset_large_hyperslab(void)
     if (H5Sselect_hyperslab(fspace_id, H5S_SELECT_SET, start, stride, count, block) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Writing large amount of data to dataset using a hyperslab selection\n");
+#endif
+
     if (H5Dwrite(dset_id, DATASET_LARGE_WRITE_TEST_HYPERSLAB_DSET_DTYPE, mspace_id, fspace_id, H5P_DEFAULT, data) < 0) {
         H5_FAILED();
         printf("    couldn't write to dataset\n");
@@ -6342,6 +6765,10 @@ test_read_dataset_small_all(void)
 
     if (NULL == (read_buf = malloc(data_size)))
         TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Reading entirety of small dataset\n");
+#endif
 
     if (H5Dread(dset_id, DATASET_SMALL_READ_TEST_ALL_DSET_DTYPE, H5S_ALL, H5S_ALL, H5P_DEFAULT, read_buf) < 0) {
         H5_FAILED();
@@ -6452,6 +6879,10 @@ test_read_dataset_small_hyperslab(void)
 
     if (NULL == (read_buf = malloc(data_size)))
         TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Reading portion of small dataset using hyperslab selection\n");
+#endif
 
     if (H5Dread(dset_id, DATASET_SMALL_READ_TEST_HYPERSLAB_DSET_DTYPE, mspace_id, fspace_id, H5P_DEFAULT, read_buf) < 0) {
         H5_FAILED();
@@ -6564,6 +6995,10 @@ test_read_dataset_small_point_selection(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Reading portion of small dataset using a point selection\n");
+#endif
+
     if (H5Dread(dset_id, DATASET_SMALL_READ_TEST_POINT_SELECTION_DSET_DTYPE, mspace_id, fspace_id, H5P_DEFAULT, data) < 0) {
         H5_FAILED();
         printf("    couldn't read from dataset\n");
@@ -6659,6 +7094,10 @@ test_read_dataset_large_all(void)
 
     if (NULL == (read_buf = malloc(data_size)))
         TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Reading entirety of large dataset\n");
+#endif
 
     if (H5Dread(dset_id, DATASET_LARGE_READ_TEST_ALL_DSET_DTYPE, H5S_ALL, H5S_ALL, H5P_DEFAULT, read_buf) < 0) {
         H5_FAILED();
@@ -6767,6 +7206,10 @@ test_read_dataset_large_hyperslab(void)
 
     if (NULL == (read_buf = malloc(data_size)))
         TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Reading portion of large dataset using hyperslab selection\n");
+#endif
 
     if (H5Dread(dset_id, DATASET_LARGE_READ_TEST_HYPERSLAB_DSET_DTYPE, mspace_id, fspace_id, H5P_DEFAULT, read_buf) < 0) {
         H5_FAILED();
@@ -6878,6 +7321,10 @@ test_read_dataset_large_point_selection(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Reading portion of large dataset using a point selection\n");
+#endif
+
     if (H5Dread(dset_id, DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPE, H5S_ALL, fspace_id, H5P_DEFAULT, data) < 0) {
         H5_FAILED();
         printf("    couldn't read from dataset\n");
@@ -6984,6 +7431,10 @@ test_write_dataset_data_verification(void)
     for (i = 0; i < data_size / DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE; i++)
         ((int *) data)[i] = (int) i;
 
+#ifdef PLUGIN_DEBUG
+    puts("Writing to dataset\n");
+#endif
+
     if (H5Dwrite(dset_id, DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
         H5_FAILED();
         printf("    couldn't write to dataset\n");
@@ -7020,6 +7471,10 @@ test_write_dataset_data_verification(void)
 
     if (NULL == (data = malloc((hsize_t) space_npoints * DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE)))
         TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the data that comes back is correct\n");
+#endif
 
     if (H5Dread(dset_id, DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
         H5_FAILED();
@@ -7122,6 +7577,10 @@ test_dataset_set_extent(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Testing use of H5Dset_extent to change dataset's extent\n");
+#endif
+
     H5E_BEGIN_TRY {
         if (H5Dset_extent(dset_id, new_dims) >= 0) {
             H5_FAILED();
@@ -7212,6 +7671,10 @@ test_unused_dataset_API_calls(void)
         printf("    couldn't create dataset\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Testing that all of the unused dataset API calls don't cause application issues\n");
+#endif
 
     H5E_BEGIN_TRY {
         if (H5Dget_storage_size(dset_id) > 0)
@@ -7322,6 +7785,10 @@ test_dataset_property_lists(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Setting property on DCPL\n");
+#endif
+
     if (H5Pset_chunk(dcpl_id1, DATASET_PROPERTY_LIST_TEST_SPACE_RANK, chunk_dims) < 0) {
         H5_FAILED();
         printf("    couldn't set DCPL property\n");
@@ -7370,6 +7837,10 @@ test_dataset_property_lists(void)
             goto error;
         }
 
+#ifdef PLUGIN_DEBUG
+    puts("Ensuring that the property on the DCPL was received back correctly\n");
+#endif
+
         for (i = 0; i < DATASET_PROPERTY_LIST_TEST_SPACE_RANK; i++)
             if (tmp_chunk_dims[i] != chunk_dims[i]) {
                 H5_FAILED();
@@ -7391,6 +7862,10 @@ test_dataset_property_lists(void)
         printf("    couldn't create DAPL\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Setting property on DAPL\n");
+#endif
 
     if (H5Pset_efile_prefix(dapl_id1, path_prefix) < 0) {
         H5_FAILED();
@@ -7431,6 +7906,10 @@ test_dataset_property_lists(void)
     /* Ensure that property list 1 has the property set and property list 2 does not */
     {
         ssize_t buf_size = 0;
+
+#ifdef PLUGIN_DEBUG
+    puts("Ensuring that the property on the DAPL was received back correctly\n");
+#endif
 
         if ((buf_size = H5Pget_efile_prefix(dapl_id1, NULL, 0)) < 0) {
             H5_FAILED();
@@ -7650,6 +8129,10 @@ test_create_committed_datatype(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Committing datatype\n");
+#endif
+
     if (H5Tcommit2(container_group, DATATYPE_CREATE_TEST_TYPE_NAME, type_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't commit datatype\n");
@@ -7718,11 +8201,19 @@ test_create_anonymous_committed_datatype(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Committing anonymous datatype\n");
+#endif
+
     if (H5Tcommit_anon(container_group, type_id, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't commit anonymous datatype\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Linking anonymous datatype into file structure\n");
+#endif
 
     if (H5Olink(type_id, container_group, DATATYPE_CREATE_ANONYMOUS_TYPE_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
@@ -7833,6 +8324,10 @@ test_create_dataset_with_committed_type(void)
     if ((fspace_id = H5Screate_simple(DATATYPE_CREATE_TEST_DATASET_DIMS, dims, NULL)) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating dataset with a committed type\n");
+#endif
+
     if ((dset_id = H5Dcreate2(container_group, DATASET_CREATE_WITH_DATATYPE_TEST_DSET_NAME, type_id, fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create dataset using variable-length string committed datatype\n");
@@ -7942,6 +8437,10 @@ test_create_attribute_with_committed_type(void)
     if ((space_id = H5Screate_simple(ATTRIBUTE_CREATE_WITH_DATATYPE_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating attribute with a committed type\n");
+#endif
+
     if ((attr_id = H5Acreate2(container_group, ATTRIBUTE_CREATE_WITH_DATATYPE_TEST_ATTR_NAME, type_id,
             space_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
@@ -8049,6 +8548,10 @@ test_delete_committed_type(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Deleting committed type with H5Ldelete\n");
+#endif
+
     if (H5Ldelete(container_group, DATATYPE_DELETE_TEST_DTYPE_NAME, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't delete datatype\n");
@@ -8100,6 +8603,9 @@ test_unused_datatype_API_calls(void)
     TESTING("unused datatype API calls")
 
     /* None currently that aren't planned to be used */
+#ifdef PLUGIN_DEBUG
+    puts("Currently no API calls to test here\n");
+#endif
 
     SKIPPED();
 
@@ -8301,12 +8807,20 @@ test_create_hard_link(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating a hard link\n");
+#endif
+
     if (H5Lcreate_hard(file_id, "/" DATASET_TEST_GROUP_NAME "/" DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_NAME,
             container_group, HARD_LINK_TEST_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create hard link\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the link exists\n");
+#endif
 
     /* Verify the link has been created */
     if ((link_exists = H5Lexists(container_group, HARD_LINK_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
@@ -8407,6 +8921,10 @@ test_create_hard_link_same_loc(void)
     }
 
 #if 0 /* Library functionality for this part of the test is broken */
+#ifdef PLUGIN_DEBUG
+    puts("Calling H5Lcreate_hard with H5L_SAME_LOC as first parameter\n");
+#endif
+
     if (H5Lcreate_hard(H5L_SAME_LOC, H5L_SAME_LOC_TEST_DSET_NAME, group_id, H5L_SAME_LOC_TEST_LINK_NAME1, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create first link\n");
@@ -8425,6 +8943,10 @@ test_create_hard_link_same_loc(void)
         printf("    link did not exist\n");
         goto error;
     }
+#endif
+
+#ifdef PLUGIN_DEBUG
+    puts("Calling H5Lcreate_hard with H5L_SAME_LOC as second parameter\n");
 #endif
 
     if (H5Lcreate_hard(group_id, H5L_SAME_LOC_TEST_DSET_NAME, H5L_SAME_LOC, H5L_SAME_LOC_TEST_LINK_NAME2, H5P_DEFAULT, H5P_DEFAULT) < 0) {
@@ -8524,12 +9046,20 @@ test_create_soft_link_existing_absolute(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating a soft link to an existing object by absolute path\n");
+#endif
+
     if (H5Lcreate_soft("/" DATASET_TEST_GROUP_NAME "/" DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_NAME, container_group,
             SOFT_LINK_TEST_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create soft link\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the link exists\n");
+#endif
 
     /* Verify the link has been created */
     if ((link_exists = H5Lexists(file_id, "/" LINK_TEST_GROUP_NAME "/" SOFT_LINK_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
@@ -8636,12 +9166,20 @@ test_create_external_link(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating an external link to root group of other file\n");
+#endif
+
     if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/" DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_NAME,
             container_group, EXTERNAL_LINK_TEST_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create external link\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the link exists\n");
+#endif
 
     /* Verify the link has been created */
     if ((link_exists = H5Lexists(container_group, EXTERNAL_LINK_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
@@ -8727,6 +9265,10 @@ test_create_user_defined_link(void)
     if ((udata_size = snprintf(udata, UD_LINK_TEST_UDATA_MAX_SIZE, "udata")) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating user-defined link\n");
+#endif
+
     H5E_BEGIN_TRY {
         if (H5Lcreate_ud(container_group, UD_LINK_TEST_LINK_NAME, H5L_TYPE_HARD, udata, (size_t) udata_size,
                 H5P_DEFAULT, H5P_DEFAULT) >= 0) {
@@ -8735,6 +9277,10 @@ test_create_user_defined_link(void)
             goto error;
         }
     } H5E_END_TRY;
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the link exists\n");
+#endif
 
     /* Verify the link has been created */
     if ((link_exists = H5Lexists(container_group, UD_LINK_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
@@ -8922,6 +9468,10 @@ test_delete_link(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Deleting links with H5Ldelete\n");
+#endif
+
     if (H5Ldelete(group_id, LINK_DELETE_TEST_HARD_LINK_NAME, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't delete hard link using H5Ldelete\n");
@@ -8939,6 +9489,10 @@ test_delete_link(void)
         printf("    couldn't delete external link using H5Ldelete\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Deleting links with H5Ldelete_by_idx\n");
+#endif
 
     H5E_BEGIN_TRY {
         if (H5Ldelete_by_idx(group_id, ".", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT) >= 0) {
@@ -8959,6 +9513,10 @@ test_delete_link(void)
             goto error;
         }
     } H5E_END_TRY;
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that all links have been deleted\n");
+#endif
 
     /* Verify that all links have been deleted */
     if ((link_exists = H5Lexists(group_id, LINK_DELETE_TEST_HARD_LINK_NAME, H5P_DEFAULT)) < 0) {
@@ -9137,6 +9695,10 @@ test_copy_link(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to copy a hard link to another location\n");
+#endif
+
     /* Copy the link */
     H5E_BEGIN_TRY {
         if (H5Lcopy(group_id, COPY_LINK_TEST_HARD_LINK_NAME, group_id, COPY_LINK_TEST_HARD_LINK_COPY_NAME, H5P_DEFAULT, H5P_DEFAULT) >= 0) {
@@ -9181,6 +9743,10 @@ test_copy_link(void)
         printf("    soft link did not exist\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to copy a soft link to another location\n");
+#endif
 
     /* Copy the link */
     H5E_BEGIN_TRY {
@@ -9319,6 +9885,10 @@ test_move_link(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to move a hard link to another location\n");
+#endif
+
     /* Move the link */
     H5E_BEGIN_TRY {
         if (H5Lmove(file_id, MOVE_LINK_TEST_HARD_LINK_NAME, group_id, MOVE_LINK_TEST_HARD_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) >= 0) {
@@ -9376,6 +9946,10 @@ test_move_link(void)
         printf("    soft link did not exist\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to move a soft link to another location\n");
+#endif
 
     /* Move the link */
     H5E_BEGIN_TRY {
@@ -9541,6 +10115,9 @@ test_get_link_info(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving hard link info with H5Lget_info\n");
+#endif
 
     memset(&link_info, 0, sizeof(link_info));
 
@@ -9555,6 +10132,10 @@ test_get_link_info(void)
         printf("    incorrect link type returned\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving soft link info with H5Lget_info\n");
+#endif
 
     memset(&link_info, 0, sizeof(link_info));
 
@@ -9571,6 +10152,10 @@ test_get_link_info(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving external link info with H5Lget_info\n");
+#endif
+
     memset(&link_info, 0, sizeof(link_info));
 
     if (H5Lget_info(group_id, GET_LINK_INFO_TEST_EXT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
@@ -9586,6 +10171,10 @@ test_get_link_info(void)
     }
 
     H5E_BEGIN_TRY {
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving hard link info with H5Lget_info_by_idx\n");
+#endif
+
         memset(&link_info, 0, sizeof(link_info));
 
         if (H5Lget_info_by_idx(group_id, ".", H5_INDEX_NAME, H5_ITER_INC, 0, &link_info, H5P_DEFAULT) >= 0) {
@@ -9600,6 +10189,10 @@ test_get_link_info(void)
             printf("    incorrect link type returned\n");
             goto error;
         }
+#endif
+
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving soft link info with H5Lget_info_by_idx\n");
 #endif
 
         memset(&link_info, 0, sizeof(link_info));
@@ -9617,6 +10210,10 @@ test_get_link_info(void)
             printf("    incorrect link type returned\n");
             goto error;
         }
+#endif
+
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving external link info with H5Lget_info_by_idx\n");
 #endif
 
         memset(&link_info, 0, sizeof(link_info));
@@ -9722,6 +10319,10 @@ test_get_link_name(void)
     }
 
     H5E_BEGIN_TRY {
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving size of link name\n");
+#endif
+
         if ((ret = H5Lget_name_by_idx(group_id, ".", H5_INDEX_NAME, H5_ITER_INC, 0, NULL, link_name_buf_size, H5P_DEFAULT)) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded\n");
@@ -9732,6 +10333,10 @@ test_get_link_name(void)
         link_name_buf_size = (size_t) ret;
         if (NULL == (link_name_buf = (char *) malloc(link_name_buf_size)))
             TEST_ERROR
+#endif
+
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving link name\n");
 #endif
 
         if (H5Lget_name_by_idx(group_id, ".", H5_INDEX_NAME, H5_ITER_INC, 0, link_name_buf, link_name_buf_size, H5P_DEFAULT) >= 0) {
@@ -9878,6 +10483,10 @@ test_get_link_val(void)
     if (NULL == (link_val_buf = (char *) malloc(link_val_buf_size)))
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving value of soft link with H5Lget_val\n");
+#endif
+
     if (H5Lget_val(group_id, GET_LINK_VAL_TEST_SOFT_LINK_NAME, link_val_buf, link_val_buf_size, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't get soft link val\n");
@@ -9913,6 +10522,10 @@ test_get_link_val(void)
             TEST_ERROR
         link_val_buf = tmp_realloc;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving value of external link with H5Lget_val\n");
+#endif
 
     if (H5Lget_val(group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, link_val_buf, link_val_buf_size, H5P_DEFAULT) < 0) {
         H5_FAILED();
@@ -9963,6 +10576,10 @@ test_get_link_val(void)
             link_val_buf = tmp_realloc;
         }
 
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving value of soft link with H5Lget_val_by_idx\n");
+#endif
+
         if (H5Lget_val_by_idx(group_id, ".", H5_INDEX_CRT_ORDER, H5_ITER_INC, 0, link_val_buf, link_val_buf_size, H5P_DEFAULT) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded!\n");
@@ -10000,6 +10617,10 @@ test_get_link_val(void)
                 TEST_ERROR
             link_val_buf = tmp_realloc;
         }
+
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving value of external link with H5Lget_val_by_idx\n");
+#endif
 
         if (H5Lget_val_by_idx(group_id, ".", H5_INDEX_CRT_ORDER, H5_ITER_INC, 0, link_val_buf, link_val_buf_size, H5P_DEFAULT) >= 0) {
             H5_FAILED();
@@ -10174,6 +10795,10 @@ test_link_iterate(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link name in increasing order with H5Literate\n");
+#endif
+
     /* Test basic link iteration capability using both index types and both index orders */
     if (H5Literate(group_id, H5_INDEX_NAME, H5_ITER_INC, NULL, link_iter_callback1, NULL) < 0) {
         H5_FAILED();
@@ -10181,11 +10806,19 @@ test_link_iterate(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link name in decreasing order with H5Literate\n");
+#endif
+
     if (H5Literate(group_id, H5_INDEX_NAME, H5_ITER_DEC, NULL, link_iter_callback1, NULL) < 0) {
         H5_FAILED();
         printf("    H5Literate by index type name in decreasing order failed\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link creation order in increasing order with H5Literate\n");
+#endif
 
     if (H5Literate(group_id, H5_INDEX_CRT_ORDER, H5_ITER_INC, NULL, link_iter_callback1, NULL) < 0) {
         H5_FAILED();
@@ -10193,11 +10826,19 @@ test_link_iterate(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link creation order in decreasing order with H5Literate\n");
+#endif
+
     if (H5Literate(group_id, H5_INDEX_CRT_ORDER, H5_ITER_DEC, NULL, link_iter_callback1, NULL) < 0) {
         H5_FAILED();
         printf("    H5Literate by index type creation order in decreasing order failed\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link name in increasing order with H5Literate_by_name\n");
+#endif
 
     if (H5Literate_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_ITER_TEST_SUBGROUP_NAME,
             H5_INDEX_NAME, H5_ITER_INC, NULL, link_iter_callback1, NULL, H5P_DEFAULT) < 0) {
@@ -10206,12 +10847,20 @@ test_link_iterate(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link name in decreasing order with H5Literate_by_name\n");
+#endif
+
     if (H5Literate_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_ITER_TEST_SUBGROUP_NAME,
             H5_INDEX_NAME, H5_ITER_DEC, NULL, link_iter_callback1, NULL, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    H5Literate_by_name by index type name in decreasing order failed\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link creation order in increasing order with H5Literate_by_name\n");
+#endif
 
     if (H5Literate_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_ITER_TEST_SUBGROUP_NAME,
             H5_INDEX_CRT_ORDER, H5_ITER_INC, NULL, link_iter_callback1, NULL, H5P_DEFAULT) < 0) {
@@ -10220,12 +10869,20 @@ test_link_iterate(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link creation order in decreasing order with H5Literate_by_name\n");
+#endif
+
     if (H5Literate_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_ITER_TEST_SUBGROUP_NAME,
             H5_INDEX_CRT_ORDER, H5_ITER_DEC, NULL, link_iter_callback1, NULL, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    H5Literate_by_name by index type creation order in decreasing order failed\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Testing H5Literate's index-saving capability in increasing iteration order\n");
+#endif
 
     /* Test the H5Literate index-saving capabilities */
     if (H5Literate(group_id, H5_INDEX_CRT_ORDER, H5_ITER_INC, &saved_idx, link_iter_callback2, &halted) < 0) {
@@ -10248,6 +10905,10 @@ test_link_iterate(void)
 
     saved_idx = LINK_ITER_TEST_NUM_LINKS - 1;
     halted = 0;
+
+#ifdef PLUGIN_DEBUG
+    puts("Testing H5Literate's index-saving capability in decreasing iteration order\n");
+#endif
 
     if (H5Literate(group_id, H5_INDEX_CRT_ORDER, H5_ITER_DEC, &saved_idx, link_iter_callback2, &halted) < 0) {
         H5_FAILED();
@@ -10418,11 +11079,19 @@ test_link_visit(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link name in increasing order with H5Lvisit\n");
+#endif
+
     if (H5Lvisit(group_id, H5_INDEX_NAME, H5_ITER_INC, link_visit_callback1, NULL) < 0) {
         H5_FAILED();
         printf("    H5Lvisit by index type name in increasing order failed\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link name in decreasing order with H5Lvisit\n");
+#endif
 
     if (H5Lvisit(group_id, H5_INDEX_NAME, H5_ITER_DEC, link_visit_callback1, NULL) < 0) {
         H5_FAILED();
@@ -10430,17 +11099,29 @@ test_link_visit(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link creation order in increasing order with H5Lvisit\n");
+#endif
+
     if (H5Lvisit(group_id, H5_INDEX_CRT_ORDER, H5_ITER_INC, link_visit_callback1, NULL) < 0) {
         H5_FAILED();
         printf("    H5Lvisit by index type creation order in increasing order failed\n");
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link creation order in decreasing order with H5Lvisit\n");
+#endif
+
     if (H5Lvisit(group_id, H5_INDEX_CRT_ORDER, H5_ITER_DEC, link_visit_callback1, NULL) < 0) {
         H5_FAILED();
         printf("    H5Lvisit by index type creation order in decreasing order failed\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link name in increasing order with H5Lvisit_by_name\n");
+#endif
 
     if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_SUBGROUP_NAME,
             H5_INDEX_NAME, H5_ITER_INC, link_visit_callback1, NULL, H5P_DEFAULT) < 0) {
@@ -10449,6 +11130,10 @@ test_link_visit(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link name in decreasing order with H5Lvisit_by_name\n");
+#endif
+
     if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_SUBGROUP_NAME,
             H5_INDEX_NAME, H5_ITER_DEC, link_visit_callback1, NULL, H5P_DEFAULT) < 0) {
         H5_FAILED();
@@ -10456,12 +11141,20 @@ test_link_visit(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link creation order in increasing order with H5Lvisit_by_name\n");
+#endif
+
     if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_SUBGROUP_NAME,
             H5_INDEX_CRT_ORDER, H5_ITER_INC, link_visit_callback1, NULL, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    H5Lvisit_by_name by index type creation order in increasing order failed\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link creation order in decreasing order with H5Lvisit_by_name\n");
+#endif
 
     if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_SUBGROUP_NAME,
             H5_INDEX_CRT_ORDER, H5_ITER_DEC, link_visit_callback1, NULL, H5P_DEFAULT) < 0) {
@@ -10509,6 +11202,9 @@ test_unused_link_API_calls(void)
     TESTING("unused link API calls")
 
     /* None currently that aren't planned to be used */
+#ifdef PLUGIN_DEBUG
+    puts("Currently no API calls to test here\n");
+#endif
 
     SKIPPED();
 
@@ -10574,6 +11270,10 @@ test_open_dataset_generically(void)
     if (H5Dclose(dset_id) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Opening dataset with H5Oopen\n");
+#endif
+
     if ((dset_id = H5Oopen(file_id, "/" OBJECT_TEST_GROUP_NAME "/" GENERIC_DATASET_OPEN_TEST_DSET_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't open dataset with H5Oopen()\n");
@@ -10586,6 +11286,10 @@ test_open_dataset_generically(void)
             TEST_ERROR
 #endif
 
+#ifdef PLUGIN_DEBUG
+    puts("Opening dataset with H5Oopen_by_idx\n");
+#endif
+
         if ((/*dset_id = */H5Oopen_by_idx(file_id, "/" OBJECT_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT)) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded!\n");
@@ -10595,6 +11299,10 @@ test_open_dataset_generically(void)
 #if 0
         if (H5Dclose(dset_id) < 0)
             TEST_ERROR
+#endif
+
+#ifdef PLUGIN_DEBUG
+    puts("Opening dataset with H5Oopen_by_addr\n");
 #endif
 
         if ((/*dset_id = */H5Oopen_by_addr(file_id, 0)) >= 0) {
@@ -10676,6 +11384,10 @@ test_open_group_generically(void)
     if (H5Gclose(group_id) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Opening group with H5Oopen\n");
+#endif
+
     if ((group_id = H5Oopen(file_id, "/" OBJECT_TEST_GROUP_NAME "/" GENERIC_GROUP_OPEN_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't open group with H5Oopen()\n");
@@ -10688,6 +11400,10 @@ test_open_group_generically(void)
             TEST_ERROR
 #endif
 
+#ifdef PLUGIN_DEBUG
+    puts("Opening group with H5Oopen_by_idx\n");
+#endif
+
         if ((/*group_id = */H5Oopen_by_idx(file_id, "/" OBJECT_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT)) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded!\n");
@@ -10697,6 +11413,10 @@ test_open_group_generically(void)
 #if 0
         if (H5Gclose(group_id) < 0)
             TEST_ERROR
+#endif
+
+#ifdef PLUGIN_DEBUG
+    puts("Opening group with H5Oopen_by_addr\n");
 #endif
 
         if ((/*group_id = */H5Oopen_by_addr(file_id, 0)) >= 0) {
@@ -10777,6 +11497,10 @@ test_open_datatype_generically(void)
     if (H5Tclose(type_id) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Opening datatype with H5Oopen\n");
+#endif
+
     if ((type_id = H5Oopen(file_id, "/" OBJECT_TEST_GROUP_NAME "/" GENERIC_DATATYPE_OPEN_TEST_TYPE_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't open datatype generically w/ H5Oopen()\n");
@@ -10789,6 +11513,10 @@ test_open_datatype_generically(void)
             TEST_ERROR
 #endif
 
+#ifdef PLUGIN_DEBUG
+    puts("Opening datatype with H5Oopen_by_idx\n");
+#endif
+
         if ((/*type_id = */H5Oopen_by_idx(file_id, "/" OBJECT_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT)) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded!\n");
@@ -10798,6 +11526,10 @@ test_open_datatype_generically(void)
 #if 0
         if (H5Tclose(type_id) < 0)
             TEST_ERROR
+#endif
+
+#ifdef PLUGIN_DEBUG
+    puts("Opening datatype with H5Oopen_by_addr\n");
 #endif
 
         if ((/*type_id = */H5Oopen_by_addr(file_id, 0)) >= 0) {
@@ -10869,6 +11601,10 @@ test_incr_decr_refcount(void)
         printf("    couldn't open file\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Testing unsupported APIs H5Oincr/decr_refcount\n");
+#endif
 
     H5E_BEGIN_TRY {
         if (H5Oincr_refcount(file_id) >= 0)
@@ -10948,6 +11684,10 @@ test_h5o_copy(void)
         printf("    couldn't create dataset\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Copying object with H5Ocopy\n");
+#endif
 
     H5E_BEGIN_TRY {
         if (H5Ocopy(group_id, OBJECT_COPY_TEST_DSET_NAME, group_id, OBJECT_COPY_TEST_DSET_NAME2, H5P_DEFAULT, H5P_DEFAULT) >= 0) {
@@ -11076,6 +11816,10 @@ test_h5o_close(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Making sure H5Oclose does its job correctly\n");
+#endif
+
     if (H5Oclose(group_id) < 0)
         TEST_ERROR
     if (H5Oclose(dtype_id) < 0)
@@ -11144,11 +11888,19 @@ test_object_visit(void)
     }
 
     H5E_BEGIN_TRY {
+#ifdef PLUGIN_DEBUG
+    puts("Visiting objects with H5Ovisit\n");
+#endif
+
         if (H5Ovisit(container_group, H5_INDEX_NAME, H5_ITER_INC, object_visit_callback, NULL) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded\n");
             goto error;
         }
+
+#ifdef PLUGIN_DEBUG
+    puts("Visiting objects with H5Ovisit_by_name\n");
+#endif
 
         if (H5Ovisit_by_name(file_id, "/" OBJECT_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, object_visit_callback, NULL, H5P_DEFAULT) >= 0) {
             H5_FAILED();
@@ -11202,6 +11954,10 @@ test_create_obj_ref(void)
         printf("    couldn't open file\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Creating an object reference\n");
+#endif
 
     if (H5Rcreate((void *) &ref, file_id, "/", H5R_OBJECT, -1) < 0) {
         H5_FAILED();
@@ -11340,6 +12096,10 @@ test_get_ref_type(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving the type of the referenced object for this reference\n");
+#endif
+
     if (H5Rget_obj_type2(file_id, H5R_OBJECT, &ref_array[0], &obj_type) < 0) {
         H5_FAILED();
         printf("    couldn't get object reference's object type\n");
@@ -11359,6 +12119,10 @@ test_get_ref_type(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving the type of the referenced object for this reference\n");
+#endif
+
     if (H5Rget_obj_type2(file_id, H5R_OBJECT, &ref_array[1], &obj_type) < 0) {
         H5_FAILED();
         printf("    couldn't get object reference's object type\n");
@@ -11377,6 +12141,10 @@ test_get_ref_type(void)
         printf("    couldn't create dataset object reference\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Retrieving the type of the referenced object for this reference\n");
+#endif
 
     if (H5Rget_obj_type2(file_id, H5R_OBJECT, &ref_array[2], &obj_type) < 0) {
         H5_FAILED();
@@ -11610,6 +12378,10 @@ test_write_dataset_w_obj_refs(void)
         }
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Writing to dataset with buffer of object references\n");
+#endif
+
     if (H5Dwrite(dset_id, H5T_STD_REF_OBJ, H5S_ALL, H5S_ALL, H5P_DEFAULT, ref_array) < 0) {
         H5_FAILED();
         printf("    couldn't write to dataset\n");
@@ -11828,6 +12600,10 @@ test_read_dataset_w_obj_refs(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Reading from dataset with object reference type\n");
+#endif
+
     memset(ref_array, 0, ref_array_size * sizeof(*ref_array));
 
     if (H5Dread(dset_id, H5T_STD_REF_OBJ, H5S_ALL, H5S_ALL, H5P_DEFAULT, ref_array) < 0) {
@@ -12006,6 +12782,10 @@ test_write_dataset_w_obj_refs_empty_data(void)
         }
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Writing to dataset with buffer of empty object references\n");
+#endif
+
     if (H5Dwrite(dset_id, H5T_STD_REF_OBJ, H5S_ALL, H5S_ALL, H5P_DEFAULT, ref_array) < 0) {
         H5_FAILED();
         printf("    couldn't write to dataset\n");
@@ -12070,6 +12850,10 @@ test_unused_object_API_calls(void)
         printf("    couldn't open file\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Testing that all of the unused object API calls don't cause application issues\n");
+#endif
 
     H5E_BEGIN_TRY {
         const char *comment = "comment";
@@ -12182,6 +12966,10 @@ test_open_link_without_leading_slash(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Testing that an object can be opened by a relative path\n");
+#endif
+
     if ((dset_id = H5Dopen2(group_id, MISCELLANEOUS_TEST_GROUP_NAME "/" OPEN_LINK_WITHOUT_SLASH_DSET_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't open dataset\n");
@@ -12267,6 +13055,10 @@ test_object_creation_by_absolute_path(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating a variety of objects using absolute pathnames\n");
+#endif
+
     /* Next try to create a group under the container group by using an absolute pathname */
     if ((sub_group_id = H5Gcreate2(file_id, "/" MISCELLANEOUS_TEST_GROUP_NAME "/" OBJECT_CREATE_BY_ABSOLUTE_PATH_TEST_CONTAINER_GROUP_NAME "/" OBJECT_CREATE_BY_ABSOLUTE_PATH_TEST_SUBGROUP_NAME,
             H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
@@ -12305,6 +13097,10 @@ test_object_creation_by_absolute_path(void)
         printf("    couldn't commit datatype\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that all of the objects exist in the correct place\n");
+#endif
 
     /* Finally try to verify that all of the previously-created objects exist in the correct location */
     if ((link_exists = H5Lexists(file_id, "/" MISCELLANEOUS_TEST_GROUP_NAME "/" OBJECT_CREATE_BY_ABSOLUTE_PATH_TEST_CONTAINER_GROUP_NAME, H5P_DEFAULT)) < 0) {
@@ -12457,6 +13253,10 @@ test_absolute_vs_relative_path(void)
     if ((dset_dtype6 = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating a variety of datasets using different forms of absolute and relative pathnames\n");
+#endif
+
     /* Create a dataset by absolute path in the form "/group/dataset" starting from the root group */
     if ((dset_id1 = H5Dcreate2(file_id, "/" MISCELLANEOUS_TEST_GROUP_NAME "/" ABSOLUTE_VS_RELATIVE_PATH_TEST_CONTAINER_GROUP_NAME "/" ABSOLUTE_VS_RELATIVE_PATH_TEST_DSET1_NAME,
             dset_dtype1, fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
@@ -12504,6 +13304,10 @@ test_absolute_vs_relative_path(void)
         printf("    couldn't create dataset by relative path from container group with leading '.'\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that all of the datasets are in the correct place\n");
+#endif
 
     /* Verify that all of the previously-created datasets exist in the correct locations */
     if ((link_exists = H5Lexists(file_id, "/" MISCELLANEOUS_TEST_GROUP_NAME "/" ABSOLUTE_VS_RELATIVE_PATH_TEST_CONTAINER_GROUP_NAME "/" ABSOLUTE_VS_RELATIVE_PATH_TEST_DSET1_NAME, H5P_DEFAULT)) < 0) {
@@ -12701,7 +13505,7 @@ test_url_encoding(void)
     hid_t   dset_dtype = -1;
     hid_t   space_id = -1;
 
-    TESTING("Correct URL-encoding behavior")
+    TESTING("correct URL-encoding behavior")
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -12723,6 +13527,10 @@ test_url_encoding(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating group with variety of symbols in name\n");
+#endif
+
     if ((group_id = H5Gcreate2(container_group, URL_ENCODING_TEST_GROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create group\n");
@@ -12740,12 +13548,20 @@ test_url_encoding(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
+#ifdef PLUGIN_DEBUG
+    puts("Creating dataset with variety of symbols in name\n");
+#endif
+
     if ((dset_id = H5Dcreate2(group_id, URL_ENCODING_TEST_DSET_NAME, dset_dtype, space_id,
             H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create dataset\n");
         goto error;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Creating attribute with variety of symbols in name\n");
+#endif
 
     if ((attr_id = H5Acreate2(dset_id, URL_ENCODING_TEST_ATTR_NAME, attr_dtype, space_id,
             H5P_DEFAULT, H5P_DEFAULT)) < 0) {
@@ -12760,6 +13576,10 @@ test_url_encoding(void)
         TEST_ERROR
     if (H5Gclose(group_id) < 0)
         TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to re-open these objects\n");
+#endif
 
     if ((group_id = H5Gopen2(container_group, URL_ENCODING_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
@@ -13641,8 +14461,6 @@ main( int argc, char** argv )
 
         while (*func) {
             nerrors += (*func++)();
-            printf("\n");
-            fflush(stdout);
         }
     }
 
