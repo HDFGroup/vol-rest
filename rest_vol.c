@@ -28,9 +28,9 @@
  *          for HDF5 data stores as described in the paper:
  *          http://hdfgroup.org/pubs/papers/RESTful_HDF5.pdf.
  */
+/* XXX: Implement support for opening objects by soft/external link */
 /* XXX: Implement _iterate functions */
 /* XXX: Eventually replace CURL PUT calls with CURLOPT_UPLOAD calls */
-/* XXX: Attempt to eliminate all use of globals/static variables */
 /* XXX: Fix up url-encoding for link names every place it can be used */
 
 #include "H5private.h"       /* XXX: Temporarily needed; Generic Functions */
@@ -259,9 +259,11 @@ static hid_t REST_g = -1;
 hid_t h5_err_class_g = -1;
 hid_t obj_err_maj_g = -1;
 hid_t parse_err_min_g = -1;
+hid_t link_table_err_min_g = -1;
 
 #define H5E_OBJECT obj_err_maj_g
 #define H5E_PARSEERROR parse_err_min_g
+#define H5E_CANTBUILDLINKTABLE link_table_err_min_g
 
 /*
  * The CURL pointer used for all cURL operations.
@@ -319,15 +321,92 @@ typedef struct link_iter_data {
  * decreasing fashion.
  */
 typedef struct link_table_entry {
-    H5L_info_t  link_info;
-    hbool_t     is_group;
-    double      crt_time;
-    char       *link_name;
-    char       *link_id;
+    H5L_info_t link_info;
+    double     crt_time;
+    char       link_name[LINK_NAME_MAX_LENGTH];
+
+    struct {
+        link_table_entry *subgroup_link_table;
+        size_t            num_entries;
+    } subgroup;
 } link_table_entry;
 
 /* Host header string for specifying the host (Domain) for requests */
 const char * const host_string = "Host: ";
+
+/* List of all the JSON keys used by yajl_tree_get throughout this plugin
+ * to retrieve various information from a section of JSON */
+
+/* Keys to retrieve the ID of an object or link from the server */
+const char *link_id_keys[]   = { "link", "id", (const char *) 0 };
+const char *object_id_keys[] = { "id", (const char *) 0 };
+const char *root_id_keys[]   = { "root", (const char *) 0 };
+
+/* Keys to retrieve the class of a link (HARD, SOFT, EXTERNAL, etc.) */
+const char *link_class_keys[]  = { "link", "class", (const char *) 0 };
+const char *link_class_keys2[] = { "class", (const char *) 0 };
+
+/* Keys to retrieve the collection that a hard link belongs to
+ * (the type of object it points to), "groups", "datasets" or "datatypes"
+ */
+const char *link_collection_keys[]  = { "link", "collection", (const char *) 0 };
+const char *link_collection_keys2[] = { "collection", (const char *) 0 };
+
+/* Keys to retrieve the value of a soft or external link */
+const char *link_path_keys[]    = { "link", "h5path", (const char *) 0 };
+const char *link_path_keys2[]   = { "h5path", (const char *) 0 };
+const char *link_domain_keys[]  = { "link", "h5domain", (const char *) 0 };
+const char *link_domain_keys2[] = { "h5domain", (const char *) 0 };
+
+/* Keys to retrieve all of the information from a link when doing link iteration */
+const char *links_keys[]              = { "links", (const char *) 0 };
+const char *link_title_keys[]         = { "title", (const char *) 0 };
+const char *link_creation_time_keys[] = { "created", (const char *) 0 };
+
+/* Keys to retrieve the attribute count of an object */
+const char *attribute_count_keys[] = { "attributeCount", (const char *) 0 };
+
+/* Keys to retrieve the number of links in a group */
+const char *group_link_count_keys[] = { "linkCount", (const char *) 0 };
+
+/* Keys to retrieve the various creation properties from a dataset */
+const char *creation_properties_keys[]    = { "creationProperties", (const char *) 0 };
+const char *alloc_time_keys[]             = { "allocTime", (const char *) 0 };
+const char *creation_order_keys[]         = { "attributeCreationOrder", (const char *) 0 };
+const char *attribute_phase_change_keys[] = { "attributePhaseChange", (const char *) 0 };
+const char *fill_time_keys[]              = { "fillTime", (const char *) 0 };
+const char *fill_value_keys[]             = { "fillValue", (const char *) 0 };
+const char *filters_keys[]                = { "filters", (const char *) 0 };
+const char *layout_keys[]                 = { "layout", (const char *) 0 };
+const char *track_times_keys[]            = { "trackTimes", (const char *) 0 };
+const char *max_compact_keys[]            = { "maxCompact", (const char *) 0 };
+const char *min_dense_keys[]              = { "minDense", (const char *) 0 };
+const char *layout_class_keys[]           = { "class", (const char *) 0 };
+const char *chunk_dims_keys[]             = { "dims", (const char *) 0 };
+const char *external_storage_keys[]       = { "externalStorage", (const char *) 0 };
+
+/* Keys to retrieve information about a datatype */
+const char *type_class_keys[] = { "type", "class", (const char *) 0 };
+const char *type_base_keys[]  = { "type", "base", (const char *) 0 };
+
+/* Keys to retrieve information about a string datatype */
+const char *str_length_keys[]  = { "type", "length", (const char *) 0 };
+const char *str_charset_keys[] = { "type", "charSet", (const char *) 0 };
+const char *str_pad_keys[]     = { "type", "strPad", (const char *) 0 };
+
+/* Keys to retrieve information about a compound datatype */
+const char *compound_field_keys[] = { "type", "fields", (const char *) 0 };
+
+/* Keys to retrieve information about an array datatype */
+const char *array_dims_keys[] = { "type", "dims", (const char *) 0 };
+
+/* Keys to retrieve information about an enum datatype */
+const char *enum_mapping_keys[] = { "type", "mapping", (const char *) 0 };
+
+/* Keys to retrieve information about a dataspace */
+const char *dataspace_class_keys[]    = { "shape", "class", (const char *) 0 };
+const char *dataspace_dims_keys[]     = { "shape", "dims", (const char *) 0 };
+const char *dataspace_max_dims_keys[] = { "shape", "maxdims", (const char *) 0 };
 
 /* Internal initialization/termination functions which are called by
  * the public functions RVinit() and RVterm() */
@@ -461,6 +540,13 @@ static herr_t RV_convert_dataspace_selection_to_string(hid_t space_id, char **se
 /* Helper functions for creating a Dataset */
 static herr_t RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t dcpl, char **create_request_body, size_t *create_request_body_len);
 static herr_t RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl_id, char **creation_properties_body, size_t *creation_properties_body_len);
+
+/* Helper function to build a table of links recursively or non-recursively starting from a given group */
+static herr_t RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int (*sort_func)(const void *, const void *), link_table_entry **link_table, size_t *num_entries);
+static void   RV_free_link_table(link_table_entry *link_table, size_t num_entries);
+#ifdef PLUGIN_DEBUG
+static void   RV_traverse_link_table(link_table_entry *link_table, size_t num_entries);
+#endif
 
 #ifdef PLUGIN_DEBUG
 /* Helper functions to print out useful debugging information */
@@ -622,6 +708,8 @@ RVinit(void)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for object interface")
     if ((parse_err_min_g = H5Ecreate_msg(h5_err_class_g, H5E_MINOR, "Error occurred while parsing JSON")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for JSON parsing failures")
+    if ((link_table_err_min_g = H5Ecreate_msg(h5_err_class_g, H5E_MINOR, "Can't build table of links for iteration")) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for link table build error")
 
     /* Register the plugin with the library */
     if (RV_init() < 0)
@@ -738,6 +826,11 @@ done:
         if (parse_err_min_g >= 0) {
             if (H5Eclose_msg(parse_err_min_g) < 0)
                 FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close JSON parsing failure error message")
+        } /* end if */
+
+        if (link_table_err_min_g >= 0) {
+            if (H5Eclose_msg(link_table_err_min_g) < 0)
+                FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close link table build error message")
         } /* end if */
 
         if (H5Eunregister_class(h5_err_class_g) < 0)
@@ -5249,10 +5342,6 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
             if (H5Pget(lcpl_id, H5VL_PROP_LINK_TARGET_NAME, &link_target) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's target")
 
-            /* XXX: Check to make sure that a soft link is being created in the same file as
-             * the target object
-             */
-
 #ifdef PLUGIN_DEBUG
             printf("-> Soft link target: %s\n\n", link_target);
 #endif
@@ -6937,10 +7026,6 @@ done:
 static herr_t
 RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
-    const char  *soft_link_class_keys[] = { "link", "class", (const char *) 0 };
-    const char  *hard_link_keys[] = { "link", "id", (const char *) 0 };
-    const char  *object_create_keys[] = { "id", (const char *) 0 };
-    const char  *root_group_keys[] = { "root", (const char *) 0 };
     RV_object_t *in_group = (RV_object_t *) callback_data_in;
     yajl_val     parse_tree = NULL, key_obj;
     char        *parsed_string;
@@ -6976,7 +7061,7 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
      * first check for the link class field and short circuit if it is found to be
      * equal to "H5L_TYPE_SOFT"
      */
-    if (NULL != (key_obj = yajl_tree_get(parse_tree, soft_link_class_keys, yajl_t_string))) {
+    if (NULL != (key_obj = yajl_tree_get(parse_tree, link_class_keys, yajl_t_string))) {
         char *link_type;
 
         if (NULL == (link_type = YAJL_GET_STRING(key_obj)))
@@ -6990,7 +7075,7 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
     /* First attempt to retrieve the URI of the object by using the JSON key sequence
      * "link" -> "id", which is returned when making a GET Link request.
      */
-    key_obj = yajl_tree_get(parse_tree, hard_link_keys, yajl_t_string);
+    key_obj = yajl_tree_get(parse_tree, link_id_keys, yajl_t_string);
     if (key_obj) {
         if (!YAJL_IS_STRING(key_obj))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned URI is not a string")
@@ -7012,7 +7097,7 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
          * for just the JSON key "id", which would generally correspond to trying to
          * retrieve the URI of a newly-created or opened object that isn't a file.
          */
-        key_obj = yajl_tree_get(parse_tree, object_create_keys, yajl_t_string);
+        key_obj = yajl_tree_get(parse_tree, object_id_keys, yajl_t_string);
         if (key_obj) {
             if (!YAJL_IS_STRING(key_obj))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned URI is not a string")
@@ -7035,7 +7120,7 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
              * retrieve the URI of a newly-created or opened file, or to a search for
              * the root group of a file.
              */
-            if (NULL == (key_obj = yajl_tree_get(parse_tree, root_group_keys, yajl_t_string)))
+            if (NULL == (key_obj = yajl_tree_get(parse_tree, root_id_keys, yajl_t_string)))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "retrieval of URI failed")
 
             if (!YAJL_IS_STRING(key_obj))
@@ -7078,8 +7163,6 @@ done:
 static herr_t
 RV_get_obj_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
-    const char *soft_link_class_keys[] = { "link", "class", (const char *) 0 };
-    const char *link_collection_keys[] = { "link", "collection", (const char *) 0 };
     H5I_type_t *obj_type = (H5I_type_t *) callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;
     char       *parsed_string;
@@ -7101,7 +7184,7 @@ RV_get_obj_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data
      * collection element, first check for the link class field and short circuit if it
      * is found not to be equal to "H5L_TYPE_HARD"
      */
-    if (NULL != (key_obj = yajl_tree_get(parse_tree, soft_link_class_keys, yajl_t_string))) {
+    if (NULL != (key_obj = yajl_tree_get(parse_tree, link_class_keys, yajl_t_string))) {
         char *link_type;
 
         if (NULL == (link_type = YAJL_GET_STRING(key_obj)))
@@ -7163,8 +7246,6 @@ done:
 static herr_t
 RV_get_link_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
-    const char *link_class_keys[] = { "link", "class", (const char *) 0 };
-    const char *link_class_keys2[] = { "class", (const char *) 0 };
     H5L_info_t *link_info = (H5L_info_t *) callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;
     char       *parsed_string;
@@ -7260,16 +7341,12 @@ done:
 static herr_t
 RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
-    const char *link_class_keys[] =  { "link", "class", (const char *) 0 };
-    const char *link_class_keys2[] = { "class", (const char *) 0 };
-    const char *link_val_keys[] =    { "link", "h5path", (const char *) 0 };
-    const char *link_val_keys2[] =   { "h5path", (const char *) 0 };
-    yajl_val    parse_tree = NULL, key_obj;
-    size_t     *in_buf_size = (size_t *) callback_data_in;
-    char       *link_path;
-    char       *link_class;
-    char       *out_buf = (char *) callback_data_out;
-    herr_t      ret_value = SUCCEED;
+    yajl_val  parse_tree = NULL, key_obj;
+    size_t   *in_buf_size = (size_t *) callback_data_in;
+    char     *link_path;
+    char     *link_class;
+    char     *out_buf = (char *) callback_data_out;
+    herr_t    ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
     printf("-> Retrieving link's value from server's HTTP response\n\n");
@@ -7299,8 +7376,8 @@ RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *call
         FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "H5Lget_val should not be called for hard links")
 
     /* Retrieve the link's value */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, link_val_keys, yajl_t_string))) {
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, link_val_keys2, yajl_t_string)))
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, link_path_keys, yajl_t_string))) {
+        if (NULL == (key_obj = yajl_tree_get(parse_tree, link_path_keys2, yajl_t_string)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link value failed")
     }
 
@@ -7332,12 +7409,10 @@ RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *call
         } /* end else */
     } /* end if */
     else {
-        const char *link_domain_keys[] = { "link", "h5domain", (const char *) 0 };
-        const char *link_domain_keys2[] = { "h5domain", (const char *) 0 };
-        yajl_val    link_domain_obj;
-        unsigned    link_version;
-        unsigned    link_flags;
-        char       *link_domain;
+        yajl_val  link_domain_obj;
+        unsigned  link_version;
+        unsigned  link_flags;
+        char     *link_domain;
 
         if (NULL == (link_domain_obj = yajl_tree_get(parse_tree, link_domain_keys, yajl_t_string))) {
             if (NULL == (link_domain_obj = yajl_tree_get(parse_tree, link_domain_keys2, yajl_t_string)))
@@ -7423,187 +7498,43 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
 {
     link_table_entry *link_table = NULL;
     link_iter_data   *iter_data = (link_iter_data *) callback_data_in;
-    const char       *links_keys[]              = { "links", (const char *) 0 };
-    const char       *link_name_keys[]          = { "title", (const char *) 0 };
-    const char       *link_creation_time_keys[] = { "created", (const char *) 0 };
-    const char       *link_collection_keys[] = { "collection", (const char *) 0 };
-    yajl_val          parse_tree = NULL, key_obj;
-    yajl_val          link_obj, link_id_obj,  
-    link_name_obj, link_create_time_obj, link_collection_obj;
     herr_t            callback_ret;
-    size_t            host_header_len = 0;
-    size_t            i, last_idx;
-    size_t            num_links;
-    size_t            depth_counter = 0;
-    char             *HTTP_buffer = HTTP_response;
-    char             *visit_buffer = NULL;
-    char             *host_header = NULL;
-    char             *link_section_ptr;
-    char             *advancement_ptr;
-    char              current_symbol;
+    size_t            last_idx;
+    size_t            link_table_num_entries;
     herr_t            ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
     printf("-> Iterating %s through links according to server's HTTP response\n\n", iter_data->is_recursive ? "recursively" : "non-recursively");
 #endif
 
-    if (!HTTP_buffer)
+    if (!HTTP_response)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
     if (!iter_data)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link iteration data pointer was NULL")
 
-    /* If this is a call to H5Lvisit, make a copy of the HTTP response since the
-     * buffer that cURL writes to is currently global and will be changed when the
-     * next request is made to the server when recursing into a subgroup to iterate
-     * over its links.
-     */
-    if (iter_data->is_recursive) {
-        size_t buffer_len = strlen(HTTP_response);
+    /* Build a table of all of the links in the given group */
+    if (H5_INDEX_CRT_ORDER == iter_data->index_type) {
+        /* This code assumes that links are returned in alphabetical order by default. If the user has requested them
+         * by creation order, sort them this way while building the link table. If, in the future, links are not returned
+         * in alphabetical order by default, this code should be changed to reflect this.
+         */
+        if (RV_build_link_table(HTTP_response, iter_data->is_recursive, TRUE, cmp_links_by_creation_order,
+                &link_table, &link_table_num_entries) < 0)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table")
 
-        if (NULL == (visit_buffer = RV_malloc(buffer_len + 1)))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate temporary buffer for H5Lvisit")
-
-        memcpy(visit_buffer, HTTP_response, buffer_len);
-        visit_buffer[buffer_len] = '\0';
-
-        HTTP_buffer = visit_buffer;
+#ifdef PLUGIN_DEBUG
+        printf("-> Link table sorted according to link creation order\n\n");
+#endif
     } /* end if */
-
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_buffer, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "parsing JSON failed")
-
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, links_keys, yajl_t_array)))
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of links object failed")
-
-    num_links = YAJL_GET_ARRAY(key_obj)->len;
-
-    /* Build a table of link information for each link so that we can sort in order
-     * of link creation if needed and can also work in decreasing order if desired
-     */
-    if (NULL == (link_table = RV_malloc(num_links * sizeof(*link_table))))
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link table")
-
-    /* Find the beginning of the "links" section */
-    if (NULL == (link_section_ptr = strstr(HTTP_buffer, "\"links\"")))
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't find \"links\" information section in HTTP response")
+    else {
+        if (RV_build_link_table(HTTP_response, iter_data->is_recursive, FALSE, NULL,
+                &link_table, &link_table_num_entries) < 0)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table")
+    } /* end else */
 
 #ifdef PLUGIN_DEBUG
-    printf("-> Building table of links\n\n");
-#endif
-
-    /* For each link, grab its name and creation order, then find its corresponding JSON
-     * subsection, place a NULL terminator at the end of it in order to "extract out" that
-     * subsection, and pass it to the "get link info" callback function in order to fill
-     * out a H5L_info_t struct for the link.
-     */
-    for (i = 0; i < num_links; i++) {
-        link_obj = YAJL_GET_ARRAY(key_obj)->values[i];
-
-        /* Get the current link's name */
-        if (NULL == (link_name_obj = yajl_tree_get(link_obj, link_name_keys, yajl_t_string)))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link name failed")
-
-        if (NULL == (link_table[i].link_name = YAJL_GET_STRING(link_name_obj)))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned linked name was NULL")
-
-        /* Get the current link's creation time */
-        if (NULL == (link_create_time_obj = yajl_tree_get(link_obj, link_creation_time_keys, yajl_t_number)))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link creation time failed")
-
-        if (!YAJL_IS_DOUBLE(link_create_time_obj))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link creation time is not a double")
-
-        link_table[i].crt_time = YAJL_GET_DOUBLE(link_create_time_obj);
-
-
-        /* Process the JSON for the current link and fill out a H5L_info_t struct for it */
-
-        /* Find the beginning and end of the JSON section for this link */
-        if (NULL == (link_section_ptr = strstr(link_section_ptr, "{")))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't find start of current link's JSON section")
-        depth_counter++;
-        advancement_ptr = link_section_ptr + 1;
-
-        /* Continue forward through the string buffer character-by-character, incrementing the depth counter
-         * for each '{' found and decrementing it for each '}' found, until the depth counter reaches 0 once
-         * again, signalling the end of the link subsection
-         */
-        /* XXX: Note that this approach will have problems with '{' or '}' appearing inside the link subsection
-         * where one would not normally expect it, such as in a link name, and will either cause early termination
-         * (an incomplete JSON representation) or will throw the below error about not being able to locate the end
-         * of the link subsection.
-         */
-        while (depth_counter) {
-            current_symbol = *advancement_ptr++;
-
-            /* If we reached the end of the string before finding the end of the link subsection, something is
-             * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
-             */
-            if (!current_symbol)
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't locate end of link subsection - stray '{' is likely")
-
-            if (current_symbol == '{')
-                depth_counter++;
-            else if (current_symbol == '}')
-                depth_counter--;
-        } /* end while */
-
-        /* Since it is not important if we destroy the contents of the HTTP response buffer,
-         * NULL terminators will be placed in the buffer strategically at the end of each link
-         * subsection, in order to "extract out" that subsection, corresponding to each individual
-         * link, and pass it to the "get link info" callback.
-         */
-        *advancement_ptr = '\0';
-
-        /* Fill out a H5L_info_t struct for this link */
-        if (RV_parse_response(link_section_ptr, NULL, &link_table[i].link_info, RV_get_link_info_callback) < 0)
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "couldn't get link info")
-
-        /* If this is a call to H5Lvisit, check whether the link points to a group */
-        link_table[i].is_group = FALSE;
-        if (iter_data->is_recursive && (link_table[i].link_info.type == H5L_TYPE_HARD)) {
-            char *link_collection;
-
-            if (NULL == (link_collection_obj = yajl_tree_get(link_obj, link_collection_keys, yajl_t_string)))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link collection failed")
-
-            if (NULL == (link_collection = YAJL_GET_STRING(link_collection_obj)))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link collection was NULL")
-
-            if (!strcmp(link_collection, "groups")) {
-                link_table[i].is_group = TRUE;
-
-                if (NULL == (link_id_obj = yajl_tree_get(link_obj, link_id_keys, yajl_t_string)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link ID failed")
-
-                if (NULL == (link_table[i].link_id = YAJL_GET_STRING(link_id_obj)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link ID was NULL")
-            } /* end if */
-        } /* end if */
-
-        /* Continue on to the next link subsection */
-        link_section_ptr = advancement_ptr + 1;
-    } /* end for */
-
-#ifdef PLUGIN_DEBUG
-    printf("-> Link table built\n\n");
-    if (H5_INDEX_CRT_ORDER == iter_data->index_type) printf("-> Sorting link table according to link creation order\n\n");
-#endif
-
-    /* This code assumes that links are returned in alphabetical order by default. If the user has requested them
-     * by creation order, sort them now. If, in the future, links are not returned in alphabetical order by default,
-     * this code should be changed to reflect this.
-     */
-    if (H5_INDEX_CRT_ORDER == iter_data->index_type)
-        qsort(link_table, num_links, sizeof(*link_table), cmp_links_by_creation_order);
-
-#ifdef PLUGIN_DEBUG
-    printf("-> Link table contents:\n");
-    for (i = 0; i < num_links; i++) {
-        printf("     - Link %zu name: %s\n", i, link_table[i].link_name);
-        printf("     - Link %zu creation time: %f\n", i, link_table[i].crt_time);
-        printf("     - Link %zu type: %s\n\n", i, link_class_to_string(link_table[i].link_info.type));
-    } /* end for */
+    printf("-> Link table contents:\n\n");
+    RV_traverse_link_table(link_table, link_table_num_entries);
 #endif
 
     /* Begin iteration */
@@ -7612,42 +7543,16 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
         case H5_ITER_INC:
         {
 #ifdef PLUGIN_DEBUG
-            printf("-> Iterating in increasing order\n\n");
+            printf("-> Beginning iteration in increasing order\n\n");
 #endif
 
-            for (last_idx = (iter_data->idx_p ? *iter_data->idx_p : 0); last_idx < num_links; last_idx++) {
+            for (last_idx = (iter_data->idx_p ? *iter_data->idx_p : 0); last_idx < link_table_num_entries; last_idx++) {
                 /* Call the user's callback */
                 callback_ret = iter_data->iter_op(iter_data->group_id, link_table[last_idx].link_name, &link_table[last_idx].link_info, iter_data->op_data);
                 if (callback_ret < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret, "H5Literate/H5Lvisit (_by_name) user callback failed")
                 else if (callback_ret > 0)
                     FUNC_GOTO_DONE(callback_ret)
-
-                /* If the current link points to a group, recurse into it */
-                if (link_table[i].is_group) {
-                    char request_url[URL_MAX_LENGTH];
-
-                    snprintf(request_url, URL_MAX_LENGTH,
-                             "%s/groups/%s/links",
-                             base_URL,
-                             );
-
-#ifdef PLUGIN_DEBUG
-                    printf("-> Retrieving all links in subgroup using URL: %s\n\n", request_url);
-
-                    printf("   /**********************************\\\n");
-                    printf("-> | Making GET request to the server |\n");
-                    printf("   \\**********************************/\n\n");
-#endif
-
-                    /* Since link visiting should occur as an atomic operation, assume that the previously
-                     * setup cURL headers are still valid
-                     */
-                    CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
-
-                    if (RV_parse_response(response_buffer.buffer, iter_data, NULL, RV_link_iter_callback) < 0)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't recurse into subgroup")
-                } /* end if */
             } /* end for */
 
             break;
@@ -7656,10 +7561,10 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
         case H5_ITER_DEC:
         {
 #ifdef PLUGIN_DEBUG
-            printf("-> Iterating in decreasing order\n\n");
+            printf("-> Beginning iteration in decreasing order\n\n");
 #endif
 
-            for (last_idx = (iter_data->idx_p ? *iter_data->idx_p : num_links - 1); last_idx >= 0; last_idx--) {
+            for (last_idx = (iter_data->idx_p ? *iter_data->idx_p : link_table_num_entries - 1); last_idx >= 0; last_idx--) {
                 /* Call the user's callback */
                 callback_ret = iter_data->iter_op(iter_data->group_id, link_table[last_idx].link_name, &link_table[last_idx].link_info, iter_data->op_data);
                 if (callback_ret < 0)
@@ -7683,15 +7588,8 @@ done:
     if (iter_data->idx_p && ret_value >= 0)
         *iter_data->idx_p = last_idx;
 
-    if (host_header)
-        RV_free(host_header);
     if (link_table)
-        RV_free(link_table);
-    if (visit_buffer)
-        RV_free(visit_buffer);
-
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
+        RV_free_link_table(link_table, link_table_num_entries);
 
     return ret_value;
 } /* end RV_link_iter_callback() */
@@ -7755,7 +7653,6 @@ static herr_t
 RV_get_object_info_callback(char *HTTP_response,
     void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
-    const char *attribute_count_keys[] = { "attributeCount", (const char *) 0 };
     H5O_info_t *obj_info = (H5O_info_t *) callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;
     herr_t      ret_value = SUCCEED;
@@ -7820,7 +7717,6 @@ static herr_t
 RV_get_group_info_callback(char *HTTP_response,
     void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
-    const char *group_link_count_keys[] = { "linkCount", (const char *) 0 };
     H5G_info_t *group_info = (H5G_info_t *) callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;
     herr_t      ret_value = SUCCEED;
@@ -7905,18 +7801,9 @@ static herr_t
 RV_parse_dataset_creation_properties_callback(char *HTTP_response,
     void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
 {
-    const char *creation_properties_keys[]    = { "creationProperties", (const char *) 0 };
-    const char *alloc_time_keys[]             = { "allocTime", (const char *) 0 };
-    const char *creation_order_keys[]         = { "attributeCreationOrder", (const char *) 0 };
-    const char *attribute_phase_change_keys[] = { "attributePhaseChange", (const char *) 0 };
-    const char *fill_time_keys[]              = { "fillTime", (const char *) 0 };
-    const char *fill_value_keys[]             = { "fillValue", (const char *) 0 };
-    const char *filters_keys[]                = { "filters", (const char *) 0 };
-    const char *layout_keys[]                 = { "layout", (const char *) 0 };
-    const char *track_times_keys[]            = { "trackTimes", (const char *) 0 };
-    yajl_val    parse_tree = NULL, creation_properties_obj, key_obj;
-    hid_t      *DCPL = (hid_t *) callback_data_out;
-    herr_t      ret_value = SUCCEED;
+    yajl_val  parse_tree = NULL, creation_properties_obj, key_obj;
+    hid_t    *DCPL = (hid_t *) callback_data_out;
+    herr_t    ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
     printf("-> Retrieving dataset's creation properties from server's HTTP response\n");
@@ -8028,11 +7915,9 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                                          *
      ****************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, attribute_phase_change_keys, yajl_t_object))) {
-        const char *max_compact_keys[] = { "maxCompact", (const char *) 0 };
-        const char *min_dense_keys[] = { "minDense", (const char *) 0 };
-        unsigned    minDense = DATASET_CREATE_MIN_DENSE_ATTRIBUTES_DEFAULT;
-        unsigned    maxCompact = DATASET_CREATE_MAX_COMPACT_ATTRIBUTES_DEFAULT;
-        yajl_val    sub_obj;
+        unsigned minDense = DATASET_CREATE_MIN_DENSE_ATTRIBUTES_DEFAULT;
+        unsigned maxCompact = DATASET_CREATE_MAX_COMPACT_ATTRIBUTES_DEFAULT;
+        yajl_val sub_obj;
 
         if (NULL == (sub_obj = yajl_tree_get(key_obj, max_compact_keys, yajl_t_number)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of maxCompact attribute phase change value failed")
@@ -8139,10 +8024,9 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                                          *
      ****************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, layout_keys, yajl_t_object))) {
-        const char *layout_class_keys[] = { "class", (const char *) 0 };
-        yajl_val    sub_obj;
-        size_t      i;
-        char       *layout_class;
+        yajl_val  sub_obj;
+        size_t    i;
+        char     *layout_class;
 
         if (NULL == (sub_obj = yajl_tree_get(key_obj, layout_class_keys, yajl_t_string)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of layout class property failed")
@@ -8151,9 +8035,8 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "layout class string was NULL")
 
         if (!strcmp(layout_class, "H5D_CHUNKED")) {
-            const char *chunk_dims_keys[] = { "dims", (const char *) 0 };
-            yajl_val    chunk_dims_obj;
-            hsize_t     chunk_dims[DATASPACE_MAX_RANK];
+            yajl_val chunk_dims_obj;
+            hsize_t  chunk_dims[DATASPACE_MAX_RANK];
 
             if (NULL == (chunk_dims_obj = yajl_tree_get(key_obj, chunk_dims_keys, yajl_t_array)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of chunk dimensionality failed")
@@ -8184,8 +8067,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set chunked storage layout on DCPL")
         } /* end if */
         else if (!strcmp(layout_class, "H5D_CONTIGUOUS")) {
-            const char *external_storage_keys[] = { "externalStorage", (const char *) 0 };
-            yajl_val    external_storage_obj;
+            yajl_val external_storage_obj;
 
             if (NULL == (external_storage_obj = yajl_tree_get(key_obj, external_storage_keys, yajl_t_array)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of external storage file extent array failed")
@@ -9171,20 +9053,18 @@ done:
 static hid_t
 RV_convert_JSON_to_datatype(const char *type)
 {
-    const char  *class_keys[] = { "type", "class", (const char *) 0 };
-    const char  *type_base_keys[] = { "type", "base", (const char *) 0 };
-    yajl_val     parse_tree = NULL, key_obj = NULL;
-    hsize_t     *array_dims = NULL;
-    size_t       i;
-    hid_t        datatype = FAIL;
-    hid_t       *compound_member_type_array = NULL;
-    hid_t        enum_base_type = FAIL;
-    char       **compound_member_names = NULL;
-    char        *datatype_class = NULL;
-    char        *array_base_type_substring = NULL;
-    char        *tmp_cmpd_type_buffer = NULL;
-    char        *tmp_enum_base_type_buffer = NULL;
-    hid_t        ret_value = FAIL;
+    yajl_val   parse_tree = NULL, key_obj = NULL;
+    hsize_t   *array_dims = NULL;
+    size_t     i;
+    hid_t      datatype = FAIL;
+    hid_t     *compound_member_type_array = NULL;
+    hid_t      enum_base_type = FAIL;
+    char     **compound_member_names = NULL;
+    char      *datatype_class = NULL;
+    char      *array_base_type_substring = NULL;
+    char      *tmp_cmpd_type_buffer = NULL;
+    char      *tmp_enum_base_type_buffer = NULL;
+    hid_t      ret_value = FAIL;
 
 #ifdef PLUGIN_DEBUG
     printf("-> Converting JSON buffer %s to hid_t\n", type);
@@ -9194,7 +9074,7 @@ RV_convert_JSON_to_datatype(const char *type)
     if (NULL == (parse_tree = yajl_tree_parse(type, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed")
 
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, class_keys, yajl_t_string)))
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, type_class_keys, yajl_t_string)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't parse datatype from JSON representation")
 
     if (NULL == (datatype_class = YAJL_GET_STRING(key_obj)))
@@ -9382,20 +9262,17 @@ RV_convert_JSON_to_datatype(const char *type)
         } /* end else */
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_STRING")) {
-        const char *length_keys[] = { "type", "length", (const char *) 0 };
-        const char *charSetKeys[] = { "type", "charSet", (const char *) 0 };
-        const char *strPadKeys[] = { "type", "strPad", (const char *) 0 };
-        long long   fixed_length = 0;
-        hbool_t     is_variable_str;
-        char       *charSet = NULL;
-        char       *strPad = NULL;
+        long long  fixed_length = 0;
+        hbool_t    is_variable_str;
+        char      *charSet = NULL;
+        char      *strPad = NULL;
 
 #ifdef PLUGIN_DEBUG
         printf("-> String datatype\n");
 #endif
 
         /* Retrieve the string datatype's length and check if it's a variable-length string */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, length_keys, yajl_t_any)))
+        if (NULL == (key_obj = yajl_tree_get(parse_tree, str_length_keys, yajl_t_any)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's length")
 
         is_variable_str = YAJL_IS_STRING(key_obj);
@@ -9406,7 +9283,7 @@ RV_convert_JSON_to_datatype(const char *type)
 
 
         /* Retrieve and check the string datatype's character set */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, charSetKeys, yajl_t_string)))
+        if (NULL == (key_obj = yajl_tree_get(parse_tree, str_charset_keys, yajl_t_string)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's character set")
 
         if (NULL == (charSet = YAJL_GET_STRING(key_obj)))
@@ -9420,9 +9297,8 @@ RV_convert_JSON_to_datatype(const char *type)
         if (strcmp(charSet, "H5T_CSET_ASCII"))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported character set for string datatype")
 
-
         /* Retrieve and check the string datatype's string padding */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, strPadKeys, yajl_t_string)))
+        if (NULL == (key_obj = yajl_tree_get(parse_tree, str_pad_keys, yajl_t_string)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's padding type")
 
         if (NULL == (strPad = YAJL_GET_STRING(key_obj)))
@@ -9454,18 +9330,17 @@ RV_convert_JSON_to_datatype(const char *type)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - opaque")
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_COMPOUND")) {
-        const char *field_keys[] = { "type", "fields", (const char *) 0 };
-        size_t      tmp_cmpd_type_buffer_size;
-        size_t      total_type_size = 0;
-        size_t      current_offset = 0;
-        char       *type_section_ptr = NULL;
+        size_t  tmp_cmpd_type_buffer_size;
+        size_t  total_type_size = 0;
+        size_t  current_offset = 0;
+        char   *type_section_ptr = NULL;
 
 #ifdef PLUGIN_DEBUG
         printf("-> Compound Datatype\n");
 #endif
 
         /* Retrieve the compound member fields array */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, field_keys, yajl_t_array)))
+        if (NULL == (key_obj = yajl_tree_get(parse_tree, compound_field_keys, yajl_t_array)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve compound datatype's members array")
 
         if (NULL == (compound_member_type_array = (hid_t *) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*compound_member_type_array))))
@@ -9591,7 +9466,6 @@ RV_convert_JSON_to_datatype(const char *type)
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_ARRAY")) {
         const char * const  type_string = "{\"type\":"; /* Gets prepended to the array "base" datatype substring */
-        const char         *dims_keys[] = { "type", "dims", (const char *) 0 };
         size_t              type_string_len = strlen(type_string);
         size_t              base_type_substring_len = 0;
         char               *base_type_substring_ptr = NULL;
@@ -9602,7 +9476,7 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
         /* Retrieve the array dimensions */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, dims_keys, yajl_t_array)))
+        if (NULL == (key_obj = yajl_tree_get(parse_tree, array_dims_keys, yajl_t_array)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve array datatype's dimensions")
 
         if (NULL == (array_dims = (hsize_t *) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*array_dims))))
@@ -9675,7 +9549,6 @@ RV_convert_JSON_to_datatype(const char *type)
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_ENUM")) {
         const char * const  type_string = "{\"type\":"; /* Gets prepended to the enum "base" datatype substring */
-        const char *        mapping_keys[] = { "type", "mapping", (const char *) 0 };
         size_t              type_string_len = strlen(type_string);
         size_t              base_section_len;
         char               *base_section_ptr = NULL;
@@ -9720,7 +9593,7 @@ RV_convert_JSON_to_datatype(const char *type)
         if ((datatype = H5Tenum_create(enum_base_type)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create enum datatype")
 
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, mapping_keys, yajl_t_object)))
+        if (NULL == (key_obj = yajl_tree_get(parse_tree, enum_mapping_keys, yajl_t_object)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve enum mapping from enum JSON representation")
 
         /* Retrieve the name and value of each member in the enum mapping, inserting them into the enum type as new members */
@@ -10186,13 +10059,12 @@ done:
 static hid_t
 RV_parse_dataspace(char *space)
 {
-    const char *class_keys[] = { "shape", "class", (const char *) 0 };
-    yajl_val    parse_tree = NULL, key_obj = NULL;
-    hsize_t    *space_dims = NULL;
-    hsize_t    *space_maxdims = NULL;
-    hid_t       dataspace = FAIL;
-    char       *dataspace_type = NULL;
-    hid_t       ret_value = FAIL;
+    yajl_val  parse_tree = NULL, key_obj = NULL;
+    hsize_t  *space_dims = NULL;
+    hsize_t  *space_maxdims = NULL;
+    hid_t     dataspace = FAIL;
+    char     *dataspace_type = NULL;
+    hid_t     ret_value = FAIL;
 
 #ifdef PLUGIN_DEBUG
     printf("-> Parsing dataspace from HTTP response\n\n");
@@ -10205,7 +10077,7 @@ RV_parse_dataspace(char *space)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed")
 
     /* Retrieve the Dataspace type */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, class_keys, yajl_t_string)))
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, dataspace_class_keys, yajl_t_string)))
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_PARSEERROR, FAIL, "can't retrieve dataspace class")
 
     if (NULL == (dataspace_type = YAJL_GET_STRING(key_obj)))
@@ -10229,23 +10101,21 @@ RV_parse_dataspace(char *space)
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCREATE, FAIL, "can't create scalar dataspace")
     } /* end if */
     else if (!strcmp(dataspace_type, "H5S_SIMPLE")) {
-        const char *dims_keys[] =    { "shape", "dims", (const char *) 0 };
-        const char *maxdims_keys[] = { "shape", "maxdims", (const char *) 0 };
-        yajl_val    dims_obj = NULL, maxdims_obj = NULL;
-        hbool_t     maxdims_specified = TRUE;
-        size_t      i;
+        yajl_val dims_obj = NULL, maxdims_obj = NULL;
+        hbool_t  maxdims_specified = TRUE;
+        size_t   i;
 
 #ifdef PLUGIN_DEBUG
         printf("-> SIMPLE dataspace\n\n");
 #endif
 
-        if (NULL == (dims_obj = yajl_tree_get(parse_tree, dims_keys, yajl_t_array)))
+        if (NULL == (dims_obj = yajl_tree_get(parse_tree, dataspace_dims_keys, yajl_t_array)))
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_PARSEERROR, FAIL, "can't retrieve dataspace dims")
 
         /* Check to see whether the maximum dimension size is specified as part of the
          * dataspace's JSON representation
          */
-        if (NULL == (maxdims_obj = yajl_tree_get(parse_tree, maxdims_keys, yajl_t_array)))
+        if (NULL == (maxdims_obj = yajl_tree_get(parse_tree, dataspace_max_dims_keys, yajl_t_array)))
             maxdims_specified = FALSE;
 
         if (NULL == (space_dims = (hsize_t *) RV_malloc(YAJL_GET_ARRAY(dims_obj)->len * sizeof(*space_dims))))
@@ -10345,9 +10215,11 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
     if (shape_body)
         if (NULL == (shape_out_string = (char *) RV_malloc(DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE)))
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace shape buffer")
-    if (maxdims_body)
-        if (NULL == (maxdims_out_string = (char *) RV_malloc(DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE)))
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace maximum dimension size buffer")
+    if (H5S_NULL != space_type) {
+        if (maxdims_body)
+            if (NULL == (maxdims_out_string = (char *) RV_malloc(DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE)))
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace maximum dimension size buffer")
+    } /* end if */
 
     /* Ensure that both buffers are NUL-terminated */
     if (shape_out_string) *shape_out_string = '\0';
@@ -10356,7 +10228,7 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
     switch (space_type) {
         case H5S_NULL:
         {
-            const char * const null_str = "\"H5S_NULL\"";
+            const char * const null_str = "\"shape\": \"H5S_NULL\"";
             size_t             null_strlen = strlen(null_str);
             size_t             shape_out_string_curr_len = DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE;
 
@@ -11676,6 +11548,291 @@ done:
 
     return ret_value;
 } /* end RV_convert_dataset_creation_properties_to_JSON() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_build_link_table
+ *
+ * Purpose:     XXX: Given a
+ *
+ * Return:      Non-NULL on success/NULL on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              January, 2017
+ */
+/* XXX: Need a way to detect cycles. Use a hash table? */
+static herr_t
+RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int (*sort_func)(const void *, const void *),
+    link_table_entry **link_table, size_t *num_entries)
+{
+    link_table_entry *table = NULL;
+    yajl_val          parse_tree = NULL, key_obj;
+    yajl_val          link_obj, link_field_obj;
+    size_t            i, num_links;
+    size_t            depth_counter = 0;
+    char             *HTTP_buffer = HTTP_response;
+    char             *visit_buffer = NULL;
+    char             *link_section_ptr;
+    char             *advancement_ptr;
+    char              current_symbol;
+    char              request_url[URL_MAX_LENGTH];
+    herr_t            ret_value = SUCCEED;
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response was NULL")
+    if (!link_table)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link table pointer was NULL")
+    if (!num_entries)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link table num. entries pointer was NULL")
+
+#ifdef PLUGIN_DEBUG
+    printf("-> Building table of links %s\n\n", is_recursive ? "recursively" : "non-recursively");
+#endif
+
+    /* If this is a call to H5Lvisit, make a copy of the HTTP response since the
+     * buffer that cURL writes to is currently global and will be changed when the
+     * next request is made to the server when recursing into a subgroup to iterate
+     * over its links.
+     */
+    if (is_recursive) {
+        size_t buffer_len = strlen(HTTP_response);
+
+        if (NULL == (visit_buffer = RV_malloc(buffer_len + 1)))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate temporary buffer for H5Lvisit")
+
+        memcpy(visit_buffer, HTTP_response, buffer_len);
+        visit_buffer[buffer_len] = '\0';
+
+        HTTP_buffer = visit_buffer;
+    } /* end if */
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_buffer, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "parsing JSON failed")
+
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, links_keys, yajl_t_array)))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of links object failed")
+
+    num_links = YAJL_GET_ARRAY(key_obj)->len;
+    if (num_links < 0) FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "number of links in group was negative")
+
+    /* Build a table of link information for each link so that we can sort in order
+     * of link creation if needed and can also work in decreasing order if desired
+     */
+    if (NULL == (table = RV_malloc(num_links * sizeof(*table))))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link table")
+
+    /* Find the beginning of the "links" section */
+    if (NULL == (link_section_ptr = strstr(HTTP_buffer, "\"links\"")))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't find \"links\" information section in HTTP response")
+
+    /* For each link, grab its name and creation order, then find its corresponding JSON
+     * subsection, place a NULL terminator at the end of it in order to "extract out" that
+     * subsection, and pass it to the "get link info" callback function in order to fill
+     * out a H5L_info_t struct for the link.
+     */
+    for (i = 0; i < num_links; i++) {
+        char *link_name;
+
+        link_obj = YAJL_GET_ARRAY(key_obj)->values[i];
+
+        /* Get the current link's name */
+        if (NULL == (link_field_obj = yajl_tree_get(link_obj, link_title_keys, yajl_t_string)))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link name failed")
+
+        if (NULL == (link_name = YAJL_GET_STRING(link_field_obj)))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link name was NULL")
+
+        strncpy(table[i].link_name, link_name, LINK_NAME_MAX_LENGTH);
+
+        /* Get the current link's creation time */
+        if (NULL == (link_field_obj = yajl_tree_get(link_obj, link_creation_time_keys, yajl_t_number)))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link creation time failed")
+
+        if (!YAJL_IS_DOUBLE(link_field_obj))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link creation time is not a double")
+
+        table[i].crt_time = YAJL_GET_DOUBLE(link_field_obj);
+
+        /* Process the JSON for the current link and fill out a H5L_info_t struct for it */
+
+        /* Find the beginning and end of the JSON section for this link */
+        if (NULL == (link_section_ptr = strstr(link_section_ptr, "{")))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't find start of current link's JSON section")
+        depth_counter++;
+        advancement_ptr = link_section_ptr + 1;
+
+        /* Continue forward through the string buffer character-by-character, incrementing the depth counter
+         * for each '{' found and decrementing it for each '}' found, until the depth counter reaches 0 once
+         * again, signalling the end of the link subsection
+         */
+        /* XXX: Note that this approach will have problems with '{' or '}' appearing inside the link subsection
+         * where one would not normally expect it, such as in a link name, and will either cause early termination
+         * (an incomplete JSON representation) or will throw the below error about not being able to locate the end
+         * of the link subsection.
+         */
+        while (depth_counter) {
+            current_symbol = *advancement_ptr++;
+
+            /* If we reached the end of the string before finding the end of the link subsection, something is
+             * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
+             */
+            if (!current_symbol)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't locate end of link subsection - stray '{' is likely")
+
+            if (current_symbol == '{')
+                depth_counter++;
+            else if (current_symbol == '}')
+                depth_counter--;
+        } /* end while */
+
+        /* Since it is not important if we destroy the contents of the HTTP response buffer,
+         * NULL terminators will be placed in the buffer strategically at the end of each link
+         * subsection, in order to "extract out" that subsection, corresponding to each individual
+         * link, and pass it to the "get link info" callback.
+         */
+        *advancement_ptr = '\0';
+
+        /* Fill out a H5L_info_t struct for this link */
+        if (RV_parse_response(link_section_ptr, NULL, &table[i].link_info, RV_get_link_info_callback) < 0)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "couldn't get link info")
+
+            printf("%s\n\n", link_section_ptr);
+
+        /* If this is a call to H5Lvisit and the current link points to a group, recurse into the group
+         * and build a link table for it as well.
+         */
+        table[i].subgroup.subgroup_link_table = NULL;
+        if (is_recursive && (H5L_TYPE_HARD == table[i].link_info.type)) {
+            char *link_collection;
+
+            if (NULL == (link_field_obj = yajl_tree_get(link_obj, link_collection_keys2, yajl_t_string)))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link collection failed")
+
+            if (NULL == (link_collection = YAJL_GET_STRING(link_field_obj)))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link collection was NULL")
+
+            if (!strcmp(link_collection, "groups")) {
+                char *link_id;
+
+                /* Retrieve the ID of the current link */
+                if (NULL == (link_field_obj = yajl_tree_get(link_obj, object_id_keys, yajl_t_string)))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link ID failed")
+
+                if (NULL == (link_id = YAJL_GET_STRING(link_field_obj)))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link ID was NULL")
+
+                /* XXX: Detect any cycles by checking to see if the ID of the group that this link points
+                 * to has already been looked at. Only if this is a new group will we recurse into
+                 * it and build a link table.
+                 */
+
+                /* Make a GET request to the server to retrieve all of the links in the subgroup */
+
+                snprintf(request_url, URL_MAX_LENGTH,
+                         "%s/groups/%s/links",
+                         base_URL,
+                         YAJL_GET_STRING(link_field_obj));
+
+#ifdef PLUGIN_DEBUG
+                printf("-> Retrieving all links in subgroup using URL: %s\n\n", request_url);
+
+                printf("   /**********************************\\\n");
+                printf("-> | Making GET request to the server |\n");
+                printf("   \\**********************************/\n\n");
+#endif
+
+                CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
+
+                if (RV_build_link_table(response_buffer.buffer, is_recursive, sort, sort_func,
+                        &table[i].subgroup.subgroup_link_table, &table[i].subgroup.num_entries) < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table for subgroup")
+            } /* end if */
+        } /* end if */
+
+        /* Continue on to the next link subsection */
+        link_section_ptr = advancement_ptr + 1;
+    } /* end for */
+
+#ifdef PLUGIN_DEBUG
+    printf("-> Link table built\n\n");
+#endif
+
+    if (sort) qsort(table, num_links, sizeof(*table), sort_func);
+
+done:
+    if (ret_value >= 0) {
+        if (link_table)
+            *link_table = table;
+        if (num_entries)
+            *num_entries = num_links;
+    } /* end if */
+
+    if (visit_buffer)
+        RV_free(visit_buffer);
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    return ret_value;
+} /* end RV_build_link_table() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_free_link_table
+ *
+ * Purpose:     Helper function to free a built up link table, freeing its
+ *              individual subgroup link tables as necessary
+ *
+ * Return:      Nothing
+ *
+ * Programmer:  Jordan Henderson
+ *              January, 2017
+ */
+static void
+RV_free_link_table(link_table_entry *link_table, size_t num_entries)
+{
+    size_t i;
+
+    for (i = 0; i < num_entries; i++) {
+        if (link_table[i].subgroup.subgroup_link_table)
+            RV_free_link_table(link_table[i].subgroup.subgroup_link_table, link_table[i].subgroup.num_entries);
+    } /* end for */
+
+    RV_free(link_table);
+} /* end RV_free_link_table() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_traverse_link_table
+ *
+ * Purpose:     Helper function to print out each entry in a link table, in
+ *              order to ensure algorithm correctness for H5Literate/visit
+ *
+ * Return:      Nothing
+ *
+ * Programmer:  Jordan Henderson
+ *              January, 2017
+ */
+#ifdef PLUGIN_DEBUG
+static void
+RV_traverse_link_table(link_table_entry *link_table, size_t num_entries)
+{
+    size_t i;
+
+    for (i = 0; i < num_entries; i++) {
+        printf("-> Link %zu name: %s\n", i, link_table[i].link_name);
+        printf("-> Link %zu creation time: %f\n", i, link_table[i].crt_time);
+        printf("-> Link %zu type: %s\n\n", i, link_class_to_string(link_table[i].link_info.type));
+
+        if (link_table[i].subgroup.subgroup_link_table) {
+            printf("-> Descending into subgroup '%s'\n\n", link_table[i].link_name);
+
+            RV_traverse_link_table(link_table[i].subgroup.subgroup_link_table, link_table[i].subgroup.num_entries);
+
+            printf("-> Exiting subgroup '%s'\n\n", link_table[i].link_name);
+        } /* end if */
+    } /* end for */
+} /* end RV_traverse_link_table() */
+#endif
 
 #ifdef PLUGIN_DEBUG
 

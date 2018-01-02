@@ -58,6 +58,7 @@ extern "C" {
 
 
 typedef struct RV_object_t RV_object_t;
+typedef struct link_table_entry link_table_entry;
 
 typedef struct RV_file_t {
     unsigned  intent;

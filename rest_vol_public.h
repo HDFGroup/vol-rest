@@ -66,6 +66,14 @@ extern "C" {
  * VOL plugin will likely be truncated. */
 #define MAX_NUM_LENGTH 20
 
+/* Maximum length of the name of a link used for an HDF5 object. This
+ * is particularly important for performance by keeping locality of
+ * reference for link names during H5Literate/visit calls. If it appears
+ * that link names are being truncated by the plugin, this value should
+ * be adjusted.
+ */
+#define LINK_NAME_MAX_LENGTH 2048
+
 typedef struct rv_obj_ref_t {
     H5R_type_t ref_type;
     H5I_type_t ref_obj_type;

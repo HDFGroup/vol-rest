@@ -146,8 +146,11 @@
 #define ATTRIBUTE_CREATE_ON_DATATYPE_ATTR_NAME  "attr_on_datatype"
 #define ATTRIBUTE_CREATE_ON_DATATYPE_ATTR_NAME2 "attr_on_datatype2"
 
-#define ATTRIBUTE_CREATE_WITH_SPACE_IN_NAME_SPACE_RANK 2
-#define ATTRIBUTE_CREATE_WITH_SPACE_IN_NAME_ATTR_NAME  "attr with space in name"
+#define ATTRIBUTE_CREATE_NULL_DATASPACE_TEST_SUBGROUP_NAME "attr_with_null_space_test"
+#define ATTRIBUTE_CREATE_NULL_DATASPACE_TEST_ATTR_NAME     "attr_with_null_space"
+
+#define ATTRIBUTE_CREATE_SCALAR_DATASPACE_TEST_SUBGROUP_NAME "attr_with_scalar_space_test"
+#define ATTRIBUTE_CREATE_SCALAR_DATASPACE_TEST_ATTR_NAME     "attr_with_scalar_space"
 
 #define ATTRIBUTE_GET_INFO_TEST_SPACE_RANK 2
 #define ATTRIBUTE_GET_INFO_TEST_ATTR_NAME  "get_info_test_attr"
@@ -157,6 +160,9 @@
 
 #define ATTRIBUTE_GET_NAME_TEST_ATTRIBUTE_NAME "retrieve_attr_name_test"
 #define ATTRIBUTE_GET_NAME_TEST_SPACE_RANK     2
+
+#define ATTRIBUTE_CREATE_WITH_SPACE_IN_NAME_SPACE_RANK 2
+#define ATTRIBUTE_CREATE_WITH_SPACE_IN_NAME_ATTR_NAME  "attr with space in name"
 
 #define ATTRIBUTE_DELETION_TEST_SPACE_RANK 2
 #define ATTRIBUTE_DELETION_TEST_ATTR_NAME  "attr_to_be_deleted"
@@ -201,6 +207,12 @@
 
 #define DATASET_CREATE_UNDER_EXISTING_SPACE_RANK 2
 #define DATASET_CREATE_UNDER_EXISTING_DSET_NAME  "nested_dset"
+
+#define DATASET_CREATE_NULL_DATASPACE_TEST_SUBGROUP_NAME "dataset_with_null_space_test"
+#define DATASET_CREATE_NULL_DATASPACE_TEST_DSET_NAME     "dataset_with_null_space"
+
+#define DATASET_CREATE_SCALAR_DATASPACE_TEST_SUBGROUP_NAME "dataset_with_scalar_space_test"
+#define DATASET_CREATE_SCALAR_DATASPACE_TEST_DSET_NAME      "dataset_with_scalar_space"
 
 /* Defines for testing the plugin's ability to parse different types
  * of Datatypes for Dataset creation
@@ -390,10 +402,27 @@
 #define H5L_SAME_LOC_TEST_LINK_NAME2      "h5l_same_loc_test_link2"
 #define H5L_SAME_LOC_TEST_DSET_NAME       "h5l_same_loc_test_dset"
 
-#define SOFT_LINK_TEST_LINK_NAME     "softlink"
+#define SOFT_LINK_EXISTING_RELATIVE_TEST_DSET_SPACE_RANK 2
+#define SOFT_LINK_EXISTING_RELATIVE_TEST_SUBGROUP_NAME   "soft_link_to_existing_relative_path_test"
+#define SOFT_LINK_EXISTING_RELATIVE_TEST_DSET_NAME       "dset"
+#define SOFT_LINK_EXISTING_RELATIVE_TEST_LINK_NAME       "soft_link_to_existing_relative_path"
 
-#define EXTERNAL_LINK_TEST_FILE_NAME "/home/test_user1/ext_link_file"
-#define EXTERNAL_LINK_TEST_LINK_NAME "ext_link"
+#define SOFT_LINK_EXISTING_ABSOLUTE_TEST_SUBGROUP_NAME "soft_link_to_existing_absolute_path_test"
+#define SOFT_LINK_EXISTING_ABSOLUTE_TEST_LINK_NAME     "soft_link_to_existing_absolute_path"
+
+#define SOFT_LINK_DANGLING_RELATIVE_TEST_DSET_SPACE_RANK 2
+#define SOFT_LINK_DANGLING_RELATIVE_TEST_SUBGROUP_NAME   "soft_link_dangling_relative_path_test"
+#define SOFT_LINK_DANGLING_RELATIVE_TEST_DSET_NAME       "dset"
+#define SOFT_LINK_DANGLING_RELATIVE_TEST_LINK_NAME       "soft_link_dangling_relative_path"
+
+#define SOFT_LINK_DANGLING_ABSOLUTE_TEST_DSET_SPACE_RANK 2
+#define SOFT_LINK_DANGLING_ABSOLUTE_TEST_SUBGROUP_NAME   "soft_link_dangling_absolute_path_test"
+#define SOFT_LINK_DANGLING_ABSOLUTE_TEST_DSET_NAME       "dset"
+#define SOFT_LINK_DANGLING_ABSOLUTE_TEST_LINK_NAME       "soft_link_dangling_absolute_path"
+
+#define EXTERNAL_LINK_TEST_SUBGROUP_NAME "external_link_test"
+#define EXTERNAL_LINK_TEST_FILE_NAME     "/home/test_user1/ext_link_file"
+#define EXTERNAL_LINK_TEST_LINK_NAME     "ext_link"
 
 #define UD_LINK_TEST_UDATA_MAX_SIZE 256
 #define UD_LINK_TEST_LINK_NAME      "ud_link"
@@ -617,9 +646,7 @@ static int test_create_soft_link_existing_relative(void);
 static int test_create_soft_link_existing_absolute(void);
 static int test_create_soft_link_dangling_relative(void);
 static int test_create_soft_link_dangling_absolute(void);
-static int test_open_object_by_soft_link(void);
 static int test_create_external_link(void);
-static int test_open_object_by_external_link(void);
 static int test_create_user_defined_link(void);
 static int test_delete_link(void);
 static int test_copy_link(void);
@@ -771,9 +798,7 @@ static int (*link_tests[])(void) = {
         test_create_soft_link_existing_absolute,
         test_create_soft_link_dangling_relative,
         test_create_soft_link_dangling_absolute,
-        test_open_object_by_soft_link,
         test_create_external_link,
-        test_open_object_by_external_link,
         test_create_user_defined_link,
         test_delete_link,
         test_copy_link,
@@ -2888,26 +2913,224 @@ error:
 static int
 test_create_attribute_with_null_space(void)
 {
+    htri_t attr_exists;
+    hid_t  file_id = -1, fapl_id = -1;
+    hid_t  container_group = -1, group_id = -1;
+    hid_t  attr_id = -1;
+    hid_t  attr_dtype = -1;
+    hid_t  space_id = -1;
+
     TESTING("create attribute with NULL dataspace")
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, ATTRIBUTE_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, ATTRIBUTE_CREATE_NULL_DATASPACE_TEST_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
+    if ((space_id = H5Screate(H5S_NULL)) < 0)
+        TEST_ERROR
+
+    if ((attr_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
+        TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    printf("Creating attribute with NULL dataspace\n");
+#endif
+
+    if ((attr_id = H5Acreate2(group_id, ATTRIBUTE_CREATE_NULL_DATASPACE_TEST_ATTR_NAME, attr_dtype, space_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create attribute\n");
+        goto error;
+    }
+
+    /* Verify the attribute has been created */
+    if ((attr_exists = H5Aexists(group_id, ATTRIBUTE_CREATE_NULL_DATASPACE_TEST_ATTR_NAME)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if attribute exists\n");
+        goto error;
+    }
+
+    if (!attr_exists) {
+        H5_FAILED();
+        printf("    attribute did not exist\n");
+        goto error;
+    }
+
+    if (H5Aclose(attr_id) < 0)
+        TEST_ERROR
+
+    if ((attr_id = H5Aopen(group_id, ATTRIBUTE_CREATE_NULL_DATASPACE_TEST_ATTR_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open attribute\n");
+        goto error;
+    }
+
+    if (H5Sclose(space_id) < 0)
+        TEST_ERROR
+    if (H5Tclose(attr_dtype) < 0)
+        TEST_ERROR
+    if (H5Aclose(attr_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Sclose(space_id);
+        H5Tclose(attr_dtype);
+        H5Aclose(attr_id);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
 static int
 test_create_attribute_with_scalar_space(void)
 {
+    htri_t attr_exists;
+    hid_t  file_id = -1, fapl_id = -1;
+    hid_t  container_group = -1, group_id = -1;
+    hid_t  attr_id = -1;
+    hid_t  attr_dtype = -1;
+    hid_t  space_id = -1;
+
     TESTING("create attribute with SCALAR dataspace")
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, ATTRIBUTE_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, ATTRIBUTE_CREATE_SCALAR_DATASPACE_TEST_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
+    if ((space_id = H5Screate(H5S_SCALAR)) < 0)
+        TEST_ERROR
+
+    if ((attr_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
+        TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    printf("Creating attribute with SCALAR dataspace\n");
+#endif
+
+    if ((attr_id = H5Acreate2(group_id, ATTRIBUTE_CREATE_SCALAR_DATASPACE_TEST_ATTR_NAME, attr_dtype, space_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create attribute\n");
+        goto error;
+    }
+
+    /* Verify the attribute has been created */
+    if ((attr_exists = H5Aexists(group_id, ATTRIBUTE_CREATE_SCALAR_DATASPACE_TEST_ATTR_NAME)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if attribute exists\n");
+        goto error;
+    }
+
+    if (!attr_exists) {
+        H5_FAILED();
+        printf("    attribute did not exist\n");
+        goto error;
+    }
+
+    if (H5Aclose(attr_id) < 0)
+        TEST_ERROR
+
+    if ((attr_id = H5Aopen(group_id, ATTRIBUTE_CREATE_SCALAR_DATASPACE_TEST_ATTR_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open attribute\n");
+        goto error;
+    }
+
+    if (H5Sclose(space_id) < 0)
+        TEST_ERROR
+    if (H5Tclose(attr_dtype) < 0)
+        TEST_ERROR
+    if (H5Aclose(attr_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Sclose(space_id);
+        H5Tclose(attr_dtype);
+        H5Aclose(attr_id);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
@@ -4863,25 +5086,197 @@ error:
 
 static int test_create_dataset_null_space(void)
 {
+    hid_t file_id = -1, fapl_id = -1;
+    hid_t container_group = -1, group_id = -1;
+    hid_t dset_id = -1;
+    hid_t dset_dtype = -1;
+    hid_t fspace_id = -1;
+
     TESTING("create dataset with a NULL dataspace")
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, DATASET_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, DATASET_CREATE_NULL_DATASPACE_TEST_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
+    if ((fspace_id = H5Screate(H5S_NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
+        TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    printf("Creating dataset with NULL dataspace\n");
+#endif
+
+    if ((dset_id = H5Dcreate2(group_id, DATASET_CREATE_NULL_DATASPACE_TEST_DSET_NAME, dset_dtype, fspace_id,
+            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dopen2(group_id, DATASET_CREATE_NULL_DATASPACE_TEST_DSET_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open dataset\n");
+        goto error;
+    }
+
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Tclose(dset_dtype) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Sclose(fspace_id);
+        H5Tclose(dset_dtype);
+        H5Dclose(dset_id);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
 static int test_create_dataset_scalar_space(void)
 {
+    hid_t file_id = -1, fapl_id = -1;
+    hid_t container_group = -1, group_id = -1;
+    hid_t dset_id = -1;
+    hid_t dset_dtype = -1;
+    hid_t fspace_id = -1;
+
     TESTING("create dataset with a SCALAR dataspace")
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+                }
+
+    if ((container_group = H5Gopen2(file_id, DATASET_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, DATASET_CREATE_SCALAR_DATASPACE_TEST_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
+    if ((fspace_id = H5Screate(H5S_SCALAR)) < 0)
+        TEST_ERROR
+
+    if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
+        TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    printf("Creating dataset with SCALAR dataspace\n");
+#endif
+
+    if ((dset_id = H5Dcreate2(group_id, DATASET_CREATE_SCALAR_DATASPACE_TEST_DSET_NAME, dset_dtype, fspace_id,
+            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dopen2(group_id, DATASET_CREATE_SCALAR_DATASPACE_TEST_DSET_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open dataset\n");
+        goto error;
+    }
+
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Tclose(dset_dtype) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Sclose(fspace_id);
+        H5Tclose(dset_dtype);
+        H5Dclose(dset_id);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
@@ -9007,13 +9402,129 @@ error:
 static int
 test_create_soft_link_existing_relative(void)
 {
+    hsize_t dims[SOFT_LINK_EXISTING_RELATIVE_TEST_DSET_SPACE_RANK];
+    size_t  i;
+    htri_t  link_exists;
+    hid_t   file_id = -1, fapl_id = -1;
+    hid_t   container_group = -1, group_id = -1;
+    hid_t   dset_id = -1;
+    hid_t   dset_dtype = -1;
+    hid_t   dset_dspace = -1;
+
     TESTING("create soft link to existing object by relative path")
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, LINK_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, SOFT_LINK_EXISTING_RELATIVE_TEST_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
+    if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
+        TEST_ERROR
+
+    for (i = 0; i < SOFT_LINK_EXISTING_RELATIVE_TEST_DSET_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
+
+    if ((dset_dspace = H5Screate_simple(SOFT_LINK_EXISTING_RELATIVE_TEST_DSET_SPACE_RANK, dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(group_id, SOFT_LINK_EXISTING_RELATIVE_TEST_DSET_NAME, dset_dtype, dset_dspace,
+            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Creating soft link with relative path value to an existing object\n");
+#endif
+
+    if (H5Lcreate_soft(SOFT_LINK_EXISTING_RELATIVE_TEST_DSET_NAME, group_id,
+            SOFT_LINK_EXISTING_RELATIVE_TEST_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't create soft link\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the link exists\n");
+#endif
+
+    /* Verify the link has been created */
+    if ((link_exists = H5Lexists(group_id, SOFT_LINK_EXISTING_RELATIVE_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if link exists\n");
+        goto error;
+    }
+
+    if (!link_exists) {
+        H5_FAILED();
+        printf("    link did not exist\n");
+        goto error;
+    }
+
+    if ((dset_id = H5Dopen2(group_id, SOFT_LINK_EXISTING_RELATIVE_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open dataset through the soft link\n");
+        goto error;
+    }
+
+    if (H5Sclose(dset_dspace) < 0)
+        TEST_ERROR
+    if (H5Tclose(dset_dtype) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Sclose(dset_dspace);
+        H5Tclose(dset_dtype);
+        H5Dclose(dset_id);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
@@ -9022,7 +9533,7 @@ test_create_soft_link_existing_absolute(void)
 {
     htri_t link_exists;
     hid_t  file_id = -1, fapl = -1;
-    hid_t  container_group = -1;
+    hid_t  container_group = -1, group_id = -1;
 
     TESTING("create soft link to existing object by absolute path")
 
@@ -9046,12 +9557,17 @@ test_create_soft_link_existing_absolute(void)
         goto error;
     }
 
+    if ((group_id = H5Gcreate2(container_group, SOFT_LINK_EXISTING_ABSOLUTE_TEST_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
 #ifdef PLUGIN_DEBUG
-    puts("Creating a soft link to an existing object by absolute path\n");
+    puts("Creating a soft link with absolute path value to an existing object\n");
 #endif
 
-    if (H5Lcreate_soft("/" DATASET_TEST_GROUP_NAME "/" DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_NAME, container_group,
-            SOFT_LINK_TEST_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+    if (H5Lcreate_soft("/", group_id, SOFT_LINK_EXISTING_ABSOLUTE_TEST_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create soft link\n");
         goto error;
@@ -9062,7 +9578,9 @@ test_create_soft_link_existing_absolute(void)
 #endif
 
     /* Verify the link has been created */
-    if ((link_exists = H5Lexists(file_id, "/" LINK_TEST_GROUP_NAME "/" SOFT_LINK_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
+    if ((link_exists = H5Lexists(file_id,
+            "/" LINK_TEST_GROUP_NAME "/" SOFT_LINK_EXISTING_ABSOLUTE_TEST_SUBGROUP_NAME "/" SOFT_LINK_EXISTING_ABSOLUTE_TEST_LINK_NAME,
+            H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't determine if link exists\n");
         goto error;
@@ -9074,6 +9592,17 @@ test_create_soft_link_existing_absolute(void)
         goto error;
     }
 
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+
+    if ((group_id = H5Gopen2(group_id, SOFT_LINK_EXISTING_ABSOLUTE_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open object pointed to by soft link\n");
+        goto error;
+    }
+
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
     if (H5Gclose(container_group) < 0)
         TEST_ERROR
     if (H5Pclose(fapl) < 0)
@@ -9089,6 +9618,7 @@ test_create_soft_link_existing_absolute(void)
 
 error:
     H5E_BEGIN_TRY {
+        H5Gclose(group_id);
         H5Gclose(container_group);
         H5Pclose(fapl);
         H5Fclose(file_id);
@@ -9101,39 +9631,270 @@ error:
 static int
 test_create_soft_link_dangling_relative(void)
 {
+    hsize_t dims[SOFT_LINK_DANGLING_RELATIVE_TEST_DSET_SPACE_RANK];
+    size_t  i;
+    htri_t  link_exists;
+    hid_t   file_id = -1, fapl_id = -1;
+    hid_t   container_group = -1, group_id = -1;
+    hid_t   dset_id = -1;
+    hid_t   dset_dtype = -1;
+    hid_t   dset_dspace = -1;
+
     TESTING("create dangling soft link to object by relative path")
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, LINK_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, SOFT_LINK_DANGLING_RELATIVE_TEST_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Creating a dangling soft link with relative path value\n");
+#endif
+
+    if (H5Lcreate_soft(SOFT_LINK_DANGLING_RELATIVE_TEST_DSET_NAME, group_id,
+            SOFT_LINK_DANGLING_RELATIVE_TEST_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't create soft link\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the link exists\n");
+#endif
+
+    /* Verify the link has been created */
+    if ((link_exists = H5Lexists(group_id, SOFT_LINK_DANGLING_RELATIVE_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if link exists\n");
+        goto error;
+    }
+
+    if (!link_exists) {
+        H5_FAILED();
+        printf("    link did not exist\n");
+        goto error;
+    }
+
+    if (H5Dopen2(group_id, SOFT_LINK_DANGLING_RELATIVE_TEST_LINK_NAME, H5P_DEFAULT) >= 0) {
+        H5_FAILED();
+        printf("    opened target of dangling link!\n");
+        goto error;
+    }
+
+    if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
+        TEST_ERROR
+
+    for (i = 0; i < SOFT_LINK_DANGLING_RELATIVE_TEST_DSET_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
+
+    if ((dset_dspace = H5Screate_simple(SOFT_LINK_DANGLING_RELATIVE_TEST_DSET_SPACE_RANK, dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(group_id, SOFT_LINK_DANGLING_RELATIVE_TEST_DSET_NAME, dset_dtype, dset_dspace,
+            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dopen2(group_id, SOFT_LINK_DANGLING_RELATIVE_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open dataset pointed to by soft link\n");
+        goto error;
+    }
+
+    if (H5Sclose(dset_dspace) < 0)
+        TEST_ERROR
+    if (H5Tclose(dset_dtype) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Sclose(dset_dspace);
+        H5Tclose(dset_dtype);
+        H5Dclose(dset_id);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
 static int
 test_create_soft_link_dangling_absolute(void)
 {
+    hsize_t dims[SOFT_LINK_DANGLING_ABSOLUTE_TEST_DSET_SPACE_RANK];
+    size_t  i;
+    htri_t  link_exists;
+    hid_t   file_id = -1, fapl_id = -1;
+    hid_t   container_group = -1, group_id = -1;
+    hid_t   dset_id = -1;
+    hid_t   dset_dtype = -1;
+    hid_t   dset_dspace = -1;
+
     TESTING("create dangling soft link to object by absolute path")
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, LINK_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, SOFT_LINK_DANGLING_ABSOLUTE_TEST_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Creating dangling soft link with absolute path value\n");
+#endif
+
+    if (H5Lcreate_soft("/" LINK_TEST_GROUP_NAME "/" SOFT_LINK_DANGLING_ABSOLUTE_TEST_SUBGROUP_NAME "/" SOFT_LINK_DANGLING_ABSOLUTE_TEST_DSET_NAME,
+            group_id, SOFT_LINK_DANGLING_ABSOLUTE_TEST_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't create soft link\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the link exists\n");
+#endif
+
+    /* Verify the link has been created */
+    if ((link_exists = H5Lexists(group_id, SOFT_LINK_DANGLING_ABSOLUTE_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if link exists\n");
+        goto error;
+    }
+
+    if (!link_exists) {
+        H5_FAILED();
+        printf("    link did not exist\n");
+        goto error;
+    }
+
+    if (H5Dopen2(group_id, SOFT_LINK_DANGLING_ABSOLUTE_TEST_LINK_NAME, H5P_DEFAULT) >= 0) {
+        H5_FAILED();
+        printf("    opened target of dangling link!\n");
+        goto error;
+    }
+
+    if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
+        TEST_ERROR
+
+    for (i = 0; i < SOFT_LINK_DANGLING_ABSOLUTE_TEST_DSET_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
+
+    if ((dset_dspace = H5Screate_simple(SOFT_LINK_DANGLING_ABSOLUTE_TEST_DSET_SPACE_RANK, dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(group_id, SOFT_LINK_DANGLING_ABSOLUTE_TEST_DSET_NAME, dset_dtype, dset_dspace,
+            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dopen2(group_id, SOFT_LINK_DANGLING_ABSOLUTE_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open dataset pointed to by soft link\n");
+        goto error;
+    }
+
+    if (H5Sclose(dset_dspace) < 0)
+        TEST_ERROR
+    if (H5Tclose(dset_dtype) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
-    return 1;
-}
+    H5E_BEGIN_TRY {
+        H5Sclose(dset_dspace);
+        H5Tclose(dset_dtype);
+        H5Dclose(dset_id);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
 
-static int
-test_open_object_by_soft_link(void)
-{
-    TESTING("open object in file by using a soft link")
-
-    SKIPPED();
-
-    return 0;
-
-error:
     return 1;
 }
 
@@ -9142,7 +9903,7 @@ test_create_external_link(void)
 {
     htri_t link_exists;
     hid_t  file_id = -1, fapl = -1;
-    hid_t  container_group = -1;
+    hid_t  container_group = -1, group_id = -1;
 
     TESTING("create external link to existing object")
 
@@ -9166,12 +9927,18 @@ test_create_external_link(void)
         goto error;
     }
 
+    if ((group_id = H5Gcreate2(container_group, EXTERNAL_LINK_TEST_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
 #ifdef PLUGIN_DEBUG
     puts("Creating an external link to root group of other file\n");
 #endif
 
     if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/" DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_NAME,
-            container_group, EXTERNAL_LINK_TEST_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+            group_id, EXTERNAL_LINK_TEST_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create external link\n");
         goto error;
@@ -9182,7 +9949,7 @@ test_create_external_link(void)
 #endif
 
     /* Verify the link has been created */
-    if ((link_exists = H5Lexists(container_group, EXTERNAL_LINK_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
+    if ((link_exists = H5Lexists(group_id, EXTERNAL_LINK_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't determine if link exists\n");
         goto error;
@@ -9194,6 +9961,14 @@ test_create_external_link(void)
         goto error;
     }
 
+    if (H5Gopen2(group_id, EXTERNAL_LINK_TEST_LINK_NAME, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't open root group of other file using external link\n");
+        goto error;
+    }
+
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
     if (H5Gclose(container_group) < 0)
         TEST_ERROR
     if (H5Pclose(fapl) < 0)
@@ -9209,25 +9984,13 @@ test_create_external_link(void)
 
 error:
     H5E_BEGIN_TRY {
+        H5Gclose(group_id);
         H5Gclose(container_group);
         H5Pclose(fapl);
         H5Fclose(file_id);
         RVterm();
     } H5E_END_TRY;
 
-    return 1;
-}
-
-static int
-test_open_object_by_external_link(void)
-{
-    TESTING("open object in file by using an external link")
-
-    SKIPPED();
-
-    return 0;
-
-error:
     return 1;
 }
 
@@ -13772,6 +14535,20 @@ link_visit_callback1(hid_t group_id, const char *name, const H5L_info_t *info, v
         }
     }
     else if (!strcmp(name, LINK_VISIT_TEST_LINK_NAME4)) {
+        if (H5L_TYPE_HARD != info->type) {
+            H5_FAILED();
+            printf("    link type did not match\n");
+            goto error;
+        }
+    }
+    else if (!strcmp(name, LINK_VISIT_TEST_SUBGROUP_NAME2)) {
+        if (H5L_TYPE_HARD != info->type) {
+            H5_FAILED();
+            printf("    link type did not match\n");
+            goto error;
+        }
+    }
+    else if (!strcmp(name, LINK_VISIT_TEST_SUBGROUP_NAME3)) {
         if (H5L_TYPE_HARD != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
