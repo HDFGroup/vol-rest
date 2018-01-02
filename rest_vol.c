@@ -320,8 +320,10 @@ typedef struct link_iter_data {
  */
 typedef struct link_table_entry {
     H5L_info_t  link_info;
+    hbool_t     is_group;
     double      crt_time;
     char       *link_name;
+    char       *link_id;
 } link_table_entry;
 
 /* Host header string for specifying the host (Domain) for requests */
@@ -587,8 +589,11 @@ RVinit(void)
 #endif
 
     /* Initialize cURL */
-    if (NULL == (curl = curl_easy_init()))
+    if (CURLE_OK != curl_global_init(CURL_GLOBAL_ALL))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't initialize cURL")
+
+    if (NULL == (curl = curl_easy_init()))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't initialize cURL easy handle")
 
     /* Instruct cURL to use the buffer for error messages */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_buf))
@@ -711,6 +716,7 @@ RV_term(hid_t H5_ATTR_UNUSED vtpl_id)
     if (curl) {
         curl_easy_cleanup(curl);
         curl = NULL;
+        curl_global_cleanup();
     } /* end if */
 
 #ifdef TRACK_MEM_USAGE
@@ -7420,12 +7426,18 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
     const char       *links_keys[]              = { "links", (const char *) 0 };
     const char       *link_name_keys[]          = { "title", (const char *) 0 };
     const char       *link_creation_time_keys[] = { "created", (const char *) 0 };
+    const char       *link_collection_keys[] = { "collection", (const char *) 0 };
     yajl_val          parse_tree = NULL, key_obj;
-    yajl_val          link_obj, link_name_obj, link_create_time_obj;
+    yajl_val          link_obj, link_id_obj,  
+    link_name_obj, link_create_time_obj, link_collection_obj;
     herr_t            callback_ret;
+    size_t            host_header_len = 0;
     size_t            i, last_idx;
     size_t            num_links;
     size_t            depth_counter = 0;
+    char             *HTTP_buffer = HTTP_response;
+    char             *visit_buffer = NULL;
+    char             *host_header = NULL;
     char             *link_section_ptr;
     char             *advancement_ptr;
     char              current_symbol;
@@ -7435,7 +7447,7 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
     printf("-> Iterating %s through links according to server's HTTP response\n\n", iter_data->is_recursive ? "recursively" : "non-recursively");
 #endif
 
-    if (!HTTP_response)
+    if (!HTTP_buffer)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
     if (!iter_data)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link iteration data pointer was NULL")
@@ -7446,11 +7458,18 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
      * over its links.
      */
     if (iter_data->is_recursive) {
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lvisit is unsupported")
-        /* XXX: Handle H5Lvisit from changing the buffer */
+        size_t buffer_len = strlen(HTTP_response);
+
+        if (NULL == (visit_buffer = RV_malloc(buffer_len + 1)))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate temporary buffer for H5Lvisit")
+
+        memcpy(visit_buffer, HTTP_response, buffer_len);
+        visit_buffer[buffer_len] = '\0';
+
+        HTTP_buffer = visit_buffer;
     } /* end if */
 
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_buffer, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "parsing JSON failed")
 
     if (NULL == (key_obj = yajl_tree_get(parse_tree, links_keys, yajl_t_array)))
@@ -7465,7 +7484,7 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link table")
 
     /* Find the beginning of the "links" section */
-    if (NULL == (link_section_ptr = strstr(HTTP_response, "\"links\"")))
+    if (NULL == (link_section_ptr = strstr(HTTP_buffer, "\"links\"")))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't find \"links\" information section in HTTP response")
 
 #ifdef PLUGIN_DEBUG
@@ -7540,6 +7559,28 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
         if (RV_parse_response(link_section_ptr, NULL, &link_table[i].link_info, RV_get_link_info_callback) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "couldn't get link info")
 
+        /* If this is a call to H5Lvisit, check whether the link points to a group */
+        link_table[i].is_group = FALSE;
+        if (iter_data->is_recursive && (link_table[i].link_info.type == H5L_TYPE_HARD)) {
+            char *link_collection;
+
+            if (NULL == (link_collection_obj = yajl_tree_get(link_obj, link_collection_keys, yajl_t_string)))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link collection failed")
+
+            if (NULL == (link_collection = YAJL_GET_STRING(link_collection_obj)))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link collection was NULL")
+
+            if (!strcmp(link_collection, "groups")) {
+                link_table[i].is_group = TRUE;
+
+                if (NULL == (link_id_obj = yajl_tree_get(link_obj, link_id_keys, yajl_t_string)))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link ID failed")
+
+                if (NULL == (link_table[i].link_id = YAJL_GET_STRING(link_id_obj)))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link ID was NULL")
+            } /* end if */
+        } /* end if */
+
         /* Continue on to the next link subsection */
         link_section_ptr = advancement_ptr + 1;
     } /* end for */
@@ -7581,6 +7622,32 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret, "H5Literate/H5Lvisit (_by_name) user callback failed")
                 else if (callback_ret > 0)
                     FUNC_GOTO_DONE(callback_ret)
+
+                /* If the current link points to a group, recurse into it */
+                if (link_table[i].is_group) {
+                    char request_url[URL_MAX_LENGTH];
+
+                    snprintf(request_url, URL_MAX_LENGTH,
+                             "%s/groups/%s/links",
+                             base_URL,
+                             );
+
+#ifdef PLUGIN_DEBUG
+                    printf("-> Retrieving all links in subgroup using URL: %s\n\n", request_url);
+
+                    printf("   /**********************************\\\n");
+                    printf("-> | Making GET request to the server |\n");
+                    printf("   \\**********************************/\n\n");
+#endif
+
+                    /* Since link visiting should occur as an atomic operation, assume that the previously
+                     * setup cURL headers are still valid
+                     */
+                    CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
+
+                    if (RV_parse_response(response_buffer.buffer, iter_data, NULL, RV_link_iter_callback) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't recurse into subgroup")
+                } /* end if */
             } /* end for */
 
             break;
@@ -7616,8 +7683,12 @@ done:
     if (iter_data->idx_p && ret_value >= 0)
         *iter_data->idx_p = last_idx;
 
+    if (host_header)
+        RV_free(host_header);
     if (link_table)
         RV_free(link_table);
+    if (visit_buffer)
+        RV_free(visit_buffer);
 
     if (parse_tree)
         yajl_tree_free(parse_tree);
