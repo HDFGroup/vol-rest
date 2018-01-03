@@ -10485,7 +10485,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                                                  "%s%llu:%llu:%llu",
                                                  i > 0 ? "," : "",
                                                  start[i],
-                                                 start[i] + (stride[i] * count[i]),
+                                                 start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1),
                                                  stride[i]
                                          )) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
@@ -10627,7 +10627,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                     start_body_curr_pos += bytes_printed;
 
                     /* XXX: stop body may be wrong */
-                    if ((bytes_printed = sprintf(stop_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), start[i] + (stride[i] * count[i]))) < 0)
+                    if ((bytes_printed = sprintf(stop_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1))) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
                     stop_body_curr_pos += bytes_printed;
 
@@ -11560,7 +11560,6 @@ done:
  * Programmer:  Jordan Henderson
  *              January, 2017
  */
-/* XXX: Need a way to detect cycles. Use a hash table? */
 static herr_t
 RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int (*sort_func)(const void *, const void *),
     link_table_entry **link_table, size_t *num_entries)
