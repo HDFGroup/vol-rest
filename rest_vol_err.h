@@ -31,6 +31,15 @@ extern "C" {
 #include "H5Ipublic.h"
 
 extern hid_t h5_err_class_g;
+extern hid_t obj_err_maj_g;
+extern hid_t parse_err_min_g;
+extern hid_t link_table_err_min_g;
+extern hid_t link_table_iter_err_min_g;
+
+#define H5E_OBJECT obj_err_maj_g
+#define H5E_PARSEERROR parse_err_min_g
+#define H5E_CANTBUILDLINKTABLE link_table_err_min_g
+#define H5E_CANTITERATE link_table_iter_err_min_g
 
 
 /* Use FUNC to safely handle variations of C99 __func__ keyword handling */

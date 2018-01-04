@@ -277,15 +277,12 @@ do {                                                                            
  */
 static hid_t REST_g = -1;
 
-/* Identifiers and defines for HDF5's error API */
+/* Identifiers for HDF5's error API */
 hid_t h5_err_class_g = -1;
 hid_t obj_err_maj_g = -1;
 hid_t parse_err_min_g = -1;
 hid_t link_table_err_min_g = -1;
-
-#define H5E_OBJECT obj_err_maj_g
-#define H5E_PARSEERROR parse_err_min_g
-#define H5E_CANTBUILDLINKTABLE link_table_err_min_g
+hid_t link_table_iter_err_min_g = -1;
 
 /*
  * The CURL pointer used for all cURL operations.
@@ -566,9 +563,7 @@ static herr_t RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl_id, char
 /* Helper function to build a table of links recursively or non-recursively starting from a given group */
 static herr_t RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int (*sort_func)(const void *, const void *), link_table_entry **link_table, size_t *num_entries);
 static void   RV_free_link_table(link_table_entry *link_table, size_t num_entries);
-#ifdef PLUGIN_DEBUG
-static void   RV_traverse_link_table(link_table_entry *link_table, size_t num_entries);
-#endif
+static herr_t RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_iter_data *iter_data);
 
 #ifdef PLUGIN_DEBUG
 /* Helper functions to print out useful debugging information */
@@ -732,6 +727,8 @@ RVinit(void)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for JSON parsing failures")
     if ((link_table_err_min_g = H5Ecreate_msg(h5_err_class_g, H5E_MINOR, "Can't build table of links for iteration")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for link table build error")
+    if ((link_table_iter_err_min_g = H5Ecreate_msg(h5_err_class_g, H5E_MINOR, "Can't iterate over link table")) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for link table iteration error")
 
     /* Register the plugin with the library */
     if (RV_init() < 0)
@@ -853,6 +850,11 @@ done:
         if (link_table_err_min_g >= 0) {
             if (H5Eclose_msg(link_table_err_min_g) < 0)
                 FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close link table build error message")
+        } /* end if */
+
+        if (link_table_iter_err_min_g >= 0) {
+            if (H5Eclose_msg(link_table_iter_err_min_g) < 0)
+                FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close link table iteration error message")
         } /* end if */
 
         if (H5Eunregister_class(h5_err_class_g) < 0)
@@ -6123,10 +6125,6 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             if (RV_parse_response(response_buffer.buffer, &iter_data, NULL, RV_link_iter_callback) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't iterate over links")
 
-#ifdef PLUGIN_DEBUG
-            printf("-> Link iteration finished\n\n");
-#endif
-
             break;
         } /* H5VL_LINK_ITER */
 
@@ -7525,8 +7523,6 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
 {
     link_table_entry *link_table = NULL;
     link_iter_data   *iter_data = (link_iter_data *) callback_data_in;
-    herr_t            callback_ret;
-    size_t            last_idx;
     size_t            link_table_num_entries;
     herr_t            ret_value = SUCCEED;
 
@@ -7559,62 +7555,11 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table")
     } /* end else */
 
-#ifdef PLUGIN_DEBUG
-    printf("-> Link table contents:\n\n");
-    RV_traverse_link_table(link_table, link_table_num_entries);
-#endif
-
     /* Begin iteration */
-    switch (iter_data->iter_order) {
-        case H5_ITER_NATIVE:
-        case H5_ITER_INC:
-        {
-#ifdef PLUGIN_DEBUG
-            printf("-> Beginning iteration in increasing order\n\n");
-#endif
-
-            for (last_idx = (iter_data->idx_p ? *iter_data->idx_p : 0); last_idx < link_table_num_entries; last_idx++) {
-                /* Call the user's callback */
-                callback_ret = iter_data->iter_op(iter_data->group_id, link_table[last_idx].link_name, &link_table[last_idx].link_info, iter_data->op_data);
-                if (callback_ret < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret, "H5Literate/H5Lvisit (_by_name) user callback failed")
-                else if (callback_ret > 0)
-                    FUNC_GOTO_DONE(callback_ret)
-            } /* end for */
-
-            break;
-        } /* H5_ITER_INC H5_ITER_NATIVE */
-
-        case H5_ITER_DEC:
-        {
-#ifdef PLUGIN_DEBUG
-            printf("-> Beginning iteration in decreasing order\n\n");
-#endif
-
-            for (last_idx = (iter_data->idx_p ? *iter_data->idx_p : link_table_num_entries - 1); last_idx >= 0; last_idx--) {
-                /* Call the user's callback */
-                callback_ret = iter_data->iter_op(iter_data->group_id, link_table[last_idx].link_name, &link_table[last_idx].link_info, iter_data->op_data);
-                if (callback_ret < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret, "H5Literate/H5Lvisit (_by_name) user callback failed")
-                else if (callback_ret > 0)
-                    FUNC_GOTO_DONE(callback_ret)
-
-                if (last_idx == 0) break;
-            } /* end for */
-
-            break;
-        } /* H5_ITER_DEC */
-
-        case H5_ITER_UNKNOWN:
-        case H5_ITER_N:
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "unknown link iteration order")
-    } /* end switch */
+    if (RV_traverse_link_table(link_table, link_table_num_entries, iter_data) < 0)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTITERATE, FAIL, "can't iterate over link table")
 
 done:
-    /* Keep track of the last index where we left off */
-    if (iter_data->idx_p && ret_value >= 0)
-        *iter_data->idx_p = last_idx;
-
     if (link_table)
         RV_free_link_table(link_table, link_table_num_entries);
 
@@ -11958,35 +11903,124 @@ RV_free_link_table(link_table_entry *link_table, size_t num_entries)
 /*-------------------------------------------------------------------------
  * Function:    RV_traverse_link_table
  *
- * Purpose:     Helper function to print out each entry in a link table, in
- *              order to ensure algorithm correctness for H5Literate/visit
+ * Purpose:     Helper function to actually iterate over a link
+ *              table, calling the user's callback for each link
  *
- * Return:      Nothing
+ * Return:      Non-negative on success/Negative on failure
  *
  * Programmer:  Jordan Henderson
  *              January, 2017
  */
-#ifdef PLUGIN_DEBUG
-static void
-RV_traverse_link_table(link_table_entry *link_table, size_t num_entries)
+static herr_t
+RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_iter_data *iter_data)
 {
-    size_t i;
+    static size_t depth = 0;
+    size_t        last_idx;
+    herr_t        callback_ret;
+    herr_t        ret_value = SUCCEED;
 
-    for (i = 0; i < num_entries; i++) {
-        printf("-> Link %zu name: %s\n", i, link_table[i].link_name);
-        printf("-> Link %zu creation time: %f\n", i, link_table[i].crt_time);
-        printf("-> Link %zu type: %s\n\n", i, link_class_to_string(link_table[i].link_info.type));
-
-        if (link_table[i].subgroup.subgroup_link_table) {
-            printf("-> Descending into subgroup '%s'\n\n", link_table[i].link_name);
-
-            RV_traverse_link_table(link_table[i].subgroup.subgroup_link_table, link_table[i].subgroup.num_entries);
-
-            printf("-> Exiting subgroup '%s'\n\n", link_table[i].link_name);
-        } /* end if */
-    } /* end for */
-} /* end RV_traverse_link_table() */
+    switch (iter_data->iter_order) {
+        case H5_ITER_NATIVE:
+        case H5_ITER_INC:
+        {
+#ifdef PLUGIN_DEBUG
+            printf("-> Beginning iteration in increasing order\n\n");
 #endif
+
+            for (last_idx = (iter_data->idx_p ? *iter_data->idx_p : 0); last_idx < num_entries; last_idx++) {
+#ifdef PLUGIN_DEBUG
+                printf("-> Link %zu name: %s\n", last_idx, link_table[last_idx].link_name);
+                printf("-> Link %zu creation time: %f\n", last_idx, link_table[last_idx].crt_time);
+                printf("-> Link %zu type: %s\n\n", last_idx, link_class_to_string(link_table[last_idx].link_info.type));
+#endif
+
+                /* Call the user's callback */
+                callback_ret = iter_data->iter_op(iter_data->group_id, link_table[last_idx].link_name, &link_table[last_idx].link_info, iter_data->op_data);
+                if (callback_ret < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret, "H5Literate/H5Lvisit (_by_name) user callback failed for link '%s'", link_table[last_idx].link_name)
+                else if (callback_ret > 0)
+                    FUNC_GOTO_DONE(callback_ret)
+
+                /* If this is a group and H5Lvisit has been called, descend into the group */
+                if (link_table[last_idx].subgroup.subgroup_link_table) {
+#ifdef PLUGIN_DEBUG
+                    printf("-> Descending into subgroup '%s'\n\n", link_table[last_idx].link_name);
+#endif
+
+                    depth++;
+                    if (RV_traverse_link_table(link_table[last_idx].subgroup.subgroup_link_table, link_table[last_idx].subgroup.num_entries, iter_data) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTITERATE, FAIL, "can't iterate over links in subgroup '%s'", link_table[last_idx].link_name)
+                    depth--;
+
+#ifdef PLUGIN_DEBUG
+                    printf("-> Exiting subgroup '%s'\n\n", link_table[last_idx].link_name);
+#endif
+                } /* end if */
+            } /* end for */
+
+            break;
+        } /* H5_ITER_NATIVE H5_ITER_INC */
+
+        case H5_ITER_DEC:
+        {
+#ifdef PLUGIN_DEBUG
+            printf("-> Beginning iteration in decreasing order\n\n");
+#endif
+
+            for (last_idx = (iter_data->idx_p ? *iter_data->idx_p : num_entries - 1); last_idx >= 0; last_idx--) {
+#ifdef PLUGIN_DEBUG
+                printf("-> Link %zu name: %s\n", last_idx, link_table[last_idx].link_name);
+                printf("-> Link %zu creation time: %f\n", last_idx, link_table[last_idx].crt_time);
+                printf("-> Link %zu type: %s\n\n", last_idx, link_class_to_string(link_table[last_idx].link_info.type));
+#endif
+
+                /* Call the user's callback */
+                callback_ret = iter_data->iter_op(iter_data->group_id, link_table[last_idx].link_name, &link_table[last_idx].link_info, iter_data->op_data);
+                if (callback_ret < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret, "H5Literate/H5Lvisit (_by_name) user callback failed for link '%s'", link_table[last_idx].link_name)
+                else if (callback_ret > 0)
+                    FUNC_GOTO_DONE(callback_ret)
+
+                /* If this is a group and H5Lvisit has been called, descend into the group */
+                if (link_table[last_idx].subgroup.subgroup_link_table) {
+#ifdef PLUGIN_DEBUG
+                    printf("-> Descending into subgroup '%s'\n\n", link_table[last_idx].link_name);
+#endif
+
+                    depth++;
+                    if (RV_traverse_link_table(link_table[last_idx].subgroup.subgroup_link_table, link_table[last_idx].subgroup.num_entries, iter_data) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTITERATE, FAIL, "can't iterate over links in subgroup '%s'", link_table[last_idx].link_name)
+                    depth--;
+
+#ifdef PLUGIN_DEBUG
+                    printf("-> Exiting subgroup '%s'\n\n", link_table[last_idx].link_name);
+#endif
+                } /* end if */
+
+                if (last_idx == 0) break;
+            } /* end for */
+
+            break;
+        } /* H5_ITER_DEC */
+
+        case H5_ITER_UNKNOWN:
+        case H5_ITER_N:
+        default:
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "unknown link iteration order")
+    } /* end switch */
+
+#ifdef PLUGIN_DEBUG
+    if (depth == 0)
+        printf("-> Link iteration finished\n\n");
+#endif
+
+done:
+    /* Keep track of the last index where we left off */
+    if (iter_data->idx_p && (ret_value >= 0) && (depth == 0))
+        *iter_data->idx_p = last_idx;
+
+    return ret_value;
+} /* end RV_traverse_link_table() */
 
 #ifdef PLUGIN_DEBUG
 

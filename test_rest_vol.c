@@ -14805,7 +14805,14 @@ error:
 static herr_t
 link_visit_callback1(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)
 {
-    if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME1)) {
+    if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_DSET_NAME)) {
+        if (H5L_TYPE_HARD != info->type) {
+            H5_FAILED();
+            printf("    link type did not match\n");
+            goto error;
+        }
+    }
+    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME1)) {
         if (H5L_TYPE_HARD != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
