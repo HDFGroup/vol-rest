@@ -7556,8 +7556,9 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
     } /* end else */
 
     /* Begin iteration */
-    if (RV_traverse_link_table(link_table, link_table_num_entries, iter_data) < 0)
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTITERATE, FAIL, "can't iterate over link table")
+    if (link_table)
+        if (RV_traverse_link_table(link_table, link_table_num_entries, iter_data) < 0)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTITERATE, FAIL, "can't iterate over link table")
 
 done:
     if (link_table)
@@ -8818,6 +8819,8 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 
             if ((ndims = H5Tget_array_ndims(type_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't get array datatype number of dimensions")
+            if (!ndims)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "0-sized array datatype")
 
             if (NULL == (array_shape = (char *) RV_malloc((size_t) (ndims * MAX_NUM_LENGTH + ndims + 3))))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array datatype dimensionality string")
@@ -9314,6 +9317,9 @@ RV_convert_JSON_to_datatype(const char *type)
         if (NULL == (key_obj = yajl_tree_get(parse_tree, compound_field_keys, yajl_t_array)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve compound datatype's members array")
 
+        if (!YAJL_GET_ARRAY(key_obj)->len)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "0-sized compound datatype members array")
+
         if (NULL == (compound_member_type_array = (hid_t *) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*compound_member_type_array))))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate compound datatype")
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) compound_member_type_array[i] = FAIL;
@@ -9449,6 +9455,9 @@ RV_convert_JSON_to_datatype(const char *type)
         /* Retrieve the array dimensions */
         if (NULL == (key_obj = yajl_tree_get(parse_tree, array_dims_keys, yajl_t_array)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve array datatype's dimensions")
+
+        if (!YAJL_GET_ARRAY(key_obj)->len)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "0-sized array")
 
         if (NULL == (array_dims = (hsize_t *) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*array_dims))))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array dimensions")
@@ -9715,6 +9724,8 @@ RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_le
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "output buffer was NULL")
     if (!buf_out_len)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "output buffer size pointer was NULL")
+    if (!ref_array_len)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid reference array length specified")
 
     out_len = ref_array_len * OBJECT_REF_STRING_LEN;
     if (NULL == (out = (char *) RV_malloc(out_len)))
@@ -9829,6 +9840,8 @@ RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "output buffer was NULL")
     if (!buf_out_len)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "output buffer size pointer was NULL")
+    if (!ref_buf_len)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid reference buffer size specified")
 
     out_len = ref_buf_len * sizeof(rv_obj_ref_t);
     if (NULL == (out = (rv_obj_ref_t *) RV_malloc(out_len)))
@@ -10089,6 +10102,9 @@ RV_parse_dataspace(char *space)
         if (NULL == (maxdims_obj = yajl_tree_get(parse_tree, dataspace_max_dims_keys, yajl_t_array)))
             maxdims_specified = FALSE;
 
+        if (!YAJL_GET_ARRAY(dims_obj)->len)
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "0-sized dataspace dimensionality array")
+
         if (NULL == (space_dims = (hsize_t *) RV_malloc(YAJL_GET_ARRAY(dims_obj)->len * sizeof(*space_dims))))
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace dimensionality array")
 
@@ -10223,6 +10239,8 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
 
             if ((space_ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of dimensions in dataspace")
+            if (!space_ndims)
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "0-dimension dataspace")
 
             if (shape_out_string)
                 if (NULL == (dims = (hsize_t *) RV_malloc((size_t) space_ndims * sizeof(*dims))))
@@ -10401,6 +10419,8 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
 
     if ((ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace dimensionality")
+    if (!ndims)
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "0-dimension dataspace specified")
 
     if (req_param) {
         /* Format the selection in a manner such that it can be used as a request parameter in
@@ -11713,6 +11733,10 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
     num_links = YAJL_GET_ARRAY(key_obj)->len;
     if (num_links < 0) FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "number of links in group was negative")
 
+    /* If this group has no links, leave its sub-table alone */
+    if (!num_links)
+        FUNC_GOTO_DONE(SUCCEED);
+
     /* Build a table of link information for each link so that we can sort in order
      * of link creation if needed and can also work in decreasing order if desired
      */
@@ -11844,7 +11868,7 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
 
                 if (RV_build_link_table(response_buffer.buffer, is_recursive, sort, sort_func,
                         &table[i].subgroup.subgroup_link_table, &table[i].subgroup.num_entries) < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table for subgroup")
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table for subgroup '%s'", table[i].link_name)
             } /* end if */
         } /* end if */
 

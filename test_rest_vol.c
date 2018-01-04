@@ -470,6 +470,8 @@
 #define LINK_ITER_TEST_LINK_NAME4    "hard_link2"
 #define LINK_ITER_TEST_NUM_LINKS     4
 
+#define LINK_ITER_TEST_0_LINKS_SUBGROUP_NAME "link_iter_test_0_links"
+
 #define LINK_VISIT_TEST_NO_CYCLE_DSET_SPACE_RANK 2
 #define LINK_VISIT_TEST_NO_CYCLE_DSET_NAME       "dset"
 #define LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME   "link_visit_test_no_cycles"
@@ -487,6 +489,10 @@
 #define LINK_VISIT_TEST_CYCLE_LINK_NAME2     "soft_link1"
 #define LINK_VISIT_TEST_CYCLE_LINK_NAME3     "ext_link1"
 #define LINK_VISIT_TEST_CYCLE_LINK_NAME4     "hard_link2"
+
+#define LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME "link_visit_test_0_links"
+#define LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME2  "link_visit_test_0_links_subgroup1"
+#define LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME3  "link_visit_test_0_links_subgroup2"
 
 
 /*****************************************************
@@ -665,8 +671,10 @@ static int test_get_link_info(void);
 static int test_get_link_name(void);
 static int test_get_link_val(void);
 static int test_link_iterate(void);
+static int test_link_iterate_0_links(void);
 static int test_link_visit(void);
 static int test_link_visit_cycles(void);
+static int test_link_visit_0_links(void);
 static int test_unused_link_API_calls(void);
 
 /* Object interface tests */
@@ -697,9 +705,11 @@ static int test_url_encoding(void);
 
 static herr_t link_iter_callback1(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
 static herr_t link_iter_callback2(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
+static herr_t link_iter_callback3(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
 
 static herr_t link_visit_callback1(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
 static herr_t link_visit_callback2(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
+static herr_t link_visit_callback3(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
 
 static herr_t object_visit_callback(hid_t o_id, const char *name, const H5O_info_t *object_info, void *op_data);
 
@@ -818,8 +828,10 @@ static int (*link_tests[])(void) = {
         test_get_link_name,
         test_get_link_val,
         test_link_iterate,
+        test_link_iterate_0_links,
         test_link_visit,
         /* test_link_visit_cycles, */
+        test_link_visit_0_links,
         test_unused_link_API_calls,
         NULL
 };
@@ -11731,6 +11743,152 @@ error:
 }
 
 static int
+test_link_iterate_0_links(void)
+{
+    hid_t file_id = -1, fapl_id = -1;
+    hid_t container_group = -1, group_id = -1;
+
+    TESTING("link iteration on group with 0 links")
+
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, LINK_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, LINK_ITER_TEST_0_LINKS_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link name in increasing order with H5Literate\n");
+#endif
+
+    /* Test basic link iteration capability using both index types and both index orders */
+    if (H5Literate(group_id, H5_INDEX_NAME, H5_ITER_INC, NULL, link_iter_callback3, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Literate by index type name in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link name in decreasing order with H5Literate\n");
+#endif
+
+    if (H5Literate(group_id, H5_INDEX_NAME, H5_ITER_DEC, NULL, link_iter_callback3, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Literate by index type name in decreasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link creation order in increasing order with H5Literate\n");
+#endif
+
+    if (H5Literate(group_id, H5_INDEX_CRT_ORDER, H5_ITER_INC, NULL, link_iter_callback3, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Literate by index type creation order in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link creation order in decreasing order with H5Literate\n");
+#endif
+
+    if (H5Literate(group_id, H5_INDEX_CRT_ORDER, H5_ITER_DEC, NULL, link_iter_callback3, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Literate by index type creation order in decreasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link name in increasing order with H5Literate_by_name\n");
+#endif
+
+    if (H5Literate_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_ITER_TEST_0_LINKS_SUBGROUP_NAME,
+            H5_INDEX_NAME, H5_ITER_INC, NULL, link_iter_callback3, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Literate_by_name by index type name in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link name in decreasing order with H5Literate_by_name\n");
+#endif
+
+    if (H5Literate_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_ITER_TEST_0_LINKS_SUBGROUP_NAME,
+            H5_INDEX_NAME, H5_ITER_DEC, NULL, link_iter_callback3, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Literate_by_name by index type name in decreasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link creation order in increasing order with H5Literate_by_name\n");
+#endif
+
+    if (H5Literate_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_ITER_TEST_0_LINKS_SUBGROUP_NAME,
+            H5_INDEX_CRT_ORDER, H5_ITER_INC, NULL, link_iter_callback3, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Literate_by_name by index type creation order in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Iterating over links by link creation order in decreasing order with H5Literate_by_name\n");
+#endif
+
+    if (H5Literate_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_ITER_TEST_0_LINKS_SUBGROUP_NAME,
+            H5_INDEX_CRT_ORDER, H5_ITER_DEC, NULL, link_iter_callback3, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Literate_by_name by index type creation order in decreasing order failed\n");
+        goto error;
+    }
+
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
+
+    return 0;
+
+error:
+    H5E_BEGIN_TRY {
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
+    return 1;
+}
+
+static int
 test_link_visit(void)
 {
     hsize_t dims[LINK_VISIT_TEST_NO_CYCLE_DSET_SPACE_RANK];
@@ -12213,6 +12371,170 @@ test_link_visit_cycles(void)
 
     if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME,
             H5_INDEX_CRT_ORDER, H5_ITER_DEC, link_visit_callback2, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit_by_name by index type creation order in decreasing order failed\n");
+        goto error;
+    }
+
+    if (H5Gclose(subgroup1) < 0)
+        TEST_ERROR
+    if (H5Gclose(subgroup2) < 0)
+        TEST_ERROR
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
+
+    return 0;
+
+error:
+    H5E_BEGIN_TRY {
+        H5Gclose(subgroup1);
+        H5Gclose(subgroup2);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
+    return 1;
+}
+
+static int
+test_link_visit_0_links(void)
+{
+    hid_t file_id = -1, fapl_id = -1;
+    hid_t container_group = -1, group_id = -1;
+    hid_t subgroup1 = -1, subgroup2 = -1;
+
+    TESTING("link visit on group with subgroups containing 0 links")
+
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, LINK_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
+    if ((subgroup1 = H5Gcreate2(group_id, LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME2, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create first subgroup\n");
+        goto error;
+    }
+
+    if ((subgroup2 = H5Gcreate2(group_id, LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME3, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create second subgroup\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link name in increasing order with H5Lvisit\n");
+#endif
+
+    if (H5Lvisit(group_id, H5_INDEX_NAME, H5_ITER_INC, link_visit_callback3, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit by index type name in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link name in decreasing order with H5Lvisit\n");
+#endif
+
+    if (H5Lvisit(group_id, H5_INDEX_NAME, H5_ITER_DEC, link_visit_callback3, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit by index type name in decreasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link creation order in increasing order with H5Lvisit\n");
+#endif
+
+    if (H5Lvisit(group_id, H5_INDEX_CRT_ORDER, H5_ITER_INC, link_visit_callback3, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit by index type creation order in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link creation order in decreasing order with H5Lvisit\n");
+#endif
+
+    if (H5Lvisit(group_id, H5_INDEX_CRT_ORDER, H5_ITER_DEC, link_visit_callback3, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit by index type creation order in decreasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link name in increasing order with H5Lvisit_by_name\n");
+#endif
+
+    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME,
+            H5_INDEX_NAME, H5_ITER_INC, link_visit_callback3, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit_by_name by index type name in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link name in decreasing order with H5Lvisit_by_name\n");
+#endif
+
+    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME,
+            H5_INDEX_NAME, H5_ITER_DEC, link_visit_callback3, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit_by_name by index type name in decreasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link creation order in increasing order with H5Lvisit_by_name\n");
+#endif
+
+    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME,
+            H5_INDEX_CRT_ORDER, H5_ITER_INC, link_visit_callback3, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit_by_name by index type creation order in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link creation order in decreasing order with H5Lvisit_by_name\n");
+#endif
+
+    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME,
+            H5_INDEX_CRT_ORDER, H5_ITER_DEC, link_visit_callback3, NULL, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    H5Lvisit_by_name by index type creation order in decreasing order failed\n");
         goto error;
@@ -14797,6 +15119,12 @@ error:
     return -1;
 }
 
+static herr_t
+link_iter_callback3(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)
+{
+    return 0;
+}
+
 /*
  * Link visit callback to simply iterate recursively through all of the links in a
  * group and check to make sure their names and link classes match what is expected
@@ -14921,6 +15249,12 @@ link_visit_callback2(hid_t group_id, const char *name, const H5L_info_t *info, v
 
 error:
     return -1;
+}
+
+static herr_t
+link_visit_callback3(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)
+{
+    return 0;
 }
 
 /*
