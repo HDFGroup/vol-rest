@@ -74,6 +74,18 @@ extern "C" {
  */
 #define LINK_NAME_MAX_LENGTH 2048
 
+/* Maximum length of the name of an external file used for storage for
+ * contiguous dataset layouts.
+ */
+#define EXTERNAL_FILE_NAME_MAX_LENGTH 2048
+
+/* Maximum length of the name of a filter, as well as the maximum length
+ * of the supplemental filter options array that can be specified along
+ * with the filter.
+ */
+#define FILTER_NAME_MAX_LENGTH                        256
+#define FILTER_MAX_CD_VALUES                          32
+
 typedef struct rv_obj_ref_t {
     H5R_type_t ref_type;
     H5I_type_t ref_obj_type;

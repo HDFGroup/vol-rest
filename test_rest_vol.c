@@ -470,13 +470,23 @@
 #define LINK_ITER_TEST_LINK_NAME4    "hard_link2"
 #define LINK_ITER_TEST_NUM_LINKS     4
 
-#define LINK_VISIT_TEST_SUBGROUP_NAME  "link_visit_test"
-#define LINK_VISIT_TEST_SUBGROUP_NAME2 "link_visit_subgroup1"
-#define LINK_VISIT_TEST_SUBGROUP_NAME3 "link_visit_subgroup2"
-#define LINK_VISIT_TEST_LINK_NAME1     "hard_link1"
-#define LINK_VISIT_TEST_LINK_NAME2     "soft_link1"
-#define LINK_VISIT_TEST_LINK_NAME3     "ext_link1"
-#define LINK_VISIT_TEST_LINK_NAME4     "hard_link2"
+#define LINK_VISIT_TEST_NO_CYCLE_DSET_SPACE_RANK 2
+#define LINK_VISIT_TEST_NO_CYCLE_DSET_NAME       "dset"
+#define LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME   "link_visit_test_no_cycles"
+#define LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME2  "link_visit_subgroup1"
+#define LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME3  "link_visit_subgroup2"
+#define LINK_VISIT_TEST_NO_CYCLE_LINK_NAME1      "hard_link1"
+#define LINK_VISIT_TEST_NO_CYCLE_LINK_NAME2      "soft_link1"
+#define LINK_VISIT_TEST_NO_CYCLE_LINK_NAME3      "ext_link1"
+#define LINK_VISIT_TEST_NO_CYCLE_LINK_NAME4      "hard_link2"
+
+#define LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME  "link_visit_test_cycles"
+#define LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME2 "link_visit_subgroup1"
+#define LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME3 "link_visit_subgroup2"
+#define LINK_VISIT_TEST_CYCLE_LINK_NAME1     "hard_link1"
+#define LINK_VISIT_TEST_CYCLE_LINK_NAME2     "soft_link1"
+#define LINK_VISIT_TEST_CYCLE_LINK_NAME3     "ext_link1"
+#define LINK_VISIT_TEST_CYCLE_LINK_NAME4     "hard_link2"
 
 
 /*****************************************************
@@ -656,6 +666,7 @@ static int test_get_link_name(void);
 static int test_get_link_val(void);
 static int test_link_iterate(void);
 static int test_link_visit(void);
+static int test_link_visit_cycles(void);
 static int test_unused_link_API_calls(void);
 
 /* Object interface tests */
@@ -808,6 +819,7 @@ static int (*link_tests[])(void) = {
         test_get_link_val,
         test_link_iterate,
         test_link_visit,
+        /* test_link_visit_cycles, */
         test_unused_link_API_calls,
         NULL
 };
@@ -11721,12 +11733,17 @@ error:
 static int
 test_link_visit(void)
 {
-    htri_t link_exists;
-    hid_t  file_id = -1, fapl_id = -1;
-    hid_t  container_group = -1, group_id = -1;
-    hid_t  subgroup1 = -1, subgroup2 = -1;
+    hsize_t dims[LINK_VISIT_TEST_NO_CYCLE_DSET_SPACE_RANK];
+    size_t  i;
+    htri_t  link_exists;
+    hid_t   file_id = -1, fapl_id = -1;
+    hid_t   container_group = -1, group_id = -1;
+    hid_t   subgroup1 = -1, subgroup2 = -1;
+    hid_t   dset_id = -1;
+    hid_t   dset_dtype = -1;
+    hid_t   fspace_id = -1;
 
-    TESTING("link visit")
+    TESTING("link visit without cycles")
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -11748,45 +11765,72 @@ test_link_visit(void)
         goto error;
     }
 
-    if ((group_id = H5Gcreate2(container_group, LINK_VISIT_TEST_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+    if ((group_id = H5Gcreate2(container_group, LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create container subgroup\n");
         goto error;
     }
 
-    if ((subgroup1 = H5Gcreate2(group_id, LINK_VISIT_TEST_SUBGROUP_NAME2, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+    if ((subgroup1 = H5Gcreate2(group_id, LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME2, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create first subgroup\n");
         goto error;
     }
 
-    if ((subgroup2 = H5Gcreate2(group_id, LINK_VISIT_TEST_SUBGROUP_NAME3, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+    if ((subgroup2 = H5Gcreate2(group_id, LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME3, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create second subgroup\n");
         goto error;
     }
 
-    if (H5Lcreate_hard(group_id, LINK_VISIT_TEST_SUBGROUP_NAME2, subgroup1, LINK_VISIT_TEST_LINK_NAME1,
+    if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
+        TEST_ERROR
+
+    for (i = 0; i < LINK_VISIT_TEST_NO_CYCLE_DSET_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
+
+    if ((fspace_id = H5Screate_simple(LINK_VISIT_TEST_NO_CYCLE_DSET_SPACE_RANK, dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(subgroup1, LINK_VISIT_TEST_NO_CYCLE_DSET_NAME, dset_dtype, fspace_id,
+            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create first dataset\n");
+    }
+
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(subgroup2, LINK_VISIT_TEST_NO_CYCLE_DSET_NAME, dset_dtype, fspace_id,
+            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create second dataset\n");
+    }
+
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+
+    if (H5Lcreate_hard(subgroup1, LINK_VISIT_TEST_NO_CYCLE_DSET_NAME, subgroup1, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME1,
             H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create first hard link\n");
         goto error;
     }
 
-    if (H5Lcreate_soft("/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_SUBGROUP_NAME "/" LINK_VISIT_TEST_SUBGROUP_NAME2,
-            subgroup1, LINK_VISIT_TEST_LINK_NAME2, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+    if (H5Lcreate_soft("/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME "/" LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME2 "/" LINK_VISIT_TEST_NO_CYCLE_DSET_NAME,
+            subgroup1, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME2, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create soft link\n");
         goto error;
     }
 
-    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", subgroup2, LINK_VISIT_TEST_LINK_NAME3, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", subgroup2, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME3, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create external link\n");
         goto error;
     }
 
-    if (H5Lcreate_hard(group_id, LINK_VISIT_TEST_SUBGROUP_NAME3, subgroup2, LINK_VISIT_TEST_LINK_NAME4,
+    if (H5Lcreate_hard(subgroup2, LINK_VISIT_TEST_NO_CYCLE_DSET_NAME, subgroup2, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME4,
             H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create second hard link\n");
@@ -11794,7 +11838,7 @@ test_link_visit(void)
     }
 
     /* Verify the links have been created */
-    if ((link_exists = H5Lexists(subgroup1, LINK_VISIT_TEST_LINK_NAME1, H5P_DEFAULT)) < 0) {
+    if ((link_exists = H5Lexists(subgroup1, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME1, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't determine if first link exists\n");
         goto error;
@@ -11806,7 +11850,7 @@ test_link_visit(void)
         goto error;
     }
 
-    if ((link_exists = H5Lexists(subgroup1, LINK_VISIT_TEST_LINK_NAME2, H5P_DEFAULT)) < 0) {
+    if ((link_exists = H5Lexists(subgroup1, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME2, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't determine if second link exists\n");
         goto error;
@@ -11818,7 +11862,7 @@ test_link_visit(void)
         goto error;
     }
 
-    if ((link_exists = H5Lexists(subgroup2, LINK_VISIT_TEST_LINK_NAME3, H5P_DEFAULT)) < 0) {
+    if ((link_exists = H5Lexists(subgroup2, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME3, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't determine if third link exists\n");
         goto error;
@@ -11830,7 +11874,7 @@ test_link_visit(void)
         goto error;
     }
 
-    if ((link_exists = H5Lexists(subgroup2, LINK_VISIT_TEST_LINK_NAME4, H5P_DEFAULT)) < 0) {
+    if ((link_exists = H5Lexists(subgroup2, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME4, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't determine if fourth link exists\n");
         goto error;
@@ -11886,7 +11930,7 @@ test_link_visit(void)
     puts("Recursively iterating over links by link name in increasing order with H5Lvisit_by_name\n");
 #endif
 
-    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_SUBGROUP_NAME,
+    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME,
             H5_INDEX_NAME, H5_ITER_INC, link_visit_callback1, NULL, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    H5Lvisit_by_name by index type name in increasing order failed\n");
@@ -11897,7 +11941,7 @@ test_link_visit(void)
     puts("Recursively iterating over links by link name in decreasing order with H5Lvisit_by_name\n");
 #endif
 
-    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_SUBGROUP_NAME,
+    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME,
             H5_INDEX_NAME, H5_ITER_DEC, link_visit_callback1, NULL, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    H5Lvisit_by_name by index type name in decreasing order failed\n");
@@ -11908,7 +11952,7 @@ test_link_visit(void)
     puts("Recursively iterating over links by link creation order in increasing order with H5Lvisit_by_name\n");
 #endif
 
-    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_SUBGROUP_NAME,
+    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME,
             H5_INDEX_CRT_ORDER, H5_ITER_INC, link_visit_callback1, NULL, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    H5Lvisit_by_name by index type creation order in increasing order failed\n");
@@ -11919,8 +11963,256 @@ test_link_visit(void)
     puts("Recursively iterating over links by link creation order in decreasing order with H5Lvisit_by_name\n");
 #endif
 
-    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_SUBGROUP_NAME,
+    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME,
             H5_INDEX_CRT_ORDER, H5_ITER_DEC, link_visit_callback1, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit_by_name by index type creation order in decreasing order failed\n");
+        goto error;
+    }
+
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Tclose(dset_dtype) < 0)
+        TEST_ERROR
+    if (H5Gclose(subgroup1) < 0)
+        TEST_ERROR
+    if (H5Gclose(subgroup2) < 0)
+        TEST_ERROR
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
+
+    return 0;
+
+error:
+    H5E_BEGIN_TRY {
+        H5Sclose(fspace_id);
+        H5Tclose(dset_dtype);
+        H5Dclose(dset_id);
+        H5Gclose(subgroup1);
+        H5Gclose(subgroup2);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
+    return 1;
+}
+
+static int
+test_link_visit_cycles(void)
+{
+    htri_t link_exists;
+    hid_t  file_id = -1, fapl_id = -1;
+    hid_t  container_group = -1, group_id = -1;
+    hid_t  subgroup1 = -1, subgroup2 = -1;
+
+    TESTING("link visit with cycles")
+
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, LINK_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
+    if ((subgroup1 = H5Gcreate2(group_id, LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME2, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create first subgroup\n");
+        goto error;
+    }
+
+    if ((subgroup2 = H5Gcreate2(group_id, LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME3, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create second subgroup\n");
+        goto error;
+    }
+
+    if (H5Lcreate_hard(group_id, LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME2, subgroup1, LINK_VISIT_TEST_CYCLE_LINK_NAME1,
+            H5P_DEFAULT, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't create first hard link\n");
+        goto error;
+    }
+
+    if (H5Lcreate_soft("/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME "/" LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME2,
+            subgroup1, LINK_VISIT_TEST_CYCLE_LINK_NAME2, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't create soft link\n");
+        goto error;
+    }
+
+    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", subgroup2, LINK_VISIT_TEST_CYCLE_LINK_NAME3, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't create external link\n");
+        goto error;
+    }
+
+    if (H5Lcreate_hard(group_id, LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME3, subgroup2, LINK_VISIT_TEST_CYCLE_LINK_NAME4,
+            H5P_DEFAULT, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't create second hard link\n");
+        goto error;
+    }
+
+    /* Verify the links have been created */
+    if ((link_exists = H5Lexists(subgroup1, LINK_VISIT_TEST_CYCLE_LINK_NAME1, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if first link exists\n");
+        goto error;
+    }
+
+    if (!link_exists) {
+        H5_FAILED();
+        printf("    link 1 did not exist\n");
+        goto error;
+    }
+
+    if ((link_exists = H5Lexists(subgroup1, LINK_VISIT_TEST_CYCLE_LINK_NAME2, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if second link exists\n");
+        goto error;
+    }
+
+    if (!link_exists) {
+        H5_FAILED();
+        printf("    link 2 did not exist\n");
+        goto error;
+    }
+
+    if ((link_exists = H5Lexists(subgroup2, LINK_VISIT_TEST_CYCLE_LINK_NAME3, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if third link exists\n");
+        goto error;
+    }
+
+    if (!link_exists) {
+        H5_FAILED();
+        printf("    link 3 did not exist\n");
+        goto error;
+    }
+
+    if ((link_exists = H5Lexists(subgroup2, LINK_VISIT_TEST_CYCLE_LINK_NAME4, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if fourth link exists\n");
+        goto error;
+    }
+
+    if (!link_exists) {
+        H5_FAILED();
+        printf("    link 4 did not exist\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link name in increasing order with H5Lvisit\n");
+#endif
+
+    if (H5Lvisit(group_id, H5_INDEX_NAME, H5_ITER_INC, link_visit_callback2, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit by index type name in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link name in decreasing order with H5Lvisit\n");
+#endif
+
+    if (H5Lvisit(group_id, H5_INDEX_NAME, H5_ITER_DEC, link_visit_callback2, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit by index type name in decreasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link creation order in increasing order with H5Lvisit\n");
+#endif
+
+    if (H5Lvisit(group_id, H5_INDEX_CRT_ORDER, H5_ITER_INC, link_visit_callback2, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit by index type creation order in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link creation order in decreasing order with H5Lvisit\n");
+#endif
+
+    if (H5Lvisit(group_id, H5_INDEX_CRT_ORDER, H5_ITER_DEC, link_visit_callback2, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit by index type creation order in decreasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link name in increasing order with H5Lvisit_by_name\n");
+#endif
+
+    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME,
+            H5_INDEX_NAME, H5_ITER_INC, link_visit_callback2, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit_by_name by index type name in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link name in decreasing order with H5Lvisit_by_name\n");
+#endif
+
+    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME,
+            H5_INDEX_NAME, H5_ITER_DEC, link_visit_callback2, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit_by_name by index type name in decreasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link creation order in increasing order with H5Lvisit_by_name\n");
+#endif
+
+    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME,
+            H5_INDEX_CRT_ORDER, H5_ITER_INC, link_visit_callback2, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Lvisit_by_name by index type creation order in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Recursively iterating over links by link creation order in decreasing order with H5Lvisit_by_name\n");
+#endif
+
+    if (H5Lvisit_by_name(file_id, "/" LINK_TEST_GROUP_NAME "/" LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME,
+            H5_INDEX_CRT_ORDER, H5_ITER_DEC, link_visit_callback2, NULL, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    H5Lvisit_by_name by index type creation order in decreasing order failed\n");
         goto error;
@@ -14513,42 +14805,42 @@ error:
 static herr_t
 link_visit_callback1(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)
 {
-    if (!strcmp(name, LINK_VISIT_TEST_LINK_NAME1)) {
+    if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME1)) {
         if (H5L_TYPE_HARD != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
             goto error;
         }
     }
-    else if (!strcmp(name, LINK_VISIT_TEST_LINK_NAME2)) {
+    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME2)) {
         if (H5L_TYPE_SOFT != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
             goto error;
         }
     }
-    else if (!strcmp(name, LINK_VISIT_TEST_LINK_NAME3)) {
+    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME3)) {
         if (H5L_TYPE_EXTERNAL != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
             goto error;
         }
     }
-    else if (!strcmp(name, LINK_VISIT_TEST_LINK_NAME4)) {
+    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME4)) {
         if (H5L_TYPE_HARD != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
             goto error;
         }
     }
-    else if (!strcmp(name, LINK_VISIT_TEST_SUBGROUP_NAME2)) {
+    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME2)) {
         if (H5L_TYPE_HARD != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
             goto error;
         }
     }
-    else if (!strcmp(name, LINK_VISIT_TEST_SUBGROUP_NAME3)) {
+    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME3)) {
         if (H5L_TYPE_HARD != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
@@ -14570,7 +14862,58 @@ error:
 static herr_t
 link_visit_callback2(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)
 {
+    if (!strcmp(name, LINK_VISIT_TEST_CYCLE_LINK_NAME1)) {
+        if (H5L_TYPE_HARD != info->type) {
+            H5_FAILED();
+            printf("    link type did not match\n");
+            goto error;
+        }
+    }
+    else if (!strcmp(name, LINK_VISIT_TEST_CYCLE_LINK_NAME2)) {
+        if (H5L_TYPE_SOFT != info->type) {
+            H5_FAILED();
+            printf("    link type did not match\n");
+            goto error;
+        }
+    }
+    else if (!strcmp(name, LINK_VISIT_TEST_CYCLE_LINK_NAME3)) {
+        if (H5L_TYPE_EXTERNAL != info->type) {
+            H5_FAILED();
+            printf("    link type did not match\n");
+            goto error;
+        }
+    }
+    else if (!strcmp(name, LINK_VISIT_TEST_CYCLE_LINK_NAME4)) {
+        if (H5L_TYPE_HARD != info->type) {
+            H5_FAILED();
+            printf("    link type did not match\n");
+            goto error;
+        }
+    }
+    else if (!strcmp(name, LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME2)) {
+        if (H5L_TYPE_HARD != info->type) {
+            H5_FAILED();
+            printf("    link type did not match\n");
+            goto error;
+        }
+    }
+    else if (!strcmp(name, LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME3)) {
+        if (H5L_TYPE_HARD != info->type) {
+            H5_FAILED();
+            printf("    link type did not match\n");
+            goto error;
+        }
+    }
+    else {
+        H5_FAILED();
+        printf("    link name didn't match known names\n");
+        goto error;
+    }
+
     return 0;
+
+error:
+    return -1;
 }
 
 /*

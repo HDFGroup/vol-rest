@@ -33,6 +33,8 @@
 /* XXX: Eventually replace CURL PUT calls with CURLOPT_UPLOAD calls */
 /* XXX: Fix up url-encoding for link names every place it can be used */
 
+#include <sys/types.h>
+
 #include "H5private.h"       /* XXX: Temporarily needed; Generic Functions */
 #include "H5Ppublic.h"       /* Property Lists    */
 #include "H5Spublic.h"       /* Dataspaces        */
@@ -210,6 +212,26 @@ do {                                                                            
     assert((var) == (vartype)_tmp_overflow);                                                                    \
 }
 
+/* Macro to change the cast for an off_t type to try and be cross-platform portable */
+#ifdef H5_SIZEOF_OFF_T
+    #if H5_SIZEOF_OFF_T == H5_SIZEOF_INT
+        #define OFF_T_SPECIFIER "%d"
+        #define OFF_T_CAST (int)
+    #elif H5_SIZEOF_OFF_T == H5_SIZEOF_LONG
+        #define OFF_T_SPECIFIER "%ld"
+        #define OFF_T_CAST (long)
+    #else
+        /* Check to see if long long is defined */
+        #if defined(H5_SIZEOF_LONG_LONG) && H5_SIZEOF_LONG_LONG == H5_SIZEOF_OFF_T
+            #define OFF_T_SPECIFIER "%lld"
+            #define OFF_T_CAST (long long)
+        #else
+            #error no suitable cast for off_t
+        #endif
+    #endif
+#else
+    #error type off_t does not exist!
+#endif
 
 /* Occasionally, some arguments passed to a callback by use of va_arg
  * are not utilized in the particular section of the callback. This
@@ -246,9 +268,9 @@ do {                                                                            
 #define PREDEFINED_DATATYPE_NAME_MAX_LENGTH           20
 
 /* Defines for the user of filters */
-#define FILTER_NAME_MAX_LENGTH                        256
-#define FILTER_MAX_CD_VALUES                          32
-#define LZF_FILTER_ID                                 32000 /* The HDF5 Library could potentially add 'H5Z_FILTER_LZF' in the future */
+#define LZF_FILTER_ID                    32000 /* The HDF5 Library could potentially add 'H5Z_FILTER_LZF' in the future */
+#define H5Z_SCALEOFFSET_PARM_SCALETYPE   0     /* ScaleOffset filter "User" parameter for scale type */
+#define H5Z_SCALEOFFSET_PARM_SCALEFACTOR 1     /* ScaleOffset filter "User" parameter for scale factor */
 
 /*
  * The vol identification number.
@@ -6386,7 +6408,7 @@ RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_typ
             H5R_type_t  ref_type = va_arg(arguments, H5R_type_t);
             void       *ref = va_arg(arguments, void *);
 
-            /* XXX: Unused until support for region references can be implemented */
+            /* Unused until support for region references can be implemented */
             UNUSED_VAR(ret);
             UNUSED_VAR(ref);
 
@@ -6557,7 +6579,7 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
 
                 case H5R_DATASET_REGION:
                 {
-                    /* XXX: Unused until support for region references can be implemented */
+                    /* Unused until support for region references can be implemented */
                     UNUSED_VAR(space_id);
 
                     FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_UNSUPPORTED, FAIL, "region references are currently unsupported")
@@ -6883,9 +6905,15 @@ write_data_callback(void *buffer, size_t size, size_t nmemb, void H5_ATTR_UNUSED
  *
  * Purpose:     A portable implementation of the basename routine which
  *              retrieves everything after the final '/' in a given
- *              pathname. This function exhibits the GNU behavior in that
- *              it will return the empty string if the pathname contains a
- *              trailing '/'.
+ *              pathname.
+ *
+ *              Note that for performance and simplicity this function
+ *              exhibits the GNU behavior in that it will return the empty
+ *              string if the pathname contains a trailing '/'. Therefore,
+ *              if a user provides a path that contains a trailing '/',
+ *              this will likely confuse the plugin and lead to incorrect
+ *              behavior. If this becomes an issue in the future, this
+ *              function may need to be reimplemented.
  *
  * Return:      Basename portion of the given path
  *              (can't fail)
@@ -6893,7 +6921,6 @@ write_data_callback(void *buffer, size_t size, size_t nmemb, void H5_ATTR_UNUSED
  * Programmer:  Jordan Henderson
  *              July, 2017
  */
-/* XXX: Potentially modify to deal with the trailing slash case */
 static const char *
 RV_basename(const char *path)
 {
@@ -7751,12 +7778,6 @@ RV_get_group_info_callback(char *HTTP_response,
     printf("-> Group had %llu links in it\n\n", group_info->nlinks);
 #endif
 
-    /* Since the spec doesn't currently include provisions for the extra fields, set them to defaults */
-    /* XXX: These defaults may be incorrect for applications to interpret */
-    group_info->storage_type = H5G_STORAGE_TYPE_SYMBOL_TABLE;
-    group_info->max_corder = 0;
-    group_info->mounted = FALSE;
-
 done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
@@ -8129,7 +8150,12 @@ done:
 /*-------------------------------------------------------------------------
  * Function:    RV_find_object_by_path
  *
- * Purpose:     XXX
+ * Purpose:     Given a pathname, this function is responsible for making
+ *              HTTP GET requests to the server in order to retrieve
+ *              information about an object. It is also responsible for
+ *              detecting when a pathname refers to a soft link to an
+ *              object and then making the appropriate HTTP GET request
+ *              using the link's value as the real pathname to the object.
  *
  *              Note that in order to support improved performance from the
  *              client side, a server operation was added to directly
@@ -8539,7 +8565,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine if datatype is committed")
 
     if (type_is_committed) {
-        H5VL_object_t *vol_container; /* XXX: Private definition currently prevents VOL plugin from being external */
+        H5VL_object_t *vol_container;
         RV_object_t   *vol_obj;
 
 #ifdef PLUGIN_DEBUG
@@ -10480,7 +10506,6 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                     CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + (3 * MAX_NUM_LENGTH) + 4,
                             out_string_curr_pos, H5E_DATASPACE, FAIL);
 
-                    /* XXX: stride values wrong until HSDS can support "block" */
                     if ((bytes_printed = sprintf(out_string_curr_pos,
                                                  "%s%llu:%llu:%llu",
                                                  i > 0 ? "," : "",
@@ -10630,7 +10655,6 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
                     stop_body_curr_pos += bytes_printed;
 
-                    /* XXX: stride values wrong until HSDS can support "block" */
                     if ((bytes_printed = sprintf(step_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), (stride[i] / block[i]))) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
                     step_body_curr_pos += bytes_printed;
@@ -11145,6 +11169,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
         if ((nfilters = H5Pget_nfilters(dcpl))) {
             const char * const filters_string = ", \"filters\": [ ";
+            H5Z_filter_t       filter_id;
             unsigned           filter_config;
             unsigned           flags;
             unsigned           cd_values[FILTER_MAX_CD_VALUES];
@@ -11171,13 +11196,13 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                     strcat(out_string_curr_pos++, ",");
                 } /* end if */
 
-                switch (H5Pget_filter2(dcpl, (unsigned) i, &flags, &cd_nelmts, cd_values, filter_namelen, filter_name, &filter_config)) {
+                switch ((filter_id = H5Pget_filter2(dcpl, (unsigned) i, &flags, &cd_nelmts, cd_values, filter_namelen, filter_name, &filter_config))) {
                     case H5Z_FILTER_DEFLATE:
                     {
                         const char * const fmt_string = "{"
                                                             "\"class\": \"H5Z_FILTER_DEFLATE\","
                                                             "\"id\": %d,"
-                                                            "\"level\": %d"
+                                                            "\"level\": %u"
                                                         "}";
 
                         /* Check whether the buffer needs to be grown */
@@ -11242,6 +11267,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                     case H5Z_FILTER_SZIP:
                     {
+                        const char *       szip_option_mask;
                         const char * const fmt_string = "{"
                                                             "\"class\": \"H5Z_FILTER_SZIP\","
                                                             "\"id\": %d,"
@@ -11251,13 +11277,34 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                                                             "\"pixelsPerScanline\": %u"
                                                         "}";
 
+                        switch (cd_values[H5Z_SZIP_PARM_MASK]) {
+                            case H5_SZIP_EC_OPTION_MASK:
+                                szip_option_mask = "H5_SZIP_EC_OPTION_MASK";
+                                break;
+
+                            case H5_SZIP_NN_OPTION_MASK:
+                                szip_option_mask = "H5_SZIP_NN_OPTION_MASK";
+                                break;
+
+                            default:
+#ifdef PLUGIN_DEBUG
+                                printf("-> Unable to add SZIP filter to DCPL - unsupported mask value specified (not H5_SZIP_EC_OPTION_MASK or H5_SZIP_NN_OPTION_MASK)\n\n");
+#endif
+
+                                if (flags & H5Z_FLAG_OPTIONAL)
+                                    continue;
+                                else
+                                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set SZIP filter on DCPL - unsupported mask value specified (not H5_SZIP_EC_OPTION_MASK or H5_SZIP_NN_OPTION_MASK)")
+
+                                break;
+                        } /* end switch */
+
                         /* Check whether the buffer needs to be grown */
-                        bytes_to_print = strlen(fmt_string) + (4 * MAX_NUM_LENGTH) + strlen("H5_SZIP_EC_OPTION_MASK") + 1;
+                        bytes_to_print = strlen(fmt_string) + (4 * MAX_NUM_LENGTH) + strlen(szip_option_mask) + 1;
 
                         H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
                         CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
 
-                        /* XXX: SZIP filter shouldn't default to NN_OPTION_MASK when unsupported mask types are specified */
                         if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
                                 H5Z_FILTER_SZIP,
                                 cd_values[H5Z_SZIP_PARM_BPP],
@@ -11295,6 +11342,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                     case H5Z_FILTER_SCALEOFFSET:
                     {
+                        const char *       scaleType;
                         const char * const fmt_string = "{"
                                                             "\"class\": \"H5Z_FILTER_SCALEOFFSET\","
                                                             "\"id\": %d,"
@@ -11302,16 +11350,42 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                                                             "\"scaleOffset\": %u"
                                                         "}";
 
+                        switch (cd_values[H5Z_SCALEOFFSET_PARM_SCALETYPE]) {
+                            case H5Z_SO_FLOAT_DSCALE:
+                                scaleType = "H5Z_SO_FLOAT_DSCALE";
+                                break;
+
+                            case H5Z_SO_FLOAT_ESCALE:
+                                scaleType = "H5Z_SO_FLOAT_ESCALE";
+                                break;
+
+                            case H5Z_SO_INT:
+                                scaleType = "H5Z_FLOAT_SO_INT";
+                                break;
+
+                            default:
+#ifdef PLUGIN_DEBUG
+                                printf("-> Unable to add ScaleOffset filter to DCPL - unsupported scale type specified (not H5Z_SO_FLOAT_DSCALE, H5Z_SO_FLOAT_ESCALE or H5Z_SO_INT)\n\n");
+#endif
+
+                                if (flags & H5Z_FLAG_OPTIONAL)
+                                    continue;
+                                else
+                                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set ScaleOffset filter on DCPL - unsupported scale type specified (not H5Z_SO_FLOAT_DSCALE, H5Z_SO_FLOAT_ESCALE or H5Z_SO_INT)")
+
+                                break;
+                        } /* end switch */
+
                         /* Check whether the buffer needs to be grown */
-                        bytes_to_print = strlen(fmt_string) + (2 * MAX_NUM_LENGTH) /* XXX: + */ + 1;
+                        bytes_to_print = strlen(fmt_string) + (2 * MAX_NUM_LENGTH) + strlen(scaleType) + 1;
 
                         H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
                         CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
 
                         if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
                                 H5Z_FILTER_SCALEOFFSET,
-                                "", /* XXX: */
-                                cd_values[1])
+                                scaleType,
+                                cd_values[H5Z_SCALEOFFSET_PARM_SCALEFACTOR])
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
@@ -11341,37 +11415,55 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                         break;
                     } /* LZF_FILTER_ID */
 
+                    case H5Z_FILTER_ERROR:
+                    {
+#ifdef PLUGIN_DEBUG
+                        printf("-> Unknown filter specified for filter %zu - not adding to DCPL\n\n", i);
+#endif
+
+                        if (flags & H5Z_FLAG_OPTIONAL)
+                            continue;
+                        else
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid filter specified")
+                    } /* H5Z_FILTER_ERROR */
+
                     default: /* User-defined filter */
                     {
-                        const char * const fmt_string = "{"
-                                                            "\"class\": \"H5Z_FILTER_USER\","
-                                                            "\"id\": %d,"
-                                                            "\"parameters\": %s"
-                                                        "}";
+                        char               *parameters = NULL;
+                        const char * const  fmt_string = "{"
+                                                             "\"class\": \"H5Z_FILTER_USER\","
+                                                             "\"id\": %d,"
+                                                             "\"parameters\": %s"
+                                                         "}";
+
+                        if (filter_id < 0) {
+                            if (flags & H5Z_FLAG_OPTIONAL)
+                                continue;
+                            else
+                                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "Unable to set filter on DCPL - invalid filter specified for filter %zu", i)
+                        } /* end if */
+
+                        /* Retrieve all of the parameters for the user-defined filter */
 
                         /* Check whether the buffer needs to be grown */
-                        bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH /* XXX: +*/ + 1;
+                        bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH + strlen(parameters) + 1;
 
                         H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
                         CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
 
-                        /* XXX: Implement ID and parameter retrieval */
                         if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
-                                0,
-                                "")
+                                filter_id,
+                                parameters)
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
                         out_string_curr_pos += bytes_printed;
                         break;
                     } /* User-defined filter */
-
-                    case H5Z_FILTER_ERROR:
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid filter specified")
                 } /* end switch */
             } /* end for */
 
-            /* Make sure to add a closing ']' to close the filters section */
+            /* Make sure to add a closing ']' to close the 'filters' section */
             H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
             CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
 
@@ -11408,20 +11500,82 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
         case H5D_CONTIGUOUS:
         {
-            const char * const contiguous_layout_str = ", \"layout\": {"
-                                                              "\"class\": \"H5D_CONTIGUOUS\""
-                                                         "}";
-            size_t             contiguous_layout_str_len = strlen(contiguous_layout_str);
+            const char * const contiguous_layout_str = ", \"layout\": {\"class\": \"H5D_CONTIGUOUS\"";
+            size_t             external_file_count;
 
             /* Check whether the buffer needs to be grown */
-            bytes_to_print = contiguous_layout_str_len + 1;
+            bytes_to_print = strlen(contiguous_layout_str);
 
             H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
             CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
 
-            /* XXX: Add support for external storage */
-            strncat(out_string_curr_pos, contiguous_layout_str, contiguous_layout_str_len);
-            out_string_curr_pos += contiguous_layout_str_len;
+            /* Append the "contiguous layout" string */
+            strncat(out_string_curr_pos, contiguous_layout_str, bytes_to_print);
+            out_string_curr_pos += bytes_to_print;
+
+            /* Determine if there are external files for the dataset */
+            if ((external_file_count = H5Pget_external_count(dcpl)) > 0) {
+                size_t             i;
+                const char * const external_storage_str = ", externalStorage: [";
+                const char * const external_file_str    = "%s{"
+                                                              "\"name\": %s,"
+                                                              "\"offset\": " OFF_T_SPECIFIER ","
+                                                              "\"size\": %llu"
+                                                          "}";
+
+                /* Check whether the buffer needs to be grown */
+                bytes_to_print += strlen(external_storage_str);
+
+                H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
+                CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+                /* Append the "external storage" string */
+                strncat(out_string_curr_pos, external_storage_str, bytes_to_print);
+                out_string_curr_pos += bytes_to_print;
+
+                /* Append an entry for each of the external files */
+                for (i = 0; i < external_file_count; i++) {
+                    hsize_t file_size;
+                    off_t   file_offset;
+                    char    file_name[EXTERNAL_FILE_NAME_MAX_LENGTH];
+
+                    if (H5Pget_external(dcpl, i, (size_t) EXTERNAL_FILE_NAME_MAX_LENGTH, file_name, &file_offset, &file_size) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get information for external file %zu from DCPL", i)
+
+                    /* Ensure that the file name buffer is NULL-terminated */
+                    file_name[EXTERNAL_FILE_NAME_MAX_LENGTH - 1] = '\0';
+
+                    bytes_to_print += strlen(external_file_str) + strlen(file_name) + (2 * MAX_NUM_LENGTH) + (i > 0 ? 1 : 0) - 8;
+
+                    /* Check whether the buffer needs to be grown */
+                    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
+                    CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+                    if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff,
+                            external_file_str,
+                            (i > 0) ? "," : "",
+                            file_name,
+                            OFF_T_CAST file_offset,
+                            file_size)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    out_string_curr_pos += bytes_printed;
+                } /* end for */
+
+                /* Make sure to add a closing ']' to close the external file section */
+                H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
+                CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
+
+                strcat(out_string_curr_pos++, "]");
+            } /* end if */
+
+            /* Make sure to add a closing '}' to close the 'layout' section */
+            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
+            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
+
+            strcat(out_string_curr_pos++, "}");
+
             break;
         } /* H5D_CONTIGUOUS */
 
@@ -11695,8 +11849,6 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
         if (RV_parse_response(link_section_ptr, NULL, &table[i].link_info, RV_get_link_info_callback) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "couldn't get link info")
 
-            printf("%s\n\n", link_section_ptr);
-
         /* If this is a call to H5Lvisit and the current link points to a group, recurse into the group
          * and build a link table for it as well.
          */
@@ -11731,6 +11883,9 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
                          "%s/groups/%s/links",
                          base_URL,
                          YAJL_GET_STRING(link_field_obj));
+
+                if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
                 printf("-> Retrieving all links in subgroup using URL: %s\n\n", request_url);
