@@ -10480,13 +10480,13 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                     CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + (3 * MAX_NUM_LENGTH) + 4,
                             out_string_curr_pos, H5E_DATASPACE, FAIL);
 
-                    /* XXX: stop values may be wrong */
+                    /* XXX: stride values wrong until HSDS can support "block" */
                     if ((bytes_printed = sprintf(out_string_curr_pos,
                                                  "%s%llu:%llu:%llu",
                                                  i > 0 ? "," : "",
                                                  start[i],
-                                                 start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1),
-                                                 stride[i]
+                                                 start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1,
+                                                 (stride[i] / block[i])
                                          )) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
 
@@ -10626,12 +10626,12 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
                     start_body_curr_pos += bytes_printed;
 
-                    /* XXX: stop body may be wrong */
-                    if ((bytes_printed = sprintf(stop_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1))) < 0)
+                    if ((bytes_printed = sprintf(stop_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1)) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
                     stop_body_curr_pos += bytes_printed;
 
-                    if ((bytes_printed = sprintf(step_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), stride[i])) < 0)
+                    /* XXX: stride values wrong until HSDS can support "block" */
+                    if ((bytes_printed = sprintf(step_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), (stride[i] / block[i]))) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error")
                     step_body_curr_pos += bytes_printed;
                 } /* end for */
