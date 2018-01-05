@@ -140,4 +140,4 @@ typedef enum H5VL_object_optional_t {
 }
 #endif
 
-#endif /* H5VLrest_H */
+#endif /* rest_vol_H */

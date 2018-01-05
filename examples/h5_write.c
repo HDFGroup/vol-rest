@@ -41,7 +41,7 @@ main (void)
     int         data[NX][NY];          /* data to write */
     int         i, j;
 
-    H5VLrest_init();
+    RVinit();
 
     fapl = H5Pcreate(H5P_FILE_ACCESS);
     H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD);
@@ -103,7 +103,7 @@ main (void)
     H5Pclose(fapl);
     H5Fclose(file);
 
-    H5VLrest_term();
+    RVterm();
 
     return 0;
 }

@@ -62,7 +62,7 @@ main (void)
      * and dataset.                                                  *
      *****************************************************************/
 
-    H5VLrest_init();
+    RVinit();
 
     fapl = H5Pcreate(H5P_FILE_ACCESS);
     H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD);
@@ -160,5 +160,5 @@ main (void)
     status = H5Dclose (dataset_id);
     status = H5Pclose(fapl);
     status = H5Fclose (file_id);
-    status = H5VLrest_term();
+    status = RVterm();
 }

@@ -89,7 +89,7 @@ main (void)
    int    vector[MSPACE1_DIM];
    int    values[] = {53, 59, 61, 67};  /* New values to be written */
 
-   H5VLrest_init();
+   RVinit();
 
    fapl = H5Pcreate(H5P_FILE_ACCESS);
    H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD);
@@ -345,7 +345,7 @@ main (void)
      */
     ret = H5Fclose(file);
 
-    ret = H5VLrest_term();
+    ret = RVterm();
 
     return 0;
 }

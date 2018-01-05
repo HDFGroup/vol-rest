@@ -32,7 +32,7 @@ int main() {
    int         i, j, dset_data[4][6];
 
    /* Initialize REST VOL plugin access */
-   H5VLrest_init();
+   RVinit();
 
    /* Associate the REST VOL plugin with a FAPL and register
     * it with the library
@@ -68,5 +68,5 @@ int main() {
    status = H5Fclose(file_id);
 
    /* Terminate REST VOL plugin access */
-   status = H5VLrest_term();
+   status = RVterm();
 }

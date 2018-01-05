@@ -717,7 +717,7 @@ RVinit(void)
 #endif
 
     /* Register the plugin with HDF5's error reporting API */
-    if ((h5_err_class_g = H5Eregister_class("REST VOL", "REST VOL", "1.0")) < 0)
+    if ((h5_err_class_g = H5Eregister_class(REST_VOL_CLS_NAME, REST_VOL_LIB_NAME, REST_VOL_VER)) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't register with HDF5 error API")
 
     /* Set up a few REST VOL-specific error API message classes */
@@ -736,12 +736,8 @@ RVinit(void)
 
 done:
     /* Cleanup if REST VOL plugin initialization failed */
-    if (ret_value < 0) {
-        if (response_buffer.buffer)
-            RV_free(response_buffer.buffer);
-
-        curl_easy_cleanup(curl);
-    } /* end if */
+    if (ret_value < 0)
+        RVterm();
 
     return ret_value;
 } /* end RVinit() */
@@ -792,6 +788,39 @@ RVterm(void)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close REST VOL plugin")
 
 done:
+#ifdef TRACK_MEM_USAGE
+    /* Check for allocated memory */
+    if (0 != rest_curr_alloc_bytes)
+        FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "%zu bytes were still left allocated", rest_curr_alloc_bytes)
+
+    rest_curr_alloc_bytes = 0;
+#endif
+
+    /* Unregister from the HDF5 error API */
+    if (h5_err_class_g >= 0) {
+        /* Print the current error stack before unregistering it */
+        if (H5Eget_num(H5E_DEFAULT) > 0) {
+            H5Eprint2(H5E_DEFAULT, NULL);
+            H5Eclear2(H5E_DEFAULT);
+        } /* end if */
+
+        if (H5Eunregister_class(h5_err_class_g) < 0) {
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister from HDF5 error API")
+
+            /* Try to print the error stack */
+            if (H5Eget_num(H5E_DEFAULT) > 0) {
+                H5Eprint2(H5E_DEFAULT, NULL);
+                H5Eclear2(H5E_DEFAULT);
+            } /* end if */
+        } /* end if */
+
+        h5_err_class_g = -1;
+        obj_err_maj_g = -1;
+        parse_err_min_g = -1;
+        link_table_err_min_g = -1;
+        link_table_iter_err_min_g = -1;
+    } /* end if */
+
     return ret_value;
 } /* end RVterm() */
 
@@ -809,8 +838,6 @@ done:
 static herr_t
 RV_term(hid_t H5_ATTR_UNUSED vtpl_id)
 {
-    herr_t ret_value = SUCCEED;
-
     /* Free base URL */
     if (base_URL)
         base_URL = (char *) RV_free(base_URL);
@@ -826,46 +853,10 @@ RV_term(hid_t H5_ATTR_UNUSED vtpl_id)
         curl_global_cleanup();
     } /* end if */
 
-#ifdef TRACK_MEM_USAGE
-    /* Check for allocated memory */
-    if (0 != rest_curr_alloc_bytes)
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "%zu bytes were still left allocated", rest_curr_alloc_bytes)
-
-done:
-    rest_curr_alloc_bytes = 0;
-#endif
-
-    /* Unregister from the HDF5 error API */
-    if (h5_err_class_g >= 0) {
-        if (obj_err_maj_g >= 0) {
-            if (H5Eclose_msg(obj_err_maj_g) < 0)
-                FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close object interface error message")
-        } /* end if */
-
-        if (parse_err_min_g >= 0) {
-            if (H5Eclose_msg(parse_err_min_g) < 0)
-                FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close JSON parsing failure error message")
-        } /* end if */
-
-        if (link_table_err_min_g >= 0) {
-            if (H5Eclose_msg(link_table_err_min_g) < 0)
-                FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close link table build error message")
-        } /* end if */
-
-        if (link_table_iter_err_min_g >= 0) {
-            if (H5Eclose_msg(link_table_iter_err_min_g) < 0)
-                FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close link table iteration error message")
-        } /* end if */
-
-        if (H5Eunregister_class(h5_err_class_g) < 0)
-            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister from HDF5 error API")
-        h5_err_class_g = -1;
-    } /* end if */
-
     /* Reset ID */
     REST_g = -1;
 
-    return ret_value;
+    return SUCCEED;
 } /* end RV_term() */
 
 

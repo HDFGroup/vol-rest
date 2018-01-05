@@ -36,6 +36,10 @@ extern hid_t parse_err_min_g;
 extern hid_t link_table_err_min_g;
 extern hid_t link_table_iter_err_min_g;
 
+#define REST_VOL_CLS_NAME "REST VOL"
+#define REST_VOL_LIB_NAME "REST VOL"
+#define REST_VOL_VER      "1.0"
+
 #define H5E_OBJECT obj_err_maj_g
 #define H5E_PARSEERROR parse_err_min_g
 #define H5E_CANTBUILDLINKTABLE link_table_err_min_g
@@ -58,7 +62,7 @@ extern hid_t link_table_iter_err_min_g;
  */
 #define FUNC_GOTO_ERROR(err_major, err_minor, ret_val, ...)                                                  \
 {                                                                                                            \
-    H5Epush2(H5P_DEFAULT, __FILE__, FUNC, __LINE__, h5_err_class_g, err_major, err_minor, __VA_ARGS__);      \
+    H5Epush2(H5E_DEFAULT, __FILE__, FUNC, __LINE__, h5_err_class_g, err_major, err_minor, __VA_ARGS__);      \
     ret_value = ret_val;                                                                                     \
     goto done;                                                                                               \
 }
@@ -72,7 +76,7 @@ extern hid_t link_table_iter_err_min_g;
  */
 #define FUNC_DONE_ERROR(err_major, err_minor, ret_val, ...)                                                  \
 {                                                                                                            \
-    H5Epush2(H5P_DEFAULT, __FILE__, FUNC, __LINE__, h5_err_class_g, err_major, err_minor, __VA_ARGS__);      \
+    H5Epush2(H5E_DEFAULT, __FILE__, FUNC, __LINE__, h5_err_class_g, err_major, err_minor, __VA_ARGS__);      \
     ret_value = ret_val;                                                                                     \
 }
 

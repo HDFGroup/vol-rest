@@ -39,7 +39,7 @@ extern "C" {
 /* Uncomment to allow cURL to print out verbose information about the HTTP requests it makes */
 /* #define CURL_DEBUG */
 
-/* Uncomment to track memory usage in this VOL plugin. When calling H5VLrest_term(),
+/* Uncomment to track memory usage in this VOL plugin. When calling RVterm(),
  * the plugin will throw an error if memory was still allocated at termination time,
  * generally signifying a memory leak in either the application code or in this plugin.
  */
@@ -101,4 +101,4 @@ H5_DLL const char *RVget_uri(hid_t);
 }
 #endif
 
-#endif /* H5VLrest_public_H */
+#endif /* rest_vol_public_H */

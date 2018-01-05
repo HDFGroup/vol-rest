@@ -62,7 +62,7 @@ main (void)
     int          i, j, k, status_n, rank;
 
     /* Initialize REST VOL plugin access */
-    H5VLrest_init();
+    RVinit();
 
     /* Associate the REST VOL plugin with a FAPL and register
      * it with the library
@@ -162,7 +162,7 @@ main (void)
     H5Pclose(fapl);
     H5Fclose(file);
 
-    H5VLrest_term();
+    RVterm();
 
     return 0;
 }
