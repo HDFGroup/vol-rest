@@ -29,9 +29,9 @@ extern "C" {
 
 #include "rest_vol_public.h"
 
-#define HDF5_VOL_REST_VERSION 1                    /* Version number of the REST VOL plugin */
+#define HDF5_VOL_REST_VERSION 1 /* Version number of the REST VOL plugin */
 
-#define H5_VOL_REST_CLS_VAL (H5VL_class_value_t) 1 /* Class value of the REST VOL plugin as defined in H5VLpublic.h */
+#define H5_VOL_REST_CLS_VAL (H5VL_class_value_t) H5_VOL_MAX_LIB_VALUE + 1 /* Class value of the REST VOL plugin as defined in H5VLpublic.h */
 
 /* Defines for the use of HTTP status codes */
 #define HTTP_INFORMATIONAL_MIN 100 /* Minimum and maximum values for the 100 class of */

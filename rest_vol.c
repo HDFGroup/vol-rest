@@ -760,7 +760,7 @@ RV_init(void)
 
     /* Register the REST VOL plugin, if it isn't already registered */
     if (H5I_VOL != H5Iget_type(REST_g)) {
-        if ((REST_g = H5VL_register((const H5VL_class_t *) &H5VL_rest_g, sizeof(H5VL_class_t), TRUE)) < 0)
+        if ((REST_g = H5VLregister((const H5VL_class_t *) &H5VL_rest_g)) < 0)
             FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTINSERT, FAIL, "can't create ID for REST VOL plugin")
     } /* end if */
 
@@ -821,6 +821,18 @@ done:
         link_table_iter_err_min_g = -1;
     } /* end if */
 
+    /* Unregister the VOL */
+    if (REST_g >= 0) {
+        if (H5VLunregister(REST_g) < 0) {
+            H5Epush2(H5E_DEFAULT, __FILE__, FUNC, __LINE__, H5E_ERR_CLS, H5E_VOL, H5E_CLOSEERROR, "can't unregister REST VOL plugin");
+            H5Eprint2(H5E_DEFAULT, NULL);
+            H5Eclear2(H5E_DEFAULT);
+        } /* end if */
+
+        /* Reset ID */
+        REST_g = -1;
+    } /* end if */
+
     return ret_value;
 } /* end RVterm() */
 
@@ -852,9 +864,6 @@ RV_term(hid_t H5_ATTR_UNUSED vtpl_id)
         curl = NULL;
         curl_global_cleanup();
     } /* end if */
-
-    /* Reset ID */
-    REST_g = -1;
 
     return SUCCEED;
 } /* end RV_term() */
