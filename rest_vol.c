@@ -4956,7 +4956,7 @@ RV_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char
     printf("     - loc_id object's URI: %s\n", parent->URI);
     printf("     - loc_id object's type: %s\n", object_type_to_string(parent->obj_type));
     printf("     - loc_id object's domain path: %s\n", parent->domain->u.file.filepath_name);
-    printf("     - Path to group: %s\n", name);
+    printf("     - Path to group: %s\n", name ? name : "(null)");
     printf("     - Default GAPL? %s\n\n", (H5P_GROUP_ACCESS_DEFAULT == gapl_id) ? "yes" : "no");
 #endif
 
@@ -5850,6 +5850,8 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
     RV_object_t *loc_obj = (RV_object_t *) obj;
     hbool_t      empty_dirname;
     size_t       host_header_len = 0;
+    hid_t        link_iter_group_id = -1;
+    void        *link_iter_group_object = NULL;
     char        *host_header = NULL;
     char        *link_path_dirname = NULL;
     char         temp_URI[URI_MAX_LENGTH];
@@ -6049,14 +6051,21 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             iter_data.iter_op      = va_arg(arguments, H5L_iterate_t);
             iter_data.op_data      = va_arg(arguments, void *);
 
-            /* XXX: Since the VOL doesn't directly pass down the group's hid_t, explicitly open the group
-             * here so that a valid hid_t can be passed to the user's link iteration callback.
-             */
-
             switch (loc_params.type) {
                 /* H5Literate/H5Lvisit */
                 case H5VL_OBJECT_BY_SELF:
                 {
+#ifdef PLUGIN_DEBUG
+                    printf("-> Opening group for link iteration\n\n");
+#endif
+
+                    /* Since the VOL doesn't directly pass down the group's hid_t, explicitly open the group
+                     * here so that a valid hid_t can be passed to the user's link iteration callback.
+                     */
+                    if (NULL == (link_iter_group_object = RV_group_open(loc_obj, loc_params, ".",
+                            H5P_DEFAULT, H5P_DEFAULT, NULL)))
+                        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, FAIL, "can't open link iteration group")
+
                     snprintf(request_url, URL_MAX_LENGTH,
                              "%s/groups/%s/links",
                              base_URL,
@@ -6068,18 +6077,21 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                 /* H5Literate_by_name/H5Lvisit_by_name */
                 case H5VL_OBJECT_BY_NAME:
                 {
-                    H5I_type_t obj_type = H5I_GROUP;
-                    htri_t     search_ret;
+#ifdef PLUGIN_DEBUG
+                    printf("-> Opening group for link iteration\n\n");
+#endif
 
-                    search_ret = RV_find_object_by_path(loc_obj, loc_params.loc_data.loc_by_name.name,
-                            &obj_type, RV_copy_object_URI_callback, NULL, temp_URI);
-                    if (!search_ret || search_ret < 0)
-                        FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate parent group")
+                    /* Since the VOL doesn't directly pass down the group's hid_t, explicitly open the group
+                     * here so that a valid hid_t can be passed to the user's link iteration callback.
+                     */
+                    if (NULL == (link_iter_group_object = RV_group_open(loc_obj, loc_params, loc_params.loc_data.loc_by_name.name,
+                            H5P_DEFAULT, H5P_DEFAULT, NULL)))
+                        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, FAIL, "can't open link iteration group")
 
                     snprintf(request_url, URL_MAX_LENGTH,
                              "%s/groups/%s/links",
                              base_URL,
-                             temp_URI);
+                             ((RV_object_t *) link_iter_group_object)->URI);
 
                     break;
                 } /* H5VL_OBJECT_BY_NAME */
@@ -6090,6 +6102,15 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                 default:
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
             } /* end switch */
+
+#ifdef PLUGIN_DEBUG
+            printf("-> Registering hid_t for opened group\n\n");
+#endif
+
+            /* Register an hid_t for the group object */
+            if ((link_iter_group_id = H5VLobject_register(link_iter_group_object, H5I_GROUP, REST_g)) < 0)
+                FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "can't create ID for group to be iterated over")
+            iter_data.group_id = link_iter_group_id;
 
             /* Make a GET request to the server to retrieve all of the links in the given group */
 
@@ -6137,6 +6158,10 @@ done:
         RV_free(link_path_dirname);
     if (host_header)
         RV_free(host_header);
+
+    if (link_iter_group_id >= 0)
+        if (H5Gclose(link_iter_group_id) < 0)
+            FUNC_DONE_ERROR(H5E_LINK, H5E_CLOSEERROR, FAIL, "can't close link iteration group")
 
     /* In case a custom DELETE request was made, reset the request to NULL
      * to prevent any possible future issues with requests
