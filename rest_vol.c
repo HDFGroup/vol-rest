@@ -45,75 +45,75 @@
 #include "rest_vol_err.h"    /* REST VOL error reporting macros */
 
 /* Macro to handle various HTTP response codes */
-#define HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value)                                         \
-do {                                                                                                            \
-    switch(response_code) {                                                                                     \
-        case 200:                                                                                               \
-        case 201:                                                                                               \
-            break;                                                                                              \
-        case 400:                                                                                               \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Malformed/Bad request for resource\n");           \
-            break;                                                                                              \
-        case 401:                                                                                               \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Username/Password needed to access resource\n");  \
-            break;                                                                                              \
-        case 403:                                                                                               \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Unauthorized access to resource\n");              \
-            break;                                                                                              \
-        case 404:                                                                                               \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Resource not found\n");                           \
-            break;                                                                                              \
-        case 405:                                                                                               \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Method not allowed\n");                           \
-            break;                                                                                              \
-        case 409:                                                                                               \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Resource already exists\n");                      \
-            break;                                                                                              \
-        case 410:                                                                                               \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Resource has been deleted\n");                    \
-            break;                                                                                              \
-        case 413:                                                                                               \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Selection too large\n");                          \
-            break;                                                                                              \
-        case 500:                                                                                               \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "An internal server error occurred\n");            \
-            break;                                                                                              \
-        case 501:                                                                                               \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Functionality not implemented\n");                \
-            break;                                                                                              \
-        case 503:                                                                                               \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Service unavailable\n");                          \
-            break;                                                                                              \
-        case 504:                                                                                               \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Gateway timeout\n");                              \
-            break;                                                                                              \
-        default:                                                                                                \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Unknown error occurred\n");                       \
-            break;                                                                                              \
-    } /* end switch */                                                                                          \
+#define HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value)                                               \
+do {                                                                                                                  \
+    switch(response_code) {                                                                                           \
+        case 200:                                                                                                     \
+        case 201:                                                                                                     \
+            break;                                                                                                    \
+        case 400:                                                                                                     \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "400 - Malformed/Bad request for resource\n");           \
+            break;                                                                                                    \
+        case 401:                                                                                                     \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "401 - Username/Password needed to access resource\n");  \
+            break;                                                                                                    \
+        case 403:                                                                                                     \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "403 - Unauthorized access to resource\n");              \
+            break;                                                                                                    \
+        case 404:                                                                                                     \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "404 - Resource not found\n");                           \
+            break;                                                                                                    \
+        case 405:                                                                                                     \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "405 - Method not allowed\n");                           \
+            break;                                                                                                    \
+        case 409:                                                                                                     \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "409 - Resource already exists\n");                      \
+            break;                                                                                                    \
+        case 410:                                                                                                     \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "410 - Resource has been deleted\n");                    \
+            break;                                                                                                    \
+        case 413:                                                                                                     \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "413 - Selection too large\n");                          \
+            break;                                                                                                    \
+        case 500:                                                                                                     \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "500 - An internal server error occurred\n");            \
+            break;                                                                                                    \
+        case 501:                                                                                                     \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "501 - Functionality not implemented\n");                \
+            break;                                                                                                    \
+        case 503:                                                                                                     \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "503 - Service unavailable\n");                          \
+            break;                                                                                                    \
+        case 504:                                                                                                     \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "504 - Gateway timeout\n");                              \
+            break;                                                                                                    \
+        default:                                                                                                      \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Unknown error occurred\n");                             \
+            break;                                                                                                    \
+    } /* end switch */                                                                                                \
 } while(0)
 
 /* Macro to perform cURL operation and handle errors. Note that
  * this macro should not generally be called directly. Use one
  * of the below macros to call this with the appropriate arguments. */
-#define CURL_PERFORM_INTERNAL(curl_ptr, handle_HTTP_response, ERR_MAJOR, ERR_MINOR, ret_value)                  \
-do {                                                                                                            \
-    CURLcode result = curl_easy_perform(curl_ptr);                                                              \
-                                                                                                                \
-    /* Reset the cURL response buffer write position pointer */                                                 \
-    response_buffer.curr_buf_ptr = response_buffer.buffer;                                                      \
-                                                                                                                \
-    if (CURLE_OK != result)                                                                                     \
-        FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "%s", curl_easy_strerror(result))                      \
-                                                                                                                \
-    if (handle_HTTP_response) {                                                                                 \
-        long response_code;                                                                                     \
-                                                                                                                \
-        if (CURLE_OK != curl_easy_getinfo(curl_ptr, CURLINFO_RESPONSE_CODE, &response_code))                    \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "can't get HTTP response code")                    \
-                                                                                                                \
-        HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value);                                        \
-    } /* end if */                                                                                              \
+#define CURL_PERFORM_INTERNAL(curl_ptr, handle_HTTP_response, ERR_MAJOR, ERR_MINOR, ret_value)                        \
+do {                                                                                                                  \
+    CURLcode result = curl_easy_perform(curl_ptr);                                                                    \
+                                                                                                                      \
+    /* Reset the cURL response buffer write position pointer */                                                       \
+    response_buffer.curr_buf_ptr = response_buffer.buffer;                                                            \
+                                                                                                                      \
+    if (CURLE_OK != result)                                                                                           \
+        FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "%s", curl_easy_strerror(result))                            \
+                                                                                                                      \
+    if (handle_HTTP_response) {                                                                                       \
+        long response_code;                                                                                           \
+                                                                                                                      \
+        if (CURLE_OK != curl_easy_getinfo(curl_ptr, CURLINFO_RESPONSE_CODE, &response_code))                          \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "can't get HTTP response code")                          \
+                                                                                                                      \
+        HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value);                                              \
+    } /* end if */                                                                                                    \
 } while(0)
 
 /* Calls the CURL_PERFORM_INTERNAL macro in such a way that any
@@ -122,7 +122,7 @@ do {                                                                            
  * the default behavior for most of the server requests that
  * this VOL plugin makes.
  */
-#define CURL_PERFORM(curl_ptr, ERR_MAJOR, ERR_MINOR, ret_value)                                                 \
+#define CURL_PERFORM(curl_ptr, ERR_MAJOR, ERR_MINOR, ret_value)                                                       \
 CURL_PERFORM_INTERNAL(curl_ptr, TRUE, ERR_MAJOR, ERR_MINOR, ret_value)
 
 /* Calls the CURL_PERFORM_INTERNAL macro in such a way that any
@@ -131,7 +131,7 @@ CURL_PERFORM_INTERNAL(curl_ptr, TRUE, ERR_MAJOR, ERR_MINOR, ret_value)
  * server to test for the existence of an object, such as in the
  * behavior for H5Fcreate()'s H5F_ACC_TRUNC flag.
  */
-#define CURL_PERFORM_NO_ERR(curl_ptr, ret_value)                                                                \
+#define CURL_PERFORM_NO_ERR(curl_ptr, ret_value)                                                                      \
 CURL_PERFORM_INTERNAL(curl_ptr, FALSE, H5E_NONE_MAJOR, H5E_NONE_MINOR, ret_value)
 
 /* Macro to check whether the size of a buffer matches the given target size
@@ -141,75 +141,75 @@ CURL_PERFORM_INTERNAL(curl_ptr, FALSE, H5E_NONE_MAJOR, H5E_NONE_MINOR, ret_value
  * incremented so that the next print operation can continue where the
  * last one left off, and not overwrite the current contents of the buffer.
  */
-#define CHECKED_REALLOC(buffer, buffer_len, target_size, ptr_to_buffer, ERR_MAJOR, ret_value)                   \
-while (target_size > buffer_len) {                                                                              \
-    char *tmp_realloc;                                                                                          \
-                                                                                                                \
-    if (NULL == (tmp_realloc = (char *) RV_realloc(buffer, 2 * buffer_len))) {                                  \
-        RV_free(buffer); buffer = NULL;                                                                         \
-        FUNC_GOTO_ERROR(ERR_MAJOR, H5E_CANTALLOC, ret_value, "can't allocate space")                            \
-    } /* end if */                                                                                              \
-                                                                                                                \
-    /* Place the "current position" pointer at the correct spot in the new buffer */                            \
-    if (ptr_to_buffer) ptr_to_buffer = tmp_realloc + ((char *) ptr_to_buffer - buffer);                         \
-    buffer = tmp_realloc;                                                                                       \
-    buffer_len *= 2;                                                                                            \
+#define CHECKED_REALLOC(buffer, buffer_len, target_size, ptr_to_buffer, ERR_MAJOR, ret_value)                         \
+while (target_size > buffer_len) {                                                                                    \
+    char *tmp_realloc;                                                                                                \
+                                                                                                                      \
+    if (NULL == (tmp_realloc = (char *) RV_realloc(buffer, 2 * buffer_len))) {                                        \
+        RV_free(buffer); buffer = NULL;                                                                               \
+        FUNC_GOTO_ERROR(ERR_MAJOR, H5E_CANTALLOC, ret_value, "can't allocate space")                                  \
+    } /* end if */                                                                                                    \
+                                                                                                                      \
+    /* Place the "current position" pointer at the correct spot in the new buffer */                                  \
+    if (ptr_to_buffer) ptr_to_buffer = tmp_realloc + ((char *) ptr_to_buffer - buffer);                               \
+    buffer = tmp_realloc;                                                                                             \
+    buffer_len *= 2;                                                                                                  \
 }
 
 /* Helper macro to call the above with a temporary useless variable, since directly passing
  * NULL to the macro generates invalid code
  */
-#define CHECKED_REALLOC_NO_PTR(buffer, buffer_len, target_size, ERR_MAJOR, ret_value)                           \
-do {                                                                                                            \
-    char *tmp = NULL;                                                                                           \
-    CHECKED_REALLOC(buffer, buffer_len, target_size, tmp, ERR_MAJOR, ret_value);                                \
+#define CHECKED_REALLOC_NO_PTR(buffer, buffer_len, target_size, ERR_MAJOR, ret_value)                                 \
+do {                                                                                                                  \
+    char *tmp = NULL;                                                                                                 \
+    CHECKED_REALLOC(buffer, buffer_len, target_size, tmp, ERR_MAJOR, ret_value);                                      \
 } while (0)
 
 
 /* Macro borrowed from H5private.h to assign a value of a larger type to
  * a variable of a smaller type
  */
-#define ASSIGN_TO_SMALLER_SIZE(dst, dsttype, src, srctype)                                                      \
-{                                                                                                               \
-    srctype _tmp_src = (srctype)(src);                                                                          \
-    dsttype _tmp_dst = (dsttype)(_tmp_src);                                                                     \
-    assert(_tmp_src == (srctype)_tmp_dst);                                                                      \
-    (dst) = _tmp_dst;                                                                                           \
+#define ASSIGN_TO_SMALLER_SIZE(dst, dsttype, src, srctype)                                                            \
+{                                                                                                                     \
+    srctype _tmp_src = (srctype)(src);                                                                                \
+    dsttype _tmp_dst = (dsttype)(_tmp_src);                                                                           \
+    assert(_tmp_src == (srctype)_tmp_dst);                                                                            \
+    (dst) = _tmp_dst;                                                                                                 \
 }
 
 /* Macro borrowed from H5private.h to assign a value of a smaller, signed type
  * to a variable of a larger, unsigned type
  */
-#define ASSIGN_TO_LARGER_SIZE_SIGNED_TO_UNSIGNED(dst, dsttype, src, srctype)                                    \
-{                                                                                                               \
-    srctype _tmp_src = (srctype)(src);                                                                          \
-    dsttype _tmp_dst = (dsttype)(_tmp_src);                                                                     \
-    assert(_tmp_src >= 0);                                                                                      \
-    assert(_tmp_src == _tmp_dst);                                                                               \
-    (dst) = _tmp_dst;                                                                                           \
+#define ASSIGN_TO_LARGER_SIZE_SIGNED_TO_UNSIGNED(dst, dsttype, src, srctype)                                          \
+{                                                                                                                     \
+    srctype _tmp_src = (srctype)(src);                                                                                \
+    dsttype _tmp_dst = (dsttype)(_tmp_src);                                                                           \
+    assert(_tmp_src >= 0);                                                                                            \
+    assert(_tmp_src == _tmp_dst);                                                                                     \
+    (dst) = _tmp_dst;                                                                                                 \
 }
 
 /* Macro borrowed from H5private.h to assign a value between two types of the
  * same size, where the source type is a signed type and the destination type
  * is an unsigned type
  */
-#define ASSIGN_TO_SAME_SIZE_SIGNED_TO_UNSIGNED(dst, dsttype, src, srctype)                                      \
-{                                                                                                               \
-    srctype _tmp_src = (srctype)(src);                                                                          \
-    dsttype _tmp_dst = (dsttype)(_tmp_src);                                                                     \
-    assert(_tmp_src >= 0);                                                                                      \
-    assert(_tmp_src == (srctype)_tmp_dst);                                                                      \
-    (dst) = _tmp_dst;                                                                                           \
+#define ASSIGN_TO_SAME_SIZE_SIGNED_TO_UNSIGNED(dst, dsttype, src, srctype)                                            \
+{                                                                                                                     \
+    srctype _tmp_src = (srctype)(src);                                                                                \
+    dsttype _tmp_dst = (dsttype)(_tmp_src);                                                                           \
+    assert(_tmp_src >= 0);                                                                                            \
+    assert(_tmp_src == (srctype)_tmp_dst);                                                                            \
+    (dst) = _tmp_dst;                                                                                                 \
 }
 
 /*
  * A macro borrowed from H5private.h for detecting over/under-flow when casting
  * between types
  */
-#define H5_CHECK_OVERFLOW(var, vartype, casttype)                                                               \
-{                                                                                                               \
-    casttype _tmp_overflow = (casttype)(var);                                                                   \
-    assert((var) == (vartype)_tmp_overflow);                                                                    \
+#define H5_CHECK_OVERFLOW(var, vartype, casttype)                                                                     \
+{                                                                                                                     \
+    casttype _tmp_overflow = (casttype)(var);                                                                         \
+    assert((var) == (vartype)_tmp_overflow);                                                                          \
 }
 
 /* Macro to change the cast for an off_t type to try and be cross-platform portable */
@@ -6106,6 +6106,19 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
 #ifdef PLUGIN_DEBUG
             printf("-> Registering hid_t for opened group\n\n");
 #endif
+
+            /* Note: The case of handling the group ID is awkward as it is, but is made even more
+             * awkward by the fact that this might be the first call to register an ID for an object
+             * of type H5I_GROUP. Since the group was opened using a VOL-internal routine and was not
+             * able to go through the public API call H5Gopen2(), this means that it is possible for
+             * the H5G interface to be uninitialized at this point in time, which will cause the below
+             * H5VLobject_register() call to fail. Therefore, we have to make a fake call to H5Gopen2()
+             * to make sure that the H5G interface is initialized. The call will of course fail, but
+             * the FUNC_ENTER_API macro should ensure that the H5G interface is initialized.
+             */
+            H5E_BEGIN_TRY {
+                H5Gopen2(-1, NULL, H5P_DEFAULT);
+            } H5E_END_TRY;
 
             /* Register an hid_t for the group object */
             if ((link_iter_group_id = H5VLobject_register(link_iter_group_object, H5I_GROUP, REST_g)) < 0)
