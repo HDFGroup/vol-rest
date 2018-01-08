@@ -329,7 +329,7 @@ typedef struct link_iter_data {
     H5_index_t       index_type;
     hbool_t          is_recursive;
     hsize_t         *idx_p;
-    hid_t            group_id;
+    hid_t            parent_group_id;
     void            *op_data;
 } link_iter_data;
 
@@ -563,7 +563,7 @@ static herr_t RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl_id, char
 /* Helper function to build a table of links recursively or non-recursively starting from a given group */
 static herr_t RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int (*sort_func)(const void *, const void *), link_table_entry **link_table, size_t *num_entries);
 static void   RV_free_link_table(link_table_entry *link_table, size_t num_entries);
-static herr_t RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_iter_data *iter_data);
+static herr_t RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_iter_data *iter_data, const char *cur_link_rel_path);
 
 #ifdef PLUGIN_DEBUG
 /* Helper functions to print out useful debugging information */
@@ -6123,7 +6123,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             /* Register an hid_t for the group object */
             if ((link_iter_group_id = H5VLobject_register(link_iter_group_object, H5I_GROUP, REST_g)) < 0)
                 FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "can't create ID for group to be iterated over")
-            iter_data.group_id = link_iter_group_id;
+            iter_data.parent_group_id = link_iter_group_id;
 
             /* Make a GET request to the server to retrieve all of the links in the given group */
 
@@ -7595,7 +7595,7 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
 
     /* Begin iteration */
     if (link_table)
-        if (RV_traverse_link_table(link_table, link_table_num_entries, iter_data) < 0)
+        if (RV_traverse_link_table(link_table, link_table_num_entries, iter_data, NULL) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTITERATE, FAIL, "can't iterate over link table")
 
 done:
@@ -11974,12 +11974,17 @@ RV_free_link_table(link_table_entry *link_table, size_t num_entries)
  *              January, 2017
  */
 static herr_t
-RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_iter_data *iter_data)
+RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_iter_data *iter_data, const char *cur_link_rel_path)
 {
-    static size_t depth = 0;
-    size_t        last_idx;
-    herr_t        callback_ret;
-    herr_t        ret_value = SUCCEED;
+    static size_t  depth = 0;
+    size_t         last_idx;
+    herr_t         callback_ret;
+    size_t         link_rel_path_len = (cur_link_rel_path ? strlen(cur_link_rel_path) : 0) + LINK_NAME_MAX_LENGTH + 2;
+    char          *link_rel_path = NULL;
+    herr_t         ret_value = SUCCEED;
+
+    if (NULL == (link_rel_path = (char *) RV_malloc(link_rel_path_len)))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link's relative pathname buffer")
 
     switch (iter_data->iter_order) {
         case H5_ITER_NATIVE:
@@ -11996,8 +12001,14 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
                 printf("-> Link %zu type: %s\n\n", last_idx, link_class_to_string(link_table[last_idx].link_info.type));
 #endif
 
+                /* Form the link's relative path from the parent group by combining the current relative path with the link's name */
+                snprintf(link_rel_path, link_rel_path_len, "%s%s%s",
+                         cur_link_rel_path ? cur_link_rel_path : "",
+                         cur_link_rel_path ? "/" : "",
+                         link_table[last_idx].link_name);
+
                 /* Call the user's callback */
-                callback_ret = iter_data->iter_op(iter_data->group_id, link_table[last_idx].link_name, &link_table[last_idx].link_info, iter_data->op_data);
+                callback_ret = iter_data->iter_op(iter_data->parent_group_id, link_rel_path, &link_table[last_idx].link_info, iter_data->op_data);
                 if (callback_ret < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret, "H5Literate/H5Lvisit (_by_name) user callback failed for link '%s'", link_table[last_idx].link_name)
                 else if (callback_ret > 0)
@@ -12005,12 +12016,17 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
 
                 /* If this is a group and H5Lvisit has been called, descend into the group */
                 if (link_table[last_idx].subgroup.subgroup_link_table) {
+                    char *last_slash = strrchr(link_rel_path, '/');
+
 #ifdef PLUGIN_DEBUG
                     printf("-> Descending into subgroup '%s'\n\n", link_table[last_idx].link_name);
 #endif
 
+                    /* Truncate the relative path buffer by cutting off the link name from the current path chain */
+                    if (last_slash) *last_slash = '\0';
+
                     depth++;
-                    if (RV_traverse_link_table(link_table[last_idx].subgroup.subgroup_link_table, link_table[last_idx].subgroup.num_entries, iter_data) < 0)
+                    if (RV_traverse_link_table(link_table[last_idx].subgroup.subgroup_link_table, link_table[last_idx].subgroup.num_entries, iter_data, link_rel_path) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTITERATE, FAIL, "can't iterate over links in subgroup '%s'", link_table[last_idx].link_name)
                     depth--;
 
@@ -12036,8 +12052,14 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
                 printf("-> Link %zu type: %s\n\n", last_idx, link_class_to_string(link_table[last_idx].link_info.type));
 #endif
 
+                /* Form the link's relative path from the parent group by combining the current relative path with the link's name */
+                snprintf(link_rel_path, link_rel_path_len, "%s%s%s",
+                         cur_link_rel_path ? cur_link_rel_path : "",
+                         cur_link_rel_path ? "/" : "",
+                         link_table[last_idx].link_name);
+
                 /* Call the user's callback */
-                callback_ret = iter_data->iter_op(iter_data->group_id, link_table[last_idx].link_name, &link_table[last_idx].link_info, iter_data->op_data);
+                callback_ret = iter_data->iter_op(iter_data->parent_group_id, link_rel_path, &link_table[last_idx].link_info, iter_data->op_data);
                 if (callback_ret < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret, "H5Literate/H5Lvisit (_by_name) user callback failed for link '%s'", link_table[last_idx].link_name)
                 else if (callback_ret > 0)
@@ -12045,12 +12067,17 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
 
                 /* If this is a group and H5Lvisit has been called, descend into the group */
                 if (link_table[last_idx].subgroup.subgroup_link_table) {
+                    char *last_slash = strrchr(link_rel_path, '/');
+
 #ifdef PLUGIN_DEBUG
                     printf("-> Descending into subgroup '%s'\n\n", link_table[last_idx].link_name);
 #endif
 
+                    /* Truncate the relative path buffer by cutting off the link name from the current path chain */
+                    if (last_slash) *last_slash = '\0';
+
                     depth++;
-                    if (RV_traverse_link_table(link_table[last_idx].subgroup.subgroup_link_table, link_table[last_idx].subgroup.num_entries, iter_data) < 0)
+                    if (RV_traverse_link_table(link_table[last_idx].subgroup.subgroup_link_table, link_table[last_idx].subgroup.num_entries, iter_data, link_rel_path) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTITERATE, FAIL, "can't iterate over links in subgroup '%s'", link_table[last_idx].link_name)
                     depth--;
 
@@ -12080,6 +12107,9 @@ done:
     /* Keep track of the last index where we left off */
     if (iter_data->idx_p && (ret_value >= 0) && (depth == 0))
         *iter_data->idx_p = last_idx;
+
+    if (link_rel_path)
+        RV_free(link_rel_path);
 
     return ret_value;
 } /* end RV_traverse_link_table() */

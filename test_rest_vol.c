@@ -15201,35 +15201,42 @@ link_iter_callback3(hid_t group_id, const char *name, const H5L_info_t *info, vo
 static herr_t
 link_visit_callback1(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)
 {
-    if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_DSET_NAME)) {
+    if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME2 "/" LINK_VISIT_TEST_NO_CYCLE_DSET_NAME)) {
         if (H5L_TYPE_HARD != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
             goto error;
         }
     }
-    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME1)) {
+    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME2 "/" LINK_VISIT_TEST_NO_CYCLE_LINK_NAME1)) {
         if (H5L_TYPE_HARD != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
             goto error;
         }
     }
-    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME2)) {
+    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME2 "/" LINK_VISIT_TEST_NO_CYCLE_LINK_NAME2)) {
         if (H5L_TYPE_SOFT != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
             goto error;
         }
     }
-    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME3)) {
+    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME3 "/" LINK_VISIT_TEST_NO_CYCLE_DSET_NAME)) {
+        if (H5L_TYPE_HARD != info->type) {
+            H5_FAILED();
+            printf("    link type did not match\n");
+            goto error;
+        }
+    }
+    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME3 "/" LINK_VISIT_TEST_NO_CYCLE_LINK_NAME3)) {
         if (H5L_TYPE_EXTERNAL != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
             goto error;
         }
     }
-    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME4)) {
+    else if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME3 "/" LINK_VISIT_TEST_NO_CYCLE_LINK_NAME4)) {
         if (H5L_TYPE_HARD != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
@@ -15265,28 +15272,28 @@ error:
 static herr_t
 link_visit_callback2(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)
 {
-    if (!strcmp(name, LINK_VISIT_TEST_CYCLE_LINK_NAME1)) {
+    if (!strcmp(name, LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME2 "/" LINK_VISIT_TEST_CYCLE_LINK_NAME1)) {
         if (H5L_TYPE_HARD != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
             goto error;
         }
     }
-    else if (!strcmp(name, LINK_VISIT_TEST_CYCLE_LINK_NAME2)) {
+    else if (!strcmp(name, LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME2 "/" LINK_VISIT_TEST_CYCLE_LINK_NAME2)) {
         if (H5L_TYPE_SOFT != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
             goto error;
         }
     }
-    else if (!strcmp(name, LINK_VISIT_TEST_CYCLE_LINK_NAME3)) {
+    else if (!strcmp(name, LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME3 "/" LINK_VISIT_TEST_CYCLE_LINK_NAME3)) {
         if (H5L_TYPE_EXTERNAL != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
             goto error;
         }
     }
-    else if (!strcmp(name, LINK_VISIT_TEST_CYCLE_LINK_NAME4)) {
+    else if (!strcmp(name, LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME3 "/" LINK_VISIT_TEST_CYCLE_LINK_NAME4)) {
         if (H5L_TYPE_HARD != info->type) {
             H5_FAILED();
             printf("    link type did not match\n");
