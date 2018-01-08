@@ -6740,6 +6740,7 @@ static herr_t
 RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
     H5VL_object_optional_t  optional_type = (H5VL_object_optional_t) va_arg(arguments, int);
+    H5VL_loc_params_t       loc_params = va_arg(arguments, H5VL_loc_params_t);
     RV_object_t            *loc_obj = (RV_object_t *) obj;
     size_t                  host_header_len = 0;
     char                   *host_header = NULL;
@@ -6761,17 +6762,34 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a group, dataset or datatype")
 
     switch (optional_type) {
-        /* H5Oset_comment, H5Oset_comment_by_name, H5Oget_comment and H5Oget_comment_by_name */
+        /* H5Oset_comment and H5Oset_comment_by_name */
         case H5VL_OBJECT_SET_COMMENT:
-        case H5VL_OBJECT_GET_COMMENT:
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "object comments are deprecated in favor of use of object attributes")
+
+        /* H5Oget_comment and H5Oget_comment_by_name */
+        case H5VL_OBJECT_GET_COMMENT:
+        {
+            char    *comment_buf = va_arg(arguments, char *);
+            size_t   comment_buf_size = va_arg(arguments, size_t);
+            ssize_t *ret_size = va_arg(arguments, ssize_t *);
+
+            UNUSED_VAR(comment_buf);
+            UNUSED_VAR(comment_buf_size);
+
+            /* Even though H5Oset_comment is deprecated in favor of attributes, H5Oget_comment is
+             * still used in h5dump, so we just return a comment size of 0 and don't support object
+             * comments.
+             */
+            *ret_size = 0;
+
+            break;
+        } /* H5VL_OBJECT_GET_COMMENT */
 
         /* H5Oget_info (_by_name/_by_idx) */
         case H5VL_OBJECT_GET_INFO:
         {
-            H5VL_loc_params_t  loc_params = va_arg(arguments, H5VL_loc_params_t);
-            H5O_info_t        *obj_info = va_arg(arguments, H5O_info_t *);
-            H5I_type_t         obj_type;
+            H5O_info_t *obj_info = va_arg(arguments, H5O_info_t *);
+            H5I_type_t  obj_type;
 
             switch (loc_params.type) {
                 /* H5Oget_info */

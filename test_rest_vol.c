@@ -14384,10 +14384,6 @@ test_unused_object_API_calls(void)
             TEST_ERROR
         if (H5Oset_comment_by_name(file_id, "/", comment, H5P_DEFAULT) >= 0)
             TEST_ERROR
-        if (H5Oget_comment(file_id, NULL, 0) >= 0)
-            TEST_ERROR
-        if (H5Oget_comment_by_name(file_id, "/", NULL, 0, H5P_DEFAULT) >= 0)
-            TEST_ERROR
     } H5E_END_TRY;
 
     if (H5Pclose(fapl_id) < 0)
