@@ -278,7 +278,8 @@ do {                                                                            
 static hid_t REST_g = -1;
 
 /* Identifiers for HDF5's error API */
-hid_t h5_err_class_g = -1;
+hid_t rv_err_stack_g = -1;
+hid_t rv_err_class_g = -1;
 hid_t obj_err_maj_g = -1;
 hid_t parse_err_min_g = -1;
 hid_t link_table_err_min_g = -1;
@@ -717,17 +718,21 @@ RVinit(void)
 #endif
 
     /* Register the plugin with HDF5's error reporting API */
-    if ((h5_err_class_g = H5Eregister_class(REST_VOL_CLS_NAME, REST_VOL_LIB_NAME, REST_VOL_VER)) < 0)
+    if ((rv_err_class_g = H5Eregister_class(REST_VOL_CLS_NAME, REST_VOL_LIB_NAME, REST_VOL_VER)) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't register with HDF5 error API")
 
+    /* Create a separate error stack for the REST VOL to report errors with */
+    if ((rv_err_stack_g = H5Ecreate_stack()) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error stack")
+
     /* Set up a few REST VOL-specific error API message classes */
-    if ((obj_err_maj_g = H5Ecreate_msg(h5_err_class_g, H5E_MAJOR, "Object interface")) < 0)
+    if ((obj_err_maj_g = H5Ecreate_msg(rv_err_class_g, H5E_MAJOR, "Object interface")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for object interface")
-    if ((parse_err_min_g = H5Ecreate_msg(h5_err_class_g, H5E_MINOR, "Error occurred while parsing JSON")) < 0)
+    if ((parse_err_min_g = H5Ecreate_msg(rv_err_class_g, H5E_MINOR, "Error occurred while parsing JSON")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for JSON parsing failures")
-    if ((link_table_err_min_g = H5Ecreate_msg(h5_err_class_g, H5E_MINOR, "Can't build table of links for iteration")) < 0)
+    if ((link_table_err_min_g = H5Ecreate_msg(rv_err_class_g, H5E_MINOR, "Can't build table of links for iteration")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for link table build error")
-    if ((link_table_iter_err_min_g = H5Ecreate_msg(h5_err_class_g, H5E_MINOR, "Can't iterate over link table")) < 0)
+    if ((link_table_iter_err_min_g = H5Ecreate_msg(rv_err_class_g, H5E_MINOR, "Can't iterate over link table")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for link table iteration error")
 
     /* Register the plugin with the library */
@@ -738,6 +743,8 @@ done:
     /* Cleanup if REST VOL plugin initialization failed */
     if (ret_value < 0)
         RVterm();
+
+    PRINT_ERROR_STACK
 
     return ret_value;
 } /* end RVinit() */
@@ -797,24 +804,21 @@ done:
 #endif
 
     /* Unregister from the HDF5 error API */
-    if (h5_err_class_g >= 0) {
-        /* Print the current error stack before unregistering it */
-        if (H5Eget_num(H5E_DEFAULT) > 0) {
-            H5Eprint2(H5E_DEFAULT, NULL);
-            H5Eclear2(H5E_DEFAULT);
-        } /* end if */
-
-        if (H5Eunregister_class(h5_err_class_g) < 0) {
+    if (rv_err_class_g >= 0) {
+        if (H5Eunregister_class(rv_err_class_g) < 0)
             FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister from HDF5 error API")
 
-            /* Try to print the error stack */
-            if (H5Eget_num(H5E_DEFAULT) > 0) {
-                H5Eprint2(H5E_DEFAULT, NULL);
-                H5Eclear2(H5E_DEFAULT);
-            } /* end if */
+        /* Print the current error stack before destroying it */
+        PRINT_ERROR_STACK
+
+        /* Destroy the error stack */
+        if (H5Eclose_stack(rv_err_stack_g) < 0) {
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close error stack")
+            PRINT_ERROR_STACK
         } /* end if */
 
-        h5_err_class_g = -1;
+        rv_err_stack_g = -1;
+        rv_err_class_g = -1;
         obj_err_maj_g = -1;
         parse_err_min_g = -1;
         link_table_err_min_g = -1;
@@ -920,6 +924,8 @@ H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const
     } /* end if */
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end H5Pset_fapl_rest_vol() */
 
@@ -935,6 +941,8 @@ RVget_uri(hid_t obj_id)
     ret_value = VOL_obj->URI;
 
 done:
+    PRINT_ERROR_STACK
+
     return (const char *) ret_value;
 } /* end RVget_uri() */
 
@@ -1399,6 +1407,8 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_attr_create() */
 
@@ -1651,6 +1661,8 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_attr_open() */
 
@@ -1811,6 +1823,8 @@ done:
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
+
+    PRINT_ERROR_STACK
 
     return ret_value;
 } /* end RV_attr_read() */
@@ -1985,6 +1999,8 @@ done:
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
+
+    PRINT_ERROR_STACK
 
     return ret_value;
 } /* end RV_attr_write() */
@@ -2297,6 +2313,8 @@ done:
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     }
+
+    PRINT_ERROR_STACK
 
     return ret_value;
 } /* end RV_attr_get() */
@@ -2657,6 +2675,8 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_attr_specific() */
 
@@ -2706,6 +2726,8 @@ RV_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
     RV_free(_attr);
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_attr_close() */
 
@@ -2933,6 +2955,8 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_datatype_commit() */
 
@@ -3021,6 +3045,8 @@ done:
         if (RV_datatype_close(datatype, FAIL, NULL) < 0)
             FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, NULL, "can't close datatype")
 
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_datatype_open() */
 
@@ -3086,6 +3112,8 @@ RV_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t H5_ATTR_UNUSED dx
     } /* end switch */
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_datatype_get() */
 
@@ -3130,6 +3158,8 @@ RV_datatype_close(void *dt, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **
     RV_free(_dtype);
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_datatype_close() */
 
@@ -3317,6 +3347,8 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_dataset_create() */
 
@@ -3416,6 +3448,8 @@ done:
     if (dataset && !ret_value)
         if (RV_dataset_close(dataset, FAIL, NULL) < 0)
             FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, NULL, "can't close dataset")
+
+    PRINT_ERROR_STACK
 
     return ret_value;
 } /* end RV_dataset_open() */
@@ -3669,6 +3703,8 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_dataset_read() */
 
@@ -3880,6 +3916,8 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_dataset_write() */
 
@@ -3975,6 +4013,8 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl
     } /* end switch */
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_dataset_get() */
 
@@ -4023,6 +4063,8 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
     } /* end switch */
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_dataset_specific() */
 
@@ -4073,6 +4115,8 @@ RV_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED *
     RV_free(_dset);
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_dataset_close() */
 
@@ -4277,6 +4321,8 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_file_create() */
 
@@ -4403,6 +4449,8 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_file_open() */
 
@@ -4504,6 +4552,8 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
     } /* end switch */
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_file_get() */
 
@@ -4561,6 +4611,8 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_ATTR_UN
     } /* end switch */
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_file_specific() */
 
@@ -4669,6 +4721,8 @@ RV_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list ar
     } /* end switch */
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_file_optional() */
 
@@ -4717,6 +4771,8 @@ RV_file_close(void *file, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
     RV_free(_file);
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_file_close() */
 
@@ -4924,6 +4980,8 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_group_create() */
 
@@ -5004,6 +5062,8 @@ done:
     if (group && !ret_value)
         if (RV_group_close(group, FAIL, NULL) < 0)
             FUNC_DONE_ERROR(H5E_SYM, H5E_CANTCLOSEOBJ, NULL, "can't close group")
+
+    PRINT_ERROR_STACK
 
     return ret_value;
 } /* end RV_group_open() */
@@ -5169,6 +5229,8 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_group_get() */
 
@@ -5209,6 +5271,8 @@ RV_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
     RV_free(_grp);
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_group_close() */
 
@@ -5515,6 +5579,8 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_link_create() */
 
@@ -5542,6 +5608,8 @@ RV_link_copy(void *src_obj, H5VL_loc_params_t loc_params1,
     FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lcopy is unsupported")
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_link_copy() */
 
@@ -5570,6 +5638,8 @@ RV_link_move(void *src_obj, H5VL_loc_params_t loc_params1,
     FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lmove is unsupported")
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_link_move() */
 
@@ -5828,6 +5898,8 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_link_get() */
 
@@ -6051,6 +6123,9 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             iter_data.iter_op      = va_arg(arguments, H5L_iterate_t);
             iter_data.op_data      = va_arg(arguments, void *);
 
+            if (!iter_data.iter_op)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTITERATE, FAIL, "no iteration function specified")
+
             switch (loc_params.type) {
                 /* H5Literate/H5Lvisit */
                 case H5VL_OBJECT_BY_SELF:
@@ -6190,6 +6265,8 @@ done:
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
+
+    PRINT_ERROR_STACK
 
     return ret_value;
 } /* end RV_link_specific() */
@@ -6375,6 +6452,8 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
     if (opened_type) *opened_type = obj_type;
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_object_open() */
 
@@ -6402,6 +6481,8 @@ RV_object_copy(void *src_obj, H5VL_loc_params_t loc_params1, const char *src_nam
     FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Ocopy is unsupported")
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_object_copy() */
 
@@ -6534,6 +6615,8 @@ RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_typ
     } /* end switch */
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_object_get() */
 
@@ -6636,6 +6719,8 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
     } /* end switch */
 
 done:
+    PRINT_ERROR_STACK
+
     return ret_value;
 } /* end RV_object_specific() */
 
@@ -6884,6 +6969,8 @@ done:
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
+
+    PRINT_ERROR_STACK
 
     return ret_value;
 } /* end RV_object_optional() */
@@ -8072,10 +8159,10 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set chunked storage layout on DCPL")
         } /* end if */
         else if (!strcmp(layout_class, "H5D_CONTIGUOUS")) {
-            yajl_val external_storage_obj;
-
-            if (NULL == (external_storage_obj = yajl_tree_get(key_obj, external_storage_keys, yajl_t_array)))
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of external storage file extent array failed")
+            /* Check to see if there is any external storage information */
+            if (yajl_tree_get(key_obj, external_storage_keys, yajl_t_array)) {
+                /* XXX: Support for external storage file extent array */
+            } /* end if */
 
 #ifdef PLUGIN_DEBUG
             printf("-> Setting contiguous layout on DCPL\n");
@@ -12007,6 +12094,10 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
                          cur_link_rel_path ? "/" : "",
                          link_table[last_idx].link_name);
 
+#ifdef PLUGIN_DEBUG
+                printf("-> Calling supplied callback function with relative link path %s\n\n", link_rel_path);
+#endif
+
                 /* Call the user's callback */
                 callback_ret = iter_data->iter_op(iter_data->parent_group_id, link_rel_path, &link_table[last_idx].link_info, iter_data->op_data);
                 if (callback_ret < 0)
@@ -12016,14 +12107,9 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
 
                 /* If this is a group and H5Lvisit has been called, descend into the group */
                 if (link_table[last_idx].subgroup.subgroup_link_table) {
-                    char *last_slash = strrchr(link_rel_path, '/');
-
 #ifdef PLUGIN_DEBUG
                     printf("-> Descending into subgroup '%s'\n\n", link_table[last_idx].link_name);
 #endif
-
-                    /* Truncate the relative path buffer by cutting off the link name from the current path chain */
-                    if (last_slash) *last_slash = '\0';
 
                     depth++;
                     if (RV_traverse_link_table(link_table[last_idx].subgroup.subgroup_link_table, link_table[last_idx].subgroup.num_entries, iter_data, link_rel_path) < 0)
@@ -12034,6 +12120,16 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
                     printf("-> Exiting subgroup '%s'\n\n", link_table[last_idx].link_name);
 #endif
                 } /* end if */
+                else {
+                    char *last_slash = strrchr(link_rel_path, '/');
+
+                    /* Truncate the relative path buffer by cutting off the trailing link name from the current path chain */
+                    if (last_slash) *last_slash = '\0';
+
+#ifdef PLUGIN_DEBUG
+                    printf("-> Relative link path after truncating trailing link name: %s\n\n", link_rel_path);
+#endif
+                } /* end else */
             } /* end for */
 
             break;
@@ -12058,6 +12154,10 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
                          cur_link_rel_path ? "/" : "",
                          link_table[last_idx].link_name);
 
+#ifdef PLUGIN_DEBUG
+                printf("-> Calling supplied callback function with relative link path %s\n\n", link_rel_path);
+#endif
+
                 /* Call the user's callback */
                 callback_ret = iter_data->iter_op(iter_data->parent_group_id, link_rel_path, &link_table[last_idx].link_info, iter_data->op_data);
                 if (callback_ret < 0)
@@ -12067,14 +12167,9 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
 
                 /* If this is a group and H5Lvisit has been called, descend into the group */
                 if (link_table[last_idx].subgroup.subgroup_link_table) {
-                    char *last_slash = strrchr(link_rel_path, '/');
-
 #ifdef PLUGIN_DEBUG
                     printf("-> Descending into subgroup '%s'\n\n", link_table[last_idx].link_name);
 #endif
-
-                    /* Truncate the relative path buffer by cutting off the link name from the current path chain */
-                    if (last_slash) *last_slash = '\0';
 
                     depth++;
                     if (RV_traverse_link_table(link_table[last_idx].subgroup.subgroup_link_table, link_table[last_idx].subgroup.num_entries, iter_data, link_rel_path) < 0)
@@ -12085,6 +12180,16 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
                     printf("-> Exiting subgroup '%s'\n\n", link_table[last_idx].link_name);
 #endif
                 } /* end if */
+                else {
+                    char *last_slash = strrchr(link_rel_path, '/');
+
+                    /* Truncate the relative path buffer by cutting off the trailing link name from the current path chain */
+                    if (last_slash) *last_slash = '\0';
+
+#ifdef PLUGIN_DEBUG
+                    printf("-> Relative link path after truncating trailing link name: %s\n\n", link_rel_path);
+#endif
+                } /* end else */
 
                 if (last_idx == 0) break;
             } /* end for */

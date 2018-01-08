@@ -6302,6 +6302,15 @@ test_create_dataset_creation_properties(void)
 
             if (H5Dclose(dset_id) < 0)
                 TEST_ERROR
+
+            if ((dset_id = H5Dopen2(group_id, name, H5P_DEFAULT)) < 0) {
+                H5_FAILED();
+                printf("    couldn't open dataset\n");
+                goto error;
+            }
+
+            if (H5Dclose(dset_id) < 0)
+                TEST_ERROR
         }
 
         if (H5Pclose(dcpl_id) < 0)
@@ -6338,6 +6347,15 @@ test_create_dataset_creation_properties(void)
 
             if (H5Dclose(dset_id) < 0)
                 TEST_ERROR
+
+            if ((dset_id = H5Dopen2(group_id, name, H5P_DEFAULT)) < 0) {
+                H5_FAILED();
+                printf("    couldn't open dataset\n");
+                goto error;
+            }
+
+            if (H5Dclose(dset_id) < 0)
+                TEST_ERROR
         }
 
         if (H5Pclose(dcpl_id) < 0)
@@ -6361,6 +6379,15 @@ test_create_dataset_creation_properties(void)
                 dset_dtype, fspace_id, H5P_DEFAULT, dcpl_id, H5P_DEFAULT)) < 0) {
             H5_FAILED();
             printf("    couldn't create dataset\n");
+            goto error;
+        }
+
+        if (H5Dclose(dset_id) < 0)
+            TEST_ERROR
+
+        if ((dset_id = H5Dopen2(group_id, DATASET_CREATION_PROPERTIES_TEST_PHASE_CHANGE_DSET_NAME, H5P_DEFAULT)) < 0) {
+            H5_FAILED();
+            printf("    couldn't open dataset\n");
             goto error;
         }
 
@@ -6395,6 +6422,15 @@ test_create_dataset_creation_properties(void)
             if ((dset_id = H5Dcreate2(group_id, name, dset_dtype, fspace_id, H5P_DEFAULT, dcpl_id, H5P_DEFAULT)) < 0) {
                 H5_FAILED();
                 printf("    couldn't create dataset\n");
+                goto error;
+            }
+
+            if (H5Dclose(dset_id) < 0)
+                TEST_ERROR
+
+            if ((dset_id = H5Dopen2(group_id, name, H5P_DEFAULT)) < 0) {
+                H5_FAILED();
+                printf("    couldn't open dataset\n");
                 goto error;
             }
 
@@ -6456,6 +6492,15 @@ test_create_dataset_creation_properties(void)
 
             if (H5Dclose(dset_id) < 0)
                 TEST_ERROR
+
+            if ((dset_id = H5Dopen2(group_id, name, H5P_DEFAULT)) < 0) {
+                H5_FAILED();
+                printf("    couldn't open dataset\n");
+                goto error;
+            }
+
+            if (H5Dclose(dset_id) < 0)
+                TEST_ERROR
         }
 
         if (H5Pclose(dcpl_id) < 0)
@@ -6484,6 +6529,15 @@ test_create_dataset_creation_properties(void)
         if (H5Dclose(dset_id) < 0)
             TEST_ERROR
 
+        if ((dset_id = H5Dopen2(group_id, DATASET_CREATION_PROPERTIES_TEST_TRACK_TIMES_YES_DSET_NAME, H5P_DEFAULT)) < 0) {
+            H5_FAILED();
+            printf("    couldn't open dataset\n");
+            goto error;
+        }
+
+        if (H5Dclose(dset_id) < 0)
+            TEST_ERROR
+
         if (H5Pset_obj_track_times(dcpl_id, false) < 0)
             TEST_ERROR
 
@@ -6491,6 +6545,15 @@ test_create_dataset_creation_properties(void)
                 dset_dtype, fspace_id, H5P_DEFAULT, dcpl_id, H5P_DEFAULT)) < 0) {
             H5_FAILED();
             printf("    couldn't create dataset\n");
+            goto error;
+        }
+
+        if (H5Dclose(dset_id) < 0)
+            TEST_ERROR
+
+        if ((dset_id = H5Dopen2(group_id, DATASET_CREATION_PROPERTIES_TEST_TRACK_TIMES_NO_DSET_NAME, H5P_DEFAULT)) < 0) {
+            H5_FAILED();
+            printf("    couldn't open dataset\n");
             goto error;
         }
 

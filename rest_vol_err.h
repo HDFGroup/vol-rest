@@ -30,7 +30,8 @@ extern "C" {
 #include "H5Epublic.h"
 #include "H5Ipublic.h"
 
-extern hid_t h5_err_class_g;
+extern hid_t rv_err_stack_g;
+extern hid_t rv_err_class_g;
 extern hid_t obj_err_maj_g;
 extern hid_t parse_err_min_g;
 extern hid_t link_table_err_min_g;
@@ -60,11 +61,17 @@ extern hid_t link_table_iter_err_min_g;
  * and then goto the "done" label, which should appear inside
  * the function
  */
-#define FUNC_GOTO_ERROR(err_major, err_minor, ret_val, ...)                                                  \
-{                                                                                                            \
-    H5Epush2(H5E_DEFAULT, __FILE__, FUNC, __LINE__, h5_err_class_g, err_major, err_minor, __VA_ARGS__);      \
-    ret_value = ret_val;                                                                                     \
-    goto done;                                                                                               \
+#define FUNC_GOTO_ERROR(err_major, err_minor, ret_val, ...)                                                      \
+{                                                                                                                \
+    H5E_auto2_t func;                                                                                            \
+                                                                                                                 \
+    /* Check whether automatic error reporting has been disabled */                                              \
+    H5Eget_auto2(H5E_DEFAULT, &func, NULL);                                                                      \
+    if (func)                                                                                                    \
+        H5Epush2(rv_err_stack_g, __FILE__, FUNC, __LINE__, rv_err_class_g, err_major, err_minor, __VA_ARGS__);   \
+                                                                                                                 \
+    ret_value = ret_val;                                                                                         \
+    goto done;                                                                                                   \
 }
 
 
@@ -74,10 +81,16 @@ extern hid_t link_table_iter_err_min_g;
  * function so that an infinite loop does not occur where goto
  * continually branches back to the label.
  */
-#define FUNC_DONE_ERROR(err_major, err_minor, ret_val, ...)                                                  \
-{                                                                                                            \
-    H5Epush2(H5E_DEFAULT, __FILE__, FUNC, __LINE__, h5_err_class_g, err_major, err_minor, __VA_ARGS__);      \
-    ret_value = ret_val;                                                                                     \
+#define FUNC_DONE_ERROR(err_major, err_minor, ret_val, ...)                                                      \
+{                                                                                                                \
+    H5E_auto2_t func;                                                                                            \
+                                                                                                                 \
+    /* Check whether automatic error reporting has been disabled */                                              \
+    H5Eget_auto2(H5E_DEFAULT, &func, NULL);                                                                      \
+    if (func)                                                                                                    \
+        H5Epush2(rv_err_stack_g, __FILE__, FUNC, __LINE__, rv_err_class_g, err_major, err_minor, __VA_ARGS__);   \
+                                                                                                                 \
+    ret_value = ret_val;                                                                                         \
 }
 
 
@@ -85,10 +98,28 @@ extern hid_t link_table_iter_err_min_g;
  * setting ret_value to the given value. This is often used for
  * short circuiting in functions when certain conditions arise.
  */
-#define FUNC_GOTO_DONE(ret_val)                                                                              \
-{                                                                                                            \
-    ret_value = ret_val;                                                                                     \
-    goto done;                                                                                               \
+#define FUNC_GOTO_DONE(ret_val)                                                                                  \
+{                                                                                                                \
+    ret_value = ret_val;                                                                                         \
+    goto done;                                                                                                   \
+}
+
+
+/* Macro to print out the REST VOL plugin's current error stack
+ * and then clear it for future use
+ */
+#define PRINT_ERROR_STACK                                                                                        \
+{                                                                                                                \
+    H5E_auto2_t func;                                                                                            \
+                                                                                                                 \
+    /* Check whether automatic error reporting has been disabled */                                              \
+    H5Eget_auto2(H5E_DEFAULT, &func, NULL);                                                                      \
+    if (func) {                                                                                                  \
+        if ((rv_err_stack_g >= 0) && (H5Eget_num(rv_err_stack_g) > 0)) {                                         \
+            H5Eprint2(rv_err_stack_g, NULL);                                                                     \
+            H5Eclear2(rv_err_stack_g);                                                                           \
+        }                                                                                                        \
+    }                                                                                                            \
 }
 
 
@@ -110,12 +141,12 @@ extern hid_t link_table_iter_err_min_g;
  * spaces.
  */
 #ifdef PLUGIN_DEBUG
-#define TESTING(S)  {printf("Testing %-62s\n\n", S); fflush(stdout);}
+#define TESTING(S)  {printf("Testing %-66s\n\n", S); fflush(stdout);}
 #define PASSED()    {puts("PASSED\n"); fflush(stdout);}
 #define H5_FAILED() {puts("*FAILED*\n"); fflush(stdout);}
 #define SKIPPED()   {puts("- SKIPPED -\n"); fflush(stdout);}
 #else
-#define TESTING(S)  {printf("Testing %-62s", S); fflush(stdout);}
+#define TESTING(S)  {printf("Testing %-66s", S); fflush(stdout);}
 #define PASSED()    {puts("PASSED"); fflush(stdout);}
 #define H5_FAILED() {puts("*FAILED*"); fflush(stdout);}
 #define SKIPPED()   {puts("- SKIPPED -"); fflush(stdout);}
