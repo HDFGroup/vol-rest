@@ -2700,7 +2700,59 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                 {
                     obj_URI = loc_obj->URI;
                     parent_obj_type = loc_obj->obj_type;
-                    attr_iter_object = loc_obj;
+
+                    if (NULL == (attr_iter_object = RV_malloc(sizeof(RV_object_t))))
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate copy of attribute's parent object")
+
+                    memcpy(attr_iter_object, loc_obj, sizeof(RV_object_t));
+
+                    /* Since we already have the attribute's parent object, but still need an hid_t for it
+                     * to pass to the user's object, we will just copy the current object, making sure to
+                     * increment the ref. counts for the object's fields so that closing it at the end of
+                     * this function does not close the fields themselves in the real object, such as a
+                     * dataset's dataspace.
+                     */
+                    switch (parent_obj_type) {
+                        case H5I_FILE:
+                        case H5I_GROUP:
+                            if (H5Iinc_ref(loc_obj->u.group.gcpl_id) < 0)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL, "can't increment field's ref. count for copy of attribute's parent group")
+                            break;
+
+                        case H5I_DATATYPE:
+                            if (H5Iinc_ref(loc_obj->u.datatype.dtype_id) < 0)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL, "can't increment field's ref. count for copy of attribute's parent datatype")
+                            if (H5Iinc_ref(loc_obj->u.datatype.tcpl_id) < 0)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL, "can't increment field's ref. count for copy of attribute's parent datatype")
+                            break;
+
+                        case H5I_DATASET:
+                            if (H5Iinc_ref(loc_obj->u.dataset.dtype_id) < 0)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL, "can't increment field's ref. count for copy of attribute's parent dataset")
+                            if (H5Iinc_ref(loc_obj->u.dataset.space_id) < 0)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL, "can't increment field's ref. count for copy of attribute's parent dataset")
+                            if (H5Iinc_ref(loc_obj->u.dataset.dapl_id) < 0)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL, "can't increment field's ref. count for copy of attribute's parent dataset")
+                            if (H5Iinc_ref(loc_obj->u.dataset.dcpl_id) < 0)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL, "can't increment field's ref. count for copy of attribute's parent dataset")
+                            break;
+
+                        case H5I_ATTR:
+                        case H5I_UNINIT:
+                        case H5I_BADID:
+                        case H5I_DATASPACE:
+                        case H5I_REFERENCE:
+                        case H5I_VFL:
+                        case H5I_VOL:
+                        case H5I_GENPROP_CLS:
+                        case H5I_GENPROP_LST:
+                        case H5I_ERROR_CLASS:
+                        case H5I_ERROR_MSG:
+                        case H5I_ERROR_STACK:
+                        case H5I_NTYPES:
+                        default:
+                            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
+                    } /* end switch */
 
 #ifdef PLUGIN_DEBUG
                     printf("-> H5Aiterate2(): Attribute's parent object URI: %s\n", loc_obj->URI);
@@ -12354,6 +12406,8 @@ RV_traverse_attr_table(attr_table_entry *attr_table, size_t num_entries, iter_da
                     FUNC_GOTO_ERROR(H5E_ATTR, H5E_CALLBACK, callback_ret, "H5Aiterate (_by_name) user callback failed for attribute '%s'", attr_table[last_idx].attr_name)
                 else if (callback_ret > 0)
                     FUNC_GOTO_DONE(callback_ret)
+
+                if (last_idx == 0) break;
             } /* end for */
 
             break;
