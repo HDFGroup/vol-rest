@@ -2881,6 +2881,26 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
             } /* end switch */
 
             /* Register an hid_t for the attribute's parent object */
+
+            /* In order to appease H5VLobject_register(), ensure that the proper interface is initialized before
+             * calling it, just as in the code for link iteration.
+             */
+            if (H5I_FILE == parent_obj_type || H5I_GROUP == parent_obj_type) {
+                H5E_BEGIN_TRY {
+                    H5Gopen2(-1, NULL, H5P_DEFAULT);
+                } H5E_END_TRY;
+            } /* end if */
+            else if (H5I_DATATYPE == parent_obj_type) {
+                H5E_BEGIN_TRY {
+                    H5Topen2(-1, NULL, H5P_DEFAULT);
+                } H5E_END_TRY;
+            } /* end else if */
+            else {
+                H5E_BEGIN_TRY {
+                    H5Dopen2(-1, NULL, H5P_DEFAULT);
+                } H5E_END_TRY;
+            } /* end else */
+
             if ((attr_iter_object_id = H5VLobject_register(attr_iter_object, parent_obj_type, REST_g)) < 0)
                 FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "can't create ID for parent object for attribute iteration")
             attr_iter_data.iter_obj_id = attr_iter_object_id;
@@ -6254,8 +6274,8 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                         H5I_type_t obj_type = H5I_GROUP;
                         htri_t     search_ret;
 
-                        search_ret = RV_find_object_by_path(loc_obj, link_path_dirname, &obj_type, RV_copy_object_URI_callback,
-                                NULL, temp_URI);
+                        search_ret = RV_find_object_by_path(loc_obj, link_path_dirname, &obj_type,
+                                RV_copy_object_URI_callback, NULL, temp_URI);
                         if (!search_ret || search_ret < 0)
                             FUNC_GOTO_ERROR(H5E_LINK, H5E_PATH, FAIL, "can't locate parent group for link")
                     } /* end if */
@@ -6344,8 +6364,8 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                 H5I_type_t obj_type = H5I_GROUP;
                 htri_t     search_ret;
 
-                search_ret = RV_find_object_by_path(loc_obj, link_path_dirname, &obj_type, RV_copy_object_URI_callback,
-                        NULL, temp_URI);
+                search_ret = RV_find_object_by_path(loc_obj, link_path_dirname, &obj_type,
+                        RV_copy_object_URI_callback, NULL, temp_URI);
                 if (!search_ret || search_ret < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_PATH, FAIL, "can't locate parent group for link")
             } /* end if */
@@ -6926,15 +6946,15 @@ static herr_t
 RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific_t specific_type,
                    hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
-    RV_object_t *theobj = (RV_object_t *) obj;
+    RV_object_t *loc_obj = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
     printf("-> Received object-specific call with following parameters:\n");
     printf("     - Object-specific call type: %s\n", object_specific_type_to_string(specific_type));
-    printf("     - loc_id object's URI: %s\n", theobj->URI);
-    printf("     - loc_id object's type: %s\n", object_type_to_string(theobj->obj_type));
-    printf("     - loc_id object's domain path: %s\n\n", theobj->domain->u.file.filepath_name);
+    printf("     - loc_id object's URI: %s\n", loc_obj->URI);
+    printf("     - loc_id object's type: %s\n", object_type_to_string(loc_obj->obj_type));
+    printf("     - loc_id object's domain path: %s\n\n", loc_obj->domain->u.file.filepath_name);
 #endif
 
     switch (specific_type) {
@@ -6970,8 +6990,8 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
 
                     /* Locate the object for the reference, setting the ref_obj_type and ref_obj_URI fields in the process */
                     objref->ref_obj_type = H5I_UNINIT;
-                    search_ret = RV_find_object_by_path(theobj, name, &objref->ref_obj_type, RV_copy_object_URI_callback,
-                            NULL, objref->ref_obj_URI);
+                    search_ret = RV_find_object_by_path(loc_obj, name, &objref->ref_obj_type,
+                            RV_copy_object_URI_callback, NULL, objref->ref_obj_URI);
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_PATH, FAIL, "can't locate ref obj. by path")
 
@@ -7631,8 +7651,8 @@ done:
  *              an HTTP response for the type of an object that a link
  *              points to and copy that type into the callback_data_out
  *              parameter, which should be a H5I_type_t *. This callback
- *              is used to help H5Oopen determine what type of object it
- *              is working with and make the appropriate object open call.
+ *              is used to help RV_find_object_by_path() determine what
+ *              type of object it is working with.
  *
  * Return:      Non-negative on success/Negative on failure
  *
@@ -7640,11 +7660,12 @@ done:
  *              September, 2017
  */
 static herr_t
-RV_get_obj_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+RV_get_obj_type_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
     H5I_type_t *obj_type = (H5I_type_t *) callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;
     char       *parsed_string;
+    char       *target_link_name = (char *) callback_data_in;
     herr_t      ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -7653,6 +7674,8 @@ RV_get_obj_type_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data
 
     if (!HTTP_response)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
+    if (!target_link_name)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "target link name was NULL")
     if (!obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "object type pointer was NULL")
 
@@ -8615,12 +8638,13 @@ done:
 /*-------------------------------------------------------------------------
  * Function:    RV_find_object_by_path
  *
- * Purpose:     Given a pathname, this function is responsible for making
+ * Purpose:     XXX: Given a pathname, this function is responsible for making
  *              HTTP GET requests to the server in order to retrieve
  *              information about an object. It is also responsible for
- *              detecting when a pathname refers to a soft link to an
- *              object and then making the appropriate HTTP GET request
- *              using the link's value as the real pathname to the object.
+ *              retrieving a link's value when a pathname refers to a soft
+ *              link to an object and then making the appropriate HTTP GET
+ *              request using the link's value as the real pathname to the
+ *              object.
  *
  *              Note that in order to support improved performance from the
  *              client side, a server operation was added to directly
@@ -8633,6 +8657,20 @@ done:
  *              object was to traverse links in the file, but this caused
  *              too much communication between client and server and would
  *              start to become problematic for deeply-nested objects.
+ *
+ *              There are two main cases that have to be handled here, the
+ *              case where we know the type of the object being searched for
+ *              and the case where we do not. In the end, both cases will
+ *              make a final request to retrieve the desired information
+ *              about the resulting target object, but the two cases arrive
+ *              in different ways.
+ *
+ *              If we know the type of the object being searched for, we can
+ *              directly make the HTTP GET request to retrieve the object's
+ *              information. Otherwise, we have to search for the group that
+ *              contains the link to the target object, determine the target
+ *              object's type by looking at the link, then make the
+ *              appropriate HTTP GET request.
  *
  * Return:      Non-negative on success, negative on failure
  *
@@ -8649,7 +8687,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
     hbool_t  is_relative_path = FALSE;
     size_t   host_header_len = 0;
     char    *host_header = NULL;
-    char    *link_dir_name = NULL;
+    char    *path_dirname = NULL;
     char    *url_encoded_link_name = NULL;
     char     temp_URI[URI_MAX_LENGTH];
     char     request_url[URL_MAX_LENGTH];
@@ -8670,15 +8708,12 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
             obj_path, object_type_to_string(parent_obj->obj_type), parent_obj->URI);
 #endif
 
-    /* XXX: Try to better organize the unknown object type case */
-
     /* In order to not confuse the server, make sure the path has no leading spaces */
     while (*obj_path == ' ') obj_path++;
 
-    /* Handle the awkward case where "." is being searched for, by just supplying the
-     * optional callback with the supplied parent object and letting it do special
-     * processing. This can avoid unnecessarily making a trip to the server to retrieve
-     * information about an object that is already known.
+    /* If the path "." is being searched for, referring to the current group, retrieve the
+     * information about the current group and supply it to the optional callback. Calling
+     * this function in this way .
      */
     if (!strcmp(obj_path, ".")) {
 #ifdef PLUGIN_DEBUG
@@ -8687,11 +8722,11 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
 
         *target_object_type = H5I_GROUP;
         callback_data_in = parent_obj;
-        FUNC_GOTO_DONE(TRUE);
+        goto request;
     } /* end if */
 
     /* Check to see whether the path references the root group, which is a case that
-     * must be specially handled
+     * can be specially handled
      */
     if (!strcmp(obj_path, "/")) {
         *target_object_type = H5I_GROUP;
@@ -8714,97 +8749,41 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
                 obj_path++;
     } /* end else */
 
-
-    /* If the object type was specified as H5I_UNINIT, the caller does not know the type of the
-     * target object, as in when calling something like H5Oopen(). Since the request URL to
-     * retrieve the actual object cannot be properly formed without knowing what type of object
-     * is being searched for, some extra preprocessing has to be done first in order to retrieve
-     * the object's type.
+    /* If the caller has specified H5I_UNINIT for the target object's type, or has specified that
+     * it is possible the given pathname is actually a symbolic link to the target object, we must
+     * make a few extra server requests to ensure that the target object's type gets determined and
+     * set correctly before making the final HTTP GET request.
      */
     if (H5I_UNINIT == *target_object_type) {
-        hbool_t empty_dirname;
+        H5I_type_t obj_type;
+        hbool_t    empty_dirname;
+        htri_t     search_ret;
 
 #ifdef PLUGIN_DEBUG
-        printf("-> Unknown target object type; retrieving object type\n\n");
+        printf("-> Unknown target object type or possible symbolic link for path name; retrieving object type\n\n");
 #endif
 
         /* In case the user specified a path which contains multiple groups on the way to the
          * one which the object in question should be under, extract out the path to the final
          * group in the chain */
-        if (NULL == (link_dir_name = RV_dirname(obj_path)))
+        if (NULL == (path_dirname = RV_dirname(obj_path)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get path dirname")
-        empty_dirname = !strcmp(link_dir_name, "");
+        empty_dirname = !strcmp(path_dirname, "");
 
         /* If the path to the final group in the chain wasn't empty, get the URI of the final
          * group and search for the object in question within that group. Otherwise, the
          * supplied parent group is the one that should be housing the object, so search from
          * there.
          */
-        if (!empty_dirname) {
-            H5I_type_t obj_type = H5I_GROUP;
-            htri_t     search_ret;
 
-            search_ret = RV_find_object_by_path(parent_obj, link_dir_name, &obj_type,
-                    RV_copy_object_URI_callback, NULL, temp_URI);
-            if (!search_ret || search_ret < 0)
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate parent group")
-
-            intermediate_groups_in_path = TRUE;
-        } /* end if */
+        search_ret = RV_find_object_by_path(parent_obj, empty_dirname ? "." : path_dirname, &obj_type,
+                RV_get_obj_type_callback, RV_basename(obj_path), target_object_type);
+        if (!search_ret || search_ret < 0)
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate parent group and retrieve type for object of unknown type")
     } /* end if */
 
-
-    /* Setup cURL for making GET requests */
-
-    /* Setup the "Host: " header */
-    host_header_len = strlen(parent_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
-
-    strcpy(host_header, host_string);
-
-    curl_headers = curl_slist_append(curl_headers, strncat(host_header, parent_obj->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
-
-    /* Disable use of Expect: 100 Continue HTTP response */
-    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
-
-
-    if (H5I_UNINIT == *target_object_type) {
-        /* Now that we have a base group to search from which will be guaranteed to contain the
-         * target object (if it exists), try to grab the link to the target object and get its
-         * object type. */
-        snprintf(request_url, URL_MAX_LENGTH,
-                 "%s/groups/%s/links/%s",
-                 base_URL,
-                 intermediate_groups_in_path ? temp_URI : parent_obj->URI,
-                 RV_basename(obj_path));
-
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
-
-#ifdef PLUGIN_DEBUG
-        printf("-> Retrieving link for object of unknown type at URL %s\n\n", request_url);
-
-        printf("   /**********************************\\\n");
-        printf("-> | Making GET request to the server |\n");
-        printf("   \\**********************************/\n\n");
-#endif
-
-        CURL_PERFORM(curl, H5E_LINK, H5E_PATH, FALSE);
-
-        if (RV_parse_response(response_buffer.buffer, NULL, target_object_type, RV_get_obj_type_callback) < 0)
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link type")
-
-#ifdef PLUGIN_DEBUG
-        printf("-> Found link for object of unknown type and captured link type: %s\n\n", object_type_to_string(*target_object_type));
-#endif
-    } /* end if */
-
+request:
+    /* Make the final HTTP GET request */
 
     /* Craft the request URL based on the type of the object we're looking for and whether or not
      * the path given is a relative path or not.
@@ -8860,6 +8839,24 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
     printf("-> Searching for object by URL: %s\n\n", request_url);
 #endif
 
+    /* Setup cURL for making GET requests */
+
+    /* Setup the "Host: " header */
+    host_header_len = strlen(parent_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
+    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+
+    strcpy(host_header, host_string);
+
+    curl_headers = curl_slist_append(curl_headers, strncat(host_header, parent_obj->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+
+    /* Disable use of Expect: 100 Continue HTTP response */
+    curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
@@ -8880,15 +8877,47 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
     printf("-> Object %s\n\n", ret_value ? "found" : "not found");
 #endif
 
+
+    if (H5I_UNINIT == *target_object_type) {
+        /* Now that we have a base group to search from which will be guaranteed to contain the
+         * target object (if it exists), try to grab the link to the target object and get its
+         * object type. */
+        snprintf(request_url, URL_MAX_LENGTH,
+                 "%s/groups/%s/links/%s",
+                 base_URL,
+                 intermediate_groups_in_path ? temp_URI : parent_obj->URI,
+                 RV_basename(obj_path));
+
+        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+
+#ifdef PLUGIN_DEBUG
+        printf("-> Retrieving link for object of unknown type at URL %s\n\n", request_url);
+
+        printf("   /**********************************\\\n");
+        printf("-> | Making GET request to the server |\n");
+        printf("   \\**********************************/\n\n");
+#endif
+
+        CURL_PERFORM(curl, H5E_LINK, H5E_PATH, FALSE);
+
+        if (RV_parse_response(response_buffer.buffer, NULL, target_object_type, RV_get_obj_type_callback) < 0)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link type")
+
+#ifdef PLUGIN_DEBUG
+        printf("-> Found link for object of unknown type and captured link type: %s\n\n", object_type_to_string(*target_object_type));
+#endif
+    } /* end if */
+
 done:
     if (ret_value > 0) {
         if (obj_found_callback && RV_parse_response(response_buffer.buffer,
-                    callback_data_in, callback_data_out, obj_found_callback) < 0)
-                FUNC_DONE_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "can't perform callback operation")
+                callback_data_in, callback_data_out, obj_found_callback) < 0)
+            FUNC_DONE_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "can't perform callback operation")
     } /* end if */
 
-    if (link_dir_name)
-        RV_free(link_dir_name);
+    if (path_dirname)
+        RV_free(path_dirname);
     if (host_header)
         RV_free(host_header);
 
@@ -11313,7 +11342,8 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
             H5I_type_t obj_type = H5I_GROUP;
             htri_t     search_ret;
 
-            search_ret = RV_find_object_by_path(pobj, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
+            search_ret = RV_find_object_by_path(pobj, path_dirname, &obj_type,
+                    RV_copy_object_URI_callback, NULL, target_URI);
             if (!search_ret || search_ret < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, FAIL, "can't locate target for dataset link")
         } /* end if */
