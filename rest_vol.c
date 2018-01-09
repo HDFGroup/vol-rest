@@ -29,7 +29,6 @@
  *          http://hdfgroup.org/pubs/papers/RESTful_HDF5.pdf.
  */
 /* XXX: Implement support for opening objects by soft/external link */
-/* XXX: Implement _iterate functions */
 /* XXX: Eventually replace CURL PUT calls with CURLOPT_UPLOAD calls */
 /* XXX: Fix up url-encoding for link names every place it can be used */
 
@@ -284,6 +283,8 @@ hid_t obj_err_maj_g = -1;
 hid_t parse_err_min_g = -1;
 hid_t link_table_err_min_g = -1;
 hid_t link_table_iter_err_min_g = -1;
+hid_t attr_table_err_min_g = -1;
+hid_t attr_table_iter_err_min_g = -1;
 
 /*
  * The CURL pointer used for all cURL operations.
@@ -321,18 +322,23 @@ static struct {
 
 /*
  * A struct which is filled out and passed to the callback function
- * RV_link_iter_callback when performing link iteration through the
- * calling of H5Literate (_by_name)/H5Lvisit (_by_name).
+ * RV_link_iter_callback or RV_attr_iter_callback when performing
+ * link and attribute iteration through the calling of
+ * H5Literate (_by_name)/H5Lvisit (_by_name) or H5Aiterate (_by_name).
  */
-typedef struct link_iter_data {
+typedef struct iter_data {
     H5_iter_order_t  iter_order;
-    H5L_iterate_t    iter_op;
     H5_index_t       index_type;
     hbool_t          is_recursive;
     hsize_t         *idx_p;
-    hid_t            parent_group_id;
+    hid_t            iter_obj_id;
     void            *op_data;
-} link_iter_data;
+
+    union {
+        H5A_operator2_t attr_iter_op;
+        H5L_iterate_t   link_iter_op;
+    } iter_function;
+} iter_data;
 
 /*
  * A struct which is filled out during link iteration and contains
@@ -350,6 +356,18 @@ typedef struct link_table_entry {
         size_t            num_entries;
     } subgroup;
 } link_table_entry;
+
+/*
+ * A struct which is filled out during attribute iteration and
+ * contains all of the information needed to iterate through
+ * attributes by both alphabetical order and creation order in
+ * increasing and decreasing fashion.
+ */
+typedef struct attr_table_entry {
+    H5A_info_t attr_info;
+    double     crt_time;
+    char       attr_name[ATTRIBUTE_NAME_MAX_LENGTH];
+} attr_table_entry;
 
 /* Host header string for specifying the host (Domain) for requests */
 const char * const host_string = "Host: ";
@@ -382,6 +400,11 @@ const char *link_domain_keys2[] = { "h5domain", (const char *) 0 };
 const char *links_keys[]              = { "links", (const char *) 0 };
 const char *link_title_keys[]         = { "title", (const char *) 0 };
 const char *link_creation_time_keys[] = { "created", (const char *) 0 };
+
+/* Keys to retrieve all of the information from an object when doing attribute iteration */
+const char *attributes_keys[]         = { "attributes", (const char *) 0 };
+const char *attr_name_keys[]          = { "name", (const char *) 0 };
+const char *attr_creation_time_keys[] = { "created", (const char *) 0 };
 
 /* Keys to retrieve the attribute count of an object */
 const char *attribute_count_keys[] = { "attributeCount", (const char *) 0 };
@@ -524,6 +547,7 @@ static herr_t RV_get_obj_type_callback(char *HTTP_response, void *callback_data_
 static herr_t RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_attr_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_attr_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_object_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_group_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
@@ -561,10 +585,14 @@ static herr_t RV_convert_dataspace_selection_to_string(hid_t space_id, char **se
 static herr_t RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t dcpl, char **create_request_body, size_t *create_request_body_len);
 static herr_t RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl_id, char **creation_properties_body, size_t *creation_properties_body_len);
 
-/* Helper function to build a table of links recursively or non-recursively starting from a given group */
+/* Helper functions to work with a table of attributes for attribute iteration */
+static herr_t RV_build_attr_table(char *HTTP_response, hbool_t sort, int(*sort_func)(const void *, const void *), attr_table_entry **attr_table, size_t *num_entries);
+static herr_t RV_traverse_attr_table(attr_table_entry *attr_table, size_t num_entries, iter_data *iter_data);
+
+/* Helper functions to work with a table of links for link iteration */
 static herr_t RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int (*sort_func)(const void *, const void *), link_table_entry **link_table, size_t *num_entries);
 static void   RV_free_link_table(link_table_entry *link_table, size_t num_entries);
-static herr_t RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_iter_data *iter_data, const char *cur_link_rel_path);
+static herr_t RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_data *iter_data, const char *cur_link_rel_path);
 
 #ifdef PLUGIN_DEBUG
 /* Helper functions to print out useful debugging information */
@@ -732,8 +760,12 @@ RVinit(void)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for JSON parsing failures")
     if ((link_table_err_min_g = H5Ecreate_msg(rv_err_class_g, H5E_MINOR, "Can't build table of links for iteration")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for link table build error")
-    if ((link_table_iter_err_min_g = H5Ecreate_msg(rv_err_class_g, H5E_MINOR, "Can't iterate over link table")) < 0)
+    if ((link_table_iter_err_min_g = H5Ecreate_msg(rv_err_class_g, H5E_MINOR, "Can't iterate through link table")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for link table iteration error")
+    if ((attr_table_err_min_g = H5Ecreate_msg(rv_err_class_g, H5E_MINOR, "Can't build table of attribute's for iteration")) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for attribute table build error")
+    if ((attr_table_iter_err_min_g = H5Ecreate_msg(rv_err_class_g, H5E_MINOR, "Can't iterate through attribute table")) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create message for attribute iteration error")
 
     /* Register the plugin with the library */
     if (RV_init() < 0)
@@ -2145,17 +2177,17 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
                         case H5I_FILE:
                         case H5I_GROUP:
                             snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                                    base_URL, parent_obj_URI, url_encoded_attr_name);
+                                     base_URL, parent_obj_URI, url_encoded_attr_name);
                             break;
 
                         case H5I_DATATYPE:
                             snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                                    base_URL, parent_obj_URI, url_encoded_attr_name);
+                                     base_URL, parent_obj_URI, url_encoded_attr_name);
                             break;
 
                         case H5I_DATASET:
                             snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                                    base_URL, parent_obj_URI, url_encoded_attr_name);
+                                     base_URL, parent_obj_URI, url_encoded_attr_name);
                             break;
 
                         case H5I_ATTR:
@@ -2336,8 +2368,13 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                  hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
+    H5I_type_t   parent_obj_type = H5I_UNINIT;
     size_t       host_header_len = 0;
+    hid_t        attr_iter_object_id = -1;
+    void        *attr_iter_object = NULL;
     char        *host_header = NULL;
+    char        *obj_URI;
+    char         temp_URI[URI_MAX_LENGTH];
     char         request_url[URL_MAX_LENGTH];
     char        *url_encoded_attr_name = NULL;
     herr_t       ret_value = SUCCEED;
@@ -2358,8 +2395,6 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
         case H5VL_ATTR_DELETE:
         {
             char *attr_name = NULL;
-            char *obj_URI = NULL;
-            char  temp_URI[URI_MAX_LENGTH];
 
             /* Check for write access */
             if (!(loc_obj->domain->u.file.intent & H5F_ACC_RDWR))
@@ -2371,11 +2406,12 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                 {
                     attr_name = va_arg(arguments, char *);
                     obj_URI = loc_obj->URI;
+                    parent_obj_type = loc_obj->obj_type;
 
 #ifdef PLUGIN_DEBUG
                     printf("-> H5Adelete(): Attribute's name: %s\n", attr_name);
                     printf("-> H5Adelete(): Attribute's parent object URI: %s\n", loc_obj->URI);
-                    printf("-> H5Adelete(): Attribute's parent object type: %s\n\n", object_type_to_string(loc_obj->obj_type));
+                    printf("-> H5Adelete(): Attribute's parent object type: %s\n\n", object_type_to_string(parent_obj_type));
 #endif
 
                     break;
@@ -2384,8 +2420,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                 /* H5Adelete_by_name */
                 case H5VL_OBJECT_BY_NAME:
                 {
-                    H5I_type_t obj_type = H5I_UNINIT;
-                    htri_t     search_ret;
+                    htri_t search_ret;
 
                     attr_name = va_arg(arguments, char *);
 
@@ -2394,7 +2429,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                     printf("-> H5Adelete_by_name(): Path to object that attribute is attached to: %s\n\n", loc_params.loc_data.loc_by_name.name);
 #endif
 
-                    search_ret = RV_find_object_by_path(loc_obj, loc_params.loc_data.loc_by_name.name, &obj_type,
+                    search_ret = RV_find_object_by_path(loc_obj, loc_params.loc_data.loc_by_name.name, &parent_obj_type,
                             RV_copy_object_URI_callback, NULL, temp_URI);
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, FAIL, "can't locate object that attribute is attached to")
@@ -2402,7 +2437,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
 #ifdef PLUGIN_DEBUG
                     printf("-> H5Adelete_by_name(): found attribute's parent object by given path\n");
                     printf("-> H5Adelete_by_name(): attribute's parent object URI: %s\n", temp_URI);
-                    printf("-> H5Adelete_by_name(): attribute's parent object type: %s\n\n", object_type_to_string(obj_type));
+                    printf("-> H5Adelete_by_name(): attribute's parent object type: %s\n\n", object_type_to_string(parent_obj_type));
 #endif
 
                     obj_URI = temp_URI;
@@ -2435,21 +2470,21 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
              * or
              * "/datasets/<id>/attributes/<attr name>,
              * depending on the type of the object the attribute is attached to. */
-            switch (loc_params.obj_type) {
+            switch (parent_obj_type) {
                 case H5I_FILE:
                 case H5I_GROUP:
                     snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                            base_URL, obj_URI, url_encoded_attr_name);
+                             base_URL, obj_URI, url_encoded_attr_name);
                     break;
 
                 case H5I_DATATYPE:
                     snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                            base_URL, obj_URI, url_encoded_attr_name);
+                             base_URL, obj_URI, url_encoded_attr_name);
                     break;
 
                 case H5I_DATASET:
                     snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                            base_URL, obj_URI, url_encoded_attr_name);
+                             base_URL, obj_URI, url_encoded_attr_name);
                     break;
 
                 case H5I_ATTR:
@@ -2507,34 +2542,33 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
             const char *attr_name = va_arg(arguments, const char *);
             htri_t     *ret = va_arg(arguments, htri_t *);
             long        http_response;
-            char       *obj_URI;
-            char        temp_URI[URI_MAX_LENGTH];
 
             switch (loc_params.type) {
                 /* H5Aexists */
                 case H5VL_OBJECT_BY_SELF:
                 {
+                    obj_URI = loc_obj->URI;
+                    parent_obj_type = loc_obj->obj_type;
+
 #ifdef PLUGIN_DEBUG
                     printf("-> H5Aexists(): Attribute's parent object URI: %s\n", loc_obj->URI);
-                    printf("-> H5Aexists(): Attribute's parent object type: %s\n\n", object_type_to_string(loc_obj->obj_type));
+                    printf("-> H5Aexists(): Attribute's parent object type: %s\n\n", object_type_to_string(parent_obj_type));
 #endif
 
-                    obj_URI = loc_obj->URI;
                     break;
                 } /* H5VL_OBJECT_BY_SELF */
 
                 /* H5Aexists_by_name */
                 case H5VL_OBJECT_BY_NAME:
                 {
-                    H5I_type_t obj_type = H5I_UNINIT;
-                    htri_t     search_ret;
+                    htri_t search_ret;
 
 #ifdef PLUGIN_DEBUG
                     printf("-> H5Aexists_by_name(): loc_id object type: %s\n", object_type_to_string(loc_obj->obj_type));
                     printf("-> H5Aexists_by_name(): Path to object that attribute is attached to: %s\n\n", loc_params.loc_data.loc_by_name.name);
 #endif
 
-                    search_ret = RV_find_object_by_path(loc_obj, loc_params.loc_data.loc_by_name.name, &obj_type,
+                    search_ret = RV_find_object_by_path(loc_obj, loc_params.loc_data.loc_by_name.name, &parent_obj_type,
                             RV_copy_object_URI_callback, NULL, temp_URI);
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, FAIL, "can't locate object that attribute is attached to")
@@ -2542,7 +2576,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
 #ifdef PLUGIN_DEBUG
                     printf("-> H5Aexists_by_name(): found attribute's parent object by given path\n");
                     printf("-> H5Aexists_by_name(): attribute's parent object URI: %s\n", temp_URI);
-                    printf("-> H5Aexists_by_name(): attribute's parent object type: %s\n\n", object_type_to_string(obj_type));
+                    printf("-> H5Aexists_by_name(): attribute's parent object type: %s\n\n", object_type_to_string(parent_obj_type));
 #endif
 
                     obj_URI = temp_URI;
@@ -2569,21 +2603,21 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
              * or
              * "/datasets/<id>/attributes/<attr name>,
              * depending on the type of the object the attribute is attached to. */
-            switch (loc_params.obj_type) {
+            switch (parent_obj_type) {
                 case H5I_FILE:
                 case H5I_GROUP:
                     snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                            base_URL, obj_URI, url_encoded_attr_name);
+                             base_URL, obj_URI, url_encoded_attr_name);
                     break;
 
                 case H5I_DATATYPE:
                     snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                            base_URL, obj_URI, url_encoded_attr_name);
+                             base_URL, obj_URI, url_encoded_attr_name);
                     break;
 
                 case H5I_DATASET:
                     snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                            base_URL, obj_URI, url_encoded_attr_name);
+                             base_URL, obj_URI, url_encoded_attr_name);
                     break;
 
                 case H5I_ATTR:
@@ -2647,7 +2681,194 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
 
         /* H5Aiterate (_by_name) */
         case H5VL_ATTR_ITER:
-            FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL, "H5Aiterate and H5Aiterate_by_name are unsupported")
+        {
+            iter_data attr_iter_data;
+
+            attr_iter_data.is_recursive               = FALSE;
+            attr_iter_data.index_type                 = va_arg(arguments, H5_index_t);
+            attr_iter_data.iter_order                 = va_arg(arguments, H5_iter_order_t);
+            attr_iter_data.idx_p                      = va_arg(arguments, hsize_t *);
+            attr_iter_data.iter_function.attr_iter_op = va_arg(arguments, H5A_operator2_t);
+            attr_iter_data.op_data                    = va_arg(arguments, void *);
+
+            if (!attr_iter_data.iter_function.attr_iter_op)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_ATTRITERERROR, FAIL, "no attribute iteration function specified")
+
+            switch (loc_params.type) {
+                /* H5Aiterate2 */
+                case H5VL_OBJECT_BY_SELF:
+                {
+                    obj_URI = loc_obj->URI;
+                    parent_obj_type = loc_obj->obj_type;
+                    attr_iter_object = loc_obj;
+
+#ifdef PLUGIN_DEBUG
+                    printf("-> H5Aiterate2(): Attribute's parent object URI: %s\n", loc_obj->URI);
+                    printf("-> H5Aiterate2(): Attribute's parent object type: %s\n\n", object_type_to_string(parent_obj_type));
+#endif
+
+                    break;
+                } /* H5VL_OBJECT_BY_SELF */
+
+                /* H5Aiterate_by_name */
+                case H5VL_OBJECT_BY_NAME:
+                {
+                    htri_t search_ret;
+
+#ifdef PLUGIN_DEBUG
+                    printf("-> H5Aiterate_by_name(): loc_id object type: %s\n", object_type_to_string(loc_obj->obj_type));
+                    printf("-> H5Aiterate_by_name(): Path to object that attribute is attached to: %s\n\n", loc_params.loc_data.loc_by_name.name);
+#endif
+
+                    search_ret = RV_find_object_by_path(loc_obj, loc_params.loc_data.loc_by_name.name, &parent_obj_type,
+                            RV_copy_object_URI_callback, NULL, temp_URI);
+                    if (!search_ret || search_ret < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, FAIL, "can't locate object that attribute is attached to")
+
+#ifdef PLUGIN_DEBUG
+                    printf("-> H5Aiterate_by_name(): found attribute's parent object by given path\n");
+                    printf("-> H5Aiterate_by_name(): attribute's parent object URI: %s\n", temp_URI);
+                    printf("-> H5Aiterate_by_name(): attribute's parent object type: %s\n\n", object_type_to_string(parent_obj_type));
+
+                    printf("-> Opening attribute's parent object to generate an hid_t and work around VOL layer\n\n");
+#endif
+
+                    /* Since the VOL layer doesn't directly pass down the parent object's ID for the attribute,
+                     * explicitly open the object here so that a valid hid_t can be passed to the user's
+                     * attribute iteration callback. In the case of H5Aiterate, we are already passed the
+                     * attribute's parent object, so we just generate a second ID for it instead of needing
+                     * to open it explicitly.
+                     */
+                    switch (parent_obj_type) {
+                        case H5I_FILE:
+                        case H5I_GROUP:
+                            if (NULL == (attr_iter_object = RV_group_open(loc_obj, loc_params,
+                                    loc_params.loc_data.loc_by_name.name, H5P_DEFAULT, H5P_DEFAULT, NULL)))
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTOPENOBJ, FAIL, "can't open attribute's parent group")
+                            break;
+
+                        case H5I_DATATYPE:
+                            if (NULL == (attr_iter_object = RV_datatype_open(loc_obj, loc_params,
+                                    loc_params.loc_data.loc_by_name.name, H5P_DEFAULT, H5P_DEFAULT, NULL)))
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTOPENOBJ, FAIL, "can't open attribute's parent datatype")
+                            break;
+
+                        case H5I_DATASET:
+                            if (NULL == (attr_iter_object = RV_dataset_open(loc_obj, loc_params,
+                                    loc_params.loc_data.loc_by_name.name, H5P_DEFAULT, H5P_DEFAULT, NULL)))
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTOPENOBJ, FAIL, "can't open attribute's parent dataset")
+                            break;
+
+                        case H5I_ATTR:
+                        case H5I_UNINIT:
+                        case H5I_BADID:
+                        case H5I_DATASPACE:
+                        case H5I_REFERENCE:
+                        case H5I_VFL:
+                        case H5I_VOL:
+                        case H5I_GENPROP_CLS:
+                        case H5I_GENPROP_LST:
+                        case H5I_ERROR_CLASS:
+                        case H5I_ERROR_MSG:
+                        case H5I_ERROR_STACK:
+                        case H5I_NTYPES:
+                        default:
+                            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
+                    } /* end switch */
+
+                    obj_URI = temp_URI;
+
+                    break;
+                } /* H5VL_OBJECT_BY_NAME */
+
+                case H5VL_OBJECT_BY_IDX:
+                case H5VL_OBJECT_BY_ADDR:
+                case H5VL_OBJECT_BY_REF:
+                default:
+                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid loc_params type")
+            } /* end switch */
+
+            /* Redirect cURL from the base URL to
+             * "/groups/<id>/attributes",
+             * "/datatypes/<id>/attributes"
+             * or
+             * "/datasets/<id>/attributes",
+             * depending on the type of the object the attribute is attached to. */
+            switch (parent_obj_type) {
+                case H5I_FILE:
+                case H5I_GROUP:
+                    snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes",
+                             base_URL, obj_URI);
+                    break;
+
+                case H5I_DATATYPE:
+                    snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes",
+                             base_URL, obj_URI);
+                    break;
+
+                case H5I_DATASET:
+                    snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes",
+                             base_URL, obj_URI);
+                    break;
+
+                case H5I_ATTR:
+                case H5I_UNINIT:
+                case H5I_BADID:
+                case H5I_DATASPACE:
+                case H5I_REFERENCE:
+                case H5I_VFL:
+                case H5I_VOL:
+                case H5I_GENPROP_CLS:
+                case H5I_GENPROP_LST:
+                case H5I_ERROR_CLASS:
+                case H5I_ERROR_MSG:
+                case H5I_ERROR_STACK:
+                case H5I_NTYPES:
+                default:
+                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
+            } /* end switch */
+
+            /* Register an hid_t for the attribute's parent object */
+            if ((attr_iter_object_id = H5VLobject_register(attr_iter_object, parent_obj_type, REST_g)) < 0)
+                FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "can't create ID for parent object for attribute iteration")
+            attr_iter_data.iter_obj_id = attr_iter_object_id;
+
+            /* Make a GET request to the server to retrieve all of the attributes attached to the given object */
+
+            /* Setup the "Host: " header */
+            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
+            if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+
+            strcpy(host_header, host_string);
+
+            curl_headers = curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+
+            /* Disable use of Expect: 100 Continue HTTP response */
+            curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+
+#ifdef PLUGIN_DEBUG
+            printf("-> Retrieving all attributes attached to object using URL: %s\n\n", request_url);
+
+            printf("   /**********************************\\\n");
+            printf("-> | Making GET request to the server |\n");
+            printf("   \\**********************************/\n\n");
+#endif
+
+            CURL_PERFORM(curl, H5E_ATTR, H5E_CANTGET, FAIL);
+
+            if (RV_parse_response(response_buffer.buffer, &attr_iter_data, NULL, RV_attr_iter_callback) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't iterate over attributes")
+
+            break;
+        } /* H5VL_ATTR_ITER */
 
         /* H5Arename (_by_name) */
         case H5VL_ATTR_RENAME:
@@ -2660,6 +2881,23 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
 done:
     if (host_header)
         RV_free(host_header);
+
+    if (attr_iter_object_id >= 0) {
+        if (H5I_GROUP == parent_obj_type) {
+            if (H5Gclose(attr_iter_object_id) < 0)
+                FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close attribute iteration parent group")
+        }
+        else if (H5I_DATATYPE == parent_obj_type) {
+            if (H5Tclose(attr_iter_object_id) < 0)
+                FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close attribute iteration parent datatype")
+        }
+        else if (H5I_DATASET == parent_obj_type) {
+            if (H5Dclose(attr_iter_object_id) < 0)
+                FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close attribute iteration parent dataset")
+        } /* end else if */
+        else
+            FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "invalid attribute parent object type")
+    } /* end if */
 
     /* In case a custom DELETE request was made, reset the request to NULL
      * to prevent any possible future issues with requests
@@ -5819,10 +6057,10 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
                     } /* end if */
 
                     snprintf(request_url, URL_MAX_LENGTH,
-                            "%s/groups/%s/links/%s",
-                            base_URL,
-                            empty_dirname ? loc_obj->URI : temp_URI,
-                            RV_basename(loc_params.loc_data.loc_by_name.name));
+                             "%s/groups/%s/links/%s",
+                             base_URL,
+                             empty_dirname ? loc_obj->URI : temp_URI,
+                             RV_basename(loc_params.loc_data.loc_by_name.name));
 
                     break;
                 } /* H5VL_OBJECT_BY_SELF */
@@ -6114,24 +6352,24 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
         /* H5Literate/visit (_by_name) */
         case H5VL_LINK_ITER:
         {
-            link_iter_data iter_data;
+            iter_data link_iter_data;
 
-            iter_data.is_recursive = va_arg(arguments, int);
-            iter_data.index_type   = va_arg(arguments, H5_index_t);
-            iter_data.iter_order   = va_arg(arguments, H5_iter_order_t);
-            iter_data.idx_p        = va_arg(arguments, hsize_t *);
-            iter_data.iter_op      = va_arg(arguments, H5L_iterate_t);
-            iter_data.op_data      = va_arg(arguments, void *);
+            link_iter_data.is_recursive               = va_arg(arguments, int);
+            link_iter_data.index_type                 = va_arg(arguments, H5_index_t);
+            link_iter_data.iter_order                 = va_arg(arguments, H5_iter_order_t);
+            link_iter_data.idx_p                      = va_arg(arguments, hsize_t *);
+            link_iter_data.iter_function.link_iter_op = va_arg(arguments, H5L_iterate_t);
+            link_iter_data.op_data                    = va_arg(arguments, void *);
 
-            if (!iter_data.iter_op)
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTITERATE, FAIL, "no iteration function specified")
+            if (!link_iter_data.iter_function.link_iter_op)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_LINKITERERROR, FAIL, "no link iteration function specified")
 
             switch (loc_params.type) {
                 /* H5Literate/H5Lvisit */
                 case H5VL_OBJECT_BY_SELF:
                 {
 #ifdef PLUGIN_DEBUG
-                    printf("-> Opening group for link iteration\n\n");
+                    printf("-> Opening group for link iteration to generate an hid_t and work around VOL layer\n\n");
 #endif
 
                     /* Since the VOL doesn't directly pass down the group's hid_t, explicitly open the group
@@ -6153,7 +6391,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                 case H5VL_OBJECT_BY_NAME:
                 {
 #ifdef PLUGIN_DEBUG
-                    printf("-> Opening group for link iteration\n\n");
+                    printf("-> Opening group for link iteration to generate an hid_t and work around VOL layer\n\n");
 #endif
 
                     /* Since the VOL doesn't directly pass down the group's hid_t, explicitly open the group
@@ -6198,7 +6436,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             /* Register an hid_t for the group object */
             if ((link_iter_group_id = H5VLobject_register(link_iter_group_object, H5I_GROUP, REST_g)) < 0)
                 FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "can't create ID for group to be iterated over")
-            iter_data.parent_group_id = link_iter_group_id;
+            link_iter_data.iter_obj_id = link_iter_group_id;
 
             /* Make a GET request to the server to retrieve all of the links in the given group */
 
@@ -6231,7 +6469,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
 
             CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
 
-            if (RV_parse_response(response_buffer.buffer, &iter_data, NULL, RV_link_iter_callback) < 0)
+            if (RV_parse_response(response_buffer.buffer, &link_iter_data, NULL, RV_link_iter_callback) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't iterate over links")
 
             break;
@@ -6249,7 +6487,7 @@ done:
 
     if (link_iter_group_id >= 0)
         if (H5Gclose(link_iter_group_id) < 0)
-            FUNC_DONE_ERROR(H5E_LINK, H5E_CLOSEERROR, FAIL, "can't close link iteration group")
+            FUNC_DONE_ERROR(H5E_LINK, H5E_CANTCLOSEOBJ, FAIL, "can't close link iteration group")
 
     /* In case a custom DELETE request was made, reset the request to NULL
      * to prevent any possible future issues with requests
@@ -6802,7 +7040,7 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
                      * depending on the type of the object. Also set the
                      * object's type in the H5O_info_t struct.
                      */
-                    switch (loc_obj->obj_type) {
+                    switch (obj_type) {
                         case H5I_FILE:
                         case H5I_GROUP:
                         {
@@ -7119,6 +7357,27 @@ dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *
 
     return 0;
 } /* end dataset_read_scatter_op() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    cmp_attributes_by_creation_order
+ *
+ * Purpose:     Qsort callback to sort attributes by creation order when
+ *              doing attribute iteration
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              January, 2018
+ */
+static int
+cmp_attributes_by_creation_order(const void *attr1, const void *attr2)
+{
+    attr_table_entry *_attr1 = (attr_table_entry *) attr1;
+    attr_table_entry *_attr2 = (attr_table_entry *) attr2;
+
+    return ((_attr1->crt_time > _attr2->crt_time) - (_attr1->crt_time < _attr2->crt_time));
+} /* end cmp_attributes_by_creation_order() */
 
 
 /*-------------------------------------------------------------------------
@@ -7652,9 +7911,9 @@ done:
  *              response for links in a group and iterate through them,
  *              setting up a H5L_info_t struct and calling the supplied
  *              callback function for each link. The callback_data_in
- *              parameter should be a link_iter_data struct *, containing
- *              all the data necessary for link iteration, such as the
- *              callback function, iteration order, index type, etc.
+ *              parameter should be a iter_data struct *, containing all
+ *              the data necessary for link iteration, such as the callback
+ *              function, iteration order, index type, etc.
  *
  * Return:      Non-negative on success/Negative on failure
  *
@@ -7665,26 +7924,26 @@ static herr_t
 RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
     link_table_entry *link_table = NULL;
-    link_iter_data   *iter_data = (link_iter_data *) callback_data_in;
+    iter_data        *link_iter_data = (iter_data *) callback_data_in;
     size_t            link_table_num_entries;
     herr_t            ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
-    printf("-> Iterating %s through links according to server's HTTP response\n\n", iter_data->is_recursive ? "recursively" : "non-recursively");
+    printf("-> Iterating %s through links according to server's HTTP response\n\n", link_iter_data->is_recursive ? "recursively" : "non-recursively");
 #endif
 
     if (!HTTP_response)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
-    if (!iter_data)
+    if (!link_iter_data)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link iteration data pointer was NULL")
 
     /* Build a table of all of the links in the given group */
-    if (H5_INDEX_CRT_ORDER == iter_data->index_type) {
+    if (H5_INDEX_CRT_ORDER == link_iter_data->index_type) {
         /* This code assumes that links are returned in alphabetical order by default. If the user has requested them
          * by creation order, sort them this way while building the link table. If, in the future, links are not returned
          * in alphabetical order by default, this code should be changed to reflect this.
          */
-        if (RV_build_link_table(HTTP_response, iter_data->is_recursive, TRUE, cmp_links_by_creation_order,
+        if (RV_build_link_table(HTTP_response, link_iter_data->is_recursive, TRUE, cmp_links_by_creation_order,
                 &link_table, &link_table_num_entries) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table")
 
@@ -7693,15 +7952,15 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
 #endif
     } /* end if */
     else {
-        if (RV_build_link_table(HTTP_response, iter_data->is_recursive, FALSE, NULL,
+        if (RV_build_link_table(HTTP_response, link_iter_data->is_recursive, FALSE, NULL,
                 &link_table, &link_table_num_entries) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table")
     } /* end else */
 
     /* Begin iteration */
     if (link_table)
-        if (RV_traverse_link_table(link_table, link_table_num_entries, iter_data, NULL) < 0)
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTITERATE, FAIL, "can't iterate over link table")
+        if (RV_traverse_link_table(link_table, link_table_num_entries, link_iter_data, NULL) < 0)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_LINKITERERROR, FAIL, "can't iterate over link table")
 
 done:
     if (link_table)
@@ -7709,6 +7968,71 @@ done:
 
     return ret_value;
 } /* end RV_link_iter_callback() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_attr_iter_callback
+ *
+ * Purpose:     A callback for RV_parse_response which will search an HTTP
+ *              response for attributes attached to an object and iterate
+ *              through them, setting up a H5A_info_t struct and calling
+ *              the supplied callback function for each attribute. The
+ *              callback_data_in parameter should be a iter_data struct *,
+ *              containing all the data necessary for attribute iteration,
+ *              such as the callback function, iteration order, index type,
+ *              etc.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              January, 2018
+ */
+static herr_t
+RV_attr_iter_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+{
+    attr_table_entry *attr_table = NULL;
+    iter_data        *attr_iter_data = (iter_data *) callback_data_in;
+    size_t            attr_table_num_entries;
+    herr_t            ret_value = SUCCEED;
+
+#ifdef PLUGIN_DEBUG
+    printf("-> Iterating through attributes according to server's HTTP response\n\n");
+#endif
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
+    if (!attr_iter_data)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "attribute iteration data pointer was NULL")
+
+    /* Build a table of all of the attributes attached to the given object */
+    if (H5_INDEX_CRT_ORDER == attr_iter_data->index_type) {
+        /* This code assumes that attributes are returned in alphabetical order by default. If the user has requested them
+         * by creation order, sort them this way while building the attribute table. If, in the future, attributes are not
+         * returned in alphabetical order by default, this code should be changed to reflect this.
+         */
+        if (RV_build_attr_table(HTTP_response, TRUE, cmp_attributes_by_creation_order, &attr_table, &attr_table_num_entries) < 0)
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTBUILDATTRTABLE, FAIL, "can't build attribute table")
+
+#ifdef PLUGIN_DEBUG
+        printf("-> Attribute table sorted according to creation order\n\n");
+#endif
+    } /* end if */
+    else {
+        if (RV_build_attr_table(HTTP_response, FALSE, NULL, &attr_table, &attr_table_num_entries) < 0)
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTBUILDATTRTABLE, FAIL, "can't build attribute table")
+    } /* end else */
+
+    /* Begin iteration */
+    if (attr_table)
+        if (RV_traverse_attr_table(attr_table, attr_table_num_entries, attr_iter_data) < 0)
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_ATTRITERERROR, FAIL, "can't iterate over attribute table")
+
+done:
+    if (attr_table)
+        RV_free(attr_table);
+
+    return ret_value;
+} /* end RV_attr_iter_callback() */
 
 
 /*-------------------------------------------------------------------------
@@ -11813,14 +12137,252 @@ done:
 
 
 /*-------------------------------------------------------------------------
+ * Function:    RV_build_attr_table
+ *
+ * Purpose:     XXX: Given a
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              January, 2018
+ */
+static herr_t
+RV_build_attr_table(char *HTTP_response, hbool_t sort, int (*sort_func)(const void *, const void *),
+    attr_table_entry **attr_table, size_t *num_entries)
+{
+    attr_table_entry *table = NULL;
+    yajl_val          parse_tree = NULL, key_obj;
+    yajl_val          attr_obj, attr_field_obj;
+    size_t            i, num_attributes;
+    size_t            depth_counter = 0;
+    char             *attribute_section_ptr;
+    char             *advancement_ptr;
+    char              current_symbol;
+    herr_t            ret_value = SUCCEED;
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response was NULL")
+    if (!attr_table)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "attr table pointer was NULL")
+    if (!num_entries)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "attr table num. entries pointer was NULL")
+
+#ifdef PLUGIN_DEBUG
+    printf("-> Building table of attributes\n\n");
+#endif
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_PARSEERROR, FAIL, "parsing JSON failed")
+
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, attributes_keys, yajl_t_array)))
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "retrieval of attributes object failed")
+
+    num_attributes = YAJL_GET_ARRAY(key_obj)->len;
+    if (num_attributes < 0) FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "number of attributes attached to object was negative")
+
+    /* If this object has no attributes, just finish */
+    if (!num_attributes)
+        FUNC_GOTO_DONE(SUCCEED);
+
+    if (NULL == (table = RV_malloc(num_attributes * sizeof(*table))))
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for attribute table")
+
+    /* Find the beginning of the "attributes" section */
+    if (NULL == (attribute_section_ptr = strstr(HTTP_response, "\"attributes\"")))
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_PARSEERROR, FAIL, "can't find \"attributes\" information section in HTTP response")
+
+    /* For each attribute, grab its name and creation time, then find its corresponding JSON
+     * subsection, place a NULL terminator at the end of it in order to "extract out" that
+     * subsection, and pass it to the "get attribute info" callback function in order to fill
+     * out a H5A_info_t struct for the attribute.
+     */
+    for (i = 0; i < num_attributes; i++) {
+        char *attr_name;
+
+        attr_obj = YAJL_GET_ARRAY(key_obj)->values[i];
+
+        /* Get the current attribute's name */
+        if (NULL == (attr_field_obj = yajl_tree_get(attr_obj, attr_name_keys, yajl_t_string)))
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "retrieval of attribute name failed")
+
+        if (NULL == (attr_name = YAJL_GET_STRING(attr_field_obj)))
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "returned attribute name was NULL")
+
+        strncpy(table[i].attr_name, attr_name, ATTRIBUTE_NAME_MAX_LENGTH);
+
+        /* Get the current attribute's creation time */
+        if (NULL == (attr_field_obj = yajl_tree_get(attr_obj, attr_creation_time_keys, yajl_t_number)))
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "retrieval of attribute creation time failed")
+
+        if (!YAJL_IS_DOUBLE(attr_field_obj))
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "returned attribute creation time is not a double")
+
+        table[i].crt_time = YAJL_GET_DOUBLE(attr_field_obj);
+
+        /* Process the JSON for the current attribute and fill out a H5A_info_t struct for it */
+
+        /* Find the beginning and end of the JSON section for this attribute */
+        if (NULL == (attribute_section_ptr = strstr(attribute_section_ptr, "{")))
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_PARSEERROR, FAIL, "can't find start of current attribute's JSON section")
+        depth_counter++;
+        advancement_ptr = attribute_section_ptr + 1;
+
+        /* Continue forward through the string buffer character-by-character, incrementing the depth counter
+         * for each '{' found and decrementing it for each '}' found, until the depth counter reaches 0 once
+         * again, signalling the end of the attribute subsection
+         */
+        /* XXX: Note that this approach will have problems with '{' or '}' appearing inside the attribute subsection
+         * where one would not normally expect it, such as in an attribute's name, and will either cause early termination
+         * (an incomplete JSON representation) or will throw the below error about not being able to locate the end
+         * of the attribute subsection.
+         */
+        while (depth_counter) {
+            current_symbol = *advancement_ptr++;
+
+            /* If we reached the end of the string before finding the end of the attribute subsection, something is
+             * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
+             */
+            if (!current_symbol)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_PARSEERROR, FAIL, "can't locate end of attribute subsection - stray '{' is likely")
+
+            if (current_symbol == '{')
+                depth_counter++;
+            else if (current_symbol == '}')
+                depth_counter--;
+        } /* end while */
+
+        /* Since it is not important if we destroy the contents of the HTTP response buffer,
+         * NULL terminators will be placed in the buffer strategically at the end of each attribute
+         * subsection (in order to "extract out" that subsection) corresponding to each individual
+         * attribute, and pass it to the "get attribute info" callback.
+         */
+        *advancement_ptr = '\0';
+
+        /* Fill out a H5A_info_t struct for this attribute */
+        if (RV_parse_response(attribute_section_ptr, NULL, &table[i].attr_info, RV_get_attr_info_callback) < 0)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "couldn't get link info")
+
+        /* Continue on to the next attribute subsection */
+        attribute_section_ptr = advancement_ptr + 1;
+    } /* end for */
+
+#ifdef PLUGIN_DEBUG
+    printf("-> Attribute table built\n\n");
+#endif
+
+    if (sort) qsort(table, num_attributes, sizeof(*table), sort_func);
+
+done:
+    if (ret_value >= 0) {
+        if (attr_table)
+            *attr_table = table;
+        if (num_entries)
+            *num_entries = num_attributes;
+    } /* end if */
+
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    return ret_value;
+} /* end RV_build_attr_table() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_traverse_attr_table
+ *
+ * Purpose:     Helper function to actually iterate over an attribute
+ *              table, calling the user's callback for each attribute
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              January, 2018
+ */
+static herr_t
+RV_traverse_attr_table(attr_table_entry *attr_table, size_t num_entries, iter_data *attr_iter_data)
+{
+    size_t last_idx;
+    herr_t callback_ret;
+    herr_t ret_value = SUCCEED;
+
+    switch (attr_iter_data->iter_order) {
+        case H5_ITER_NATIVE:
+        case H5_ITER_INC:
+        {
+#ifdef PLUGIN_DEBUG
+            printf("-> Beginning iteration in increasing order\n\n");
+#endif
+
+            for (last_idx = (attr_iter_data->idx_p ? *attr_iter_data->idx_p : 0); last_idx < num_entries; last_idx++) {
+#ifdef PLUGIN_DEBUG
+                printf("-> Attribute %zu name: %s\n", last_idx, attr_table[last_idx].attr_name);
+                printf("-> Attribute %zu creation time: %f\n", last_idx, attr_table[last_idx].crt_time);
+                printf("-> Attribute %zu data size: %llu\n\n", last_idx, attr_table[last_idx].attr_info.data_size);
+
+                printf("-> Calling supplied callback function\n\n");
+#endif
+
+                /* Call the user's callback */
+                callback_ret = attr_iter_data->iter_function.attr_iter_op(attr_iter_data->iter_obj_id, attr_table[last_idx].attr_name, &attr_table[last_idx].attr_info, attr_iter_data->op_data);
+                if (callback_ret < 0)
+                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_CALLBACK, callback_ret, "H5Aiterate (_by_name) user callback failed for attribute '%s'", attr_table[last_idx].attr_name)
+                else if (callback_ret > 0)
+                    FUNC_GOTO_DONE(callback_ret)
+            } /* end for */
+
+            break;
+        } /* H5_ITER_NATIVE H5_ITER_INC */
+
+        case H5_ITER_DEC:
+        {
+#ifdef PLUGIN_DEBUG
+            printf("-> Beginning iteration in decreasing order\n\n");
+#endif
+
+            for (last_idx = (attr_iter_data->idx_p ? *attr_iter_data->idx_p : num_entries - 1); last_idx >= 0; last_idx--) {
+#ifdef PLUGIN_DEBUG
+                printf("-> Attribute %zu name: %s\n", last_idx, attr_table[last_idx].attr_name);
+                printf("-> Attribute %zu creation time: %f\n", last_idx, attr_table[last_idx].crt_time);
+                printf("-> Attribute %zu data size: %llu\n\n", last_idx, attr_table[last_idx].attr_info.data_size);
+
+                printf("-> Calling supplied callback function\n\n");
+#endif
+
+                /* Call the user's callback */
+                callback_ret = attr_iter_data->iter_function.attr_iter_op(attr_iter_data->iter_obj_id, attr_table[last_idx].attr_name, &attr_table[last_idx].attr_info, attr_iter_data->op_data);
+                if (callback_ret < 0)
+                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_CALLBACK, callback_ret, "H5Aiterate (_by_name) user callback failed for attribute '%s'", attr_table[last_idx].attr_name)
+                else if (callback_ret > 0)
+                    FUNC_GOTO_DONE(callback_ret)
+            } /* end for */
+
+            break;
+        } /* H5_ITER_DEC */
+
+        case H5_ITER_UNKNOWN:
+        case H5_ITER_N:
+        default:
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "unknown attribute iteration order")
+    } /* end switch */
+
+#ifdef PLUGIN_DEBUG
+    printf("-> Attribute iteration finished\n\n");
+#endif
+
+done:
+    return ret_value;
+} /* end RV_traverse_attr_table() */
+
+
+/*-------------------------------------------------------------------------
  * Function:    RV_build_link_table
  *
  * Purpose:     XXX: Given a
  *
- * Return:      Non-NULL on success/NULL on failure
+ * Return:      Non-negative on success/Negative on failure
  *
  * Programmer:  Jordan Henderson
- *              January, 2017
+ *              January, 2018
  */
 static herr_t
 RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int (*sort_func)(const void *, const void *),
@@ -11952,7 +12514,7 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
 
         /* Since it is not important if we destroy the contents of the HTTP response buffer,
          * NULL terminators will be placed in the buffer strategically at the end of each link
-         * subsection, in order to "extract out" that subsection, corresponding to each individual
+         * subsection (in order to "extract out" that subsection) corresponding to each individual
          * link, and pass it to the "get link info" callback.
          */
         *advancement_ptr = '\0';
@@ -12051,7 +12613,7 @@ done:
  * Return:      Nothing
  *
  * Programmer:  Jordan Henderson
- *              January, 2017
+ *              January, 2018
  */
 static void
 RV_free_link_table(link_table_entry *link_table, size_t num_entries)
@@ -12076,10 +12638,10 @@ RV_free_link_table(link_table_entry *link_table, size_t num_entries)
  * Return:      Non-negative on success/Negative on failure
  *
  * Programmer:  Jordan Henderson
- *              January, 2017
+ *              January, 2018
  */
 static herr_t
-RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_iter_data *iter_data, const char *cur_link_rel_path)
+RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_data *link_iter_data, const char *cur_link_rel_path)
 {
     static size_t  depth = 0;
     size_t         last_idx;
@@ -12091,7 +12653,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
     if (NULL == (link_rel_path = (char *) RV_malloc(link_rel_path_len)))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link's relative pathname buffer")
 
-    switch (iter_data->iter_order) {
+    switch (link_iter_data->iter_order) {
         case H5_ITER_NATIVE:
         case H5_ITER_INC:
         {
@@ -12099,7 +12661,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
             printf("-> Beginning iteration in increasing order\n\n");
 #endif
 
-            for (last_idx = (iter_data->idx_p ? *iter_data->idx_p : 0); last_idx < num_entries; last_idx++) {
+            for (last_idx = (link_iter_data->idx_p ? *link_iter_data->idx_p : 0); last_idx < num_entries; last_idx++) {
 #ifdef PLUGIN_DEBUG
                 printf("-> Link %zu name: %s\n", last_idx, link_table[last_idx].link_name);
                 printf("-> Link %zu creation time: %f\n", last_idx, link_table[last_idx].crt_time);
@@ -12117,7 +12679,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
 #endif
 
                 /* Call the user's callback */
-                callback_ret = iter_data->iter_op(iter_data->parent_group_id, link_rel_path, &link_table[last_idx].link_info, iter_data->op_data);
+                callback_ret = link_iter_data->iter_function.link_iter_op(link_iter_data->iter_obj_id, link_rel_path, &link_table[last_idx].link_info, link_iter_data->op_data);
                 if (callback_ret < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret, "H5Literate/H5Lvisit (_by_name) user callback failed for link '%s'", link_table[last_idx].link_name)
                 else if (callback_ret > 0)
@@ -12130,8 +12692,8 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
 #endif
 
                     depth++;
-                    if (RV_traverse_link_table(link_table[last_idx].subgroup.subgroup_link_table, link_table[last_idx].subgroup.num_entries, iter_data, link_rel_path) < 0)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTITERATE, FAIL, "can't iterate over links in subgroup '%s'", link_table[last_idx].link_name)
+                    if (RV_traverse_link_table(link_table[last_idx].subgroup.subgroup_link_table, link_table[last_idx].subgroup.num_entries, link_iter_data, link_rel_path) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_LINKITERERROR, FAIL, "can't iterate over links in subgroup '%s'", link_table[last_idx].link_name)
                     depth--;
 
 #ifdef PLUGIN_DEBUG
@@ -12159,7 +12721,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
             printf("-> Beginning iteration in decreasing order\n\n");
 #endif
 
-            for (last_idx = (iter_data->idx_p ? *iter_data->idx_p : num_entries - 1); last_idx >= 0; last_idx--) {
+            for (last_idx = (link_iter_data->idx_p ? *link_iter_data->idx_p : num_entries - 1); last_idx >= 0; last_idx--) {
 #ifdef PLUGIN_DEBUG
                 printf("-> Link %zu name: %s\n", last_idx, link_table[last_idx].link_name);
                 printf("-> Link %zu creation time: %f\n", last_idx, link_table[last_idx].crt_time);
@@ -12177,7 +12739,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
 #endif
 
                 /* Call the user's callback */
-                callback_ret = iter_data->iter_op(iter_data->parent_group_id, link_rel_path, &link_table[last_idx].link_info, iter_data->op_data);
+                callback_ret = link_iter_data->iter_function.link_iter_op(link_iter_data->iter_obj_id, link_rel_path, &link_table[last_idx].link_info, link_iter_data->op_data);
                 if (callback_ret < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret, "H5Literate/H5Lvisit (_by_name) user callback failed for link '%s'", link_table[last_idx].link_name)
                 else if (callback_ret > 0)
@@ -12190,8 +12752,8 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
 #endif
 
                     depth++;
-                    if (RV_traverse_link_table(link_table[last_idx].subgroup.subgroup_link_table, link_table[last_idx].subgroup.num_entries, iter_data, link_rel_path) < 0)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTITERATE, FAIL, "can't iterate over links in subgroup '%s'", link_table[last_idx].link_name)
+                    if (RV_traverse_link_table(link_table[last_idx].subgroup.subgroup_link_table, link_table[last_idx].subgroup.num_entries, link_iter_data, link_rel_path) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_LINKITERERROR, FAIL, "can't iterate over links in subgroup '%s'", link_table[last_idx].link_name)
                     depth--;
 
 #ifdef PLUGIN_DEBUG
@@ -12228,8 +12790,8 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, link_it
 
 done:
     /* Keep track of the last index where we left off */
-    if (iter_data->idx_p && (ret_value >= 0) && (depth == 0))
-        *iter_data->idx_p = last_idx;
+    if (link_iter_data->idx_p && (ret_value >= 0) && (depth == 0))
+        *link_iter_data->idx_p = last_idx;
 
     if (link_rel_path)
         RV_free(link_rel_path);

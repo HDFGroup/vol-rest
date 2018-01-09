@@ -184,6 +184,19 @@
 #define ATTRIBUTE_GET_NUM_ATTRS_TEST_ATTRIBUTE_NAME "get_num_attrs_test_attribute"
 #define ATTRIBUTE_GET_NUM_ATTRS_TEST_SPACE_RANK     2
 
+#define ATTRIBUTE_ITERATE_TEST_DSET_SPACE_RANK 2
+#define ATTRIBUTE_ITERATE_TEST_ATTR_SPACE_RANK 2
+#define ATTRIBUTE_ITERATE_TEST_SUBGROUP_NAME   "attribute_iterate_test"
+#define ATTRIBUTE_ITERATE_TEST_DSET_NAME       "attribute_iterate_dset"
+#define ATTRIBUTE_ITERATE_TEST_ATTR_NAME       "iter_attr1"
+#define ATTRIBUTE_ITERATE_TEST_ATTR_NAME2      "iter_attr2"
+#define ATTRIBUTE_ITERATE_TEST_ATTR_NAME3      "iter_attr3"
+#define ATTRIBUTE_ITERATE_TEST_ATTR_NAME4      "iter_attr4"
+
+#define ATTRIBUTE_ITERATE_TEST_0_ATTRIBUTES_DSET_SPACE_RANK 2
+#define ATTRIBUTE_ITERATE_TEST_0_ATTRIBUTES_SUBGROUP_NAME   "attribute_iterate_test_0_attributes"
+#define ATTRIBUTE_ITERATE_TEST_0_ATTRIBUTES_DSET_NAME       "attribute_iterate_dset"
+
 #define ATTRIBUTE_UNUSED_APIS_TEST_SPACE_RANK 2
 #define ATTRIBUTE_UNUSED_APIS_TEST_ATTR_NAME  "unused_apis_attr"
 
@@ -612,6 +625,7 @@ static int test_read_attribute(void);
 static int test_rename_attribute(void);
 static int test_get_number_attributes(void);
 static int test_attribute_iterate(void);
+static int test_attribute_iterate_0_attributes(void);
 static int test_unused_attribute_API_calls(void);
 static int test_attribute_property_lists(void);
 
@@ -706,6 +720,9 @@ static int test_absolute_vs_relative_path(void);
 static int test_double_init_free(void);
 static int test_url_encoding(void);
 
+static herr_t attr_iter_callback1(hid_t location_id, const char *attr_name, const H5A_info_t *ainfo, void *op_data);
+static herr_t attr_iter_callback2(hid_t location_id, const char *attr_name, const H5A_info_t *ainfo, void *op_data);
+
 static herr_t link_iter_callback1(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
 static herr_t link_iter_callback2(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
 static herr_t link_iter_callback3(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
@@ -763,6 +780,7 @@ static int (*attribute_tests[])(void) = {
         test_rename_attribute,
         test_get_number_attributes,
         test_attribute_iterate,
+        test_attribute_iterate_0_attributes,
         test_unused_attribute_API_calls,
         test_attribute_property_lists,
         NULL
@@ -4501,16 +4519,390 @@ error:
 static int
 test_attribute_iterate(void)
 {
+    hsize_t dset_dims[ATTRIBUTE_ITERATE_TEST_DSET_SPACE_RANK];
+    hsize_t attr_dims[ATTRIBUTE_ITERATE_TEST_ATTR_SPACE_RANK];
+    size_t  i;
+    htri_t  attr_exists;
+    hid_t   file_id = -1, fapl_id = -1;
+    hid_t   container_group = -1, group_id = -1;
+    hid_t   dset_id = -1;
+    hid_t   attr_id = -1, attr_id2 = -1, attr_id3 = -1, attr_id4 = -1;
+    hid_t   dset_dtype = -1;
+    hid_t   attr_dtype = -1;
+    hid_t   dset_space_id = -1;
+    hid_t   attr_space_id = -1;
+
     TESTING("attribute iteration")
 
-    /* H5Aiterate2 */
-    /* H5Aiterate_by_name */
+    if (RVinit() < 0)
+        TEST_ERROR
 
-    SKIPPED();
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, ATTRIBUTE_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, ATTRIBUTE_ITERATE_TEST_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
+    if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
+        TEST_ERROR
+    if ((attr_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
+        TEST_ERROR
+
+    for (i = 0; i < ATTRIBUTE_ITERATE_TEST_DSET_SPACE_RANK; i++)
+        dset_dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
+    for (i = 0; i < ATTRIBUTE_ITERATE_TEST_ATTR_SPACE_RANK; i++)
+        attr_dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
+
+    if ((dset_space_id = H5Screate_simple(ATTRIBUTE_ITERATE_TEST_DSET_SPACE_RANK, dset_dims, NULL)) < 0)
+        TEST_ERROR
+    if ((attr_space_id = H5Screate_simple(ATTRIBUTE_ITERATE_TEST_ATTR_SPACE_RANK, attr_dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(group_id, ATTRIBUTE_ITERATE_TEST_DSET_NAME, dset_dtype,
+            dset_space_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    printf("Creating attributes on dataset\n");
+#endif
+
+    if ((attr_id = H5Acreate2(dset_id, ATTRIBUTE_ITERATE_TEST_ATTR_NAME, attr_dtype,
+            attr_space_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create attribute\n");
+        goto error;
+    }
+
+    if ((attr_id2 = H5Acreate2(dset_id, ATTRIBUTE_ITERATE_TEST_ATTR_NAME2, attr_dtype,
+            attr_space_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create attribute\n");
+        goto error;
+    }
+
+    if ((attr_id3 = H5Acreate2(dset_id, ATTRIBUTE_ITERATE_TEST_ATTR_NAME3, attr_dtype,
+            attr_space_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create attribute\n");
+        goto error;
+    }
+
+    if ((attr_id4 = H5Acreate2(dset_id, ATTRIBUTE_ITERATE_TEST_ATTR_NAME4, attr_dtype,
+            attr_space_id, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create attribute\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    printf("Verifying that the attributes exist\n");
+#endif
+
+    /* Verify the attributes have been created */
+    if ((attr_exists = H5Aexists(dset_id, ATTRIBUTE_ITERATE_TEST_ATTR_NAME)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if attribute exists\n");
+        goto error;
+    }
+
+    if (!attr_exists) {
+        H5_FAILED();
+        printf("    attribute did not exist\n");
+        goto error;
+    }
+
+    if ((attr_exists = H5Aexists(dset_id, ATTRIBUTE_ITERATE_TEST_ATTR_NAME2)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if attribute exists\n");
+        goto error;
+    }
+
+    if (!attr_exists) {
+        H5_FAILED();
+        printf("    attribute did not exist\n");
+        goto error;
+    }
+
+    if ((attr_exists = H5Aexists(dset_id, ATTRIBUTE_ITERATE_TEST_ATTR_NAME3)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if attribute exists\n");
+        goto error;
+    }
+
+    if (!attr_exists) {
+        H5_FAILED();
+        printf("    attribute did not exist\n");
+        goto error;
+    }
+
+    if ((attr_exists = H5Aexists(dset_id, ATTRIBUTE_ITERATE_TEST_ATTR_NAME4)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if attribute exists\n");
+        goto error;
+    }
+
+    if (!attr_exists) {
+        H5_FAILED();
+        printf("    attribute did not exist\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    printf("Iterating over attributes by attribute name in increasing order with H5Aiterate2\n");
+#endif
+
+    /* Test basic attribute iteration capability using both index types and both index orders */
+    if (H5Aiterate2(dset_id, H5_INDEX_NAME, H5_ITER_INC, NULL, attr_iter_callback1, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Aiterate2 by index type name in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    printf("Iterating over attributes by attribute name in decreasing order with H5Aiterate2\n");
+#endif
+
+    if (H5Aiterate2(dset_id, H5_INDEX_NAME, H5_ITER_DEC, NULL, attr_iter_callback1, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Aiterate2 by index type name in decreasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    printf("Iterating over attributes by creation order in increasing order with H5Aiterate2\n");
+#endif
+
+    if (H5Aiterate2(dset_id, H5_INDEX_CRT_ORDER, H5_ITER_INC, NULL, attr_iter_callback1, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Aiterate2 by index type creation order in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    printf("Iterating over attributes by creation order in decreasing order with H5Aiterate2\n");
+#endif
+
+    if (H5Aiterate2(dset_id, H5_INDEX_CRT_ORDER, H5_ITER_DEC, NULL, attr_iter_callback1, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Aiterate2 by index type creation order in decreasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    printf("Iterating over attributes by attribute name in increasing order with H5Aiterate_by_name\n");
+#endif
+
+    if (H5Aiterate_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_ITERATE_TEST_SUBGROUP_NAME "/" ATTRIBUTE_ITERATE_TEST_DSET_NAME,
+            H5_INDEX_NAME, H5_ITER_INC, NULL, attr_iter_callback1, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Aiterate_by_name by index type name in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    printf("Iterating over attributes by attribute name in decreasing order with H5Aiterate_by_name\n");
+#endif
+
+    if (H5Aiterate_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_ITERATE_TEST_SUBGROUP_NAME "/" ATTRIBUTE_ITERATE_TEST_DSET_NAME,
+            H5_INDEX_NAME, H5_ITER_DEC, NULL, attr_iter_callback1, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Aiterate_by_name by index type name in decreasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    printf("Iterating over attributes by creation order in increasing order with H5Aiterate_by_name\n");
+#endif
+
+    if (H5Aiterate_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_ITERATE_TEST_SUBGROUP_NAME "/" ATTRIBUTE_ITERATE_TEST_DSET_NAME,
+            H5_INDEX_CRT_ORDER, H5_ITER_INC, NULL, attr_iter_callback1, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Aiterate_by_name by index type creation order in increasing order failed\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    printf("Iterating over attributes by creation order in decreasing order with H5Aiterate_by_name\n");
+#endif
+
+    if (H5Aiterate_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_ITERATE_TEST_SUBGROUP_NAME "/" ATTRIBUTE_ITERATE_TEST_DSET_NAME,
+            H5_INDEX_CRT_ORDER, H5_ITER_DEC, NULL, attr_iter_callback1, NULL, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Aiterate_by_name by index type creation order in decreasing order failed\n");
+        goto error;
+    }
+
+
+    /* XXX: Test the H5Aiterate index-saving capabilities */
+
+
+    if (H5Sclose(dset_space_id) < 0)
+        TEST_ERROR
+    if (H5Sclose(attr_space_id) < 0)
+        TEST_ERROR
+    if (H5Tclose(dset_dtype) < 0)
+        TEST_ERROR
+    if (H5Tclose(attr_dtype) < 0)
+        TEST_ERROR
+    if (H5Aclose(attr_id) < 0)
+        TEST_ERROR
+    if (H5Aclose(attr_id2) < 0)
+        TEST_ERROR
+    if (H5Aclose(attr_id3) < 0)
+        TEST_ERROR
+    if (H5Aclose(attr_id4) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        H5Sclose(dset_space_id);
+        H5Sclose(attr_space_id);
+        H5Tclose(dset_dtype);
+        H5Tclose(attr_dtype);
+        H5Aclose(attr_id);
+        H5Aclose(attr_id2);
+        H5Aclose(attr_id3);
+        H5Aclose(attr_id4);
+        H5Dclose(dset_id);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+    } H5E_END_TRY;
+
+    return 1;
+}
+
+static int
+test_attribute_iterate_0_attributes(void)
+{
+    hsize_t dset_dims[ATTRIBUTE_ITERATE_TEST_0_ATTRIBUTES_DSET_SPACE_RANK];
+    size_t  i;
+    hid_t   file_id = -1, fapl_id = -1;
+    hid_t   container_group = -1, group_id = -1;
+    hid_t   dset_id = -1;
+    hid_t   dset_dtype = -1;
+    hid_t   dset_space_id = -1;
+
+    TESTING("attribute iteration on object with 0 attributes")
+
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, ATTRIBUTE_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, ATTRIBUTE_ITERATE_TEST_0_ATTRIBUTES_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
+    if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
+        TEST_ERROR
+
+    for (i = 0; i < ATTRIBUTE_ITERATE_TEST_0_ATTRIBUTES_DSET_SPACE_RANK; i++)
+        dset_dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
+
+    if ((dset_space_id = H5Screate_simple(ATTRIBUTE_ITERATE_TEST_0_ATTRIBUTES_DSET_SPACE_RANK, dset_dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(group_id, ATTRIBUTE_ITERATE_TEST_0_ATTRIBUTES_DSET_NAME, dset_dtype,
+            dset_space_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    if (H5Aiterate2(dset_id, H5_INDEX_NAME, H5_ITER_INC, NULL, attr_iter_callback2, NULL) < 0) {
+        H5_FAILED();
+        printf("    H5Aiterate2 by index type name in increasing order failed\n");
+        goto error;
+    }
+
+    if (H5Sclose(dset_space_id) < 0)
+        TEST_ERROR
+    if (H5Tclose(dset_dtype) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
+
+    return 0;
+
+error:
+    H5E_BEGIN_TRY {
+        H5Sclose(dset_space_id);
+        H5Tclose(dset_dtype);
+        H5Dclose(dset_id);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
@@ -15157,6 +15549,127 @@ error:
     } H5E_END_TRY;
 
     return 1;
+}
+
+static herr_t
+attr_iter_callback1(hid_t location_id, const char *attr_name, const H5A_info_t *ainfo, void *op_data)
+{
+    if (!strcmp(attr_name, ATTRIBUTE_ITERATE_TEST_ATTR_NAME)) {
+        if (ainfo->corder != 0) {
+            H5_FAILED();
+            printf("    attribute corder didn't match\n");
+            goto error;
+        }
+
+        if (ainfo->corder_valid != 0) {
+            H5_FAILED();
+            printf("    attribute corder_valid didn't match\n");
+            goto error;
+        }
+
+        if (ainfo->cset != 0) {
+            H5_FAILED();
+            printf("    attribute cset didn't match\n");
+            goto error;
+        }
+
+        if (ainfo->data_size != 0) {
+            H5_FAILED();
+            printf("    attribute data_size didn't match\n");
+            goto error;
+        }
+    }
+    else if (!strcmp(attr_name, ATTRIBUTE_ITERATE_TEST_ATTR_NAME2)) {
+        if (ainfo->corder != 0) {
+            H5_FAILED();
+            printf("    attribute corder didn't match\n");
+            goto error;
+        }
+
+        if (ainfo->corder_valid != 0) {
+            H5_FAILED();
+            printf("    attribute corder_valid didn't match\n");
+            goto error;
+        }
+
+        if (ainfo->cset != 0) {
+            H5_FAILED();
+            printf("    attribute cset didn't match\n");
+            goto error;
+        }
+
+        if (ainfo->data_size != 0) {
+            H5_FAILED();
+            printf("    attribute data_size didn't match\n");
+            goto error;
+        }
+    }
+    else if (!strcmp(attr_name, ATTRIBUTE_ITERATE_TEST_ATTR_NAME3)) {
+        if (ainfo->corder != 0) {
+            H5_FAILED();
+            printf("    attribute corder didn't match\n");
+            goto error;
+        }
+
+        if (ainfo->corder_valid != 0) {
+            H5_FAILED();
+            printf("    attribute corder_valid didn't match\n");
+            goto error;
+        }
+
+        if (ainfo->cset != 0) {
+            H5_FAILED();
+            printf("    attribute cset didn't match\n");
+            goto error;
+        }
+
+        if (ainfo->data_size != 0) {
+            H5_FAILED();
+            printf("    attribute data_size didn't match\n");
+            goto error;
+        }
+    }
+    else if (!strcmp(attr_name, ATTRIBUTE_ITERATE_TEST_ATTR_NAME4)) {
+        if (ainfo->corder != 0) {
+            H5_FAILED();
+            printf("    attribute corder didn't match\n");
+            goto error;
+        }
+
+        if (ainfo->corder_valid != 0) {
+            H5_FAILED();
+            printf("    attribute corder_valid didn't match\n");
+            goto error;
+        }
+
+        if (ainfo->cset != 0) {
+            H5_FAILED();
+            printf("    attribute cset didn't match\n");
+            goto error;
+        }
+
+        if (ainfo->data_size != 0) {
+            H5_FAILED();
+            printf("    attribute data_size didn't match\n");
+            goto error;
+        }
+    }
+    else {
+        H5_FAILED();
+        printf("    attribute name didn't match known names\n");
+        goto error;
+    }
+
+    return 0;
+
+error:
+    return -1;
+}
+
+static herr_t
+attr_iter_callback2(hid_t location_id, const char *attr_name, const H5A_info_t *ainfo, void *op_data)
+{
+    return 0;
 }
 
 /*

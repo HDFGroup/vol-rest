@@ -74,6 +74,13 @@ extern "C" {
  */
 #define LINK_NAME_MAX_LENGTH 2048
 
+/* Maximum length of the name of an HDF5 attribute. This is particularly
+ * important for performance by keeping locality of reference for attribute
+ * names during H5Aiterate calls. If it appears that attribute names are
+ * being truncated by the plugin, this value should be adjusted.
+ */
+#define ATTRIBUTE_NAME_MAX_LENGTH 2048
+
 /* Maximum length of the name of an external file used for storage for
  * contiguous dataset layouts.
  */
