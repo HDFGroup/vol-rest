@@ -437,6 +437,11 @@
 #define EXTERNAL_LINK_TEST_FILE_NAME     "/home/test_user1/ext_link_file"
 #define EXTERNAL_LINK_TEST_LINK_NAME     "ext_link"
 
+#define EXTERNAL_LINK_TEST_DANGLING_DSET_SPACE_RANK 2
+#define EXTERNAL_LINK_TEST_DANGLING_SUBGROUP_NAME   "external_link_dangling_test"
+#define EXTERNAL_LINK_TEST_DANGLING_LINK_NAME       "dangling_ext_link"
+#define EXTERNAL_LINK_TEST_DANGLING_DSET_NAME       "external_dataset"
+
 #define UD_LINK_TEST_UDATA_MAX_SIZE 256
 #define UD_LINK_TEST_LINK_NAME      "ud_link"
 
@@ -680,6 +685,7 @@ static int test_create_soft_link_existing_absolute(void);
 static int test_create_soft_link_dangling_relative(void);
 static int test_create_soft_link_dangling_absolute(void);
 static int test_create_external_link(void);
+static int test_create_dangling_external_link(void);
 static int test_create_user_defined_link(void);
 static int test_delete_link(void);
 static int test_copy_link(void);
@@ -841,6 +847,7 @@ static int (*link_tests[])(void) = {
         test_create_soft_link_dangling_relative,
         test_create_soft_link_dangling_absolute,
         test_create_external_link,
+        test_create_dangling_external_link,
         test_create_user_defined_link,
         test_delete_link,
         test_copy_link,
@@ -10015,7 +10022,7 @@ test_create_soft_link_existing_absolute(void)
 {
     htri_t link_exists;
     hid_t  file_id = -1, fapl = -1;
-    hid_t  container_group = -1, group_id = -1;
+    hid_t  container_group = -1, group_id = -1, root_id = -1;
 
     TESTING("create soft link to existing object by absolute path")
 
@@ -10074,15 +10081,14 @@ test_create_soft_link_existing_absolute(void)
         goto error;
     }
 
-    if (H5Gclose(group_id) < 0)
-        TEST_ERROR
-
-    if ((group_id = H5Gopen2(group_id, SOFT_LINK_EXISTING_ABSOLUTE_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
+    if ((root_id = H5Gopen2(group_id, SOFT_LINK_EXISTING_ABSOLUTE_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't open object pointed to by soft link\n");
         goto error;
     }
 
+    if (H5Gclose(root_id) < 0)
+        TEST_ERROR
     if (H5Gclose(group_id) < 0)
         TEST_ERROR
     if (H5Gclose(container_group) < 0)
@@ -10100,6 +10106,7 @@ test_create_soft_link_existing_absolute(void)
 
 error:
     H5E_BEGIN_TRY {
+        H5Gclose(root_id);
         H5Gclose(group_id);
         H5Gclose(container_group);
         H5Pclose(fapl);
@@ -10178,11 +10185,13 @@ test_create_soft_link_dangling_relative(void)
         goto error;
     }
 
-    if (H5Dopen2(group_id, SOFT_LINK_DANGLING_RELATIVE_TEST_LINK_NAME, H5P_DEFAULT) >= 0) {
-        H5_FAILED();
-        printf("    opened target of dangling link!\n");
-        goto error;
-    }
+    H5E_BEGIN_TRY {
+        if (H5Dopen2(group_id, SOFT_LINK_DANGLING_RELATIVE_TEST_LINK_NAME, H5P_DEFAULT) >= 0) {
+            H5_FAILED();
+            printf("    opened target of dangling link!\n");
+            goto error;
+        }
+    } H5E_END_TRY;
 
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
@@ -10313,11 +10322,13 @@ test_create_soft_link_dangling_absolute(void)
         goto error;
     }
 
-    if (H5Dopen2(group_id, SOFT_LINK_DANGLING_ABSOLUTE_TEST_LINK_NAME, H5P_DEFAULT) >= 0) {
-        H5_FAILED();
-        printf("    opened target of dangling link!\n");
-        goto error;
-    }
+    H5E_BEGIN_TRY {
+        if (H5Dopen2(group_id, SOFT_LINK_DANGLING_ABSOLUTE_TEST_LINK_NAME, H5P_DEFAULT) >= 0) {
+            H5_FAILED();
+            printf("    opened target of dangling link!\n");
+            goto error;
+        }
+    } H5E_END_TRY;
 
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
@@ -10397,6 +10408,15 @@ test_create_external_link(void)
     if (H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD) < 0)
         TEST_ERROR
 
+    if ((file_id = H5Fcreate(EXTERNAL_LINK_TEST_FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, fapl)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create file for external link to reference\n");
+        goto error;
+    }
+
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+
     if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
@@ -10419,8 +10439,8 @@ test_create_external_link(void)
     puts("Creating an external link to root group of other file\n");
 #endif
 
-    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/" DATASET_SMALL_WRITE_TEST_HYPERSLAB_DSET_NAME,
-            group_id, EXTERNAL_LINK_TEST_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", group_id,
+            EXTERNAL_LINK_TEST_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create external link\n");
         goto error;
@@ -10470,6 +10490,165 @@ error:
         H5Gclose(container_group);
         H5Pclose(fapl);
         H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
+    return 1;
+}
+
+static int
+test_create_dangling_external_link(void)
+{
+    hsize_t dims[EXTERNAL_LINK_TEST_DANGLING_DSET_SPACE_RANK];
+    size_t  i;
+    htri_t  link_exists;
+    hid_t   file_id = -1, ext_file_id = -1, fapl = -1;
+    hid_t   container_group = -1, group_id = -1;
+    hid_t   dset_id = -1;
+    hid_t   dset_dtype = -1;
+    hid_t   dset_dspace = -1;
+
+    TESTING("create dangling external link")
+
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    if ((fapl = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD) < 0)
+        TEST_ERROR
+
+    if ((ext_file_id = H5Fcreate(EXTERNAL_LINK_TEST_FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, fapl)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create file for external link to reference\n");
+        goto error;
+    }
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, LINK_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, EXTERNAL_LINK_TEST_DANGLING_SUBGROUP_NAME,
+            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container subgroup\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Creating a dangling external link to a dataset in other file\n");
+#endif
+
+    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/" EXTERNAL_LINK_TEST_DANGLING_DSET_NAME, group_id,
+            EXTERNAL_LINK_TEST_DANGLING_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dangling external link\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the link exists\n");
+#endif
+
+    /* Verify the link has been created */
+    if ((link_exists = H5Lexists(group_id, EXTERNAL_LINK_TEST_DANGLING_LINK_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if link exists\n");
+        goto error;
+    }
+
+    if (!link_exists) {
+        H5_FAILED();
+        printf("    link did not exist\n");
+        goto error;
+    }
+
+#ifdef PLUGIN_DEBUG
+    puts("Attempting to open non-existent dataset using dangling external link\n");
+#endif
+
+    H5E_BEGIN_TRY {
+        if (H5Dopen2(group_id, EXTERNAL_LINK_TEST_DANGLING_LINK_NAME, H5P_DEFAULT) >= 0) {
+            H5_FAILED();
+            printf("    opened non-existent dataset in other file using dangling external link!\n");
+            goto error;
+        }
+    } H5E_END_TRY;
+
+    if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
+        TEST_ERROR
+
+    for (i = 0; i < EXTERNAL_LINK_TEST_DANGLING_DSET_SPACE_RANK; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
+
+    if ((dset_dspace = H5Screate_simple(EXTERNAL_LINK_TEST_DANGLING_DSET_SPACE_RANK, dims, NULL)) < 0)
+        TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Creating target dataset for dangling external link\n");
+#endif
+
+    if ((dset_id = H5Dcreate2(ext_file_id, EXTERNAL_LINK_TEST_DANGLING_DSET_NAME, dset_dtype, dset_dspace,
+            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset in external file\n");
+        goto error;
+    }
+
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Re-attempting to open dataset using external link\n");
+#endif
+
+    if ((dset_id = H5Dopen2(group_id, EXTERNAL_LINK_TEST_DANGLING_LINK_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open dataset in external file\n");
+        goto error;
+    }
+
+    if (H5Sclose(dset_dspace) < 0)
+        TEST_ERROR
+    if (H5Tclose(dset_dtype) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(ext_file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
+
+    return 0;
+
+error:
+    H5E_BEGIN_TRY {
+        H5Sclose(dset_dspace);
+        H5Tclose(dset_dtype);
+        H5Dclose(dset_id);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl);
+        H5Fclose(file_id);
+        H5Fclose(ext_file_id);
         RVterm();
     } H5E_END_TRY;
 
