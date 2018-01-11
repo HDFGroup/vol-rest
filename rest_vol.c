@@ -28,7 +28,6 @@
  *          for HDF5 data stores as described in the paper:
  *          http://hdfgroup.org/pubs/papers/RESTful_HDF5.pdf.
  */
-/* XXX: Implement support for opening objects by soft/external link */
 /* XXX: Eventually replace CURL PUT calls with CURLOPT_UPLOAD calls */
 /* XXX: Fix up url-encoding for link names every place it can be used */
 
