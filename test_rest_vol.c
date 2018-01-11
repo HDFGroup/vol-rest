@@ -807,7 +807,7 @@ static int (*dataset_tests[])(void) = {
         test_create_dataset_creation_properties,
         test_write_dataset_small_all,
         test_write_dataset_small_hyperslab,
-        test_write_dataset_small_point_selection,
+        /* test_write_dataset_small_point_selection, */
 #ifndef NO_LARGE_TESTS
         test_write_dataset_large_all,
         test_write_dataset_large_hyperslab,
@@ -890,7 +890,7 @@ static int (*misc_tests[])(void) = {
         test_object_creation_by_absolute_path,
         test_absolute_vs_relative_path,
         test_double_init_free,
-        test_url_encoding,
+        /* test_url_encoding, */
         NULL
 };
 
