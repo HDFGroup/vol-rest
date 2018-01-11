@@ -8263,13 +8263,19 @@ static int
 test_write_dataset_data_verification(void)
 {
     hssize_t space_npoints;
-    hsize_t  dims[DATASET_DATA_VERIFY_WRITE_TEST_DSET_SPACE_RANK];
+    hsize_t  dims[DATASET_DATA_VERIFY_WRITE_TEST_DSET_SPACE_RANK] = { 10, 5, 3 };
+    hsize_t  start[DATASET_DATA_VERIFY_WRITE_TEST_DSET_SPACE_RANK];
+    hsize_t  stride[DATASET_DATA_VERIFY_WRITE_TEST_DSET_SPACE_RANK];
+    hsize_t  count[DATASET_DATA_VERIFY_WRITE_TEST_DSET_SPACE_RANK];
+    hsize_t  block[DATASET_DATA_VERIFY_WRITE_TEST_DSET_SPACE_RANK];
     size_t   i, data_size;
     hid_t    file_id = -1, fapl_id = -1;
     hid_t    container_group = -1;
     hid_t    dset_id = -1;
     hid_t    fspace_id = -1;
     void    *data = NULL;
+    void    *write_buf = NULL;
+    void    *read_buf = NULL;
 
     TESTING("verification of dataset data after write then read")
 
@@ -8293,9 +8299,6 @@ test_write_dataset_data_verification(void)
         goto error;
     }
 
-    for (i = 0; i < DATASET_DATA_VERIFY_WRITE_TEST_DSET_SPACE_RANK; i++)
-        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
-
     if ((fspace_id = H5Screate_simple(DATASET_DATA_VERIFY_WRITE_TEST_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
@@ -8306,6 +8309,10 @@ test_write_dataset_data_verification(void)
         goto error;
     }
 
+#ifdef PLUGIN_DEBUG
+    puts("Writing to dataset using H5S_ALL\n");
+#endif
+
     for (i = 0, data_size = 1; i < DATASET_DATA_VERIFY_WRITE_TEST_DSET_SPACE_RANK; i++)
         data_size *= dims[i];
     data_size *= DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE;
@@ -8315,10 +8322,6 @@ test_write_dataset_data_verification(void)
 
     for (i = 0; i < data_size / DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE; i++)
         ((int *) data)[i] = (int) i;
-
-#ifdef PLUGIN_DEBUG
-    puts("Writing to dataset\n");
-#endif
 
     if (H5Dwrite(dset_id, DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
         H5_FAILED();
@@ -8358,7 +8361,7 @@ test_write_dataset_data_verification(void)
         TEST_ERROR
 
 #ifdef PLUGIN_DEBUG
-    puts("Verifying that the data that comes back is correct\n");
+    puts("Verifying that the data that comes back is correct after writing to entire dataset\n");
 #endif
 
     if (H5Dread(dset_id, DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
@@ -8378,6 +8381,195 @@ test_write_dataset_data_verification(void)
         free(data);
         data = NULL;
     }
+
+#ifdef PLUGIN_DEBUG
+    puts("Writing to dataset using hyperslab selection\n");
+#endif
+
+    data_size = dims[1] * 2 * DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE;
+
+    if (NULL == (write_buf = malloc(data_size)))
+        TEST_ERROR
+
+    for (i = 0; i < data_size / DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE; i++)
+        ((int *) write_buf)[i] = 56;
+
+    for (i = 0, data_size = 1; i < DATASET_DATA_VERIFY_WRITE_TEST_DSET_SPACE_RANK; i++)
+        data_size *= dims[i];
+    data_size *= DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE;
+
+    if (NULL == (data = malloc(data_size)))
+        TEST_ERROR
+
+    if (H5Dread(dset_id, DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
+        H5_FAILED();
+        printf("    couldn't read from dataset\n");
+        goto error;
+    }
+
+    for (i = 0; i < 2; i++) {
+        size_t j;
+
+        for (j = 0; j < dims[1]; j++)
+            ((int *) data)[(i * dims[1] * dims[2]) + (j * dims[2])] = 56;
+    }
+
+    /* Write to first two rows of dataset */
+    start[0] = start[1] = start[2] = 0;
+    stride[0] = stride[1] = stride[2] = 1;
+    count[0] = 2; count[1] = dims[1]; count[2] = 1;
+    block[0] = block[1] = block[2] = 1;
+
+    if (H5Sselect_hyperslab(fspace_id, H5S_SELECT_SET, start, stride, count, block) < 0)
+        TEST_ERROR
+
+    if (H5Dwrite(dset_id, DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPE, H5S_ALL, fspace_id, H5P_DEFAULT, write_buf) < 0) {
+        H5_FAILED();
+        printf("    couldn't write to dataset\n");
+        goto error;
+    }
+
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dopen2(file_id, "/" DATASET_TEST_GROUP_NAME "/" DATASET_DATA_VERIFY_WRITE_TEST_DSET_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open dataset\n");
+        goto error;
+    }
+
+    if ((fspace_id = H5Dget_space(dset_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't get dataset dataspace\n");
+        goto error;
+    }
+
+    if ((space_npoints = H5Sget_simple_extent_npoints(fspace_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't get dataspace num points\n");
+        goto error;
+    }
+
+    if (NULL == (read_buf = malloc((hsize_t) space_npoints * DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE)))
+        TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the data that comes back is correct after writing to the dataset using a hyperslab selection\n");
+#endif
+
+    if (H5Dread(dset_id, DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPE, H5S_ALL, H5S_ALL, H5P_DEFAULT, read_buf) < 0) {
+        H5_FAILED();
+        printf("    couldn't read from dataset\n");
+        goto error;
+    }
+
+    if (memcmp(data, read_buf, data_size)) {
+        H5_FAILED();
+        printf("    data verification failed\n");
+        goto error;
+    }
+
+    if (data) {
+        free(data);
+        data = NULL;
+    }
+
+    if (write_buf) {
+        free(write_buf);
+        write_buf = NULL;
+    }
+
+    if (read_buf) {
+        free(read_buf);
+        read_buf = NULL;
+    }
+
+#if 0
+#ifdef PLUGIN_DEBUG
+    puts("Writing to dataset using point selection\n");
+#endif
+
+    for (i = 0, data_size = 1; i < DATASET_DATA_VERIFY_WRITE_TEST_DSET_SPACE_RANK; i++)
+        data_size *= dims[i];
+    data_size *= DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE;
+
+    if (NULL == (data = malloc(data_size)))
+            TEST_ERROR
+
+    for (i = 0; i < data_size / DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE; i++)
+        ((int *) data)[i] = (int) ;
+
+    if (H5Dwrite(dset_id, DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPE, H5S_ALL, fspace_id, H5P_DEFAULT, data) < 0) {
+        H5_FAILED();
+        printf("    couldn't write to dataset\n");
+        goto error;
+    }
+
+    if (data) {
+        free(data);
+        data = NULL;
+    }
+
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dopen2(file_id, "/" DATASET_TEST_GROUP_NAME "/" DATASET_DATA_VERIFY_WRITE_TEST_DSET_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open dataset\n");
+        goto error;
+    }
+
+    if ((fspace_id = H5Dget_space(dset_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't get dataset dataspace\n");
+        goto error;
+    }
+
+    if ((space_npoints = H5Sget_simple_extent_npoints(fspace_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't get dataspace num points\n");
+        goto error;
+    }
+
+    if (NULL == (data = malloc((hsize_t) space_npoints * DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE)))
+        TEST_ERROR
+
+#ifdef PLUGIN_DEBUG
+    puts("Verifying that the data that comes back is correct after writing to dataset using point selection\n");
+#endif
+
+    if (H5Dread(dset_id, DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data) < 0) {
+        H5_FAILED();
+        printf("    couldn't read from dataset\n");
+        goto error;
+    }
+
+    for (i = 0; i < (hsize_t) space_npoints; i++)
+        if (((int *) data)[i] != (int) i) {
+            H5_FAILED();
+            printf("    data verification failed\n");
+            goto error;
+        }
+
+    if (data) {
+        free(data);
+        data = NULL;
+    }
+
+    if (write_buf) {
+        free(write_buf);
+        write_buf = NULL;
+    }
+
+    if (read_buf) {
+        free(read_buf);
+        read_buf = NULL;
+    }
+#endif
 
     if (H5Sclose(fspace_id) < 0)
         TEST_ERROR
@@ -8399,6 +8591,8 @@ test_write_dataset_data_verification(void)
 error:
     H5E_BEGIN_TRY {
         if (data) free(data);
+        if (write_buf) free(write_buf);
+        if (read_buf) free(read_buf);
         H5Sclose(fspace_id);
         H5Dclose(dset_id);
         H5Gclose(container_group);
