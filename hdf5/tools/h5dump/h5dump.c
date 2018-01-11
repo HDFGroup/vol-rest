@@ -18,6 +18,7 @@
 #include "h5dump.h"
 #include "h5dump_ddl.h"
 #include "h5dump_xml.h"
+#include "rest_vol_public.h"
 
 /* Name of tool */
 #define PROGRAMNAME "h5dump"
@@ -1356,6 +1357,8 @@ main(int argc, const char *argv[])
     void               *tools_edata;
     char               *fname = NULL;
 
+    RVinit();
+
     h5tools_setprogname(PROGRAMNAME);
     h5tools_setstatus(EXIT_SUCCESS);
     h5tools_dump_header_format = &h5tools_standardformat;
@@ -1435,7 +1438,7 @@ main(int argc, const char *argv[])
     while(opt_ind < argc) {
         fname = HDstrdup(argv[opt_ind++]);
 
-        fid = h5tools_fopen(fname, H5F_ACC_RDONLY, H5P_DEFAULT, driver, NULL, 0);
+        fid = h5tools_fopen(fname, H5F_ACC_RDONLY, H5P_DEFAULT, "rest", NULL, 0);
 
         if (fid < 0) {
             error_msg("unable to open file \"%s\"\n", fname);
@@ -1613,6 +1616,8 @@ main(int argc, const char *argv[])
     leave(h5tools_getstatus());
 
 done:
+    RVterm();
+
     /* Free tables for objects */
     table_list_free();
 
@@ -1677,7 +1682,7 @@ h5_fileaccess(void)
 
     HDstrncpy(s, val, sizeof s);
     s[sizeof(s)-1] = '\0';
-    if (NULL==(name=HDstrtok(s, " \t\n\r"))) return fapl;
+    /* if (NULL==(name=HDstrtok(s, " \t\n\r"))) return fapl; */
 
     if (!HDstrcmp(name, "sec2")) {
         /* Unix read() and write() system calls */

@@ -30,6 +30,10 @@
 #include "h5tools_utils.h"
 #include "H5private.h"
 
+#define URL      "http://127.0.0.1:5101"
+#define USERNAME "test_user1"
+#define PASSWORD "test"
+
 /* global variables */
 hid_t H5tools_ERR_STACK_g = 0;
 hid_t H5tools_ERR_CLS_g = -1;
@@ -64,6 +68,7 @@ static const char *drivernames[]={
 #ifdef H5_HAVE_PARALLEL
     "mpio",
 #endif /* H5_HAVE_PARALLEL */
+    "rest"
 };
 
 /* This enum should match the entries in the above drivers_list since they
@@ -76,6 +81,7 @@ typedef enum {
 #ifdef H5_HAVE_PARALLEL
    ,MPIO_IDX
 #endif /* H5_HAVE_PARALLEL */
+   ,REST_IDX
 } driver_idx;
 #define NUM_DRIVERS     (sizeof(drivernames) / sizeof(drivernames[0]))
 
@@ -528,6 +534,14 @@ h5tools_get_fapl(hid_t fapl, const char *driver, unsigned *drivernum)
         } /* end if */
     }
 #endif /* H5_HAVE_PARALLEL */
+    else if (!HDstrcmp(driver, drivernames[REST_IDX])) {
+        /* REST VOL */
+        if (H5Pset_fapl_rest_vol(new_fapl, URL, USERNAME, PASSWORD) < 0)
+            goto error;
+
+        if(drivernum)
+            *drivernum = REST_IDX;
+    }
     else
         goto error;
 
