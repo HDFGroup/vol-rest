@@ -242,6 +242,7 @@
 
 #define DATASET_ENUM_TYPE_TEST_VAL_BASE_NAME "INDEX"
 #define DATASET_ENUM_TYPE_TEST_SUBGROUP_NAME "enum_type_dataset_test"
+#define DATASET_ENUM_TYPE_TEST_NUM_MEMBERS   16
 #define DATASET_ENUM_TYPE_TEST_SPACE_RANK    2
 #define DATASET_ENUM_TYPE_TEST_DSET_NAME1    "enum_native_dset"
 #define DATASET_ENUM_TYPE_TEST_DSET_NAME2    "enum_non_native_dset"
@@ -6180,7 +6181,7 @@ test_create_dataset_enum_types(void)
         goto error;
     }
 
-    for (i = 0; i < 256; i++) {
+    for (i = 0; i < DATASET_ENUM_TYPE_TEST_NUM_MEMBERS; i++) {
         char val_name[15];
 
         sprintf(val_name, "%s%zu", DATASET_ENUM_TYPE_TEST_VAL_BASE_NAME, i);
