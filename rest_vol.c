@@ -1174,7 +1174,6 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
 {
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *new_attribute = NULL;
-    curl_off_t   create_request_body_len = 0;
     size_t       create_request_nalloc = 0;
     size_t       host_header_len = 0;
     size_t       datatype_body_len = 0;
@@ -1186,6 +1185,8 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
     char        *shape_body = NULL;
     char         request_url[URL_MAX_LENGTH];
     char        *url_encoded_attr_name = NULL;
+    int          create_request_body_len = 0;
+    int          url_len = 0;
     void        *ret_value = NULL;
 
 #ifdef PLUGIN_DEBUG
@@ -1305,6 +1306,9 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
         ) < 0)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error")
 
+    if ((size_t) create_request_body_len >= create_request_nalloc)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "attribute create request body size exceeded allocated buffer size")
+
 #ifdef PLUGIN_DEBUG
     printf("-> Attribute create request JSON:\n%s\n\n", create_request_body);
 #endif
@@ -1339,18 +1343,36 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
     switch (new_attribute->u.attribute.parent_obj_type) {
         case H5I_FILE:
         case H5I_GROUP:
-            snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                     base_URL, new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
+                     base_URL, new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error")
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "attribute create URL exceeded maximum URL size")
+
             break;
 
         case H5I_DATATYPE:
-            snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                     base_URL, new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
+                     base_URL, new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error")
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "attribute create URL exceeded maximum URL size")
+
             break;
 
         case H5I_DATASET:
-            snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                     base_URL, new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
+                     base_URL, new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error")
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "attribute create URL exceeded maximum URL size")
+
             break;
 
         case H5I_ATTR:
@@ -1380,7 +1402,7 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL PUT data: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, create_request_body_len))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) create_request_body_len))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
@@ -1470,6 +1492,7 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
     char        *host_header = NULL;
     char         request_url[URL_MAX_LENGTH];
     char        *url_encoded_attr_name = NULL;
+    int          url_len = 0;
     void        *ret_value = NULL;
 
 #ifdef PLUGIN_DEBUG
@@ -1592,18 +1615,36 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
     switch (attribute->u.attribute.parent_obj_type) {
         case H5I_FILE:
         case H5I_GROUP:
-            snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error")
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "attribute open URL exceeded maximum URL size")
+
             break;
 
         case H5I_DATATYPE:
-            snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error")
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "attribute open URL exceeded maximum URL size")
+
             break;
 
         case H5I_DATASET:
-            snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error")
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "attribute open URL exceeded maximum URL size")
+
             break;
 
         case H5I_ATTR:
@@ -1722,6 +1763,7 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED dxpl_id
     char        *host_header = NULL;
     char        *url_encoded_attr_name = NULL;
     char         request_url[URL_MAX_LENGTH];
+    int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -1787,18 +1829,36 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED dxpl_id
     switch (attribute->u.attribute.parent_obj_type) {
         case H5I_FILE:
         case H5I_GROUP:
-            snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s/value",
-                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s/value",
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "attribute read URL exceeded maximum URL size")
+
             break;
 
         case H5I_DATATYPE:
-            snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s/value",
-                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s/value",
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "attribute read URL exceeded maximum URL size")
+
             break;
 
         case H5I_DATASET:
-            snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s/value",
-                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s/value",
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "attribute read URL exceeded maximum URL size")
+
             break;
 
         case H5I_ATTR:
@@ -1885,6 +1945,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
     char        *host_header = NULL;
     char        *url_encoded_attr_name = NULL;
     char         request_url[URL_MAX_LENGTH];
+    int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -1954,18 +2015,36 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
     switch (attribute->u.attribute.parent_obj_type) {
         case H5I_FILE:
         case H5I_GROUP:
-            snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s/value",
-                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s/value",
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "attribute write URL exceeded maximum URL size")
+
             break;
 
         case H5I_DATATYPE:
-            snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s/value",
-                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s/value",
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "attribute write URL exceeded maximum URL size")
+
             break;
 
         case H5I_DATASET:
-            snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s/value",
-                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name);
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s/value",
+                     base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "attribute write URL exceeded maximum URL size")
+
             break;
 
         case H5I_ATTR:
@@ -2057,6 +2136,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
     char        *host_header = NULL;
     char         request_url[URL_MAX_LENGTH];
     char        *url_encoded_attr_name = NULL;
+    int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -2107,18 +2187,36 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
                     switch (loc_obj->u.attribute.parent_obj_type) {
                         case H5I_FILE:
                         case H5I_GROUP:
-                            snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                                     base_URL, loc_obj->u.attribute.parent_obj_URI, url_encoded_attr_name);
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
+                                     base_URL, loc_obj->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                                ) < 0)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                            if (url_len >= URL_MAX_LENGTH)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Aget_info request URL exceeded maximum URL size")
+
                             break;
 
                         case H5I_DATATYPE:
-                            snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                                     base_URL, loc_obj->u.attribute.parent_obj_URI, url_encoded_attr_name);
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
+                                     base_URL, loc_obj->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                                ) < 0)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                            if (url_len >= URL_MAX_LENGTH)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Aget_info request URL exceeded maximum URL size")
+
                             break;
 
                         case H5I_DATASET:
-                            snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                                     base_URL, loc_obj->u.attribute.parent_obj_URI, url_encoded_attr_name);
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
+                                     base_URL, loc_obj->u.attribute.parent_obj_URI, url_encoded_attr_name)
+                                ) < 0)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                            if (url_len >= URL_MAX_LENGTH)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Aget_info request URL exceeded maximum URL size")
+
                             break;
 
                         case H5I_ATTR:
@@ -2176,18 +2274,36 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
                     switch (parent_obj_type) {
                         case H5I_FILE:
                         case H5I_GROUP:
-                            snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                                     base_URL, parent_obj_URI, url_encoded_attr_name);
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
+                                     base_URL, parent_obj_URI, url_encoded_attr_name)
+                                ) < 0)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                            if (url_len >= URL_MAX_LENGTH)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Aget_info_by_name request URL exceeded maximum URL size")
+
                             break;
 
                         case H5I_DATATYPE:
-                            snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                                     base_URL, parent_obj_URI, url_encoded_attr_name);
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
+                                     base_URL, parent_obj_URI, url_encoded_attr_name)
+                                ) < 0)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                            if (url_len >= URL_MAX_LENGTH)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Aget_info_by_name request URL exceeded maximum URL size")
+
                             break;
 
                         case H5I_DATASET:
-                            snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                                     base_URL, parent_obj_URI, url_encoded_attr_name);
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
+                                     base_URL, parent_obj_URI, url_encoded_attr_name)
+                                ) < 0)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                            if (url_len >= URL_MAX_LENGTH)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Aget_info_by_name request URL exceeded maximum URL size")
+
                             break;
 
                         case H5I_ATTR:
@@ -2377,6 +2493,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
     char         temp_URI[URI_MAX_LENGTH];
     char         request_url[URL_MAX_LENGTH];
     char        *url_encoded_attr_name = NULL;
+    int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -2473,18 +2590,36 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
             switch (parent_obj_type) {
                 case H5I_FILE:
                 case H5I_GROUP:
-                    snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                             base_URL, obj_URI, url_encoded_attr_name);
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
+                             base_URL, obj_URI, url_encoded_attr_name)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Adelete(_by_name) request URL exceeded maximum URL size")
+
                     break;
 
                 case H5I_DATATYPE:
-                    snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                             base_URL, obj_URI, url_encoded_attr_name);
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
+                             base_URL, obj_URI, url_encoded_attr_name)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Adelete(_by_name) request URL exceeded maximum URL size")
+
                     break;
 
                 case H5I_DATASET:
-                    snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                             base_URL, obj_URI, url_encoded_attr_name);
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
+                             base_URL, obj_URI, url_encoded_attr_name)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Adelete(_by_name) request URL exceeded maximum URL size")
+
                     break;
 
                 case H5I_ATTR:
@@ -2606,18 +2741,36 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
             switch (parent_obj_type) {
                 case H5I_FILE:
                 case H5I_GROUP:
-                    snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                             base_URL, obj_URI, url_encoded_attr_name);
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
+                             base_URL, obj_URI, url_encoded_attr_name)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Aexists(_by_name) request URL exceeded maximum URL size")
+
                     break;
 
                 case H5I_DATATYPE:
-                    snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                             base_URL, obj_URI, url_encoded_attr_name);
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
+                             base_URL, obj_URI, url_encoded_attr_name)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Aexists(_by_name) request URL exceeded maximum URL size")
+
                     break;
 
                 case H5I_DATASET:
-                    snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                             base_URL, obj_URI, url_encoded_attr_name);
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
+                             base_URL, obj_URI, url_encoded_attr_name)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Aexists(_by_name) request URL exceeded maximum URL size")
+
                     break;
 
                 case H5I_ATTR:
@@ -2849,18 +3002,36 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
             switch (parent_obj_type) {
                 case H5I_FILE:
                 case H5I_GROUP:
-                    snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes",
-                             base_URL, obj_URI);
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes",
+                             base_URL, obj_URI)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Aiterate(_by_name) request URL exceeded maximum URL size")
+
                     break;
 
                 case H5I_DATATYPE:
-                    snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes",
-                             base_URL, obj_URI);
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes",
+                             base_URL, obj_URI)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Aiterate(_by_name) request URL exceeded maximum URL size")
+
                     break;
 
                 case H5I_DATASET:
-                    snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes",
-                             base_URL, obj_URI);
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes",
+                             base_URL, obj_URI)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "H5Aiterate(_by_name) request URL exceeded maximum URL size")
+
                     break;
 
                 case H5I_ATTR:
@@ -3061,17 +3232,19 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
 {
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *new_datatype = NULL;
-    curl_off_t   commit_request_len = 0;
     size_t       commit_request_nalloc = 0;
+    size_t       link_body_nalloc = 0;
     size_t       host_header_len = 0;
     size_t       datatype_body_len = 0;
-    size_t       link_body_len = 0;
     char        *host_header = NULL;
     char        *commit_request_body = NULL;
     char        *datatype_body = NULL;
     char        *link_body = NULL;
     char        *path_dirname = NULL;
     char         request_url[URL_MAX_LENGTH];
+    int          commit_request_len = 0;
+    int          link_body_len = 0;
+    int          url_len = 0;
     void        *ret_value = NULL;
 
 #ifdef PLUGIN_DEBUG
@@ -3153,13 +3326,17 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't locate target for dataset link")
         } /* end if */
 
-        link_body_len = strlen(link_body_format) + strlen(link_basename) + (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
-        if (NULL == (link_body = (char *) RV_malloc(link_body_len)))
+        link_body_nalloc = strlen(link_body_format) + strlen(link_basename) + (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
+        if (NULL == (link_body = (char *) RV_malloc(link_body_nalloc)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for datatype link body")
 
         /* Form the Datatype Commit Link portion of the commit request using the above format
          * specifier and the corresponding arguments */
-        snprintf(link_body, link_body_len, link_body_format, empty_dirname ? parent->URI : target_URI, link_basename);
+        if ((link_body_len = snprintf(link_body, link_body_nalloc, link_body_format, empty_dirname ? parent->URI : target_URI, link_basename)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "snprintf error")
+
+        if ((size_t) link_body_len >= link_body_nalloc)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "datatype link create request body size exceeded allocated buffer size")
     } /* end if */
 
     /* Form the request body to commit the Datatype */
@@ -3174,6 +3351,9 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
              link_body ? link_body : "")
         ) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "snprintf error")
+
+    if ((size_t) commit_request_len >= commit_request_nalloc)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "datatype create request body size exceeded allocated buffer size")
 
 #ifdef PLUGIN_DEBUG
     printf("-> Datatype commit request body:\n%s\n\n", commit_request_body);
@@ -3195,7 +3375,11 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
     curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
 
     /* Redirect cURL from the base URL to "/datatypes" to commit the datatype */
-    snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes", base_URL);
+    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes", base_URL)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "snprintf error")
+
+    if (url_len >= URL_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "datatype create URL size exceeded maximum URL size")
 
 #ifdef PLUGIN_DEBUG
     printf("-> Datatype commit URL: %s\n\n", request_url);
@@ -3207,7 +3391,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, commit_request_body))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL POST data: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, commit_request_len))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) commit_request_len))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL POST data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
@@ -3499,6 +3683,7 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
     char        *host_header = NULL;
     char        *create_request_body = NULL;
     char         request_url[URL_MAX_LENGTH];
+    int          url_len = 0;
     void        *ret_value = NULL;
 
 #ifdef PLUGIN_DEBUG
@@ -3583,7 +3768,11 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
     curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
 
     /* Redirect cURL from the base URL to "/datasets" to create the dataset */
-    snprintf(request_url, URL_MAX_LENGTH, "%s/datasets", base_URL);
+    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets", base_URL)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, NULL, "snprintf error")
+
+    if (url_len >= URL_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, NULL, "dataset create URL size exceeded maximum URL size")
 
 #ifdef PLUGIN_DEBUG
     printf("-> Dataset creation request URL: %s\n\n", request_url);
@@ -3794,6 +3983,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     char         *selection_body = NULL;
     void         *obj_ref_buf = NULL;
     char          request_url[URL_MAX_LENGTH];
+    int           url_len = 0;
     herr_t        ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -3898,11 +4088,17 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     curl_headers = curl_slist_append(curl_headers, is_transfer_binary ? "Accept: application/octet-stream" : "Accept: application/json");
 
     /* Redirect cURL from the base URL to "/datasets/<id>/value" to get the dataset data values */
-    snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/value%s%s",
-                                          base_URL,
-                                          dataset->URI,
-                                          is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? "?select=" : "",
-                                          is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? selection_body : "");
+    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                            "%s/datasets/%s/value%s%s",
+                            base_URL,
+                            dataset->URI,
+                            is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? "?select=" : "",
+                            is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? selection_body : "")
+        ) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+    if (url_len >= URL_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset read URL size exceeded maximum URL size")
 
 #ifdef PLUGIN_DEBUG
     printf("-> Dataset read URL: %s\n\n", request_url);
@@ -4047,6 +4243,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     char         *host_header = NULL;
     char         *write_body = NULL;
     char          request_url[URL_MAX_LENGTH];
+    int           url_len = 0;
     herr_t        ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -4171,11 +4368,17 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     curl_headers = curl_slist_append(curl_headers, is_transfer_binary ? "Content-Type: application/octet-stream" : "Content-Type: application/json");
 
     /* Redirect cURL from the base URL to "/datasets/<id>/value" to write the value out */
-    snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/value%s%s",
-                                          base_URL,
-                                          dataset->URI,
-                                          is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? "?select=" : "",
-                                          is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? selection_body : "");
+    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                            "%s/datasets/%s/value%s%s",
+                            base_URL,
+                            dataset->URI,
+                            is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? "?select=" : "",
+                            is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? selection_body : "")
+        ) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+    if (url_len >= URL_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset write URL size exceeded maximum URL size")
 
 #ifdef PLUGIN_DEBUG
     printf("-> Dataset write URL: %s\n\n", request_url);
@@ -5106,7 +5309,6 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
 {
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *new_group = NULL;
-    curl_off_t   create_request_body_len = 0;
     size_t       create_request_nalloc = 0;
     size_t       host_header_len = 0;
     char        *host_header = NULL;
@@ -5114,6 +5316,8 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
     char        *path_dirname = NULL;
     char         target_URI[URI_MAX_LENGTH];
     char         request_url[URL_MAX_LENGTH];
+    int          create_request_body_len = 0;
+    int          url_len = 0;
     void        *ret_value = NULL;
 
 #ifdef PLUGIN_DEBUG
@@ -5201,6 +5405,9 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
                     empty_dirname ? parent->URI : target_URI, path_basename)
                 ) < 0)
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error")
+
+            if ((size_t) create_request_body_len >= create_request_nalloc)
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "group link create request body size exceeded allocated buffer size")
         }
 
 #ifdef PLUGIN_DEBUG
@@ -5224,7 +5431,11 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
     curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
 
     /* Redirect cURL from the base URL to "/groups" to create the group */
-    snprintf(request_url, URL_MAX_LENGTH, "%s/groups", base_URL);
+    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups", base_URL)) < 0)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error")
+
+    if (url_len >= URL_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "group create URL size exceeded maximum URL size")
 
 #ifdef PLUGIN_DEBUG
     printf("-> Group create request URL: %s\n\n", request_url);
@@ -5236,7 +5447,7 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body ? create_request_body : ""))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL POST data: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, create_request_body ? create_request_body_len : 0))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) create_request_body_len))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL POST data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
@@ -5397,6 +5608,7 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
     size_t       host_header_len = 0;
     char        *host_header = NULL;
     char         request_url[URL_MAX_LENGTH];
+    int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -5435,7 +5647,11 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
 #endif
 
                     /* Redirect cURL from the base URL to "/groups/<id>" to get information about the group */
-                    snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, loc_obj->URI);
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, loc_obj->URI)) < 0)
+                        FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL, "H5Gget_info request URL size exceeded maximum URL size")
 
                     break;
                 } /* H5VL_OBJECT_BY_SELF */
@@ -5465,7 +5681,11 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
 #endif
 
                     /* Redirect cURL from the base URL to "/groups/<id>" to get information about the group */
-                    snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, temp_URI);
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, temp_URI)) < 0)
+                        FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL, "H5Gget_info_by_name request URL size exceeded maximum URL size")
 
                     break;
                 } /* H5VL_OBJECT_BY_NAME */
@@ -5604,7 +5824,6 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
 {
     H5VL_loc_params_t  hard_link_target_obj_loc_params;
     RV_object_t       *new_link_loc_obj = (RV_object_t *) obj;
-    curl_off_t         create_request_body_len = 0;
     size_t             create_request_nalloc = 0;
     size_t             host_header_len = 0;
     void              *hard_link_target_obj;
@@ -5612,6 +5831,8 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
     char              *create_request_body = NULL;
     char               request_url[URL_MAX_LENGTH];
     char              *url_encoded_link_name = NULL;
+    int                create_request_body_len = 0;
+    int                url_len = 0;
     herr_t             ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -5723,6 +5944,9 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
 
                 if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string, target_URI)) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                if ((size_t) create_request_body_len >= create_request_nalloc)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link create request body size exceeded allocated buffer size")
             }
 
 #ifdef PLUGIN_DEBUG
@@ -5754,6 +5978,9 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
 
                 if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string, link_target)) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                if ((size_t) create_request_body_len >= create_request_nalloc)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link create request body size exceeded allocated buffer size")
             }
 
 #ifdef PLUGIN_DEBUG
@@ -5802,6 +6029,9 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
 
                 if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string, file_path, link_target)) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                if ((size_t) create_request_body_len >= create_request_nalloc)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link create request body size exceeded allocated buffer size")
             }
 
 #ifdef PLUGIN_DEBUG
@@ -5837,7 +6067,16 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
 
     /* Redirect cURL from the base URL to "/groups/<id>/links/<name>" to create the link */
-    snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links/%s", base_URL, new_link_loc_obj->URI, url_encoded_link_name);
+    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                            "%s/groups/%s/links/%s",
+                            base_URL,
+                            new_link_loc_obj->URI,
+                            url_encoded_link_name)
+        ) < 0)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+    if (url_len >= URL_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link create URL size exceeded maximum URL size")
 
 #ifdef PLUGIN_DEBUG
     printf("-> Link create request URL: %s\n\n", request_url);
@@ -5849,7 +6088,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, create_request_body_len))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) create_request_body_len))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
@@ -5976,6 +6215,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
     char        *link_dir_name = NULL;
     char         temp_URI[URI_MAX_LENGTH];
     char         request_url[URL_MAX_LENGTH];
+    int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -6023,11 +6263,16 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
 #endif
                     } /* end if */
 
-                    snprintf(request_url, URL_MAX_LENGTH,
-                             "%s/groups/%s/links/%s",
-                             base_URL,
-                             empty_dirname ? loc_obj->URI : temp_URI,
-                             RV_basename(loc_params.loc_data.loc_by_name.name));
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                                            "%s/groups/%s/links/%s",
+                                            base_URL,
+                                            empty_dirname ? loc_obj->URI : temp_URI,
+                                            RV_basename(loc_params.loc_data.loc_by_name.name))
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "H5Lget_info request URL size exceeded maximum URL size")
 
                     break;
                 } /* H5VL_OBJECT_BY_NAME */
@@ -6128,11 +6373,16 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
 #endif
                     } /* end if */
 
-                    snprintf(request_url, URL_MAX_LENGTH,
-                             "%s/groups/%s/links/%s",
-                             base_URL,
-                             empty_dirname ? loc_obj->URI : temp_URI,
-                             RV_basename(loc_params.loc_data.loc_by_name.name));
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                                            "%s/groups/%s/links/%s",
+                                            base_URL,
+                                            empty_dirname ? loc_obj->URI : temp_URI,
+                                            RV_basename(loc_params.loc_data.loc_by_name.name))
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "H5Lget_val request URL size exceeded maximum URL size")
 
                     break;
                 } /* H5VL_OBJECT_BY_SELF */
@@ -6239,6 +6489,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
     char         temp_URI[URI_MAX_LENGTH];
     char         request_url[URL_MAX_LENGTH];
     char        *url_encoded_link_name = NULL;
+    int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -6287,11 +6538,16 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
 
                     /* Redirect cURL from the base URL to "/groups/<id>/links/<name>" to delete link */
-                    snprintf(request_url, URL_MAX_LENGTH,
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
                              "%s/groups/%s/links/%s",
                              base_URL,
                              empty_dirname ? loc_obj->URI : temp_URI,
-                             url_encoded_link_name);
+                             url_encoded_link_name)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "H5Ldelete request URL size exceeded maximum URL size")
 
                     break;
                 } /* H5VL_OBJECT_BY_SELF */
@@ -6376,11 +6632,16 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(loc_params.loc_data.loc_by_name.name), 0)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
 
-            snprintf(request_url, URL_MAX_LENGTH,
-                     "%s/groups/%s/links/%s",
-                     base_URL,
-                     empty_dirname ? loc_obj->URI : temp_URI,
-                     url_encoded_link_name);
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                                    "%s/groups/%s/links/%s",
+                                    base_URL,
+                                    empty_dirname ? loc_obj->URI : temp_URI,
+                                    url_encoded_link_name)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "H5Lexists request URL size exceeded maximum URL size")
 
             /* Setup cURL to make the GET request */
 
@@ -6451,10 +6712,15 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                             H5P_DEFAULT, H5P_DEFAULT, NULL)))
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, FAIL, "can't open link iteration group")
 
-                    snprintf(request_url, URL_MAX_LENGTH,
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
                              "%s/groups/%s/links",
                              base_URL,
-                             loc_obj->URI);
+                             loc_obj->URI)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "H5Literate/visit request URL size exceeded maximum URL size")
 
                     break;
                 } /* H5VL_OBJECT_BY_SELF */
@@ -6473,10 +6739,15 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                             H5P_DEFAULT, H5P_DEFAULT, NULL)))
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, FAIL, "can't open link iteration group")
 
-                    snprintf(request_url, URL_MAX_LENGTH,
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
                              "%s/groups/%s/links",
                              base_URL,
-                             ((RV_object_t *) link_iter_group_object)->URI);
+                             ((RV_object_t *) link_iter_group_object)->URI)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "H5Literate/visit_by_name request URL size exceeded maximum URL size")
 
                     break;
                 } /* H5VL_OBJECT_BY_NAME */
@@ -7055,6 +7326,7 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
     size_t                  host_header_len = 0;
     char                   *host_header = NULL;
     char                    request_url[URL_MAX_LENGTH];
+    int                     url_len = 0;
     herr_t                  ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -7116,19 +7388,34 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
                         case H5I_FILE:
                         case H5I_GROUP:
                         {
-                            snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, loc_obj->URI);
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, loc_obj->URI)) < 0)
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                            if (url_len >= URL_MAX_LENGTH)
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "H5Oget_info request URL size exceeded maximum URL size")
+
                             break;
                         } /* H5I_FILE H5I_GROUP */
 
                         case H5I_DATATYPE:
                         {
-                            snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL, loc_obj->URI);
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL, loc_obj->URI)) < 0)
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                            if (url_len >= URL_MAX_LENGTH)
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "H5Oget_info request URL size exceeded maximum URL size")
+
                             break;
                         } /* H5I_DATATYPE */
 
                         case H5I_DATASET:
                         {
-                            snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL, loc_obj->URI);
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL, loc_obj->URI)) < 0)
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                            if (url_len >= URL_MAX_LENGTH)
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "H5Oget_info request URL size exceeded maximum URL size")
+
                             break;
                         } /* H5I_DATASET */
 
@@ -7188,19 +7475,34 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
                         case H5I_FILE:
                         case H5I_GROUP:
                         {
-                            snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, temp_URI);
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, temp_URI)) < 0)
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                            if (url_len >= URL_MAX_LENGTH)
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "H5Oget_info_by_name request URL size exceeded maximum URL size")
+
                             break;
                         } /* H5I_FILE H5I_GROUP */
 
                         case H5I_DATATYPE:
                         {
-                            snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL, temp_URI);
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL, temp_URI)) < 0)
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                            if (url_len >= URL_MAX_LENGTH)
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "H5Oget_info_by_name request URL size exceeded maximum URL size")
+
                             break;
                         } /* H5I_DATATYPE */
 
                         case H5I_DATASET:
                         {
-                            snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL, temp_URI);
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL, temp_URI)) < 0)
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                            if (url_len >= URL_MAX_LENGTH)
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "H5Oget_info_by_name request URL size exceeded maximum URL size")
+
                             break;
                         } /* H5I_DATASET */
 
@@ -8680,6 +8982,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
     char        *url_encoded_link_name = NULL;
     char         request_url[URL_MAX_LENGTH];
     long         http_response;
+    int          url_len = 0;
     htri_t       ret_value = FAIL;
 
     if (!parent_obj)
@@ -8799,11 +9102,16 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
         if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(obj_path), 0)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
 
-        snprintf(request_url, URL_MAX_LENGTH,
-                 "%s/groups/%s/links/%s",
-                 base_URL,
-                 pobj_URI,
-                 url_encoded_link_name);
+        if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                                "%s/groups/%s/links/%s",
+                                base_URL,
+                                pobj_URI,
+                                url_encoded_link_name)
+            ) < 0)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+        if (url_len >= URL_MAX_LENGTH)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
 
 #ifdef PLUGIN_DEBUG
         printf("-> Retrieving link type for link to target object of unknown type at URL %s\n\n", request_url);
@@ -8907,40 +9215,62 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
             case H5I_GROUP:
                 /* Handle the special case for the paths "." and "/" */
                 if (!strcmp(obj_path, ".") || !strcmp(obj_path, "/")) {
-                    snprintf(request_url, URL_MAX_LENGTH,
-                             "%s/groups/%s",
-                             base_URL,
-                             parent_obj->URI);
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                                            "%s/groups/%s",
+                                            base_URL,
+                                            parent_obj->URI)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
                 } /* end if */
                 else {
-                    snprintf(request_url, URL_MAX_LENGTH,
-                             "%s/groups/%s?h5path=%s",
-                             base_URL,
-                             is_relative_path ? parent_obj->URI : "",
-                             obj_path);
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                                            "%s/groups/%s?h5path=%s",
+                                            base_URL,
+                                            is_relative_path ? parent_obj->URI : "",
+                                            obj_path)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
 
                 } /* end else */
 
                 break;
 
             case H5I_DATATYPE:
-                snprintf(request_url, URL_MAX_LENGTH,
-                         "%s/datatypes/?%s%s%sh5path=%s",
-                         base_URL,
-                         is_relative_path ? "grpid=" : "",
-                         is_relative_path ? parent_obj->URI : "",
-                         is_relative_path ? "&" : "",
-                         obj_path);
+                if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                                        "%s/datatypes/?%s%s%sh5path=%s",
+                                        base_URL,
+                                        is_relative_path ? "grpid=" : "",
+                                        is_relative_path ? parent_obj->URI : "",
+                                        is_relative_path ? "&" : "",
+                                        obj_path)
+                    ) < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                if (url_len >= URL_MAX_LENGTH)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
+
                 break;
 
             case H5I_DATASET:
-                snprintf(request_url, URL_MAX_LENGTH,
+                if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
                          "%s/datasets/?%s%s%sh5path=%s",
                          base_URL,
                          is_relative_path ? "grpid=" : "",
                          is_relative_path ? parent_obj->URI : "",
                          is_relative_path ? "&" : "",
-                         obj_path);
+                         obj_path)
+                    ) < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                if (url_len >= URL_MAX_LENGTH)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
+
                 break;
 
             case H5I_ATTR:
@@ -9051,6 +9381,7 @@ RV_convert_predefined_datatype_to_string(hid_t type_id)
     H5T_sign_t   type_sign = H5T_SGN_NONE;
     static char  type_name[PREDEFINED_DATATYPE_NAME_MAX_LENGTH];
     size_t       type_size;
+    int          type_str_len = 0;
     char        *ret_value = type_name;
 
     if (H5T_NO_CLASS == (type_class = H5Tget_class(type_id)))
@@ -9066,12 +9397,17 @@ RV_convert_predefined_datatype_to_string(hid_t type_id)
         if (H5T_SGN_ERROR == (type_sign = H5Tget_sign(type_id)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, NULL, "invalid datatype sign")
 
-    snprintf(type_name, PREDEFINED_DATATYPE_NAME_MAX_LENGTH,
+    if ((type_str_len = snprintf(type_name, PREDEFINED_DATATYPE_NAME_MAX_LENGTH,
              "H5T_%s_%s%zu%s",
              (type_class == H5T_INTEGER) ? "STD" : "IEEE",
              (type_class == H5T_FLOAT) ? "F" : (type_sign == H5T_SGN_NONE) ? "U" : "I",
              type_size * 8,
-             (type_order == H5T_ORDER_LE) ? "LE" : "BE");
+             (type_order == H5T_ORDER_LE) ? "LE" : "BE")
+        ) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "snprintf error")
+
+    if (type_str_len >= PREDEFINED_DATATYPE_NAME_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "predefined datatype name string size exceeded maximum size")
 
 #ifdef PLUGIN_DEBUG
     printf("-> Converted predefined datatype to string representation %s\n\n", type_name);
@@ -9183,6 +9519,9 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
         if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, "\"%s\"", vol_obj->URI)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocate buffer size")
+
         out_string_curr_pos += bytes_printed;
 
         FUNC_GOTO_DONE(SUCCEED);
@@ -9222,6 +9561,9 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                     (H5T_INTEGER == type_class ? int_class_str : float_class_str), type_name)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size")
+
             out_string_curr_pos += bytes_printed;
 
             break;
@@ -9260,6 +9602,9 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                                               fmt_string, cset_ascii_string, nullterm_string)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+                if ((size_t) bytes_printed >= out_string_len - leading_string_len)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size")
+
                 out_string_curr_pos += bytes_printed;
             } /* end if */
             else {
@@ -9279,6 +9624,9 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                 if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - leading_string_len,
                                               fmt_string, cset_ascii_string, nullpad_string, type_size)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                if ((size_t) bytes_printed >= out_string_len - leading_string_len)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size")
 
                 out_string_curr_pos += bytes_printed;
             } /* end else */
@@ -9342,6 +9690,9 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                                               fmt_string, compound_member_name, compound_member_strings[i],
                                               i < (size_t) nmembers - 1 ? ", " : "")) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size")
 
                 out_string_curr_pos += bytes_printed;
 
@@ -9418,6 +9769,9 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                                               i < (size_t) enum_nmembers - 1 ? ", " : "")) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+                if ((size_t) bytes_printed >= enum_mapping_length - positive_ptrdiff)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "enum member string size exceeded allocated mapping buffer size")
+
                 mapping_curr_pos += bytes_printed;
 
                 if (H5free_memory(enum_value_name) < 0)
@@ -9450,6 +9804,9 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff,
                                           fmt_string, base_type_name, enum_mapping)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size")
 
             out_string_curr_pos += bytes_printed;
 
@@ -9490,6 +9847,9 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                 if ((bytes_printed = snprintf(array_shape_curr_pos, MAX_NUM_LENGTH, "%s%llu", i > 0 ? "," : "", array_dims[i])) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+                if (bytes_printed >= MAX_NUM_LENGTH)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "array dimension size string exceeded maximum number string size")
+
                 array_shape_curr_pos += bytes_printed;
             } /* end for */
 
@@ -9520,6 +9880,9 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff,
                                           fmt_string, array_base_type, array_shape)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size")
 
             out_string_curr_pos += bytes_printed;
 
@@ -9560,6 +9923,9 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff,
                     fmt_string, is_obj_ref ? obj_ref_str : reg_ref_str)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size")
 
             out_string_curr_pos += bytes_printed;
 
@@ -10362,6 +10728,7 @@ RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_le
     size_t  out_len = 0;
     char   *out = NULL;
     char   *out_curr_pos;
+    int     ref_string_len = 0;
     herr_t  ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -10422,7 +10789,15 @@ RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_le
                 FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_BADVALUE, FAIL, "invalid ref obj. type")
         } /* end switch */
 
-        snprintf(out_curr_pos, OBJECT_REF_STRING_LEN, "%s/%s", prefix_table[prefix_index], ref_array[i].ref_obj_URI);
+        if ((ref_string_len = snprintf(out_curr_pos, OBJECT_REF_STRING_LEN,
+                                       "%s/%s",
+                                       prefix_table[prefix_index],
+                                       ref_array[i].ref_obj_URI)
+            ) < 0)
+            FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+        if (ref_string_len >= OBJECT_REF_STRING_LEN)
+            FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_SYSERRSTR, FAIL, "object reference string size exceeded maximum reference string size")
 
         out_curr_pos += OBJECT_REF_STRING_LEN;
     } /* end for */
@@ -11292,6 +11667,9 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                                      )) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+                if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "dataspace string size exceeded allocated buffer size")
+
                 out_string_curr_pos += bytes_printed;
 
                 break;
@@ -11363,10 +11741,10 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
                                      char **create_request_body, size_t *create_request_body_len)
 {
     RV_object_t *pobj = (RV_object_t *) parent_obj;
-    size_t       link_body_len = 0;
     size_t       creation_properties_body_len = 0;
-    size_t       bytes_to_print = 0;
+    size_t       create_request_nalloc = 0;
     size_t       datatype_body_len = 0;
+    size_t       link_body_nalloc = 0;
     hid_t        type_id, space_id, lcpl_id;
     char        *datatype_body = NULL;
     char        *out_string = NULL;
@@ -11375,7 +11753,8 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
     char        *creation_properties_body = NULL;
     char        *link_body = NULL;
     char        *path_dirname = NULL;
-    int          bytes_printed = 0;
+    int          create_request_len = 0;
+    int          link_body_len = 0;
     herr_t       ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
@@ -11450,26 +11829,30 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, FAIL, "can't locate target for dataset link")
         } /* end if */
 
-        link_body_len = strlen(link_body_format) + strlen(link_basename) + (empty_dirname ? strlen(pobj->URI) : strlen(target_URI)) + 1;
-        if (NULL == (link_body = (char *) RV_malloc(link_body_len)))
+        link_body_nalloc = strlen(link_body_format) + strlen(link_basename) + (empty_dirname ? strlen(pobj->URI) : strlen(target_URI)) + 1;
+        if (NULL == (link_body = (char *) RV_malloc(link_body_nalloc)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset link body")
 
         /* Form the Dataset Creation Link portion of the Dataset create request using the above format
          * specifier and the corresponding arguments */
-        snprintf(link_body, link_body_len, link_body_format, empty_dirname ? pobj->URI : target_URI, link_basename);
+        if ((link_body_len = snprintf(link_body, link_body_nalloc, link_body_format, empty_dirname ? pobj->URI : target_URI, link_basename)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+        if ((size_t) link_body_len >= link_body_nalloc)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset link create request body size exceeded allocated buffer size")
     } /* end if */
 
-    bytes_to_print = datatype_body_len
-                   + (shape_body ? strlen(shape_body) + 2 : 0)
-                   + (maxdims_body ? strlen(maxdims_body) + 2 : 0)
-                   + (creation_properties_body ? creation_properties_body_len + 2 : 0)
-                   + (link_body ? link_body_len + 2 : 0)
-                   + 3;
+    create_request_nalloc = datatype_body_len
+                          + (shape_body ? strlen(shape_body) + 2 : 0)
+                          + (maxdims_body ? strlen(maxdims_body) + 2 : 0)
+                          + (creation_properties_body ? creation_properties_body_len + 2 : 0)
+                          + (link_body ? link_body_len + 2 : 0)
+                          + 3;
 
-    if (NULL == (out_string = (char *) RV_malloc(bytes_to_print)))
+    if (NULL == (out_string = (char *) RV_malloc(create_request_nalloc)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset creation request body")
 
-    if ((bytes_printed = snprintf(out_string, bytes_to_print,
+    if ((create_request_len = snprintf(out_string, create_request_nalloc,
              "{%s%s%s%s%s%s%s%s%s}",
              datatype_body,                                            /* Add the required Dataset Datatype description */
              shape_body ? ", " : "",                                   /* Add separator for Dataset shape section, if specified */
@@ -11483,6 +11866,9 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
         ) < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+    if ((size_t) create_request_len >= create_request_nalloc)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset create request body size exceeded allocated buffer size")
+
 done:
 #ifdef PLUGIN_DEBUG
     printf("\n");
@@ -11490,7 +11876,7 @@ done:
 
     if (ret_value >= 0) {
         *create_request_body = out_string;
-        if (create_request_body_len) *create_request_body_len = (size_t) bytes_printed;
+        if (create_request_body_len) *create_request_body_len = (size_t) create_request_len;
 
 #ifdef PLUGIN_DEBUG
         printf("-> Dataset creation request JSON:\n%s\n\n", out_string);
@@ -11664,6 +12050,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                 ) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset creation order property string size exceeded allocated buffer size")
+
             out_string_curr_pos += bytes_printed;
         } /* end if */
     }
@@ -11699,6 +12088,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string, max_compact, min_dense)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset attribute phase change property string size exceeded allocated buffer size")
+
             out_string_curr_pos += bytes_printed;
         } /* end if */
     }
@@ -11730,6 +12122,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                     H5D_FILL_TIME_ALLOC == fill_time ? "ALLOC" : "NEVER")
                 ) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset fill time property string size exceeded allocated buffer size")
 
             out_string_curr_pos += bytes_printed;
         } /* end if */
@@ -11833,6 +12228,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset deflate filter property string size exceeded allocated buffer size")
+
                         out_string_curr_pos += bytes_printed;
                         break;
                     } /* H5Z_FILTER_DEFLATE */
@@ -11855,6 +12253,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset shuffle filter property string size exceeded allocated buffer size")
+
                         out_string_curr_pos += bytes_printed;
                         break;
                     } /* H5Z_FILTER_SHUFFLE */
@@ -11876,6 +12277,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                                 H5Z_FILTER_FLETCHER32)
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset fletcher32 filter property string size exceeded allocated buffer size")
 
                         out_string_curr_pos += bytes_printed;
                         break;
@@ -11930,6 +12334,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset szip filter property string size exceeded allocated buffer size")
+
                         out_string_curr_pos += bytes_printed;
                         break;
                     } /* H5Z_FILTER_SZIP */
@@ -11951,6 +12358,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                                 H5Z_FILTER_NBIT)
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset nbit filter property string size exceeded allocated buffer size")
 
                         out_string_curr_pos += bytes_printed;
                         break;
@@ -12005,6 +12415,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset scaleoffset filter property string size exceeded allocated buffer size")
+
                         out_string_curr_pos += bytes_printed;
                         break;
                     } /* H5Z_FILTER_SCALEOFFSET */
@@ -12026,6 +12439,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                                 LZF_FILTER_ID)
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset lzf filter property string size exceeded allocated buffer size")
 
                         out_string_curr_pos += bytes_printed;
                         break;
@@ -12072,6 +12488,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                                 parameters)
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset user-defined filter property string size exceeded allocate buffer size")
 
                         out_string_curr_pos += bytes_printed;
                         break;
@@ -12176,6 +12595,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                         ) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+                    if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset external file list property string size exceeded allocated buffer size")
+
                     out_string_curr_pos += bytes_printed;
                 } /* end for */
 
@@ -12223,6 +12645,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                 if ((bytes_printed = snprintf(chunk_dims_string_curr_pos, MAX_NUM_LENGTH, "%s%llu", i > 0 ? "," : "", chunk_dims[i])) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
+                if (bytes_printed >= MAX_NUM_LENGTH)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "chunk 'dimension size' string size exceeded maximum number string size")
+
                 chunk_dims_string_curr_pos += bytes_printed;
             } /* end for */
 
@@ -12236,6 +12661,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
             if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string, chunk_dims_string)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset chunk dimensionality property string size exceeded allocated buffer size")
 
             out_string_curr_pos += bytes_printed;
             break;
@@ -12715,6 +13143,7 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
         table[i].subgroup.subgroup_link_table = NULL;
         if (is_recursive && (H5L_TYPE_HARD == table[i].link_info.type)) {
             char *link_collection;
+            int   url_len = 0;
 
             if (NULL == (link_field_obj = yajl_tree_get(link_obj, link_collection_keys2, yajl_t_string)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link collection failed")
@@ -12739,10 +13168,15 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
 
                 /* Make a GET request to the server to retrieve all of the links in the subgroup */
 
-                snprintf(request_url, URL_MAX_LENGTH,
-                         "%s/groups/%s/links",
-                         base_URL,
-                         YAJL_GET_STRING(link_field_obj));
+                if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                                        "%s/groups/%s/links",
+                                        base_URL,
+                                        YAJL_GET_STRING(link_field_obj))
+                    ) < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                if (url_len >= URL_MAX_LENGTH)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
 
                 if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
@@ -12834,6 +13268,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_da
     herr_t         callback_ret;
     size_t         link_rel_path_len = (cur_link_rel_path ? strlen(cur_link_rel_path) : 0) + LINK_NAME_MAX_LENGTH + 2;
     char          *link_rel_path = NULL;
+    int            snprintf_ret = 0;
     herr_t         ret_value = SUCCEED;
 
     if (NULL == (link_rel_path = (char *) RV_malloc(link_rel_path_len)))
@@ -12855,10 +13290,16 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_da
 #endif
 
                 /* Form the link's relative path from the parent group by combining the current relative path with the link's name */
-                snprintf(link_rel_path, link_rel_path_len, "%s%s%s",
+                if ((snprintf_ret = snprintf(link_rel_path, link_rel_path_len,
+                         "%s%s%s",
                          cur_link_rel_path ? cur_link_rel_path : "",
                          cur_link_rel_path ? "/" : "",
-                         link_table[last_idx].link_name);
+                         link_table[last_idx].link_name)
+                    ) < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                if ((size_t) snprintf_ret >= link_rel_path_len)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link's relative path string size exceeded allocated buffer size")
 
 #ifdef PLUGIN_DEBUG
                 printf("-> Calling supplied callback function with relative link path %s\n\n", link_rel_path);
@@ -12915,10 +13356,15 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_da
 #endif
 
                 /* Form the link's relative path from the parent group by combining the current relative path with the link's name */
-                snprintf(link_rel_path, link_rel_path_len, "%s%s%s",
+                if ((snprintf_ret = snprintf(link_rel_path, link_rel_path_len, "%s%s%s",
                          cur_link_rel_path ? cur_link_rel_path : "",
                          cur_link_rel_path ? "/" : "",
-                         link_table[last_idx].link_name);
+                         link_table[last_idx].link_name)
+                    ) < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                if ((size_t) snprintf_ret >= link_rel_path_len)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link's relative path string size exceeded allocated buffer size")
 
 #ifdef PLUGIN_DEBUG
                 printf("-> Calling supplied callback function with relative link path %s\n\n", link_rel_path);
