@@ -9016,7 +9016,7 @@ done:
 /*-------------------------------------------------------------------------
  * Function:    RV_find_object_by_path
  *
- * Purpose:     XXX: Given a pathname, this function is responsible for making
+ * Purpose:     Given a pathname, this function is responsible for making
  *              HTTP GET requests to the server in order to retrieve
  *              information about an object. It is also responsible for
  *              retrieving a link's value when a pathname refers to a soft
@@ -9036,19 +9036,29 @@ done:
  *              too much communication between client and server and would
  *              start to become problematic for deeply-nested objects.
  *
- *              There are two main cases that have to be handled here, the
- *              case where we know the type of the object being searched for
- *              and the case where we do not. In the end, both cases will
- *              make a final request to retrieve the desired information
- *              about the resulting target object, but the two cases arrive
- *              in different ways.
+ *              There are two main cases that have to be handled in this
+ *              function, the case where the caller knows the type of the
+ *              object being searched for and the case where the caller
+ *              does not. In the end, both cases will make a final request
+ *              to retrieve the desired information about the resulting
+ *              target object, but the two cases arrive in different ways.
+ *              If the type of the target object is not known, or if it
+ *              is possible for there to be a soft link among the path to
+ *              the target object, the target object type parameter should
+ *              be passed as H5I_UNINIT. This is the safest case and should
+ *              generally always be passed, unless the caller is
+ *              absolutely sure that the path given points directly to an
+ *              object of the given type, without soft links included
+ *              along the way.
  *
- *              If we know the type of the object being searched for, we can
+ *              While the type of the target object is unknown, this
+ *              function will keep locating the group that the link to the
+ *              target object is contained within, resolving soft links as
+ *              it is processing, until it locates the final hard link to
+ *              the target object, at which point it will set the resulting
+ *              type. Once the type of the target object is known, we can
  *              directly make the HTTP GET request to retrieve the object's
- *              information. Otherwise, we have to search for the group that
- *              contains the link to the target object, determine the target
- *              object's type by looking at the link, then make the
- *              appropriate HTTP GET request.
+ *              information.
  *
  * Return:      Non-negative on success, negative on failure
  *
@@ -12839,7 +12849,17 @@ done:
 /*-------------------------------------------------------------------------
  * Function:    RV_build_attr_table
  *
- * Purpose:     XXX: Given a
+ * Purpose:     Given an HTTP response that contains the information about
+ *              all of the attributes attached to a given object, this
+ *              function builds a list of attr_table_entry structs
+ *              (defined near the top of this file), one for each
+ *              attribute, which each contain an attribute's name, creation
+ *              time and an attribute info H5A_info_t struct.
+ *
+ *              This list is used during attribute iteration in order to
+ *              supply the user's optional iteration callback function
+ *              with all of the information it needs to process each
+ *              attribute on a given object.
  *
  * Return:      Non-negative on success/Negative on failure
  *
@@ -13079,7 +13099,26 @@ done:
 /*-------------------------------------------------------------------------
  * Function:    RV_build_link_table
  *
- * Purpose:     XXX: Given a
+ * Purpose:     Given an HTTP response that contains the information about
+ *              all of the links contained within a given group, this
+ *              function builds a list of link_table_entry structs
+ *              (defined near the top of this file), one for each link,
+ *              which each contain a link's name, creation time and a link
+ *              info H5L_info_t struct.
+ *
+ *              Each link_table_entry struct may additionally contain a
+ *              pointer to another link table in the case that the link in
+ *              question points to a subgroup of the parent group and a
+ *              call to H5Lvisit has been made. H5Lvisit visits all the
+ *              links in the given object and its subgroups, as opposed to
+ *              H5Literate which only iterates over the links in the given
+ *              group.
+ *
+ *              This list is used during link iteration in order to supply
+ *              the user's optional iteration callback function with all
+ *              of the information it needs to process each link contained
+ *              within a group (for H5Literate) or within a group and all
+ *              of its subgroups (for H5Lvisit).
  *
  * Return:      Non-negative on success/Negative on failure
  *
