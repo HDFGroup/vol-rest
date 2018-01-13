@@ -1229,6 +1229,7 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
     new_attribute->domain = parent->domain; /* Store pointer to file that the newly-created attribute is in */
     new_attribute->u.attribute.dtype_id = FAIL;
     new_attribute->u.attribute.space_id = FAIL;
+    new_attribute->u.attribute.aapl_id = FAIL;
     new_attribute->u.attribute.acpl_id = FAIL;
     new_attribute->u.attribute.attr_name = NULL;
 
@@ -1253,6 +1254,16 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
         new_attribute->u.attribute.parent_obj_type = parent->obj_type;
         strncpy(new_attribute->u.attribute.parent_obj_URI, parent->URI, URI_MAX_LENGTH);
     } /* end else */
+
+    /* Copy the AAPL if it wasn't H5P_DEFAULT, else set up a default one so that
+     * attribute access property lists functions will function correctly
+     */
+    if (H5P_ATTRIBUTE_ACCESS_DEFAULT != aapl_id) {
+        if ((new_attribute->u.attribute.aapl_id = H5Pcopy(aapl_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy AAPL")
+    } /* end if */
+    else
+        new_attribute->u.attribute.aapl_id = H5P_ATTRIBUTE_ACCESS_DEFAULT;
 
     /* Copy the ACPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Aget_create_plist() will function correctly
@@ -1534,6 +1545,7 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
     attribute->domain = parent->domain; /* Store pointer to file that the opened Dataset is within */
     attribute->u.attribute.dtype_id = FAIL;
     attribute->u.attribute.space_id = FAIL;
+    attribute->u.attribute.aapl_id = FAIL;
     attribute->u.attribute.acpl_id = FAIL;
     attribute->u.attribute.attr_name = NULL;
 
@@ -1698,6 +1710,16 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for copy of attribute's name")
     memcpy(attribute->u.attribute.attr_name, attr_name, attr_name_len);
     attribute->u.attribute.attr_name[attr_name_len] = '\0';
+
+    /* Copy the AAPL if it wasn't H5P_DEFAULT, else set up a default one so that
+     * attribute access property list functions will function correctly
+     */
+    if (H5P_ATTRIBUTE_ACCESS_DEFAULT != aapl_id) {
+        if ((attribute->u.attribute.aapl_id = H5Pcopy(aapl_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy AAPL")
+    } /* end if */
+    else
+        attribute->u.attribute.aapl_id = H5P_ATTRIBUTE_ACCESS_DEFAULT;
 
     /* Set up an ACPL for the attribute so that H5Aget_create_plist() will function correctly */
     /* XXX: Set any properties necessary */
@@ -3199,6 +3221,10 @@ RV_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
     if (_attr->u.attribute.space_id >= 0 && H5Sclose(_attr->u.attribute.space_id) < 0)
         FUNC_DONE_ERROR(H5E_DATASPACE, H5E_CANTCLOSEOBJ, FAIL, "can't close attribute's dataspace")
 
+    if (_attr->u.attribute.aapl_id >= 0) {
+        if (_attr->u.attribute.aapl_id != H5P_ATTRIBUTE_ACCESS_DEFAULT && H5Pclose(_attr->u.attribute.aapl_id) < 0)
+            FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close AAPL")
+    } /* end if */
     if (_attr->u.attribute.acpl_id >= 0) {
         if (_attr->u.attribute.acpl_id != H5P_ATTRIBUTE_CREATE_DEFAULT && H5Pclose(_attr->u.attribute.acpl_id) < 0)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close ACPL")
@@ -3275,7 +3301,18 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
     new_datatype->obj_type = H5I_DATATYPE;
     new_datatype->domain = parent->domain; /* Store pointer to file that the newly-committed datatype is in */
     new_datatype->u.datatype.dtype_id = FAIL;
+    new_datatype->u.datatype.tapl_id = FAIL;
     new_datatype->u.datatype.tcpl_id = FAIL;
+
+    /* Copy the TAPL if it wasn't H5P_DEFAULT, else set up a default one so that
+     * datatype access property list functions will function correctly
+     */
+    if (H5P_DATATYPE_ACCESS_DEFAULT != tapl_id) {
+        if ((new_datatype->u.datatype.tapl_id = H5Pcopy(tapl_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy TAPL")
+    } /* end if */
+    else
+        new_datatype->u.datatype.tapl_id = H5P_DATATYPE_ACCESS_DEFAULT;
 
     /* Copy the TCPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Tget_create_plist() will function correctly
@@ -3498,6 +3535,7 @@ RV_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const c
     datatype->obj_type = H5I_DATATYPE;
     datatype->domain = parent->domain; /* Store pointer to file that the opened Dataset is within */
     datatype->u.datatype.dtype_id = FAIL;
+    datatype->u.datatype.tapl_id = FAIL;
     datatype->u.datatype.tcpl_id = FAIL;
 
     /* Locate the named Datatype */
@@ -3512,6 +3550,16 @@ RV_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const c
     /* Set up the actual datatype by converting the string representation into an hid_t */
     if ((datatype->u.datatype.dtype_id = RV_parse_datatype(response_buffer.buffer, TRUE)) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert JSON to usable datatype")
+
+    /* Copy the TAPL if it wasn't H5P_DEFAULT, else set up a default one so that
+     * datatype access property list functions will function correctly
+     */
+    if (H5P_DATATYPE_ACCESS_DEFAULT != tapl_id) {
+        if ((datatype->u.datatype.tapl_id = H5Pcopy(tapl_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy TAPL")
+    } /* end if */
+    else
+        datatype->u.datatype.tapl_id = H5P_DATATYPE_ACCESS_DEFAULT;
 
     /* Set up a TCPL for the datatype so that H5Tget_create_plist() will function correctly.
        Note that currently there aren't any properties that can be set for a TCPL, however
@@ -3644,6 +3692,10 @@ RV_datatype_close(void *dt, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **
     if (_dtype->u.datatype.dtype_id >= 0 && H5Tclose(_dtype->u.datatype.dtype_id) < 0)
         FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
 
+    if (_dtype->u.datatype.tapl_id >= 0) {
+        if (_dtype->u.datatype.tapl_id != H5P_DATATYPE_ACCESS_DEFAULT && H5Pclose(_dtype->u.datatype.tapl_id) < 0)
+            FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close TAPL")
+    } /* end if */
     if (_dtype->u.datatype.tcpl_id >= 0) {
         if (_dtype->u.datatype.tcpl_id != H5P_DATATYPE_CREATE_DEFAULT && H5Pclose(_dtype->u.datatype.tcpl_id) < 0)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close TCPL")
@@ -3916,9 +3968,15 @@ RV_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
     if ((dataset->u.dataset.dtype_id = RV_parse_datatype(response_buffer.buffer, TRUE)) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert JSON to usable datatype for dataset")
 
-    /* Set up a DAPL for the dataset so that H5Dget_access_plist() will function correctly */
-    if ((dataset->u.dataset.dapl_id = H5Pcreate(H5P_DATASET_ACCESS)) < 0)
-        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create DAPL for dataset")
+    /* Copy the DAPL if it wasn't H5P_DEFAULT, else set up a default one so that
+     * H5Dget_access_plist() will function correctly
+     */
+    if (H5P_DATASET_ACCESS_DEFAULT != dapl_id) {
+        if ((dataset->u.dataset.dapl_id = H5Pcopy(dapl_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't copy DAPL")
+    } /* end if */
+    else
+        dataset->u.dataset.dapl_id = H5P_DATASET_ACCESS_DEFAULT;
 
     /* Set up a DCPL for the dataset so that H5Dget_create_plist() will function correctly */
     if ((dataset->u.dataset.dcpl_id = H5Pcreate(H5P_DATASET_CREATE)) < 0)
@@ -4619,7 +4677,6 @@ RV_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED *
         if (_dset->u.dataset.dapl_id != H5P_DATASET_ACCESS_DEFAULT && H5Pclose(_dset->u.dataset.dapl_id) < 0)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close DAPL")
     } /* end if */
-
     if (_dset->u.dataset.dcpl_id >= 0) {
         if (_dset->u.dataset.dcpl_id != H5P_DATASET_CREATE_DEFAULT && H5Pclose(_dset->u.dataset.dcpl_id) < 0)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close DCPL")
@@ -4926,10 +4983,16 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t H5_ATTR_UNUS
     if (RV_parse_response(response_buffer.buffer, NULL, file->URI, RV_copy_object_URI_callback) < 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTOPENFILE, NULL, "can't parse file's URI")
 
-    /* Set up a FAPL for the file so that H5Fget_access_plist() will function correctly */
+    /* Copy the FAPL if it wasn't H5P_DEFAULT, else set up a default one so that
+     * H5Fget_access_plist() will function correctly
+     */
     /* XXX: Set any properties necessary */
-    if ((file->u.file.fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
-        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create FAPL for file")
+    if (H5P_FILE_ACCESS_DEFAULT != fapl_id) {
+        if ((file->u.file.fapl_id = H5Pcopy(fapl_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FAPL")
+    } /* end if */
+    else
+        file->u.file.fapl_id = H5P_FILE_ACCESS_DEFAULT;
 
     /* Set up a FCPL for the file so that H5Fget_create_plist() will function correctly */
     if ((file->u.file.fcpl_id = H5Pcreate(H5P_FILE_CREATE)) < 0)
@@ -5275,7 +5338,6 @@ RV_file_close(void *file, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
         if (_file->u.file.fapl_id != H5P_FILE_ACCESS_DEFAULT && H5Pclose(_file->u.file.fapl_id) < 0)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FAPL")
     } /* end if */
-
     if (_file->u.file.fcpl_id >= 0) {
         if (_file->u.file.fcpl_id != H5P_FILE_CREATE_DEFAULT && H5Pclose(_file->u.file.fcpl_id) < 0)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FCPL")
@@ -5344,8 +5406,19 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
 
     new_group->URI[0] = '\0';
     new_group->obj_type = H5I_GROUP;
+    new_group->u.group.gapl_id = FAIL;
     new_group->u.group.gcpl_id = FAIL;
     new_group->domain = parent->domain; /* Store pointer to file that the newly-created group is within */
+
+    /* Copy the GAPL if it wasn't H5P_DEFAULT, else set up a default one so that
+     * group access property list functions will function correctly
+     */
+    if (H5P_GROUP_ACCESS_DEFAULT != gapl_id) {
+        if ((new_group->u.group.gapl_id = H5Pcopy(gapl_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy GAPL")
+    } /* end if */
+    else
+        new_group->u.group.gapl_id = H5P_GROUP_ACCESS_DEFAULT;
 
     /* Copy the GCPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Gget_create_plist() will function correctly
@@ -5548,6 +5621,7 @@ RV_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char
 
     group->URI[0] = '\0';
     group->obj_type = H5I_GROUP;
+    group->u.group.gapl_id = FAIL;
     group->u.group.gcpl_id = FAIL;
     group->domain = parent->domain; /* Store pointer to file that the opened Group is within */
 
@@ -5559,6 +5633,16 @@ RV_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char
 #ifdef PLUGIN_DEBUG
     printf("-> Found group by given path\n\n");
 #endif
+
+    /* Copy the GAPL if it wasn't H5P_DEFAULT, else set up a default one so that
+     * group access property list functions will function correctly
+     */
+    if (H5P_GROUP_ACCESS_DEFAULT != gapl_id) {
+        if ((group->u.group.gapl_id = H5Pcopy(gapl_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy GAPL")
+    } /* end if */
+    else
+        group->u.group.gapl_id = H5P_GROUP_ACCESS_DEFAULT;
 
     /* Set up a GCPL for the group so that H5Gget_create_plist() will function correctly */
     /* XXX: Set any properties necessary */
@@ -5793,6 +5877,10 @@ RV_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
     if (H5I_GROUP != _grp->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a group")
 
+    if (_grp->u.group.gapl_id >= 0) {
+        if (_grp->u.group.gapl_id != H5P_GROUP_ACCESS_DEFAULT && H5Pclose(_grp->u.group.gapl_id) < 0)
+            FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close GAPL")
+    } /* end if */
     if (_grp->u.group.gcpl_id >= 0) {
         if (_grp->u.group.gcpl_id != H5P_GROUP_CREATE_DEFAULT && H5Pclose(_grp->u.group.gcpl_id) < 0)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close GCPL")
@@ -10796,7 +10884,7 @@ RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_le
             ) < 0)
             FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-        if (ref_string_len >= OBJECT_REF_STRING_LEN)
+        if (ref_string_len >= OBJECT_REF_STRING_LEN + 1)
             FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_SYSERRSTR, FAIL, "object reference string size exceeded maximum reference string size")
 
         out_curr_pos += OBJECT_REF_STRING_LEN;

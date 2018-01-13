@@ -67,6 +67,7 @@ typedef struct RV_file_t {
 } RV_file_t;
 
 typedef struct RV_group_t {
+    hid_t gapl_id;
     hid_t gcpl_id;
 } RV_group_t;
 
@@ -82,12 +83,14 @@ typedef struct RV_attr_t {
     char        parent_obj_URI[URI_MAX_LENGTH];
     hid_t       space_id;
     hid_t       dtype_id;
+    hid_t       aapl_id;
     hid_t       acpl_id;
     char       *attr_name;
 } RV_attr_t;
 
 typedef struct RV_datatype_t {
     hid_t dtype_id;
+    hid_t tapl_id;
     hid_t tcpl_id;
 } RV_datatype_t;
 
