@@ -9816,11 +9816,11 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 
         case H5T_ENUM:
         {
+            H5T_sign_t          type_sign;
             const char         *base_type_name;
             size_t              enum_mapping_length = 0;
             char               *mapping_curr_pos;
             int                 enum_nmembers;
-            const char * const  mapping_fmt_string = "\"%s\": %lld%s";
             const char * const  fmt_string = "{"
                                                  "\"class\": \"H5T_ENUM\", "
                                                  "\"base\": {"
@@ -9832,10 +9832,13 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                                                  "}"
                                              "}";
 
+            if (H5T_SGN_ERROR == (type_sign = H5Tget_sign(type_id)))
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get sign of enum base datatype")
+
             if ((enum_nmembers = H5Tget_nmembers(type_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't get number of members of enumerated type")
 
-            if (NULL == (enum_value = RV_malloc(type_size)))
+            if (NULL == (enum_value = RV_calloc(H5_SIZEOF_LONG_LONG)))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for enum member value")
 
             enum_mapping_length = ENUM_MAPPING_DEFAULT_SIZE;
@@ -9852,20 +9855,41 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                 if (H5Tget_member_value(type_id, (unsigned) i, enum_value) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve value of enum member")
 
-                /* Check if the mapping buffer needs to grow */
-                bytes_to_print = strlen(enum_value_name) + MAX_NUM_LENGTH + (strlen(mapping_fmt_string) - 8)
-                        + (i < (size_t) enum_nmembers - 1 ? 2 : 0) + 1;
+                /* Determine the correct cast type for the enum value buffer and then append this member's
+                 * name and numeric value to the mapping list.
+                 */
+                if (H5T_SGN_NONE == type_sign) {
+                    const char * const mapping_fmt_string = "\"%s\": %llu%s";
 
-                H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, mapping_curr_pos - enum_mapping, ptrdiff_t);
-                CHECKED_REALLOC(enum_mapping, enum_mapping_length, positive_ptrdiff + bytes_to_print,
-                        mapping_curr_pos, H5E_DATATYPE, FAIL);
+                    /* Check if the mapping buffer needs to grow */
+                    bytes_to_print = strlen(enum_value_name) + MAX_NUM_LENGTH + (strlen(mapping_fmt_string) - 8)
+                                   + (i < (size_t) enum_nmembers - 1 ? 2 : 0) + 1;
 
-                /* Append the name of this enum mapping value and its corresponding numeric value to the mapping list */
-                /* XXX: Need to cast the enum_value to the appropriate size type */
-                if ((bytes_printed = snprintf(mapping_curr_pos, enum_mapping_length - positive_ptrdiff,
-                                              mapping_fmt_string, enum_value_name, *((long long int *) enum_value),
-                                              i < (size_t) enum_nmembers - 1 ? ", " : "")) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+                    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, mapping_curr_pos - enum_mapping, ptrdiff_t);
+                    CHECKED_REALLOC(enum_mapping, enum_mapping_length, positive_ptrdiff + bytes_to_print,
+                            mapping_curr_pos, H5E_DATATYPE, FAIL);
+
+                    if ((bytes_printed = snprintf(mapping_curr_pos, enum_mapping_length - positive_ptrdiff,
+                                                  mapping_fmt_string, enum_value_name, *((unsigned long long int *) enum_value),
+                                                  i < (size_t) enum_nmembers - 1 ? ", " : "")) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+                } /* end if */
+                else {
+                    const char * const mapping_fmt_string = "\"%s\": %lld%s";
+
+                    /* Check if the mapping buffer needs to grow */
+                    bytes_to_print = strlen(enum_value_name) + MAX_NUM_LENGTH + (strlen(mapping_fmt_string) - 8)
+                                   + (i < (size_t) enum_nmembers - 1 ? 2 : 0) + 1;
+
+                    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, mapping_curr_pos - enum_mapping, ptrdiff_t);
+                    CHECKED_REALLOC(enum_mapping, enum_mapping_length, positive_ptrdiff + bytes_to_print,
+                            mapping_curr_pos, H5E_DATATYPE, FAIL);
+
+                    if ((bytes_printed = snprintf(mapping_curr_pos, enum_mapping_length - positive_ptrdiff,
+                                                  mapping_fmt_string, enum_value_name, *((long long int *) enum_value),
+                                                  i < (size_t) enum_nmembers - 1 ? ", " : "")) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
+                } /* end else */
 
                 if ((size_t) bytes_printed >= enum_mapping_length - positive_ptrdiff)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "enum member string size exceeded allocated mapping buffer size")
@@ -10699,10 +10723,10 @@ RV_convert_JSON_to_datatype(const char *type)
 
             val = YAJL_GET_INTEGER(YAJL_GET_OBJECT(key_obj)->values[i]);
 
-            /* XXX: The insert call may potentially fail or produce incorrect results depending on the base
-             * integer type of the enum datatype. In this case, the insert call always tries to pull data from
-             * a long long.
-             */
+            /* Convert the value from YAJL's integer representation to the base type of the enum datatype */
+            if (H5Tconvert(H5T_NATIVE_LLONG, enum_base_type, 1, &val, NULL, H5P_DEFAULT) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert enum value to base type")
+
             if (H5Tenum_insert(datatype, YAJL_GET_OBJECT(key_obj)->keys[i], (void *) &val) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTINSERT, FAIL, "can't insert member into enum datatype")
         } /* end for */

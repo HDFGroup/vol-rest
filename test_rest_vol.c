@@ -16798,7 +16798,7 @@ generate_random_datatype(H5T_class_t parent_class)
                 }
             }
 
-            if ((datatype = H5Tcreate(H5T_ENUM, sizeof(int))) < 0) {
+            if ((datatype = H5Tenum_create(H5T_NATIVE_INT)) < 0) {
                 H5_FAILED();
                 printf("    couldn't create enum datatype\n");
                 goto error;
