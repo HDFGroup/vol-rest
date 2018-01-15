@@ -535,6 +535,7 @@ h5tools_get_fapl(hid_t fapl, const char *driver, unsigned *drivernum)
         } /* end if */
     }
 #endif /* H5_HAVE_PARALLEL */
+#if 0
     else if (!HDstrcmp(driver, drivernames[REST_IDX])) {
         /* REST VOL */
         if (H5Pset_fapl_rest_vol(new_fapl, URL, USERNAME, PASSWORD) < 0)
@@ -543,6 +544,7 @@ h5tools_get_fapl(hid_t fapl, const char *driver, unsigned *drivernum)
         if(drivernum)
             *drivernum = REST_IDX;
     }
+#endif
     else
         goto error;
 

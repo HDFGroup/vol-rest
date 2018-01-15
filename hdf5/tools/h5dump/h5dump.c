@@ -1357,7 +1357,7 @@ main(int argc, const char *argv[])
     void               *tools_edata;
     char               *fname = NULL;
 
-    RVinit();
+    /* RVinit(); */
 
     h5tools_setprogname(PROGRAMNAME);
     h5tools_setstatus(EXIT_SUCCESS);
@@ -1616,7 +1616,7 @@ main(int argc, const char *argv[])
     leave(h5tools_getstatus());
 
 done:
-    RVterm();
+    /* RVterm(); */
 
     /* Free tables for objects */
     table_list_free();
