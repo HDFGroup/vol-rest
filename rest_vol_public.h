@@ -101,7 +101,7 @@ typedef struct rv_obj_ref_t {
 
 H5_DLL herr_t      RVinit(void);
 H5_DLL herr_t      RVterm(void);
-H5_DLL herr_t      H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const char *password);
+H5_DLL herr_t      H5Pset_fapl_rest_vol(hid_t fapl_id);
 H5_DLL const char *RVget_uri(hid_t);
 
 #ifdef __cplusplus

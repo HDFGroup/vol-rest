@@ -25,12 +25,9 @@
 #include "hdf5.h"
 
 
-#define H5FILE_NAME    "/home/" USERNAME "/group.h5"
+#define H5FILE_NAME    "group.h5"
+#define FILE_NAME_MAX_LENGTH 256
 #define RANK    2
-
-#define URL      "http://127.0.0.1:5101"
-#define USERNAME "test_user1"
-#define PASSWORD "test"
 
 static herr_t file_info(hid_t loc_id, const char *name, const H5L_info_t *linfo,
     void *opdata);              /* Link iteration operator function */
@@ -46,6 +43,9 @@ main(void)
     hid_t    plist;
     hid_t    fapl;
 
+    const char *username;
+    char        filename[FILE_NAME_MAX_LENGTH];
+
     herr_t   status;
     hsize_t  dims[2];
     hsize_t  cdims[2];
@@ -55,12 +55,16 @@ main(void)
     RVinit();
 
     fapl = H5Pcreate(H5P_FILE_ACCESS);
-    H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD);
+    H5Pset_fapl_rest_vol(fapl);
+
+    username = getenv("HSDS_USERNAME");
+
+    snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" H5FILE_NAME, username);
 
     /*
      * Create a file.
      */
-    file = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
+    file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
 
     /*
      * Create a group in the file.

@@ -26,7 +26,8 @@
 
 #include "hdf5.h"
 
-#define H5FILE_NAME "/home/" USERNAME "/Select.h5"
+#define H5FILE_NAME "Select.h5"
+#define FILE_NAME_MAX_LENGTH 256
 
 #define MSPACE1_RANK     1          /* Rank of the first dataset in memory */
 #define MSPACE1_DIM      50         /* Dataset size in memory */
@@ -48,10 +49,6 @@
 
 #define NPOINTS          4          /* Number of points that will be selected
                                        and overwritten */
-
-#define URL      "http://127.0.0.1:5101"
-#define USERNAME "test_user1"
-#define PASSWORD "test"
 
 int
 main (void)
@@ -89,10 +86,13 @@ main (void)
    int    vector[MSPACE1_DIM];
    int    values[] = {53, 59, 61, 67};  /* New values to be written */
 
+   const char *username;
+   char        filename[FILE_NAME_MAX_LENGTH];
+
    RVinit();
 
    fapl = H5Pcreate(H5P_FILE_ACCESS);
-   H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD);
+   H5Pset_fapl_rest_vol(fapl);
 
    /*
     * Buffers' initialization.
@@ -101,10 +101,14 @@ main (void)
    for(i = 1; i < MSPACE1_DIM - 1; i++)
        vector[i] = i;
 
+   username = getenv("HSDS_USERNAME");
+
+   snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" H5FILE_NAME, username);
+
    /*
     * Create a file.
     */
-   file = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
+   file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
 
    /*
     * Create property list for a dataset and set up fill values.
@@ -222,7 +226,7 @@ main (void)
     /*
      * Open the file.
      */
-    file = H5Fopen(H5FILE_NAME, H5F_ACC_RDONLY, fapl);
+    file = H5Fopen(filename, H5F_ACC_RDONLY, fapl);
 
     /*
      * Open the dataset.

@@ -19,15 +19,14 @@
  */
 
 #include "hdf5.h"
-#define FILE "/home/" USERNAME "/dset.h5"
-
-#define URL      "http://127.0.0.1:5101"
-#define USERNAME "test_user1"
-#define PASSWORD "test"
+#define FILE "dset.h5"
+#define FILE_NAME_MAX_LENGTH 256
 
 int main() {
 
    hid_t       file_id, dataset_id, fapl;  /* identifiers */
+   const char *username;
+   char        filename[FILE_NAME_MAX_LENGTH];
    herr_t      status;
    int         i, j, dset_data[4][6];
 
@@ -38,7 +37,11 @@ int main() {
     * it with the library
     */
    fapl = H5Pcreate(H5P_FILE_ACCESS);
-   H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD);
+   H5Pset_fapl_rest_vol(fapl);
+
+   username = getenv("HSDS_USERNAME");
+
+   snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" FILE, username);
 
    /* Initialize the dataset. */
    for (i = 0; i < 4; i++)
@@ -46,7 +49,7 @@ int main() {
          dset_data[i][j] = i * 6 + j + 1;
 
    /* Open an existing file. */
-   file_id = H5Fopen(FILE, H5F_ACC_RDWR, fapl);
+   file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl);
 
    /* Open an existing dataset. */
    dataset_id = H5Dopen2(file_id, "/dset", H5P_DEFAULT);

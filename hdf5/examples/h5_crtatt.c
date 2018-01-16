@@ -20,20 +20,32 @@
 
 #include "hdf5.h"
 #define FILE "dset.h5"
+#define FILE_NAME_MAX_LENGTH 256
 
 int main() {
 
-   hid_t       file_id, dataset_id, attribute_id, dataspace_id;  /* identifiers */
+   hid_t       file_id, fapl_id, dataset_id, attribute_id, dataspace_id;  /* identifiers */
    hsize_t     dims;
    int         attr_data[2];
+   const char *username;
+   char        filename[FILE_NAME_MAX_LENGTH];
    herr_t      status;
+
+   RVinit();
 
    /* Initialize the attribute data. */
    attr_data[0] = 100;
    attr_data[1] = 200;
 
+   fapl_id = H5Pcreate(H5P_FILE_ACCESS);
+   H5Pset_fapl_rest_vol(fapl_id);
+
+   username = getenv("HSDS_USERNAME");
+
+   snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" FILE, username);
+
    /* Open an existing file. */
-   file_id = H5Fopen(FILE, H5F_ACC_RDWR, H5P_DEFAULT);
+   file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id);
 
    /* Open an existing dataset. */
    dataset_id = H5Dopen2(file_id, "/dset", H5P_DEFAULT);
@@ -58,6 +70,10 @@ int main() {
    /* Close to the dataset. */
    status = H5Dclose(dataset_id);
 
+   status = H5Pclose(fapl_id);
+
    /* Close the file. */
    status = H5Fclose(file_id);
+
+   RVterm();
 }

@@ -20,13 +20,18 @@
 
 #include "hdf5.h"
 #define FILE "groups.h5"
+#define FILE_NAME_MAX_LENGTH 256
 
 int main() {
 
-   hid_t       file_id, group_id, dataset_id, dataspace_id;  /* identifiers */
+   hid_t       file_id, fapl_id, group_id, dataset_id, dataspace_id;  /* identifiers */
    hsize_t     dims[2];
+   const char *username;
+   char        filename[FILE_NAME_MAX_LENGTH];
    herr_t      status;
    int         i, j, dset1_data[3][3], dset2_data[2][10];
+
+   RVinit();
 
    /* Initialize the first dataset. */
    for (i = 0; i < 3; i++)
@@ -38,8 +43,15 @@ int main() {
       for (j = 0; j < 10; j++)
          dset2_data[i][j] = j + 1;
 
+   fapl_id = H5Pcreate(H5P_FILE_ACCESS);
+   H5Pset_fapl_rest_vol(fapl_id);
+
+   username = getenv("HSDS_USERNAME");
+
+   snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" FILE, username);
+
    /* Open an existing file. */
-   file_id = H5Fopen(FILE, H5F_ACC_RDWR, H5P_DEFAULT);
+   file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id);
 
    /* Create the data space for the first dataset. */
    dims[0] = 3;
@@ -85,7 +97,11 @@ int main() {
    /* Close the group. */
    status = H5Gclose(group_id);
 
+   status = H5Pclose(fapl_id);
+
    /* Close the file. */
    status = H5Fclose(file_id);
+
+   RVterm();
 }
 

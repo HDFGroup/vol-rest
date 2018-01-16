@@ -917,13 +917,16 @@ RV_term(hid_t H5_ATTR_UNUSED vtpl_id)
  *              March, 2017
  */
 herr_t
-H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const char *password)
+H5Pset_fapl_rest_vol(hid_t fapl_id)
 {
-    size_t URL_len = 0;
-    herr_t ret_value;
+    const char *URL;
+    const char *username;
+    const char *password;
+    size_t      URL_len = 0;
+    herr_t      ret_value;
 
-    if (!URL)
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "must specify a base URL")
+    if (NULL == (URL = getenv("HSDS_ENDPOINT")))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "must specify a base URL - please set HSDS_ENDPOINT environment variable")
 
     if (REST_g < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_UNINITIALIZED, FAIL, "REST VOL plugin not initialized")
@@ -945,12 +948,12 @@ H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const
     strncpy(base_URL, URL, URL_len);
     base_URL[URL_len] = '\0';
 
-    if (username && strlen(username)) {
+    if ((username = getenv("HSDS_USERNAME")) && strlen(username)) {
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, username))
             FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf)
     } /* end if */
 
-    if (password && strlen(password)) {
+    if ((password = getenv("HSDS_PASSWORD")) && strlen(password)) {
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, password))
             FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf)
     } /* end if */

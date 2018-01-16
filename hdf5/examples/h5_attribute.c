@@ -29,7 +29,9 @@
 
 #include "hdf5.h"
 
-#define H5FILE_NAME "/home/" USERNAME "/Attributes.h5"
+#define H5FILE_NAME "Attributes.h5"
+
+#define FILE_NAME_MAX_LENGTH 256
 
 #define RANK  1   /* Rank and size of the dataset  */
 #define SIZE  7
@@ -39,10 +41,6 @@
 #define ADIM2  3
 #define ANAME  "Float attribute"      /* Name of the array attribute */
 #define ANAMES "Character attribute" /* Name of the string attribute */
-
-#define URL      "http://127.0.0.1:5101"
-#define USERNAME "test_user1"
-#define PASSWORD "test"
 
 static herr_t attr_info(hid_t loc_id, const char *name, const H5A_info_t *ainfo, void *opdata);
                                      /* Operator function */
@@ -71,6 +69,8 @@ main (void)
    unsigned i, j;              /* Counters */
    char    string_out[80];     /* Buffer to read string attribute back */
    int     point_out;          /* Buffer to read scalar attribute back */
+   const char *username;
+   char        filename[FILE_NAME_MAX_LENGTH];
 
    /*
     * Data initialization.
@@ -88,12 +88,16 @@ main (void)
    RVinit();
 
    fapl = H5Pcreate(H5P_FILE_ACCESS);
-   H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD);
+   H5Pset_fapl_rest_vol(fapl);
+
+   username = getenv("HSDS_USERNAME");
+
+   snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" H5FILE_NAME, username);
 
    /*
     * Create a file.
     */
-   file = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
+   file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
 
    /*
     * Create the dataspace for the dataset in the file.
@@ -182,7 +186,7 @@ main (void)
    /*
     * Reopen the file.
     */
-   file = H5Fopen(H5FILE_NAME, H5F_ACC_RDONLY, fapl);
+   file = H5Fopen(filename, H5F_ACC_RDONLY, fapl);
 
    /*
     * Open the dataset.

@@ -20,7 +20,8 @@
  
 #include "hdf5.h"
 
-#define FILE        "/home/" USERNAME "/subset.h5"
+#define FILE        "subset.h5"
+#define FILE_NAME_MAX_LENGTH 256
 #define DATASETNAME "IntArray" 
 #define RANK  2
 
@@ -30,10 +31,6 @@
 
 #define DIM0     8                          /* size of dataset */       
 #define DIM1     10
-
-#define URL      "http://127.0.0.1:5101"
-#define USERNAME "test_user1"
-#define PASSWORD "test"
 
 int
 main (void)
@@ -55,6 +52,9 @@ main (void)
     hsize_t     block[2];
     int         i, j;
 
+    const char *username;
+    char        filename[FILE_NAME_MAX_LENGTH];
+
     
     /*****************************************************************
      * Create a new file with default creation and access properties.*
@@ -65,9 +65,13 @@ main (void)
     RVinit();
 
     fapl = H5Pcreate(H5P_FILE_ACCESS);
-    H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD);
+    H5Pset_fapl_rest_vol(fapl);
 
-    file_id = H5Fcreate (FILE, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
+    username = getenv("HSDS_USERNAME");
+
+    snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" FILE, username);
+
+    file_id = H5Fcreate (filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
 
     dims[0] = DIM0;
     dims[1] = DIM1;

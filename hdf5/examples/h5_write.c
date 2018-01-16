@@ -20,15 +20,12 @@
 
 #include "hdf5.h"
 
-#define H5FILE_NAME        "/home/" USERNAME "/SDS.h5"
+#define H5FILE_NAME        "SDS.h5"
+#define FILE_NAME_MAX_LENGTH 256
 #define DATASETNAME "IntArray"
 #define NX     5                      /* dataset dimensions */
 #define NY     6
 #define RANK   2
-
-#define URL      "http://127.0.0.1:5101"
-#define USERNAME "test_user1"
-#define PASSWORD "test"
 
 int
 main (void)
@@ -41,10 +38,13 @@ main (void)
     int         data[NX][NY];          /* data to write */
     int         i, j;
 
+    const char *username;
+    char        filename[FILE_NAME_MAX_LENGTH];
+
     RVinit();
 
     fapl = H5Pcreate(H5P_FILE_ACCESS);
-    H5Pset_fapl_rest_vol(fapl, URL, USERNAME, PASSWORD);
+    H5Pset_fapl_rest_vol(fapl);
 
     /*
      * Data  and output buffer initialization.
@@ -60,12 +60,16 @@ main (void)
      * 4 5 6 7 8 9
      */
 
+    username = getenv("HSDS_USERNAME");
+
+    snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" H5FILE_NAME, username);
+
     /*
      * Create a new file using H5F_ACC_TRUNC access,
      * default file creation properties, and default file
      * access properties.
      */
-    file = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
+    file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
 
     /*
      * Describe the size of the array and create the data space for fixed
