@@ -18,7 +18,7 @@
 #include "h5dump.h"
 #include "h5dump_ddl.h"
 #include "h5dump_xml.h"
-#include "rest_vol_public.h"
+/* #include "rest_vol_public.h" */
 
 /* Name of tool */
 #define PROGRAMNAME "h5dump"

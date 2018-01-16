@@ -29,11 +29,7 @@
 #include "h5tools_ref.h"
 #include "h5tools_utils.h"
 #include "H5private.h"
-#include "rest_vol_public.h"
-
-#define URL      "http://127.0.0.1:5101"
-#define USERNAME "test_user1"
-#define PASSWORD "test"
+/* #include "rest_vol_public.h" */
 
 /* global variables */
 hid_t H5tools_ERR_STACK_g = 0;
