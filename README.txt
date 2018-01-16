@@ -1,8 +1,8 @@
-/*******************************************\
-|                                           |
-|                                           |
-|                                           |
-\*******************************************/
+/********************************************\
+|                                            |
+|            HDF5 REST VOL plugin            |
+|                                            |
+\********************************************/
 
 Table of Contents:
 
@@ -18,17 +18,30 @@ IV.  More information
 
 I. Introduction
 
+    The REST VOL plugin is a plugin for HDF5 designed with the goal of allowing
+    HDF5 applications, both existing and future, to utilize web-based storage
+    systems by translating HDF5 API calls into HTTP-based REST calls, as defined
+    by the HDF5 REST API (see section IV for more information on RESTful HDF5).
+
+    The HDF5 Virtual Object Layer is an abstraction layer that sits directly
+    between HDF5's public API calls and the underlying storage system. Using
+    a VOL plugin allows an existing HDF5 application to interface with
+    different storage systems with minimal changes necessary. In this manner,
+    the mental data model of an HDF5 application can be preserved and mapped
+    onto , such as Amazon S3 in this particular case.
 
 
 II. Obtaining and Building the REST VOL plugin
 
+    a. Obtaining the REST VOL plugin
 
-
+    b. Building the REST VOL plugin against HDF5
 
 III. Using the REST VOL plugin
 
+    a. Building and running an application with the REST VOL plugin
 
-
+    
 
     b. Currently unsupported features
 
