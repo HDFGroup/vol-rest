@@ -945,12 +945,12 @@ H5Pset_fapl_rest_vol(hid_t fapl_id, const char *URL, const char *username, const
     strncpy(base_URL, URL, URL_len);
     base_URL[URL_len] = '\0';
 
-    if (username) {
+    if (username && strlen(username)) {
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, username))
             FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf)
     } /* end if */
 
-    if (password) {
+    if (password && strlen(password)) {
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, password))
             FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf)
     } /* end if */

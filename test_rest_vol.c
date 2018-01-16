@@ -19,7 +19,6 @@
  * Purpose: Tests the REST VOL plugin
  */
 
-/* XXX: Eliminate all test inter-dependencies */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
