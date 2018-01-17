@@ -720,6 +720,7 @@ static int test_object_creation_by_absolute_path(void);
 static int test_absolute_vs_relative_path(void);
 static int test_double_init_free(void);
 static int test_url_encoding(void);
+static int test_symbols_in_compound_field_name(void);
 
 static herr_t attr_iter_callback1(hid_t location_id, const char *attr_name, const H5A_info_t *ainfo, void *op_data);
 static herr_t attr_iter_callback2(hid_t location_id, const char *attr_name, const H5A_info_t *ainfo, void *op_data);
@@ -886,6 +887,7 @@ static int (*misc_tests[])(void) = {
         test_absolute_vs_relative_path,
         test_double_init_free,
         /* test_url_encoding, */
+        test_symbols_in_compound_field_name,
         NULL
 };
 
@@ -15916,6 +15918,19 @@ error:
         RVterm();
     } H5E_END_TRY;
 
+    return 1;
+}
+
+static int
+test_symbols_in_compound_field_name(void)
+{
+    TESTING("usage of '{', '}' and '\\\"' symbols in compound type\'s field name")
+
+    SKIPPED();
+
+    return 0;
+
+error:
     return 1;
 }
 

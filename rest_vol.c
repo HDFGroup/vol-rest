@@ -163,6 +163,39 @@ do {                                                                            
     CHECKED_REALLOC(buffer, buffer_len, target_size, tmp, ERR_MAJOR, ret_value);                                            \
 } while (0)
 
+/* Helper macro to find the matching JSON '}' symbol for a given '{' symbol. This macro is
+ * used to extract out all of the JSON within a JSON object so that processing can be done
+ * on it.
+ */
+/* XXX: Note that this approach will have problems with '{' or '}' appearing inside the "type" subsection
+ * where one would not normally expect it, such as in a compound datatype field name, and will either
+ * cause early termination (an incomplete JSON representation) or will throw the below error about not
+ * being able to locate the end of the "type" substring.
+ */
+#define FIND_JSON_SECTION_END(start_ptr, end_ptr, ERR_MAJOR, ret_value)                                                     \
+do {                                                                                                                        \
+    size_t  depth_counter = 1; /* Keep track of depth until it reaches 0 again, signalling end of section */                \
+    char   *advancement_ptr = start_ptr + 1; /* Pointer to increment while searching for matching '}' symbols */            \
+    char    current_symbol;                                                                                                 \
+                                                                                                                            \
+    while (depth_counter) {                                                                                                 \
+        current_symbol = *advancement_ptr++;                                                                                \
+                                                                                                                            \
+        /* If we reached the end of string before finding the end of the JSON object section, something is                  \
+         * wrong. Most likely the JSON is misformatted, with a stray '{' in the section somewhere.                          \
+         */                                                                                                                 \
+        if (!current_symbol)                                                                                                \
+            FUNC_GOTO_ERROR(ERR_MAJOR, H5E_PARSEERROR, ret_value, "can't locate end of section - misformatted JSON likely") \
+                                                                                                                            \
+        if (current_symbol == '{')                                                                                          \
+            depth_counter++;                                                                                                \
+        else if (current_symbol == '}')                                                                                     \
+            depth_counter--;                                                                                                \
+    } /* end while */                                                                                                       \
+                                                                                                                            \
+    end_ptr = advancement_ptr;                                                                                              \
+} while(0)
+
 
 /* Macro borrowed from H5private.h to assign a value of a larger type to
  * a variable of a smaller type
@@ -10449,6 +10482,7 @@ RV_convert_JSON_to_datatype(const char *type)
         size_t  total_type_size = 0;
         size_t  current_offset = 0;
         char   *type_section_ptr = NULL;
+        char   *section_start, *section_end;
 
 #ifdef PLUGIN_DEBUG
         printf("-> Compound Datatype\n");
@@ -10502,53 +10536,22 @@ RV_convert_JSON_to_datatype(const char *type)
 
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
             size_t  type_section_len = 0;
-            size_t  depth_counter = 0;
-            char   *symbol_ptr = NULL;
-            char    current_symbol;
 
             /* Find the beginning of the "type" section for this Compound Datatype member */
             if (NULL == (type_section_ptr = strstr(type_section_ptr, "\"type\"")))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find \"type\" information section in datatype string")
 
-            /* Search for the initial '{' brace that begins the subsection and set the initial value for the depth
-             * counter, to keep track of brace depth level inside the subsection
+            /* Search for the initial '{' brace that begins the section */
+            if (NULL == (section_start = strstr(type_section_ptr, "{")))
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find beginning '{' of \"type\" information section in datatype string - misformatted JSON likely")
+
+            /* Continue forward through the string buffer character-by-character until the end of this JSON
+             * object section is found.
              */
-            symbol_ptr = type_section_ptr;
-            while ((current_symbol = *symbol_ptr++) != '{')
-                /* If we reached the end of the string before finding the beginning brace of the "type" subsection.
-                 * the JSON must be misformatted
-                 */
-                if (!current_symbol)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't locate beginning of \"type\" subsection - misformatted JSON")
-
-            depth_counter++;
-
-            /* Continue forward through the string buffer character-by-character, incrementing the depth counter
-             * for each '{' found and decrementing it for each '}' found, until the depth counter reaches 0 once
-             * again, signalling the end of the "type" subsection
-             */
-            /* XXX: Note that this approach will have problems with '{' or '}' appearing inside the "type" subsection
-             * where one would not normally expect it, such as in a compound datatype field name, and will either
-             * cause early termination (an incomplete JSON representation) or will throw the below error about not
-             * being able to locate the end of the "type" substring.
-             */
-            while (depth_counter) {
-                current_symbol = *symbol_ptr++;
-
-                /* If we reached the end of the string before finding the end of the "type" subsection, something is
-                 * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
-                 */
-                if (!current_symbol)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't locate end of \"type\" subsection - stray '{' is likely")
-
-                if (current_symbol == '{')
-                    depth_counter++;
-                else if (current_symbol == '}')
-                    depth_counter--;
-            } /* end while */
+            FIND_JSON_SECTION_END(section_start, section_end, H5E_DATATYPE, FAIL);
 
             /* Check if the temporary buffer needs to grow to accomodate this "type" substring */
-            H5_CHECKED_ASSIGN(type_section_len, size_t, symbol_ptr - type_section_ptr, ptrdiff_t);
+            H5_CHECKED_ASSIGN(type_section_len, size_t, section_end - type_section_ptr, ptrdiff_t);
             CHECKED_REALLOC_NO_PTR(tmp_cmpd_type_buffer, tmp_cmpd_type_buffer_size, type_section_len + 3, H5E_DATATYPE, FAIL);
 
             /* Copy the "type" substring into the temporary buffer, wrapping it in enclosing braces to ensure that the
@@ -10568,8 +10571,8 @@ RV_convert_JSON_to_datatype(const char *type)
 
             total_type_size += H5Tget_size(compound_member_type_array[i]);
 
-            /* Increment the type section pointer so that the next search does not return the same subsection */
-            type_section_ptr++;
+            /* Adjust the type section pointer so that the next search does not return the same subsection */
+            type_section_ptr = section_end + 1;
         } /* end for */
 
         if ((datatype = H5Tcreate(H5T_COMPOUND, total_type_size)) < 0)
@@ -10586,7 +10589,7 @@ RV_convert_JSON_to_datatype(const char *type)
         const char * const  type_string = "{\"type\":"; /* Gets prepended to the array "base" datatype substring */
         size_t              type_string_len = strlen(type_string);
         size_t              base_type_substring_len = 0;
-        char               *base_type_substring_ptr = NULL;
+        char               *base_type_substring_start, *base_type_substring_end;
         hid_t               base_type_id = FAIL;
 
 #ifdef PLUGIN_DEBUG
@@ -10618,33 +10621,17 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
         /* Locate the beginning and end braces of the "base" section for the array datatype */
-        if (NULL == (base_type_substring_ptr = strstr(type, "\"base\"")))
+        if (NULL == (base_type_substring_start = strstr(type, "\"base\"")))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find \"base\" type information in datatype string")
-        if (NULL == (base_type_substring_ptr = strstr(base_type_substring_ptr, "{")))
+        if (NULL == (base_type_substring_start = strstr(base_type_substring_start, "{")))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "incorrectly formatted \"base\" type information in datatype string")
 
-        /* To find the end of the "base type" section, a quick solution is to repeatedly search for
-         * '{' symbols, matching this with the same number of searches for '}', and taking the final
-         * '}' to be the end of the section.
-         */
-        /* XXX: This will have the same issue as the _parse_datatype function in that '{' or '}' in
-         * the name will cause issues
-         */
-        {
-            size_t  key_braces_found = 0;
-            char   *ptr = base_type_substring_ptr;
-            char   *endptr = ptr;
-
-            while ((ptr = strstr(ptr, "{"))) { key_braces_found++; ptr++; }
-            ptr = base_type_substring_ptr;
-            while (key_braces_found && (ptr = strstr(ptr, "}"))) { key_braces_found--; endptr = ptr++; }
-
-            H5_CHECKED_ASSIGN(base_type_substring_len, size_t, endptr - base_type_substring_ptr + 1, ptrdiff_t);
-        }
+        FIND_JSON_SECTION_END(base_type_substring_start, base_type_substring_end, H5E_DATATYPE, FAIL);
 
         /* Allocate enough memory to hold the "base" information substring, plus a few bytes for
          * the leading "type:" string and enclosing braces
          */
+        H5_CHECKED_ASSIGN(base_type_substring_len, size_t, base_type_substring_end - base_type_substring_start, ptrdiff_t);
         if (NULL == (array_base_type_substring = (char *) RV_malloc(base_type_substring_len + type_string_len + 2)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array base type substring")
 
@@ -10653,7 +10640,7 @@ RV_convert_JSON_to_datatype(const char *type)
          * the substring we have extracted, add them here before processing occurs.
          */
         memcpy(array_base_type_substring, type_string, type_string_len);
-        memcpy(array_base_type_substring + type_string_len, base_type_substring_ptr, base_type_substring_len);
+        memcpy(array_base_type_substring + type_string_len, base_type_substring_start, base_type_substring_len);
         array_base_type_substring[type_string_len + base_type_substring_len] = '}';
         array_base_type_substring[type_string_len + base_type_substring_len + 1] = '\0';
 
@@ -11087,7 +11074,6 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
     hbool_t  substring_allocated = FALSE;
     hid_t    datatype = FAIL;
     char    *type_string = type;
-    char    *type_section_ptr = NULL;
     hid_t    ret_value = FAIL;
 
 #ifdef PLUGIN_DEBUG
@@ -11099,9 +11085,8 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
 
     if (need_truncate) {
         size_t  substring_len;
-        size_t  depth_counter = 0;
-        char   *advancement_ptr;
-        char    current_symbol;
+        char   *type_section_ptr = NULL;
+        char   *type_section_start, *type_section_end;
 
 #ifdef PLUGIN_DEBUG
         printf("-> Extraneous information included in HTTP response, extracting out datatype section\n\n");
@@ -11111,44 +11096,16 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
         if (NULL == (type_section_ptr = strstr(type, "\"type\"")))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find \"type\" information section in datatype string")
 
-        /* Search for the initial '{' brace that begins the subsection and set the initial value for the depth
-         * counter, to keep track of brace depth level inside the subsectjon
+        /* Search for the initial '{' brace that begins the section */
+        if (NULL == (type_section_start = strstr(type_section_ptr, "{")))
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find beginning '{' of \"type\" information section in datatype string - misformatted JSON likely")
+
+        /* Continue forward through the string buffer character-by-character until the end of this JSON
+         * object section is found.
          */
-        advancement_ptr = type_section_ptr;
-        while ((current_symbol = *advancement_ptr++) != '{')
-            /* If we reached the end of the string before finding the beginning brace of the "type" subsection,
-             * the JSON must be misformatted
-             */
-            if (!current_symbol)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't locate beginning of \"type\" subsection - misformatted JSON")
+        FIND_JSON_SECTION_END(type_section_start, type_section_end, H5E_DATATYPE, FAIL);
 
-        depth_counter++;
-
-        /* Continue forward through the string buffer character-by-character, incrementing the depth counter
-         * for each '{' found and decrementing it for each '}' found, until the depth counter reaches 0 once
-         * again, signalling the end of the "type" subsection
-         */
-        /* XXX: Note that this approach will have problems with '{' or '}' appearing inside the "type" subsection
-         * where one would not normally expect it, such as in a compound datatype field name, and will either
-         * cause early termination (an incomplete JSON representation) or will throw the below error about not
-         * being able to locate the end of the "type" subsection.
-         */
-        while (depth_counter) {
-            current_symbol = *advancement_ptr++;
-
-            /* If we reached the end of the string before finding the end of the "type" subsection, something is
-             * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
-             */
-            if (!current_symbol)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't locate end of \"type\" subsection - stray '{' is likely")
-
-            if (current_symbol == '{')
-                depth_counter++;
-            else if (current_symbol == '}')
-                depth_counter--;
-        } /* end while */
-
-        H5_CHECKED_ASSIGN(substring_len, size_t, advancement_ptr - type_section_ptr, ptrdiff_t);
+        H5_CHECKED_ASSIGN(substring_len, size_t, type_section_end - type_section_ptr, ptrdiff_t);
         if (NULL == (type_string = (char *) RV_malloc(substring_len + 3)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for \"type\" subsection")
 
@@ -12901,10 +12858,7 @@ RV_build_attr_table(char *HTTP_response, hbool_t sort, int (*sort_func)(const vo
     yajl_val          parse_tree = NULL, key_obj;
     yajl_val          attr_obj, attr_field_obj;
     size_t            i, num_attributes;
-    size_t            depth_counter = 0;
-    char             *attribute_section_ptr;
-    char             *advancement_ptr;
-    char              current_symbol;
+    char             *attribute_section_start, *attribute_section_end;
     herr_t            ret_value = SUCCEED;
 
     if (!HTTP_response)
@@ -12935,7 +12889,7 @@ RV_build_attr_table(char *HTTP_response, hbool_t sort, int (*sort_func)(const vo
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for attribute table")
 
     /* Find the beginning of the "attributes" section */
-    if (NULL == (attribute_section_ptr = strstr(HTTP_response, "\"attributes\"")))
+    if (NULL == (attribute_section_start = strstr(HTTP_response, "\"attributes\"")))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_PARSEERROR, FAIL, "can't find \"attributes\" information section in HTTP response")
 
     /* For each attribute, grab its name and creation time, then find its corresponding JSON
@@ -12969,48 +12923,27 @@ RV_build_attr_table(char *HTTP_response, hbool_t sort, int (*sort_func)(const vo
         /* Process the JSON for the current attribute and fill out a H5A_info_t struct for it */
 
         /* Find the beginning and end of the JSON section for this attribute */
-        if (NULL == (attribute_section_ptr = strstr(attribute_section_ptr, "{")))
+        if (NULL == (attribute_section_start = strstr(attribute_section_start, "{")))
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_PARSEERROR, FAIL, "can't find start of current attribute's JSON section")
-        depth_counter++;
-        advancement_ptr = attribute_section_ptr + 1;
 
-        /* Continue forward through the string buffer character-by-character, incrementing the depth counter
-         * for each '{' found and decrementing it for each '}' found, until the depth counter reaches 0 once
-         * again, signalling the end of the attribute subsection
+        /* Continue forward through the string buffer character-by-character until the end of this JSON
+         * object section is found.
          */
-        /* XXX: Note that this approach will have problems with '{' or '}' appearing inside the attribute subsection
-         * where one would not normally expect it, such as in an attribute's name, and will either cause early termination
-         * (an incomplete JSON representation) or will throw the below error about not being able to locate the end
-         * of the attribute subsection.
-         */
-        while (depth_counter) {
-            current_symbol = *advancement_ptr++;
-
-            /* If we reached the end of the string before finding the end of the attribute subsection, something is
-             * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
-             */
-            if (!current_symbol)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_PARSEERROR, FAIL, "can't locate end of attribute subsection - stray '{' is likely")
-
-            if (current_symbol == '{')
-                depth_counter++;
-            else if (current_symbol == '}')
-                depth_counter--;
-        } /* end while */
+        FIND_JSON_SECTION_END(attribute_section_start, attribute_section_end, H5E_ATTR, FAIL);
 
         /* Since it is not important if we destroy the contents of the HTTP response buffer,
          * NULL terminators will be placed in the buffer strategically at the end of each attribute
          * subsection (in order to "extract out" that subsection) corresponding to each individual
          * attribute, and pass it to the "get attribute info" callback.
          */
-        *advancement_ptr = '\0';
+        *attribute_section_end = '\0';
 
         /* Fill out a H5A_info_t struct for this attribute */
-        if (RV_parse_response(attribute_section_ptr, NULL, &table[i].attr_info, RV_get_attr_info_callback) < 0)
+        if (RV_parse_response(attribute_section_start, NULL, &table[i].attr_info, RV_get_attr_info_callback) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "couldn't get link info")
 
         /* Continue on to the next attribute subsection */
-        attribute_section_ptr = advancement_ptr + 1;
+        attribute_section_start = attribute_section_end + 1;
     } /* end for */
 
 #ifdef PLUGIN_DEBUG
@@ -13160,12 +13093,9 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
     yajl_val          parse_tree = NULL, key_obj;
     yajl_val          link_obj, link_field_obj;
     size_t            i, num_links;
-    size_t            depth_counter = 0;
     char             *HTTP_buffer = HTTP_response;
     char             *visit_buffer = NULL;
-    char             *link_section_ptr;
-    char             *advancement_ptr;
-    char              current_symbol;
+    char             *link_section_start, *link_section_end;
     char              request_url[URL_MAX_LENGTH];
     herr_t            ret_value = SUCCEED;
 
@@ -13217,7 +13147,7 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link table")
 
     /* Find the beginning of the "links" section */
-    if (NULL == (link_section_ptr = strstr(HTTP_buffer, "\"links\"")))
+    if (NULL == (link_section_start = strstr(HTTP_buffer, "\"links\"")))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't find \"links\" information section in HTTP response")
 
     /* For each link, grab its name and creation order, then find its corresponding JSON
@@ -13251,44 +13181,23 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
         /* Process the JSON for the current link and fill out a H5L_info_t struct for it */
 
         /* Find the beginning and end of the JSON section for this link */
-        if (NULL == (link_section_ptr = strstr(link_section_ptr, "{")))
+        if (NULL == (link_section_start = strstr(link_section_start, "{")))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't find start of current link's JSON section")
-        depth_counter++;
-        advancement_ptr = link_section_ptr + 1;
 
-        /* Continue forward through the string buffer character-by-character, incrementing the depth counter
-         * for each '{' found and decrementing it for each '}' found, until the depth counter reaches 0 once
-         * again, signalling the end of the link subsection
+        /* Continue forward through the string buffer character-by-character until the end of this JSON
+         * object section is found.
          */
-        /* XXX: Note that this approach will have problems with '{' or '}' appearing inside the link subsection
-         * where one would not normally expect it, such as in a link name, and will either cause early termination
-         * (an incomplete JSON representation) or will throw the below error about not being able to locate the end
-         * of the link subsection.
-         */
-        while (depth_counter) {
-            current_symbol = *advancement_ptr++;
-
-            /* If we reached the end of the string before finding the end of the link subsection, something is
-             * wrong. Could be misformatted JSON or could be something like a stray '{' in the subsection somewhere
-             */
-            if (!current_symbol)
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "can't locate end of link subsection - stray '{' is likely")
-
-            if (current_symbol == '{')
-                depth_counter++;
-            else if (current_symbol == '}')
-                depth_counter--;
-        } /* end while */
+        FIND_JSON_SECTION_END(link_section_start, link_section_end, H5E_LINK, FAIL);
 
         /* Since it is not important if we destroy the contents of the HTTP response buffer,
          * NULL terminators will be placed in the buffer strategically at the end of each link
          * subsection (in order to "extract out" that subsection) corresponding to each individual
          * link, and pass it to the "get link info" callback.
          */
-        *advancement_ptr = '\0';
+        *link_section_end = '\0';
 
         /* Fill out a H5L_info_t struct for this link */
-        if (RV_parse_response(link_section_ptr, NULL, &table[i].link_info, RV_get_link_info_callback) < 0)
+        if (RV_parse_response(link_section_start, NULL, &table[i].link_info, RV_get_link_info_callback) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "couldn't get link info")
 
         /* If this is a call to H5Lvisit and the current link points to a group, recurse into the group
@@ -13352,7 +13261,7 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
         } /* end if */
 
         /* Continue on to the next link subsection */
-        link_section_ptr = advancement_ptr + 1;
+        link_section_start = link_section_end + 1;
     } /* end for */
 
 #ifdef PLUGIN_DEBUG
