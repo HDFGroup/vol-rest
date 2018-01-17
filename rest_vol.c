@@ -345,7 +345,6 @@ static char *base_URL = NULL;
 static size_t rest_curr_alloc_bytes;
 #endif
 
-/* XXX: Eventually pass these around instead of using a global one */
 static struct {
     char   *buffer;
     char   *curr_buf_ptr;
@@ -8921,7 +8920,6 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                                            *
      ******************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, fill_value_keys, yajl_t_any))) {
-        /* XXX: support for fill values */
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset fill values are unsupported")
     } /* end if */
 
@@ -8935,7 +8933,6 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                             *
      ***************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, filters_keys, yajl_t_array))) {
-        /* XXX: support for filters */
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset filters are unsupported")
     } /* end if */
 
@@ -8993,7 +8990,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         else if (!strcmp(layout_class, "H5D_CONTIGUOUS")) {
             /* Check to see if there is any external storage information */
             if (yajl_tree_get(key_obj, external_storage_keys, yajl_t_array)) {
-                /* XXX: Support for external storage file extent array */
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset external file storage is unsupported")
             } /* end if */
 
 #ifdef PLUGIN_DEBUG
@@ -12243,7 +12240,6 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                 out_string_curr_pos += null_value_len;
             } /* end if */
             else {
-                /* XXX: Support for fill values */
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset fill values are unsupported")
             } /* end else */
         } /* end if */
@@ -13224,11 +13220,6 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
 
                 if (NULL == (link_id = YAJL_GET_STRING(link_field_obj)))
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link ID was NULL")
-
-                /* XXX: Detect any cycles by checking to see if the ID of the group that this link points
-                 * to has already been looked at. Only if this is a new group will we recurse into
-                 * it and build a link table.
-                 */
 
                 /* Make a GET request to the server to retrieve all of the links in the subgroup */
 

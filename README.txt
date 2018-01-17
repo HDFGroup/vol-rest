@@ -124,6 +124,7 @@ III. Using the REST VOL plugin
         Dataset Fill Values
         Dataset Filters
         Virtual Dataset layout
+        External Storage for contiguous dataset layout
 
         Non-predefined integer and floating-point datatypes
         Variable-length, Opaque, Bitfield and Time datatypes
@@ -185,6 +186,6 @@ IV. More information
     https://github.com/HDFGroup/h5serv
     https://support.hdfgroup.org/projects/hdfserver/
     https://s3.amazonaws.com/hdfgroup/docs/HDFServer_SciPy2015.pdf
-    
+
     HSDS/HDF in the Cloud
     https://www.slideshare.net/HDFEOS/hdf-cloud-services
