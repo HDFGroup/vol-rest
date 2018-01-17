@@ -7231,6 +7231,7 @@ RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_typ
             void       *ref = va_arg(arguments, void *);
 
             /* Unused until support for region references can be implemented */
+            UNUSED_VAR(loc_obj);
             UNUSED_VAR(ret);
             UNUSED_VAR(ref);
 
