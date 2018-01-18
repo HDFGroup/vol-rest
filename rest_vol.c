@@ -3237,19 +3237,24 @@ RV_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
     RV_object_t *_attr = (RV_object_t *) attr;
     herr_t       ret_value = SUCCEED;
 
+    if (!_attr)
+        FUNC_GOTO_DONE(SUCCEED);
+
 #ifdef PLUGIN_DEBUG
     printf("-> Received attribute close call with following parameters:\n");
     printf("     - Attribute's object type: %s\n", object_type_to_string(_attr->obj_type));
     if (H5I_ATTR == _attr->obj_type && _attr->u.attribute.attr_name)
         printf("     - Attribute's name: %s\n", _attr->u.attribute.attr_name);
-    printf("     - Attribute's domain path: %s\n\n", _attr->domain->u.file.filepath_name);
+    if (_attr->domain && _attr->domain->u.file.filepath_name)
+        printf("     - Attribute's domain path: %s\n", _attr->domain->u.file.filepath_name);
+    printf("\n");
 #endif
 
     if (H5I_ATTR != _attr->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not an attribute")
 
     if (_attr->u.attribute.attr_name)
-        RV_free(_attr->u.attribute.attr_name);
+        _attr->u.attribute.attr_name = RV_free(_attr->u.attribute.attr_name);
 
     if (_attr->u.attribute.dtype_id >= 0 && H5Tclose(_attr->u.attribute.dtype_id) < 0)
         FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close attribute's datatype")
@@ -3265,7 +3270,7 @@ RV_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close ACPL")
     } /* end if */
 
-    RV_free(_attr);
+    _attr = RV_free(_attr);
 
 done:
     PRINT_ERROR_STACK
@@ -3714,11 +3719,16 @@ RV_datatype_close(void *dt, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **
     RV_object_t *_dtype = (RV_object_t *) dt;
     herr_t       ret_value = SUCCEED;
 
+    if (!_dtype)
+        FUNC_GOTO_DONE(SUCCEED);
+
 #ifdef PLUGIN_DEBUG
     printf("-> Received datatype close call with following parameters:\n");
     printf("     - Datatype's URI: %s\n", _dtype->URI);
     printf("     - Datatype's object type: %s\n", object_type_to_string(_dtype->obj_type));
-    printf("     - Datatype's domain path: %s\n\n", _dtype->domain->u.file.filepath_name);
+    if (_dtype->domain && _dtype->domain->u.file.filepath_name)
+        printf("     - Datatype's domain path: %s\n", _dtype->domain->u.file.filepath_name);
+    printf("\n");
 #endif
 
     if (H5I_DATATYPE != _dtype->obj_type)
@@ -3736,7 +3746,7 @@ RV_datatype_close(void *dt, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close TCPL")
     } /* end if */
 
-    RV_free(_dtype);
+    _dtype = RV_free(_dtype);
 
 done:
     PRINT_ERROR_STACK
@@ -4693,11 +4703,16 @@ RV_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED *
     RV_object_t *_dset = (RV_object_t *) dset;
     herr_t       ret_value = SUCCEED;
 
+    if (!_dset)
+        FUNC_GOTO_DONE(SUCCEED);
+
 #ifdef PLUGIN_DEBUG
     printf("-> Received dataset close call with following parameters:\n");
     printf("     - Dataset's URI: %s\n", _dset->URI);
     printf("     - Dataset's object type: %s\n", object_type_to_string(_dset->obj_type));
-    printf("     - Dataset's domain path: %s\n\n", _dset->domain->u.file.filepath_name);
+    if (_dset->domain && _dset->domain->u.file.filepath_name)
+        printf("     - Dataset's domain path: %s\n", _dset->domain->u.file.filepath_name);
+    printf("\n");
 #endif
 
     if (H5I_DATASET != _dset->obj_type)
@@ -4717,7 +4732,7 @@ RV_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED *
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close DCPL")
     } /* end if */
 
-    RV_free(_dset);
+    _dset = RV_free(_dset);
 
 done:
     PRINT_ERROR_STACK
@@ -5356,18 +5371,23 @@ RV_file_close(void *file, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
     RV_object_t *_file = (RV_object_t *) file;
     herr_t       ret_value = SUCCEED;
 
+    if (!_file)
+        FUNC_GOTO_DONE(SUCCEED);
+
 #ifdef PLUGIN_DEBUG
     printf("-> Received file close call with following parameters:\n");
     printf("     - File's URI: %s\n", _file->URI);
     printf("     - File's object type: %s\n", object_type_to_string(_file->obj_type));
-    printf("     - Filename: %s\n\n", _file->domain->u.file.filepath_name);
+    if (_file->domain && _file->domain->u.file.filepath_name)
+        printf("     - Filename: %s\n", _file->domain->u.file.filepath_name);
+    printf("\n");
 #endif
 
     if (H5I_FILE != _file->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a file")
 
     if (_file->u.file.filepath_name)
-        RV_free(_file->u.file.filepath_name);
+        _file->u.file.filepath_name = RV_free(_file->u.file.filepath_name);
 
     if (_file->u.file.fapl_id >= 0) {
         if (_file->u.file.fapl_id != H5P_FILE_ACCESS_DEFAULT && H5Pclose(_file->u.file.fapl_id) < 0)
@@ -5378,7 +5398,7 @@ RV_file_close(void *file, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FCPL")
     } /* end if */
 
-    RV_free(_file);
+    _file = RV_free(_file);
 
 done:
     PRINT_ERROR_STACK
@@ -5902,11 +5922,16 @@ RV_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
     RV_object_t *_grp = (RV_object_t *) grp;
     herr_t       ret_value = SUCCEED;
 
+    if (!_grp)
+        FUNC_GOTO_DONE(SUCCEED);
+
 #ifdef PLUGIN_DEBUG
     printf("-> Received group close call with following parameters:\n");
     printf("     - Group's URI: %s\n", _grp->URI);
     printf("     - Group's object type: %s\n", object_type_to_string(_grp->obj_type));
-    printf("     - Group's domain path: %s\n\n", _grp->domain->u.file.filepath_name);
+    if (_grp->domain && _grp->domain->u.file.filepath_name)
+        printf("     - Group's domain path: %s\n", _grp->domain->u.file.filepath_name);
+    printf("\n");
 #endif
 
     if (H5I_GROUP != _grp->obj_type)
@@ -5921,7 +5946,7 @@ RV_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close GCPL")
     } /* end if */
 
-    RV_free(_grp);
+    _grp = RV_free(_grp);
 
 done:
     PRINT_ERROR_STACK
@@ -10456,7 +10481,7 @@ RV_convert_JSON_to_datatype(const char *type)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported string padding type for string datatype")
 
 #ifdef PLUGIN_DEBUG
-            printf("-> String padding: %s\n", strPad);
+        printf("-> String padding: %s\n", strPad);
 #endif
 
         /* Retrieve the length if the datatype is a fixed-length string */

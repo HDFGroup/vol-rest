@@ -585,6 +585,11 @@
 #define URL_ENCODING_TEST_DSET_NAME  "url_encoding_dset !*'();:@&=+$,?#[]-.<>\\\\^`{}|~"
 #define URL_ENCODING_TEST_ATTR_NAME  "url_encoding_attr !*'();:@&=+$,?#[]-.<>\\\\^`{}|~"
 
+#define COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_SUBGROUP_NAME "compound_type_with_symbols_in_member_names_test"
+#define COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_NUM_SUBTYPES  8
+#define COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_DSET_RANK     2
+#define COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_DSET_NAME     "dset"
+
 
 /* Plugin initialization/termination test */
 static int test_setup_plugin(void);
@@ -718,9 +723,9 @@ static int test_unused_object_API_calls(void);
 static int test_open_link_without_leading_slash(void);
 static int test_object_creation_by_absolute_path(void);
 static int test_absolute_vs_relative_path(void);
-static int test_double_init_free(void);
 static int test_url_encoding(void);
 static int test_symbols_in_compound_field_name(void);
+static int test_double_init_free(void);
 
 static herr_t attr_iter_callback1(hid_t location_id, const char *attr_name, const H5A_info_t *ainfo, void *op_data);
 static herr_t attr_iter_callback2(hid_t location_id, const char *attr_name, const H5A_info_t *ainfo, void *op_data);
@@ -885,9 +890,9 @@ static int (*misc_tests[])(void) = {
         test_open_link_without_leading_slash,
         test_object_creation_by_absolute_path,
         test_absolute_vs_relative_path,
-        test_double_init_free,
         /* test_url_encoding, */
         test_symbols_in_compound_field_name,
+        test_double_init_free,
         NULL
 };
 
@@ -15924,13 +15929,144 @@ error:
 static int
 test_symbols_in_compound_field_name(void)
 {
+    hsize_t  dims[COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_DSET_RANK];
+    size_t   i;
+    size_t   total_type_size;
+    size_t   next_offset;
+    hid_t    file_id = -1, fapl_id = -1;
+    hid_t    container_group = -1, group_id = -1;
+    hid_t    compound_type = -1;
+    hid_t    dset_id = -1;
+    hid_t    fspace_id = -1;
+    hid_t    type_pool[COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_NUM_SUBTYPES];
+    char     member_names[COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_NUM_SUBTYPES][256];
+
     TESTING("usage of '{', '}' and '\\\"' symbols in compound type\'s field name")
 
-    SKIPPED();
+    if (RVinit() < 0)
+        TEST_ERROR
+
+    for (i = 0; i < COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_NUM_SUBTYPES; i++)
+        type_pool[i] = -1;
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open file\n");
+        goto error;
+    }
+
+    if ((container_group = H5Gopen2(file_id, MISCELLANEOUS_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't open container group\n");
+        goto error;
+    }
+
+    if ((group_id = H5Gcreate2(container_group, COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_SUBGROUP_NAME,
+            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create container sub-group\n");
+        goto error;
+    }
+
+    for (i = 0, total_type_size = 0; i < COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_NUM_SUBTYPES; i++) {
+        type_pool[i] = generate_random_datatype(H5T_NO_CLASS);
+        total_type_size += H5Tget_size(type_pool[i]);
+    }
+
+    snprintf(member_names[0], 256, "{{{ member0");
+    snprintf(member_names[1], 256, "member1 }}}");
+    snprintf(member_names[2], 256, "{{{ member2 }}");
+    snprintf(member_names[3], 256, "{{ member3 }}}");
+    snprintf(member_names[4], 256, "\\\"member4");
+    snprintf(member_names[5], 256, "member5\\\"");
+    snprintf(member_names[6], 256, "mem\\\"ber6");
+    snprintf(member_names[7], 256, "{{ member7\\\" }");
+
+    if ((compound_type = H5Tcreate(H5T_COMPOUND, total_type_size)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create compound datatype\n");
+        goto error;
+    }
+
+    for (i = 0, next_offset = 0; i < COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_NUM_SUBTYPES; i++) {
+        if (H5Tinsert(compound_type, member_names[i], next_offset, type_pool[i]) < 0) {
+            H5_FAILED();
+            printf("    couldn't insert compound member %zu\n", i);
+            goto error;
+        }
+
+        next_offset += H5Tget_size(type_pool[i]);
+    }
+
+    if (H5Tpack(compound_type) < 0)
+        TEST_ERROR
+
+    for (i = 0; i < COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_DSET_RANK; i++)
+        dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
+
+    if ((fspace_id = H5Screate_simple(COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_DSET_RANK, dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dcreate2(group_id, COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_DSET_NAME, compound_type,
+            fspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create dataset\n");
+        goto error;
+    }
+
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+
+    if ((dset_id = H5Dopen2(group_id, COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_DSET_NAME, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    failed to open dataset\n");
+        goto error;
+    }
+
+    for (i = 0; i < COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_NUM_SUBTYPES; i++)
+        if (type_pool[i] >= 0 && H5Tclose(type_pool[i]) < 0)
+            TEST_ERROR
+
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Tclose(compound_type) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(group_id) < 0)
+        TEST_ERROR
+    if (H5Gclose(container_group) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (RVterm() < 0)
+        TEST_ERROR
+
+    PASSED();
 
     return 0;
 
 error:
+    H5E_BEGIN_TRY {
+        for (i = 0; i < COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_NUM_SUBTYPES; i++)
+            H5Tclose(type_pool[i]);
+        H5Sclose(fspace_id);
+        H5Tclose(compound_type);
+        H5Dclose(dset_id);
+        H5Gclose(group_id);
+        H5Gclose(container_group);
+        H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        RVterm();
+    } H5E_END_TRY;
+
     return 1;
 }
 
