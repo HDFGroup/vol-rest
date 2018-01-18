@@ -8,8 +8,10 @@ Table of Contents:
 
 I.   Introduction
 II.  Obtaining and Building the REST VOL plugin
-    a. Obtaining HDF5 and the REST VOL plugin
-    b. Building the REST VOL plugin against HDF5
+    a. Prerequisites
+    b. Obtaining the REST VOL plugin
+    c. Building the included HDF5 distribution
+    d. Building the REST VOL plugin against HDF5
 III. Using the REST VOL plugin
     a. Building and running an application with the REST VOL plugin
     b. Currently unsupported features
@@ -33,15 +35,29 @@ I. Introduction
 
 II. Obtaining and Building the REST VOL plugin
 
-    a. Obtaining the REST VOL plugin
+    a. Prerequisites
 
-    b. Building the REST VOL plugin against HDF5
+
+    b. Obtaining the REST VOL plugin
+
+
+    c. Building the included HDF5 distribution
+
+    Due to some specialized changes that had to be made in order for the REST
+    VOL plugin to work correctly, a modified source distribution of HDF5 has
+    been included in the folder 'hdf5' and needs to be built and then used to
+    build the plugin itself.
+
+
+    d. Building the REST VOL plugin against HDF5
+
 
 III. Using the REST VOL plugin
 
     a. Building and running an application with the REST VOL plugin
 
     
+
 
     b. Currently unsupported features
 
@@ -189,3 +205,4 @@ IV. More information
 
     HSDS/HDF in the Cloud
     https://www.slideshare.net/HDFEOS/hdf-cloud-services
+
