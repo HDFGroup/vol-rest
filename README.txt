@@ -179,11 +179,6 @@ III. Using the REST VOL plugin
         behavior, using a trailing "/" on path names will likely confuse the
         plugin and cause incorrect behavior.
 
-        Due to the algorithm used to process the JSON fields of a compound
-        datatype and turn them each into an HDF5 hid_t, including a '{' or '}'
-        symbol inside the name of a compound datatype member will confuse the
-        plugin and lead to incorrect behavior.
-
         Due to the HDF5 public API call H5Pset_external's use of the 'off_t'
         type, it is likely that compilation of the REST VOL on non-posix
         compliant systems will fail.

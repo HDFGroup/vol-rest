@@ -586,7 +586,7 @@
 #define URL_ENCODING_TEST_ATTR_NAME  "url_encoding_attr !*'();:@&=+$,?#[]-.<>\\\\^`{}|~"
 
 #define COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_SUBGROUP_NAME "compound_type_with_symbols_in_member_names_test"
-#define COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_NUM_SUBTYPES  8
+#define COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_NUM_SUBTYPES  9
 #define COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_DSET_RANK     2
 #define COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_DSET_NAME     "dset"
 
@@ -10593,6 +10593,7 @@ test_create_external_link(void)
     htri_t link_exists;
     hid_t  file_id = -1, fapl_id = -1;
     hid_t  container_group = -1, group_id = -1;
+    hid_t  root_id = -1;
 
     TESTING("create external link to existing object")
 
@@ -10659,12 +10660,14 @@ test_create_external_link(void)
         goto error;
     }
 
-    if (H5Gopen2(group_id, EXTERNAL_LINK_TEST_LINK_NAME, H5P_DEFAULT) < 0) {
+    if ((root_id = H5Gopen2(group_id, EXTERNAL_LINK_TEST_LINK_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't open root group of other file using external link\n");
         goto error;
     }
 
+    if (H5Gclose(root_id) < 0)
+        TEST_ERROR
     if (H5Gclose(group_id) < 0)
         TEST_ERROR
     if (H5Gclose(container_group) < 0)
@@ -10682,6 +10685,7 @@ test_create_external_link(void)
 
 error:
     H5E_BEGIN_TRY {
+        H5Gclose(root_id);
         H5Gclose(group_id);
         H5Gclose(container_group);
         H5Pclose(fapl_id);
@@ -15986,6 +15990,7 @@ test_symbols_in_compound_field_name(void)
     snprintf(member_names[5], 256, "member5\\\"");
     snprintf(member_names[6], 256, "mem\\\"ber6");
     snprintf(member_names[7], 256, "{{ member7\\\" }");
+    snprintf(member_names[8], 256, "{{ member8\\\\");
 
     if ((compound_type = H5Tcreate(H5T_COMPOUND, total_type_size)) < 0) {
         H5_FAILED();

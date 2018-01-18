@@ -167,16 +167,12 @@ do {                                                                            
  * used to extract out all of the JSON within a JSON object so that processing can be done
  * on it.
  */
-/* XXX: Note that this approach will have problems with '{' or '}' appearing inside the "type" subsection
- * where one would not normally expect it, such as in a compound datatype field name, and will either
- * cause early termination (an incomplete JSON representation) or will throw the below error about not
- * being able to locate the end of the "type" substring.
- */
 #define FIND_JSON_SECTION_END(start_ptr, end_ptr, ERR_MAJOR, ret_value)                                                     \
 do {                                                                                                                        \
-    size_t  depth_counter = 1; /* Keep track of depth until it reaches 0 again, signalling end of section */                \
-    char   *advancement_ptr = start_ptr + 1; /* Pointer to increment while searching for matching '}' symbols */            \
-    char    current_symbol;                                                                                                 \
+    hbool_t  suspend_processing = FALSE; /* Whether we are suspending processing for characters inside a JSON string */     \
+    size_t   depth_counter = 1; /* Keep track of depth until it reaches 0 again, signalling end of section */               \
+    char    *advancement_ptr = start_ptr + 1; /* Pointer to increment while searching for matching '}' symbols */           \
+    char     current_symbol;                                                                                                \
                                                                                                                             \
     while (depth_counter) {                                                                                                 \
         current_symbol = *advancement_ptr++;                                                                                \
@@ -187,9 +183,28 @@ do {                                                                            
         if (!current_symbol)                                                                                                \
             FUNC_GOTO_ERROR(ERR_MAJOR, H5E_PARSEERROR, ret_value, "can't locate end of section - misformatted JSON likely") \
                                                                                                                             \
-        if (current_symbol == '{')                                                                                          \
+        /* If we encounter a " in the buffer, we assume that this is a JSON string and we suspend processing                \
+         * of '{' and '}' symbols until the matching " is found that ends the JSON string. Note however that                \
+         * it is possible for the JSON string to have an escaped \" combination within it, in which case this               \
+         * is not the ending " and we will still suspend processing. Note further that the JSON string may                  \
+         * also have the escaped \\ sequence within it as well. Since it is safer to search forward in the                  \
+         * string buffer (as we know the next character must be valid or the NUL terminator) we check each                  \
+         * character for the presence of a \ symbol, and if the following character is \ or ", we just skip                 \
+         * ahead two characters and continue on.                                                                            \
+         */                                                                                                                 \
+        if (current_symbol == '\\') {                                                                                       \
+            if (*advancement_ptr == '\\' || *advancement_ptr == '"') {                                                      \
+                advancement_ptr++;                                                                                          \
+                continue;                                                                                                   \
+            } /* end if */                                                                                                  \
+        } /* end if */                                                                                                      \
+                                                                                                                            \
+        /* Now safe to suspend/resume processing */                                                                         \
+        if (current_symbol == '"')                                                                                          \
+            suspend_processing = !suspend_processing;                                                                       \
+        else if (current_symbol == '{' && !suspend_processing)                                                              \
             depth_counter++;                                                                                                \
-        else if (current_symbol == '}')                                                                                     \
+        else if (current_symbol == '}' && !suspend_processing)                                                              \
             depth_counter--;                                                                                                \
     } /* end while */                                                                                                       \
                                                                                                                             \
