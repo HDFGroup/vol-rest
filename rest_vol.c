@@ -28,7 +28,6 @@
  *          for HDF5 data stores as described in the paper:
  *          http://hdfgroup.org/pubs/papers/RESTful_HDF5.pdf.
  */
-/* XXX: Eventually replace CURL PUT calls with CURLOPT_UPLOAD calls */
 /* XXX: Fix up url-encoding for link names every place it can be used */
 
 #include <sys/types.h>
@@ -360,11 +359,26 @@ static char *base_URL = NULL;
 static size_t rest_curr_alloc_bytes;
 #endif
 
+/* A global struct containing the buffer which cURL will write its
+ * responses out to after making a call to the server. The buffer
+ * in this struct is allocated upon plugin initialization and is
+ * dynamically grown as needed throughout the lifetime of the plugin.
+ */
 static struct {
     char   *buffer;
     char   *curr_buf_ptr;
     size_t  buffer_size;
 } response_buffer;
+
+/* A local struct which is used each time an HTTP PUT call is to be
+ * made to the server. This struct contains the data buffer and its
+ * size and is passed to the curl_read_data_callback() function to
+ * copy the data from the local buffer into cURL's internal buffer.
+ */
+typedef struct {
+    const void *buffer;
+    size_t      buffer_size;
+} upload_info;
 
 /*
  * A struct which is filled out and passed to the callback function
@@ -570,8 +584,9 @@ static herr_t RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object
 static herr_t RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
 static herr_t RV_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
 
-/* cURL write function callback */
-static size_t write_data_callback(void *buffer, size_t size, size_t nmemb, void *userp);
+/* cURL function callbacks */
+static size_t curl_read_data_callback(char *buffer, size_t size, size_t nmemb, void *inptr);
+static size_t curl_write_data_callback(char *buffer, size_t size, size_t nmemb, void *userp);
 
 /* Alternate, more portable version of the basename function which doesn't modify its argument */
 static const char *RV_basename(const char *path);
@@ -785,8 +800,12 @@ RVinit(void)
     response_buffer.curr_buf_ptr = response_buffer.buffer;
 
     /* Redirect cURL output to response buffer */
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data_callback))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_data_callback))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL write function: %s", curl_err_buf)
+
+    /* Set cURL read function for UPLOAD operations */
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READFUNCTION, curl_read_data_callback))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL read function: %s", curl_err_buf)
 
 #ifdef CURL_DEBUG
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
@@ -1224,6 +1243,7 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
 {
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *new_attribute = NULL;
+    upload_info  uinfo;
     size_t       create_request_nalloc = 0;
     size_t       host_header_len = 0;
     size_t       datatype_body_len = 0;
@@ -1457,13 +1477,16 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
     printf("-> URL for attribute creation request: %s\n\n", request_url);
 #endif
 
+    uinfo.buffer = create_request_body;
+    uinfo.buffer_size = (size_t) create_request_body_len;
+
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT"))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, &uinfo))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL PUT data: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) create_request_body_len))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t) create_request_body_len))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
@@ -1513,9 +1536,9 @@ done:
         if (RV_attr_close(new_attribute, FAIL, NULL) < 0)
             FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, NULL, "can't close attribute")
 
-    /* Reset cURL custom request to prevent issues with future requests */
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't reset cURL custom request: %s", curl_err_buf)
+    /* Unset cURL UPLOAD option to ensure that future requests don't try to use PUT calls */
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 0))
+        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't unset cURL PUT option: %s", curl_err_buf)
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
@@ -2009,6 +2032,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
 {
     RV_object_t *attribute = (RV_object_t *) attr;
     H5T_class_t  dtype_class;
+    upload_info  uinfo;
     hssize_t     file_select_npoints;
     htri_t       is_variable_str;
     size_t       dtype_size;
@@ -2143,13 +2167,16 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
     /* Check to make sure that the size of the write body can safely be cast to a curl_off_t */
     H5_CHECK_OVERFLOW(write_body_len, size_t, curl_off_t);
 
+    uinfo.buffer = buf;
+    uinfo.buffer_size = write_body_len;
+
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT"))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, (const char *) buf))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, &uinfo))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) write_body_len))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t) write_body_len))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
@@ -2174,9 +2201,9 @@ done:
     if (url_encoded_attr_name)
         curl_free(url_encoded_attr_name);
 
-    /* Reset cURL custom request to prevent issues with future requests */
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf)
+    /* Unset cURL UPLOAD option to ensure that future requests don't try to use PUT calls */
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 0))
+        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't unset cURL PUT option: %s", curl_err_buf)
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
@@ -4351,6 +4378,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 {
     H5S_sel_type  sel_type = H5S_SEL_ALL;
     RV_object_t  *dataset = (RV_object_t *) obj;
+    upload_info   uinfo;
     H5T_class_t   dtype_class;
     hssize_t      mem_select_npoints, file_select_npoints;
     hbool_t       is_transfer_binary = FALSE;
@@ -4505,13 +4533,16 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     /* Check to make sure that the size of the write body can safely be cast to a curl_off_t */
     H5_CHECK_OVERFLOW(write_body_len, size_t, curl_off_t);
 
+    uinfo.buffer = is_transfer_binary ? buf : write_body;
+    uinfo.buffer_size = write_body_len;
+
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT"))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, is_transfer_binary ? (const char *) buf : write_body))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, &uinfo))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) write_body_len))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t) write_body_len))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
@@ -4538,9 +4569,9 @@ done:
     if (host_header)
         RV_free(host_header);
 
-    /* Reset cURL custom request to prevent issues with future requests */
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf)
+    /* Unset cURL UPLOAD option to ensure that future requests don't try to use PUT calls */
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 0))
+        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't unset cURL PUT option: %s", curl_err_buf)
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
@@ -4900,11 +4931,11 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
         } /* end if */
     } /* end if */
 
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT"))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, ""))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, NULL))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL PUT data: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 0))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, 0))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL PUT data size: %s", curl_err_buf)
 
 #ifdef PLUGIN_DEBUG
@@ -4950,6 +4981,10 @@ done:
     /* Reset cURL custom request to prevent issues with future requests */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
         FUNC_DONE_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't reset cURL custom request: %s", curl_err_buf)
+
+    /* Unset cURL UPLOAD option to ensure that future requests don't try to use PUT calls */
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 0))
+        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't unset cURL PUT option: %s", curl_err_buf)
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
@@ -5987,6 +6022,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
 {
     H5VL_loc_params_t  hard_link_target_obj_loc_params;
     RV_object_t       *new_link_loc_obj = (RV_object_t *) obj;
+    upload_info        uinfo;
     size_t             create_request_nalloc = 0;
     size_t             host_header_len = 0;
     void              *hard_link_target_obj;
@@ -6245,13 +6281,16 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
     printf("-> Link create request URL: %s\n\n", request_url);
 #endif
 
+    uinfo.buffer = create_request_body;
+    uinfo.buffer_size = (size_t) create_request_body_len;
+
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT"))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, &uinfo))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) create_request_body_len))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t) create_request_body_len))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
@@ -6282,9 +6321,9 @@ done:
     if (url_encoded_link_name)
         curl_free(url_encoded_link_name);
 
-    /* Reset cURL custom request to prevent issues with future requests */
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        FUNC_DONE_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf)
+    /* Unset cURL UPLOAD option to ensure that future requests don't try to use PUT calls */
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 0))
+        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't unset cURL PUT option: %s", curl_err_buf)
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
@@ -7775,7 +7814,38 @@ done:
 
 
 /*-------------------------------------------------------------------------
- * Function:    write_data_callback
+ * Function:    curl_read_data_callback
+ *
+ * Purpose:     A callback for cURL which will copy the data from a given
+ *              buffer into cURL's internal buffer when making an HTTP PUT
+ *              call to the server.
+ *
+ * Return:      Amount of bytes equal to the amount given in the upload
+ *              info struct on success/0 on failure or if NULL data buffer
+ *              is given
+ *
+ * Programmer:  Jordan Henderson
+ *              January, 2018
+ */
+static size_t
+curl_read_data_callback(char *buffer, size_t size, size_t nmemb, void *inptr)
+{
+    upload_info *uinfo = (upload_info *) inptr;
+    size_t       max_buf_size = size * nmemb;
+    size_t       data_size = 0;
+
+    if (inptr) {
+        data_size = (uinfo->buffer_size > max_buf_size) ? max_buf_size : uinfo->buffer_size;
+
+        memcpy(buffer, uinfo->buffer, data_size);
+    } /* end if */
+
+    return data_size;
+} /* end curl_read_data_callback() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    curl_write_data_callback
  *
  * Purpose:     A callback for cURL which allows cURL to write its
  *              responses from the server into a growing string buffer
@@ -7789,7 +7859,7 @@ done:
  *              March, 2017
  */
 static size_t
-write_data_callback(void *buffer, size_t size, size_t nmemb, void H5_ATTR_UNUSED *userp)
+curl_write_data_callback(char *buffer, size_t size, size_t nmemb, void H5_ATTR_UNUSED *userp)
 {
     size_t data_size = size * nmemb;
     size_t positive_ptrdiff;
@@ -7814,7 +7884,7 @@ write_data_callback(void *buffer, size_t size, size_t nmemb, void H5_ATTR_UNUSED
     *response_buffer.curr_buf_ptr = '\0';
 
     return data_size;
-} /* end write_data_callback() */
+} /* end curl_write_data_callback() */
 
 
 /*-------------------------------------------------------------------------
