@@ -28,8 +28,8 @@
  *          for HDF5 data stores as described in the paper:
  *          http://hdfgroup.org/pubs/papers/RESTful_HDF5.pdf.
  */
-/* XXX: Fix up url-encoding for link names every place it can be used */
 
+#include <ctype.h>
 #include <sys/types.h>
 
 #include "H5private.h"       /* XXX: Temporarily needed; Generic Functions */
@@ -593,6 +593,9 @@ static const char *RV_basename(const char *path);
 
 /* Alternate, more portable version of the dirname function which doesn't modify its argument */
 static char *RV_dirname(const char *path);
+
+/* Helper function to URL-encode an entire pathname by URL-encoding each of its separate components */
+static char *RV_url_encode_path(const char *path);
 
 /* H5Dscatter() callback for dataset reads */
 static herr_t dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *op_data);
@@ -1284,7 +1287,7 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
         && H5I_GROUP != parent->obj_type
         && H5I_DATATYPE != parent->obj_type
         && H5I_DATASET != parent->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a group, datatype or dataset")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a group, datatype or dataset")
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -1607,7 +1610,7 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
         && H5I_GROUP != parent->obj_type
         && H5I_DATATYPE != parent->obj_type
         && H5I_DATASET != parent->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a group, datatype or dataset")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a group, datatype or dataset")
 
     /* Allocate and setup internal Attribute struct */
     if (NULL == (attribute = (RV_object_t *) RV_malloc(sizeof(*attribute))))
@@ -1870,9 +1873,9 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED dxpl_id
 #endif
 
     if (H5I_ATTR != attribute->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not an attribute")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not an attribute")
     if (!buf)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "read buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "read buffer was NULL")
 
     /* Determine whether it's possible to receive the data as a binary blob instead of as JSON */
     if (H5T_NO_CLASS == (dtype_class = H5Tget_class(dtype_id)))
@@ -2053,9 +2056,9 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
 #endif
 
     if (H5I_ATTR != attribute->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not an attribute")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not an attribute")
     if (!buf)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "write buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "write buffer was NULL")
 
     /* Check for write access */
     if (!(attribute->domain->u.file.intent & H5F_ACC_RDWR))
@@ -2248,7 +2251,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
         && H5I_GROUP != loc_obj->obj_type
         && H5I_DATATYPE != loc_obj->obj_type
         && H5I_DATASET != loc_obj->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "parent object not an attribute, group, datatype or dataset")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not an attribute, group, datatype or dataset")
 
     switch (get_type) {
         /* H5Aget_create_plist */
@@ -2604,7 +2607,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
         && H5I_GROUP != loc_obj->obj_type
         && H5I_DATATYPE != loc_obj->obj_type
         && H5I_DATASET != loc_obj->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "parent object not a group, datatype or dataset")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
 
     switch (specific_type) {
         /* H5Adelete (_by_name/_by_idx) */
@@ -3293,7 +3296,7 @@ RV_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
 #endif
 
     if (H5I_ATTR != _attr->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not an attribute")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not an attribute")
 
     if (_attr->u.attribute.attr_name)
         _attr->u.attribute.attr_name = RV_free(_attr->u.attribute.attr_name);
@@ -3369,7 +3372,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const
 #endif
 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a file or group")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group")
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -3607,7 +3610,7 @@ RV_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const c
 #endif
 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a file or group")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group")
 
     /* Allocate and setup internal Datatype struct */
     if (NULL == (datatype = (RV_object_t *) RV_malloc(sizeof(*datatype))))
@@ -3702,7 +3705,7 @@ RV_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t H5_ATTR_UNUSED dx
 #endif
 
     if (H5I_DATATYPE != dtype->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a datatype")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a datatype")
 
     switch (get_type) {
         case H5VL_DATATYPE_GET_BINARY:
@@ -3774,7 +3777,7 @@ RV_datatype_close(void *dt, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **
 #endif
 
     if (H5I_DATATYPE != _dtype->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a datatype")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a datatype")
 
     if (_dtype->u.datatype.dtype_id >= 0 && H5Tclose(_dtype->u.datatype.dtype_id) < 0)
         FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype")
@@ -3837,7 +3840,7 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
 #endif
 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a file or group")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group")
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -4024,7 +4027,7 @@ RV_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
 #endif
 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a file or group")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group")
 
     /* Allocate and setup internal Dataset struct */
     if (NULL == (dataset = (RV_object_t *) RV_malloc(sizeof(*dataset))))
@@ -4142,9 +4145,9 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 #endif
 
     if (H5I_DATASET != dataset->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a dataset")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a dataset")
     if (!buf)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "read buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "read buffer was NULL")
 
     /* Follow the semantics for the use of H5S_ALL */
     if (H5S_ALL == mem_space_id && H5S_ALL == file_space_id) {
@@ -4403,9 +4406,9 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 #endif
 
     if (H5I_DATASET != dataset->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a dataset")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a dataset")
     if (!buf)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "write buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "write buffer was NULL")
 
     /* Check for write access */
     if (!(dataset->domain->u.file.intent & H5F_ACC_RDWR))
@@ -4611,7 +4614,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl
 #endif
 
     if (H5I_DATASET != dset->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a dataset")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a dataset")
 
     switch (get_type) {
         /* H5Dget_access_plist */
@@ -4708,7 +4711,7 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
 #endif
 
     if (H5I_DATASET != dset->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a dataset")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a dataset")
 
     switch (specific_type) {
         /* H5Dset_extent */
@@ -4762,7 +4765,7 @@ RV_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED *
 #endif
 
     if (H5I_DATASET != _dset->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a dataset")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a dataset")
 
     if (_dset->u.dataset.dtype_id >= 0 && H5Tclose(_dset->u.dataset.dtype_id) < 0)
         FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close dataset's datatype")
@@ -5156,7 +5159,7 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, v
 #endif
 
     if (H5I_FILE != _obj->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a file")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file")
 
     switch (get_type) {
         /* H5Fget_access_plist */
@@ -5263,7 +5266,7 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_ATTR_UN
 #endif
 
     if (file && H5I_FILE != file->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a file")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file")
 
     switch (specific_type) {
         /* H5Fflush */
@@ -5319,7 +5322,7 @@ RV_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list ar
 #endif
 
     if (H5I_FILE != file->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a file")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file")
 
     switch (optional_type) {
         /* H5Freopen */
@@ -5434,7 +5437,7 @@ RV_file_close(void *file, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
 #endif
 
     if (H5I_FILE != _file->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a file")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file")
 
     if (_file->u.file.filepath_name)
         _file->u.file.filepath_name = RV_free(_file->u.file.filepath_name);
@@ -5499,7 +5502,7 @@ RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const ch
 #endif
 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a file or group")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group")
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -5718,7 +5721,7 @@ RV_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char
 #endif
 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a file or group")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group")
 
     /* Allocate and setup internal Group struct */
     if (NULL == (group = (RV_object_t *) RV_malloc(sizeof(*group))))
@@ -5806,7 +5809,7 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
 #endif
 
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a group")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a group")
 
     switch (get_type) {
         /* H5Gget_create_plist */
@@ -5985,7 +5988,7 @@ RV_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **re
 #endif
 
     if (H5I_GROUP != _grp->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a group")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a group")
 
     if (_grp->u.group.gapl_id >= 0) {
         if (_grp->u.group.gapl_id != H5P_GROUP_ACCESS_DEFAULT && H5Pclose(_grp->u.group.gapl_id) < 0)
@@ -6066,9 +6069,9 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
 
     /* Validate loc_id and check for write access on the file */
     if (H5I_FILE != new_link_loc_obj->obj_type && H5I_GROUP != new_link_loc_obj->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link location object not a file or group")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link location object not a file or group")
     if (!loc_params.loc_data.loc_by_name.name)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link name data was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link name data was NULL")
 
     if (!(new_link_loc_obj->domain->u.file.intent & H5F_ACC_RDWR))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file")
@@ -6415,6 +6418,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
     size_t       host_header_len = 0;
     char        *host_header = NULL;
     char        *link_dir_name = NULL;
+    char        *url_encoded_link_name = NULL;
     char         temp_URI[URI_MAX_LENGTH];
     char         request_url[URL_MAX_LENGTH];
     int          url_len = 0;
@@ -6465,11 +6469,17 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
 #endif
                     } /* end if */
 
+                    /* URL-encode the name of the link to ensure that the resulting URL for the get
+                     * link info operation doesn't contain any illegal characters
+                     */
+                    if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(loc_params.loc_data.loc_by_name.name), 0)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
+
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
                                             "%s/groups/%s/links/%s",
                                             base_URL,
                                             empty_dirname ? loc_obj->URI : temp_URI,
-                                            RV_basename(loc_params.loc_data.loc_by_name.name))
+                                            url_encoded_link_name)
                         ) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
 
@@ -6575,11 +6585,17 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
 #endif
                     } /* end if */
 
+                    /* URL-encode the name of the link to ensure that the resulting URL for the get
+                     * link value operation doesn't contain any illegal characters
+                     */
+                    if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(loc_params.loc_data.loc_by_name.name), 0)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
+
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
                                             "%s/groups/%s/links/%s",
                                             base_URL,
                                             empty_dirname ? loc_obj->URI : temp_URI,
-                                            RV_basename(loc_params.loc_data.loc_by_name.name))
+                                            url_encoded_link_name)
                         ) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
 
@@ -6650,10 +6666,12 @@ done:
     printf("-> Link get response buffer:\n%s\n\n", response_buffer.buffer);
 #endif
 
-    if (link_dir_name)
-        RV_free(link_dir_name);
     if (host_header)
         RV_free(host_header);
+    if (url_encoded_link_name)
+        curl_free(url_encoded_link_name);
+    if (link_dir_name)
+        RV_free(link_dir_name);
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
@@ -6703,7 +6721,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
 #endif
 
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "parent object not a file or group")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file or group")
 
     switch (specific_type) {
         /* H5Ldelete */
@@ -7097,7 +7115,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
 #endif
 
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, NULL, "parent object not a file or group")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group")
 
     switch (loc_params.type) {
         /* H5Oopen */
@@ -7544,7 +7562,7 @@ RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED 
         && H5I_GROUP != loc_obj->obj_type
         && H5I_DATATYPE != loc_obj->obj_type
         && H5I_DATASET != loc_obj->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "not a group, dataset or datatype")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a group, dataset or datatype")
 
     switch (optional_type) {
         /* H5Oset_comment and H5Oset_comment_by_name */
@@ -7947,6 +7965,143 @@ RV_dirname(const char *path)
 
 
 /*-------------------------------------------------------------------------
+ * Function:    RV_url_encode_path
+ *
+ * Purpose:     A helper function to URL-encode an entire path name by
+ *              URL-encoding each of its separate components and then
+ *              sticking them back together into a single string.
+ *
+ * Return:      URL-encoded version of the given path on success/ NULL on
+ *              failure
+ *
+ * Programmer:  Jordan Henderson
+ *              January, 2018
+ */
+static char *
+RV_url_encode_path(const char *path)
+{
+    size_t  bytes_nalloc;
+    size_t  path_prefix_len;
+    size_t  path_component_len;
+    size_t  positive_ptrdiff;
+    char   *path_copy = NULL;
+    char   *url_encoded_path_component = NULL;
+    char   *token;
+    char   *cur_pos;
+    char   *tmp_buffer = NULL;
+    char   *ret_value = NULL;
+
+    if (!path)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "path was NULL")
+
+    /* Retrieve the length of the possible path prefix, which could be something like '/', '.', etc. */
+    cur_pos = (char *) path;
+    while (*cur_pos && !isalnum(*cur_pos))
+        cur_pos++;
+    path_prefix_len = (size_t) (cur_pos - path);
+
+#ifdef PLUGIN_DEBUG
+    printf("-> Length of path prefix: %zu\n\n", path_prefix_len);
+#endif
+
+    /* Copy the given path (minus the path prefix) so that strtok() can safely modify it */
+    bytes_nalloc = strlen(path) - path_prefix_len + 1;
+    if (NULL == (path_copy = RV_malloc(bytes_nalloc)))
+        FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, NULL, "can't allocate space for copy of path")
+
+    strncpy(path_copy, path + path_prefix_len, bytes_nalloc);
+
+#ifdef PLUGIN_DEBUG
+    printf("-> Allocated copy of path: %s\n\n", path_copy);
+#endif
+
+    /* As URLs generally tend to be short and URL-encoding in the worst case will generally
+     * introduce 3x the memory usage for a given URL (since URL-encoded characters are
+     * represented by a '%' followed by two hexadecimal digits), go ahead and allocate
+     * the resulting buffer to this size and grow it dynamically if really necessary.
+     */
+    bytes_nalloc = (3 * bytes_nalloc) + path_prefix_len + 1;
+    if (NULL == (tmp_buffer = RV_malloc(bytes_nalloc)))
+        FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, NULL, "can't allocate space for resulting URL-encoded path buffer")
+
+    cur_pos = tmp_buffer;
+
+    /* Append the path's possible prefix, along with the first path component. This is to handle relative
+     * vs absolute pathnames, where a leading '/' or '.' may or may not be present */
+    if (path_prefix_len) {
+        strncpy(cur_pos, path, path_prefix_len);
+        cur_pos += path_prefix_len;
+    } /* end if */
+
+    if ((token = strtok(path_copy, "/"))) {
+        if (NULL == (url_encoded_path_component = curl_easy_escape(curl, token, 0)))
+            FUNC_GOTO_ERROR(H5E_NONE_MAJOR, H5E_CANTENCODE, NULL, "can't URL-encode path component")
+
+        path_component_len = strlen(url_encoded_path_component);
+
+        H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, cur_pos - tmp_buffer, ptrdiff_t);
+        CHECKED_REALLOC(tmp_buffer, bytes_nalloc, positive_ptrdiff + path_component_len, cur_pos, H5E_RESOURCE, NULL);
+
+        strncpy(cur_pos, url_encoded_path_component, path_component_len);
+        cur_pos += path_component_len;
+
+        curl_free(url_encoded_path_component);
+        url_encoded_path_component = NULL;
+    } /* end if */
+
+    /* For each of the rest of the path components, URL-encode it and then append it into
+     * the resulting path buffer, dynamically growing the buffer as necessary.
+     */
+    for (token = strtok(NULL, "/"); token; token = strtok(NULL, "/")) {
+#ifdef PLUGIN_DEBUG
+        printf("-> Processing next token: %s\n\n", token);
+#endif
+
+        if (NULL == (url_encoded_path_component = curl_easy_escape(curl, token, 0)))
+            FUNC_GOTO_ERROR(H5E_NONE_MAJOR, H5E_CANTENCODE, NULL, "can't URL-encode path component")
+
+#ifdef PLUGIN_DEBUG
+        printf("-> URL-encoded form of token: %s\n\n", url_encoded_path_component);
+#endif
+
+        path_component_len = strlen(url_encoded_path_component);
+
+        /* Check if the path components buffer needs to be grown */
+        H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, cur_pos - tmp_buffer, ptrdiff_t);
+        CHECKED_REALLOC(tmp_buffer, bytes_nalloc, positive_ptrdiff + path_component_len + 1, cur_pos, H5E_RESOURCE, NULL);
+
+        *cur_pos++ = '/';
+        strncpy(cur_pos, url_encoded_path_component, path_component_len);
+        cur_pos += path_component_len;
+
+        curl_free(url_encoded_path_component);
+        url_encoded_path_component = NULL;
+    } /* end for */
+
+    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, cur_pos - tmp_buffer, ptrdiff_t);
+    CHECKED_REALLOC(tmp_buffer, bytes_nalloc, positive_ptrdiff + 1, cur_pos, H5E_RESOURCE, NULL);
+
+    *cur_pos = '\0';
+
+#ifdef PLUGIN_DEBUG
+    printf("-> Final URL-encoded string: %s\n\n", tmp_buffer);
+#endif
+
+    ret_value = tmp_buffer;
+
+done:
+    if (url_encoded_path_component)
+        curl_free(url_encoded_path_component);
+    if (!ret_value && tmp_buffer)
+        RV_free(tmp_buffer);
+    if (path_copy)
+        RV_free(path_copy);
+
+    return ret_value;
+} /* end RV_url_encode_path() */
+
+
+/*-------------------------------------------------------------------------
  * Function:    dataset_read_scatter_op
  *
  * Purpose:     Callback for H5Dscatter() to scatter the read data into the
@@ -8031,7 +8186,7 @@ RV_parse_response(char *HTTP_response, void *callback_data_in, void *callback_da
     herr_t ret_value = SUCCEED;
 
     if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL")
 
     if (parse_callback && parse_callback(HTTP_response, callback_data_in, callback_data_out) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CALLBACK, FAIL, "can't perform callback operation")
@@ -8071,9 +8226,9 @@ RV_copy_object_URI_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_d
 #endif
 
     if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL")
     if (!buf_out)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "out buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL")
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed")
@@ -8194,9 +8349,9 @@ RV_get_link_obj_type_callback(char *HTTP_response, void *callback_data_in, void 
 #endif
 
     if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL")
     if (!obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "object type pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "object type pointer was NULL")
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed")
@@ -8277,9 +8432,9 @@ RV_get_link_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_dat
 #endif
 
     if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL")
     if (!link_info)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link info pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link info pointer was NULL")
 
     memset(link_info, 0, sizeof(H5L_info_t));
 
@@ -8374,9 +8529,9 @@ RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *call
 #endif
 
     if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL")
     if (!in_buf_size)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "buffer size point was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "buffer size pointer was NULL")
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "parsing JSON failed")
@@ -8532,9 +8687,9 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
 #endif
 
     if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL")
     if (!link_iter_data)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link iteration data pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link iteration data pointer was NULL")
 
     /* Build a table of all of the links in the given group */
     if (H5_INDEX_CRT_ORDER == link_iter_data->index_type) {
@@ -8599,9 +8754,9 @@ RV_attr_iter_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in
 #endif
 
     if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL")
     if (!attr_iter_data)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "attribute iteration data pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "attribute iteration data pointer was NULL")
 
     /* Build a table of all of the attributes attached to the given object */
     if (H5_INDEX_CRT_ORDER == attr_iter_data->index_type) {
@@ -8662,9 +8817,9 @@ RV_get_attr_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_dat
 #endif
 
     if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL")
     if (!attr_info)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "attribute info pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "attribute info pointer was NULL")
 
     memset(attr_info, 0, sizeof(*attr_info));
 
@@ -8701,9 +8856,9 @@ RV_get_object_info_callback(char *HTTP_response,
 #endif
 
     if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL")
     if (!obj_info)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "object info pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "object info pointer was NULL")
 
     memset(obj_info, 0, sizeof(*obj_info));
 
@@ -8765,9 +8920,9 @@ RV_get_group_info_callback(char *HTTP_response,
 #endif
 
     if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL")
     if (!group_info)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "group info pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "group info pointer was NULL")
 
     memset(group_info, 0, sizeof(*group_info));
 
@@ -8843,9 +8998,9 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
 #endif
 
     if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL")
     if (!DCPL)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "DCPL pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "DCPL pointer was NULL")
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "parsing JSON failed")
@@ -9222,19 +9377,20 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
     char        *path_dirname = NULL;
     char        *tmp_link_val = NULL;
     char        *url_encoded_link_name = NULL;
+    char        *url_encoded_path_name = NULL;
     char         request_url[URL_MAX_LENGTH];
     long         http_response;
     int          url_len = 0;
     htri_t       ret_value = FAIL;
 
     if (!parent_obj)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "parent object pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object pointer was NULL")
     if (H5I_FILE != parent_obj->obj_type && H5I_GROUP != parent_obj->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "parent object not a file or group")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file or group")
     if (!obj_path)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "target path was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "target path was NULL")
     if (!target_object_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "target object type pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "target object type pointer was NULL")
 
 #ifdef PLUGIN_DEBUG
     printf("-> Finding object by path '%s' from parent object of type %s with URI %s\n\n",
@@ -9468,11 +9624,14 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
                 } /* end if */
                 else {
+                    if (NULL == (url_encoded_path_name = RV_url_encode_path(obj_path)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path")
+
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
                                             "%s/groups/%s?h5path=%s",
                                             base_URL,
                                             is_relative_path ? parent_obj->URI : "",
-                                            obj_path)
+                                            url_encoded_path_name)
                         ) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
 
@@ -9484,13 +9643,16 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
                 break;
 
             case H5I_DATATYPE:
+                if (NULL == (url_encoded_path_name = RV_url_encode_path(obj_path)))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path")
+
                 if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
                                         "%s/datatypes/?%s%s%sh5path=%s",
                                         base_URL,
                                         is_relative_path ? "grpid=" : "",
                                         is_relative_path ? parent_obj->URI : "",
                                         is_relative_path ? "&" : "",
-                                        obj_path)
+                                        url_encoded_path_name)
                     ) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
 
@@ -9500,13 +9662,16 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
                 break;
 
             case H5I_DATASET:
+                if (NULL == (url_encoded_path_name = RV_url_encode_path(obj_path)))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path")
+
                 if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
                          "%s/datasets/?%s%s%sh5path=%s",
                          base_URL,
                          is_relative_path ? "grpid=" : "",
                          is_relative_path ? parent_obj->URI : "",
                          is_relative_path ? "&" : "",
-                         obj_path)
+                         url_encoded_path_name)
                     ) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
 
@@ -9582,14 +9747,16 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
     } /* end else */
 
 done:
-    if (path_dirname)
-        RV_free(path_dirname);
-    if (host_header)
-        RV_free(host_header);
     if (tmp_link_val)
         RV_free(tmp_link_val);
+    if (host_header)
+        RV_free(host_header);
+    if (url_encoded_path_name)
+        RV_free(url_encoded_path_name);
     if (url_encoded_link_name)
         curl_free(url_encoded_link_name);
+    if (path_dirname)
+        RV_free(path_dirname);
 
     if (external_file)
         if (RV_file_close(external_file, H5P_DEFAULT, NULL) < 0)
@@ -10956,11 +11123,11 @@ RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_le
 #endif
 
     if (!ref_array)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "reference array pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "reference array pointer was NULL")
     if (!buf_out)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "output buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL")
     if (!buf_out_len)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "output buffer size pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer size pointer was NULL")
     if (!ref_array_len)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid reference array length specified")
 
@@ -11080,11 +11247,11 @@ RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
 #endif
 
     if (!ref_buf)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "reference string buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "reference string buffer was NULL")
     if (!buf_out)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "output buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL")
     if (!buf_out_len)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "output buffer size pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer size pointer was NULL")
     if (!ref_buf_len)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid reference buffer size specified")
 
@@ -11189,7 +11356,7 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
 #endif
 
     if (!type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "datatype JSON buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "datatype JSON buffer was NULL")
 
     if (need_truncate) {
         size_t  substring_len;
@@ -11270,7 +11437,7 @@ RV_parse_dataspace(char *space)
 #endif
 
     if (!space)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "dataspace string buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "dataspace string buffer was NULL")
 
     if (NULL == (parse_tree = yajl_tree_parse(space, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed")
@@ -11618,7 +11785,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
 #endif
 
     if (!selection_string)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "dataspace selection string was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "dataspace selection string was NULL")
 
     out_string_len = DATASPACE_SELECTION_STRING_DEFAULT_SIZE;
     if (NULL == (out_string = (char *) RV_malloc(out_string_len)))
@@ -11952,9 +12119,9 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
 #endif
 
     if (H5I_FILE != pobj->obj_type && H5I_GROUP != pobj->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "parent object not a file or group")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file or group")
     if (!create_request_body)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "dataset create request output buffer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "dataset create request output buffer was NULL")
 
     /* Get the type ID */
     if (H5Pget(dcpl, H5VL_PROP_DSET_TYPE_ID, &type_id) < 0)
@@ -12969,11 +13136,11 @@ RV_build_attr_table(char *HTTP_response, hbool_t sort, int (*sort_func)(const vo
     herr_t            ret_value = SUCCEED;
 
     if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response was NULL")
     if (!attr_table)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "attr table pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "attr table pointer was NULL")
     if (!num_entries)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "attr table num. entries pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "attr table num. entries pointer was NULL")
 
 #ifdef PLUGIN_DEBUG
     printf("-> Building table of attributes\n\n");
@@ -13203,15 +13370,16 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
     char             *HTTP_buffer = HTTP_response;
     char             *visit_buffer = NULL;
     char             *link_section_start, *link_section_end;
+    char             *url_encoded_link_name = NULL;
     char              request_url[URL_MAX_LENGTH];
     herr_t            ret_value = SUCCEED;
 
     if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "HTTP response was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response was NULL")
     if (!link_table)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link table pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link table pointer was NULL")
     if (!num_entries)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_NONE_MINOR, FAIL, "link table num. entries pointer was NULL")
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link table num. entries pointer was NULL")
 
 #ifdef PLUGIN_DEBUG
     printf("-> Building table of links %s\n\n", is_recursive ? "recursively" : "non-recursively");
@@ -13333,10 +13501,16 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
 
                 /* Make a GET request to the server to retrieve all of the links in the subgroup */
 
+                /* URL-encode the name of the link to ensure that the resulting URL for the link
+                 * iteration operation doesn't contain any illegal characters
+                 */
+                if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(YAJL_GET_STRING(link_field_obj)), 0)))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
+
                 if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
                                         "%s/groups/%s/links",
                                         base_URL,
-                                        YAJL_GET_STRING(link_field_obj))
+                                        url_encoded_link_name)
                     ) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
 
@@ -13359,6 +13533,9 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
                 if (RV_build_link_table(response_buffer.buffer, is_recursive, sort, sort_func,
                         &table[i].subgroup.subgroup_link_table, &table[i].subgroup.num_entries) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table for subgroup '%s'", table[i].link_name)
+
+                curl_free(url_encoded_link_name);
+                url_encoded_link_name = NULL;
             } /* end if */
         } /* end if */
 
@@ -13380,10 +13557,12 @@ done:
             *num_entries = num_links;
     } /* end if */
 
-    if (visit_buffer)
-        RV_free(visit_buffer);
+    if (url_encoded_link_name)
+        curl_free(url_encoded_link_name);
     if (parse_tree)
         yajl_tree_free(parse_tree);
+    if (visit_buffer)
+        RV_free(visit_buffer);
 
     return ret_value;
 } /* end RV_build_link_table() */

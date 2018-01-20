@@ -581,9 +581,9 @@
 #define ABSOLUTE_VS_RELATIVE_PATH_TEST_DSET_SPACE_RANK      3
 
 #define URL_ENCODING_TEST_SPACE_RANK 2
-#define URL_ENCODING_TEST_GROUP_NAME "url_encoding_group !*'();:@&=+$,?#[]-.<>\\\\^`{}|~"
-#define URL_ENCODING_TEST_DSET_NAME  "url_encoding_dset !*'();:@&=+$,?#[]-.<>\\\\^`{}|~"
-#define URL_ENCODING_TEST_ATTR_NAME  "url_encoding_attr !*'();:@&=+$,?#[]-.<>\\\\^`{}|~"
+#define URL_ENCODING_TEST_GROUP_NAME "url_encoding_group !*'():@&=+$,?#[]-.<>\\\\^`{}|~"
+#define URL_ENCODING_TEST_DSET_NAME  "url_encoding_dset !*'():@&=+$,?#[]-.<>\\\\^`{}|~"
+#define URL_ENCODING_TEST_ATTR_NAME  "url_encoding_attr !*'():@&=+$,?#[]-.<>\\\\^`{}|~"
 
 #define COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_SUBGROUP_NAME "compound_type_with_symbols_in_member_names_test"
 #define COMPOUND_WITH_SYMBOLS_IN_MEMBER_NAMES_TEST_NUM_SUBTYPES  9
@@ -724,6 +724,7 @@ static int test_open_link_without_leading_slash(void);
 static int test_object_creation_by_absolute_path(void);
 static int test_absolute_vs_relative_path(void);
 static int test_url_encoding(void);
+static int test_long_path_name(void);
 static int test_symbols_in_compound_field_name(void);
 static int test_double_init_free(void);
 
@@ -890,7 +891,8 @@ static int (*misc_tests[])(void) = {
         test_open_link_without_leading_slash,
         test_object_creation_by_absolute_path,
         test_absolute_vs_relative_path,
-        /* test_url_encoding, */
+        test_url_encoding,
+        test_long_path_name,
         test_symbols_in_compound_field_name,
         test_double_init_free,
         NULL
@@ -15888,6 +15890,8 @@ test_url_encoding(void)
         goto error;
     }
 
+    /* XXX: Test all of the other places where URL-encoding is used */
+
     if (H5Sclose(space_id) < 0)
         TEST_ERROR
     if (H5Tclose(attr_dtype) < 0)
@@ -15927,6 +15931,19 @@ error:
         RVterm();
     } H5E_END_TRY;
 
+    return 1;
+}
+
+static int
+test_long_path_name(void)
+{
+    TESTING("correct behavior of URL-encoding function for long path names")
+
+    SKIPPED();
+
+    return 0;
+
+error:
     return 1;
 }
 
