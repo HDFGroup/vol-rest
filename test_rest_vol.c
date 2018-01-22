@@ -809,7 +809,7 @@ static int (*dataset_tests[])(void) = {
         test_create_dataset_creation_properties,
         test_write_dataset_small_all,
         test_write_dataset_small_hyperslab,
-        /* test_write_dataset_small_point_selection, */
+        test_write_dataset_small_point_selection,
 #ifndef NO_LARGE_TESTS
         test_write_dataset_large_all,
         test_write_dataset_large_hyperslab,
@@ -7297,7 +7297,7 @@ test_write_dataset_small_point_selection(void)
         size_t j;
 
         for (j = 0; j < DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DSET_SPACE_RANK; j++)
-            points[(i * DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DSET_SPACE_RANK) + j] = j;
+            points[(i * DATASET_SMALL_WRITE_TEST_POINT_SELECTION_DSET_SPACE_RANK) + j] = i;
     }
 
     if (H5Sselect_elements(fspace_id, H5S_SELECT_SET, DATASET_SMALL_WRITE_TEST_POINT_SELECTION_NUM_POINTS, points) < 0) {

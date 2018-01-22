@@ -306,6 +306,11 @@ do {                                                                            
  */
 #define CURL_RESPONSE_BUFFER_DEFAULT_SIZE             1024
 
+/* Default size for the buffer to allocate during base64-encoding if the caller
+ * of RV_base64_encode supplies a 0-sized buffer.
+ */
+#define BASE64_ENCODE_DEFAULT_BUFFER_SIZE             33554432 /* 32MB */
+
 /* Maximum length (in charactes) of the string representation of an HDF5
  * predefined integer or floating-point type, such as H5T_STD_I8LE or
  * H5T_IEEE_F32BE
@@ -593,6 +598,9 @@ static const char *RV_basename(const char *path);
 
 /* Alternate, more portable version of the dirname function which doesn't modify its argument */
 static char *RV_dirname(const char *path);
+
+/* Helper function to base64 encode a given buffer */
+static herr_t RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size);
 
 /* Helper function to URL-encode an entire pathname by URL-encoding each of its separate components */
 static char *RV_url_encode_path(const char *path);
@@ -4149,6 +4157,19 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     if (!buf)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "read buffer was NULL")
 
+    /* Determine whether it's possible to send the data as a binary blob instead of a JSON array */
+    if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
+
+    if ((is_variable_str = H5Tis_variable_str(mem_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
+
+    /* Only perform a binary transfer for fixed-length datatype datasets with an
+     * All or Hyperslab selection. Point selections are dealt with by POSTing the
+     * point list as JSON in the request body.
+     */
+    is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
+
     /* Follow the semantics for the use of H5S_ALL */
     if (H5S_ALL == mem_space_id && H5S_ALL == file_space_id) {
         /* The file dataset's dataspace is used for the memory dataspace
@@ -4188,9 +4209,9 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         /* Retrieve the selection type to choose how to format the dataspace selection */
         if (H5S_SEL_ERROR == (sel_type = H5Sget_select_type(file_space_id)))
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type")
+        is_transfer_binary = is_transfer_binary && (H5S_SEL_POINTS != sel_type);
 
-        if (RV_convert_dataspace_selection_to_string(file_space_id, &selection_body, &selection_body_len,
-                (H5S_SEL_POINTS == sel_type) ? FALSE : TRUE) < 0)
+        if (RV_convert_dataspace_selection_to_string(file_space_id, &selection_body, &selection_body_len, is_transfer_binary) < 0)
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL, "can't convert dataspace selection to string representation")
     } /* end else */
 
@@ -4206,19 +4227,6 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     printf("-> %lld points selected in file dataspace\n", file_select_npoints);
     printf("-> %lld points selected in memory dataspace\n\n", mem_select_npoints);
 #endif
-
-    /* Determine whether it's possible to send the data as a binary blob instead of a JSON array */
-    if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
-
-    if ((is_variable_str = H5Tis_variable_str(mem_type_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
-
-    /* Only perform a binary transfer for fixed-length datatype datasets with an
-     * All or Hyperslab selection. Point selections are dealt with by POSTing the
-     * point list as JSON in the request body.
-     */
-    is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
 
     /* Setup the "Host: " header */
     host_header_len = strlen(dataset->domain->u.file.filepath_name) + strlen(host_string) + 1;
@@ -4388,7 +4396,9 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     htri_t        is_variable_str;
     size_t        host_header_len = 0;
     size_t        write_body_len = 0;
+    size_t        selection_body_len = 0;
     char         *selection_body = NULL;
+    char         *base64_encoded_value = NULL;
     char         *host_header = NULL;
     char         *write_body = NULL;
     char          request_url[URL_MAX_LENGTH];
@@ -4421,6 +4431,10 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     if ((is_variable_str = H5Tis_variable_str(mem_type_id)) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
+    /* Only perform a binary transfer for fixed-length datatype datasets with an
+     * All or Hyperslab selection. Point selections are dealt with by POSTing the
+     * point list as JSON in the request body.
+     */
     is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
 
     /* Follow the semantics for the use of H5S_ALL */
@@ -4462,8 +4476,9 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         /* Retrieve the selection type here for later use */
         if (H5S_SEL_ERROR == (sel_type = H5Sget_select_type(file_space_id)))
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type")
+        is_transfer_binary = is_transfer_binary && (H5S_SEL_POINTS != sel_type);
 
-        if (RV_convert_dataspace_selection_to_string(file_space_id, &selection_body, NULL, is_transfer_binary) < 0)
+        if (RV_convert_dataspace_selection_to_string(file_space_id, &selection_body, &selection_body_len, is_transfer_binary) < 0)
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL, "can't convert dataspace selection to string representation")
     } /* end else */
 
@@ -4533,20 +4548,82 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     printf("-> Dataset write URL: %s\n\n", request_url);
 #endif
 
-    /* Check to make sure that the size of the write body can safely be cast to a curl_off_t */
-    H5_CHECK_OVERFLOW(write_body_len, size_t, curl_off_t);
+    /* If using a point selection, instruct cURL to perform a POST request in order to post the
+     * point list. Otherwise, a PUT request is made to the server.
+     */
+    if (H5S_SEL_POINTS == sel_type) {
+        const char * const fmt_string = "{%s,\"value_base64\": \"%s\"}";
+        curl_off_t         off_t_len;
+        size_t             value_body_len;
+        int                bytes_printed;
 
-    uinfo.buffer = is_transfer_binary ? buf : write_body;
-    uinfo.buffer_size = write_body_len;
+        /* Since base64 encoding generally introduces 33% overhead for encoding,
+         * go ahead and allocate a buffer 4/3 the size of the given write buffer
+         * in order to try and avoid reallocations inside the encoding function.
+         */
+        value_body_len = ((double) 4.0 / 3.0) * write_body_len;
+        if (NULL == (base64_encoded_value = RV_malloc(value_body_len)))
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate temporary buffer for base64-encoded write buffer")
+
+        if (RV_base64_encode(buf, write_body_len, &base64_encoded_value, &value_body_len) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTENCODE, FAIL, "can't base64-encode write buffer")
+
+#ifdef PLUGIN_DEBUG
+        printf("-> Base64-encoded data buffer: %s\n\n", base64_encoded_value);
+#endif
+
+        write_body_len = (strlen(fmt_string) - 4) + selection_body_len + value_body_len;
+        if (NULL == (write_body = RV_malloc(write_body_len + 1)))
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for write buffer")
+
+        if ((bytes_printed = snprintf(write_body, write_body_len + 1, fmt_string, selection_body, base64_encoded_value)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+#ifdef PLUGIN_DEBUG
+        printf("-> Write body: %s\n\n", write_body);
+#endif
+
+        if (bytes_printed >= write_body_len + 1)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "point selection write buffer exceeded allocate buffer size")
+
+        /* Check to make sure that the size of the selection HTTP body can safely be cast to a curl_off_t */
+        if (sizeof(curl_off_t) < sizeof(size_t))
+            ASSIGN_TO_LARGER_SIZE_SIGNED_TO_UNSIGNED(off_t_len, curl_off_t, write_body_len, size_t)
+        else if (sizeof(curl_off_t) > sizeof(size_t))
+            ASSIGN_TO_SMALLER_SIZE(off_t_len, curl_off_t, write_body_len, size_t)
+        else
+            ASSIGN_TO_SAME_SIZE_SIGNED_TO_UNSIGNED(off_t_len, curl_off_t, write_body_len, size_t)
+
+        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
+        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, write_body))
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL POST data: %s", curl_err_buf)
+        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, off_t_len))
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL POST data size: %s", curl_err_buf)
+
+        curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
+
+#ifdef PLUGIN_DEBUG
+        printf("-> Setup cURL to POST point list for dataset write\n\n");
+#endif
+    } /* end if */
+    else {
+        /* Check to make sure that the size of the write body can safely be cast to a curl_off_t */
+        H5_CHECK_OVERFLOW(write_body_len, size_t, curl_off_t);
+
+        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
+        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, &uinfo))
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
+        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t) write_body_len))
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
+
+        uinfo.buffer = is_transfer_binary ? buf : write_body;
+        uinfo.buffer_size = write_body_len;
+    } /* end else */
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, &uinfo))
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t) write_body_len))
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
@@ -4565,12 +4642,14 @@ done:
     printf("-> Dataset write response buffer:\n%s\n\n", response_buffer.buffer);
 #endif
 
-    if (selection_body)
-        RV_free(selection_body);
-    if (write_body)
-        RV_free(write_body);
+    if (base64_encoded_value)
+        RV_free(base64_encoded_value);
     if (host_header)
         RV_free(host_header);
+    if (write_body)
+        RV_free(write_body);
+    if (selection_body)
+        RV_free(selection_body);
 
     /* Unset cURL UPLOAD option to ensure that future requests don't try to use PUT calls */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 0))
@@ -7962,6 +8041,132 @@ RV_dirname(const char *path)
 
     return dirname;
 } /* end RV_dirname() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    base64_encode
+ *
+ * Purpose:     A helper function to base64 encode the given buffer. This
+ *              is used specifically when dealing with writing data to a
+ *              dataset using a point selection.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              January, 2018
+ */
+static herr_t
+RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size)
+{
+    const uint8_t *buf = (const uint8_t *) in;
+    const char     charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    uint32_t       three_byte_set;
+    uint8_t        c0, c1, c2, c3;
+    size_t         i;
+    size_t         nalloc = *out_size;
+    size_t         out_index = 0;
+    char          *tmp_realloc;
+    int            npad = (int) (*out_size % 3);
+    herr_t         ret_value = SUCCEED;
+
+    /* If the caller has specified a 0-sized buffer, allocate one and set nalloc
+     * so that the following 'nalloc *= 2' calls don't result in 0-sized
+     * allocations.
+     */
+    if (!nalloc) {
+        nalloc = BASE64_ENCODE_DEFAULT_BUFFER_SIZE;
+        if (NULL == (*out = (char *) RV_malloc(nalloc)))
+            FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't allocate space for base64-encoding output buffer")
+    } /* end if */
+
+    for (i = 0; i < in_size; i += 3) {
+        three_byte_set = ((uint32_t) buf[i]) << 16;
+
+        if (i + 1 < in_size)
+            three_byte_set += ((uint32_t) buf[i + 1]) << 8;
+
+        if (i + 2 < in_size)
+            three_byte_set += buf[i + 2];
+
+        /* Split 3-byte number into four 6-bit groups for encoding */
+        c0 = (uint8_t) (three_byte_set >> 18) & 0x3f;
+        c1 = (uint8_t) (three_byte_set >> 12) & 0x3f;
+        c2 = (uint8_t) (three_byte_set >> 6)  & 0x3f;
+        c3 = (uint8_t)  three_byte_set        & 0x3f;
+
+        if (out_index + 1 >= nalloc) {
+            nalloc *= 2;
+
+            if (NULL == (tmp_realloc = (char *) RV_realloc(*out, nalloc)))
+                FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't reallocate space for base64-encoding output buffer")
+
+            *out = tmp_realloc;
+        } /* end if */
+
+        (*out)[out_index++] = charset[c0];
+        (*out)[out_index++] = charset[c1];
+
+        if (i + 1 < in_size) {
+            if (out_index >= nalloc) {
+                nalloc *= 2;
+
+                if (NULL == (tmp_realloc = (char *) RV_realloc(*out, nalloc)))
+                    FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't reallocate space for base64-encoding output buffer")
+
+                *out = tmp_realloc;
+            } /* end if */
+
+            (*out)[out_index++] = charset[c2];
+        } /* end if */
+
+        if (i + 2 < in_size) {
+            if (out_index >= nalloc) {
+                nalloc *= 2;
+
+                if (NULL == (tmp_realloc = (char *) RV_realloc(*out, nalloc)))
+                    FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't reallocate space for base64-encoding output buffer")
+
+                *out = tmp_realloc;
+            } /* end if */
+
+            (*out)[out_index++] = charset[c3];
+        } /* end if */
+    } /* end for */
+
+    /* Add trailing padding when in_size is not a multiple of 3 */
+    if (npad) {
+        while (npad < 3) {
+            if (out_index >= nalloc) {
+                nalloc *= 2;
+
+                if (NULL == (tmp_realloc = (char *) RV_realloc(*out, nalloc)))
+                    FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't reallocate space for base64-encoding output buffer")
+
+                *out = tmp_realloc;
+            } /* end if */
+
+            (*out)[out_index++] = '=';
+
+            npad++;
+        } /* end while */
+    } /* end if */
+
+    if (out_index >= nalloc) {
+        nalloc *= 2;
+
+        if (NULL == (tmp_realloc = (char *) RV_realloc(*out, nalloc)))
+            FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't reallocate space for base64-encoding output buffer")
+
+        *out = tmp_realloc;
+    } /* end if */
+
+    (*out)[out_index] = '\0';
+
+    *out_size = out_index;
+
+done:
+    return ret_value;
+} /* end base64_encode() */
 
 
 /*-------------------------------------------------------------------------

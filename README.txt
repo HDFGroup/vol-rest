@@ -179,6 +179,13 @@ III. Using the REST VOL plugin
         behavior, using a trailing "/" on path names will likely confuse the
         plugin and cause incorrect behavior.
 
+        The use of point selections for dataset writes will generally incur an
+        additional memory overhead of approximately 4/3 the size of the original
+        buffer used for the H5Dwrite() call. This is due to the fact that a
+        temporary copy of the buffer must be made and then base64-encoded for
+        the server transfer and base64-encoding generally introduces 33%
+        overhead.
+
         Due to the HDF5 public API call H5Pset_external's use of the 'off_t'
         type, it is likely that compilation of the REST VOL on non-posix
         compliant systems will fail.
