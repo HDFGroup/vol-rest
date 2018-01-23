@@ -29,14 +29,19 @@
  *          http://hdfgroup.org/pubs/papers/RESTful_HDF5.pdf.
  */
 
+#include <stdlib.h>
+#include <string.h>
 #include <ctype.h>
-#include <sys/types.h>
+#include <assert.h>
 
-#include "H5private.h"       /* XXX: Temporarily needed; Generic Functions */
+/* Includes for HDF5 */
+#include "H5public.h"
 #include "H5Ppublic.h"       /* Property Lists    */
 #include "H5Spublic.h"       /* Dataspaces        */
 #include "H5VLpublic.h"      /* VOL plugins       */
 #include "H5VLprivate.h"     /* XXX: Temporarily needed */
+
+/* Includes for the REST VOL itself */
 #include "rest_vol.h"        /* REST VOL plugin   */
 #include "rest_vol_public.h"
 #include "rest_vol_err.h"    /* REST VOL error reporting macros */
@@ -222,18 +227,6 @@ do {                                                                            
     (dst) = _tmp_dst;                                                                                                       \
 }
 
-/* Macro borrowed from H5private.h to assign a value of a smaller, signed type
- * to a variable of a larger, unsigned type
- */
-#define ASSIGN_TO_LARGER_SIZE_SIGNED_TO_UNSIGNED(dst, dsttype, src, srctype)                                                \
-{                                                                                                                           \
-    srctype _tmp_src = (srctype)(src);                                                                                      \
-    dsttype _tmp_dst = (dsttype)(_tmp_src);                                                                                 \
-    assert(_tmp_src >= 0);                                                                                                  \
-    assert(_tmp_src == _tmp_dst);                                                                                           \
-    (dst) = _tmp_dst;                                                                                                       \
-}
-
 /* Macro borrowed from H5private.h to assign a value between two types of the
  * same size, where the source type is an unsigned type and the destination
  * type is a signed type
@@ -245,29 +238,6 @@ do {                                                                            
     assert(_tmp_dst >= 0);                                                                                                  \
     assert(_tmp_src == (srctype)_tmp_dst);                                                                                  \
     (dst) = _tmp_dst;                                                                                                       \
-}
-
-/* Macro borrowed from H5private.h to assign a value between two types of the
- * same size, where the source type is a signed type and the destination type
- * is an unsigned type
- */
-#define ASSIGN_TO_SAME_SIZE_SIGNED_TO_UNSIGNED(dst, dsttype, src, srctype)                                                  \
-{                                                                                                                           \
-    srctype _tmp_src = (srctype)(src);                                                                                      \
-    dsttype _tmp_dst = (dsttype)(_tmp_src);                                                                                 \
-    assert(_tmp_src >= 0);                                                                                                  \
-    assert(_tmp_src == (srctype)_tmp_dst);                                                                                  \
-    (dst) = _tmp_dst;                                                                                                       \
-}
-
-/*
- * A macro borrowed from H5private.h for detecting over/under-flow when casting
- * between types
- */
-#define H5_CHECK_OVERFLOW(var, vartype, casttype)                                                                           \
-{                                                                                                                           \
-    casttype _tmp_overflow = (casttype)(var);                                                                               \
-    assert((var) == (vartype)_tmp_overflow);                                                                                \
 }
 
 /* Macro to change the cast for an off_t type to try and be cross-platform portable */
@@ -974,7 +944,7 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_term(hid_t H5_ATTR_UNUSED vtpl_id)
+RV_term(hid_t vtpl_id)
 {
     /* Free base URL */
     if (base_URL)
@@ -1263,7 +1233,7 @@ RV_free(void *mem)
  */
 static void *
 RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, hid_t acpl_id,
-               hid_t H5_ATTR_UNUSED aapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+               hid_t aapl_id, hid_t dxpl_id, void **req)
 {
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *new_attribute = NULL;
@@ -1591,7 +1561,7 @@ done:
  */
 static void *
 RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
-             hid_t H5_ATTR_UNUSED aapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+             hid_t aapl_id, hid_t dxpl_id, void **req)
 {
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *attribute = NULL;
@@ -1870,7 +1840,7 @@ done:
  *              November, 2017
  */
 static herr_t
-RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
 {
     RV_object_t *attribute = (RV_object_t *) attr;
     H5T_class_t  dtype_class;
@@ -2052,11 +2022,12 @@ done:
  *              November, 2017
  */
 static herr_t
-RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void **req)
 {
     RV_object_t *attribute = (RV_object_t *) attr;
     H5T_class_t  dtype_class;
     upload_info  uinfo;
+    curl_off_t   write_len;
     hssize_t     file_select_npoints;
     htri_t       is_variable_str;
     size_t       dtype_size;
@@ -2189,7 +2160,12 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
 #endif
 
     /* Check to make sure that the size of the write body can safely be cast to a curl_off_t */
-    H5_CHECK_OVERFLOW(write_body_len, size_t, curl_off_t);
+    if (sizeof(curl_off_t) < sizeof(size_t))
+        ASSIGN_TO_SMALLER_SIZE(write_len, curl_off_t, write_body_len, size_t)
+    else if (sizeof(curl_off_t) > sizeof(size_t))
+        write_len = (curl_off_t) write_body_len;
+    else
+        ASSIGN_TO_SAME_SIZE_UNSIGNED_TO_SIGNED(write_len, curl_off_t, write_body_len, size_t)
 
     uinfo.buffer = buf;
     uinfo.buffer_size = write_body_len;
@@ -2200,7 +2176,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t H5_ATTR_UNUSED 
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, &uinfo))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t) write_body_len))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, write_len))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
@@ -2252,7 +2228,7 @@ done:
  *              November, 2017
  */
 static herr_t
-RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
     size_t       host_header_len = 0;
@@ -2604,7 +2580,7 @@ done:
  */
 static herr_t
 RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t specific_type,
-                 hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+                 hid_t dxpl_id, void **req, va_list arguments)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
     H5I_type_t   parent_obj_type = H5I_UNINIT;
@@ -3298,7 +3274,7 @@ done:
  *              September, 2017
  */
 static herr_t
-RV_attr_close(void *attr, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_attr_close(void *attr, hid_t dxpl_id, void **req)
 {
     RV_object_t *_attr = (RV_object_t *) attr;
     herr_t       ret_value = SUCCEED;
@@ -3359,8 +3335,8 @@ done:
  *              August, 2017
  */
 static void *
-RV_datatype_commit(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name, hid_t type_id,
-                   hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t type_id,
+                   hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req)
 {
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *new_datatype = NULL;
@@ -3612,8 +3588,8 @@ done:
  *              August, 2017
  */
 static void *
-RV_datatype_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name,
-                 hid_t tapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_datatype_open(void *obj, H5VL_loc_params_t loc_params, const char *name,
+                 hid_t tapl_id, hid_t dxpl_id, void **req)
 {
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *datatype = NULL;
@@ -3711,8 +3687,8 @@ done:
  *              August, 2017
  */
 static herr_t
-RV_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
-                void H5_ATTR_UNUSED **req, va_list arguments)
+RV_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t dxpl_id,
+                void **req, va_list arguments)
 {
     RV_object_t *dtype = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
@@ -3780,7 +3756,7 @@ done:
  *              August, 2017
  */
 static herr_t
-RV_datatype_close(void *dt, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_datatype_close(void *dt, hid_t dxpl_id, void **req)
 {
     RV_object_t *_dtype = (RV_object_t *) dt;
     herr_t       ret_value = SUCCEED;
@@ -3835,8 +3811,8 @@ done:
  *              March, 2017
  */
 static void *
-RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name, hid_t dcpl_id,
-                  hid_t dapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+RV_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t dcpl_id,
+                  hid_t dapl_id, hid_t dxpl_id, void **req)
 {
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *new_dataset = NULL;
@@ -4029,8 +4005,8 @@ done:
  *              March, 2017
  */
 static void *
-RV_dataset_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name,
-                hid_t dapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_dataset_open(void *obj, H5VL_loc_params_t loc_params, const char *name,
+                hid_t dapl_id, hid_t dxpl_id, void **req)
 {
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *dataset = NULL;
@@ -4137,7 +4113,7 @@ done:
  */
 static herr_t
 RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
-                hid_t file_space_id, hid_t dxpl_id, void *buf, void H5_ATTR_UNUSED **req)
+                hid_t file_space_id, hid_t dxpl_id, void *buf, void **req)
 {
     H5S_sel_type  sel_type = H5S_SEL_ALL;
     RV_object_t  *dataset = (RV_object_t *) obj;
@@ -4398,7 +4374,7 @@ done:
  */
 static herr_t
 RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
-                 hid_t file_space_id, hid_t dxpl_id, const void *buf, void H5_ATTR_UNUSED **req)
+                 hid_t file_space_id, hid_t dxpl_id, const void *buf, void **req)
 {
     H5S_sel_type  sel_type = H5S_SEL_ALL;
     RV_object_t  *dataset = (RV_object_t *) obj;
@@ -4597,7 +4573,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 #endif
 
         if (bytes_printed >= write_body_len + 1)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "point selection write buffer exceeded allocate buffer size")
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "point selection write buffer exceeded allocated buffer size")
 
         curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
 
@@ -4679,8 +4655,8 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id,
-               void H5_ATTR_UNUSED **req, va_list arguments)
+RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t dxpl_id,
+               void **req, va_list arguments)
 {
     RV_object_t *dset = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
@@ -4777,7 +4753,7 @@ done:
  */
 static herr_t
 RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
-                    hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+                    hid_t dxpl_id, void **req, va_list arguments)
 {
     RV_object_t *dset = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
@@ -4827,7 +4803,7 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_dataset_close(void *dset, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
     RV_object_t *_dset = (RV_object_t *) dset;
     herr_t       ret_value = SUCCEED;
@@ -4885,7 +4861,7 @@ done:
  */
 static void *
 RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
-               hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+               hid_t dxpl_id, void **req)
 {
     RV_object_t *new_file = NULL;
     size_t       name_length;
@@ -5094,7 +5070,7 @@ done:
  *              March, 2017
  */
 static void *
-RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
     RV_object_t *file = NULL;
     size_t       name_length;
@@ -5226,7 +5202,7 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
     RV_object_t *_obj = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
@@ -5329,8 +5305,8 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t H5_ATTR_UNUSED dxpl_id,
-                 void H5_ATTR_UNUSED **req, va_list arguments)
+RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t dxpl_id,
+                 void **req, va_list arguments)
 {
     RV_object_t *file = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
@@ -5388,7 +5364,7 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_file_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments)
 {
     H5VL_file_optional_t  optional_type = (H5VL_file_optional_t) va_arg(arguments, int);
     RV_object_t          *file = (RV_object_t *) obj;
@@ -5499,7 +5475,7 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_file_close(void *file, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_file_close(void *file, hid_t dxpl_id, void **req)
 {
     RV_object_t *_file = (RV_object_t *) file;
     herr_t       ret_value = SUCCEED;
@@ -5554,8 +5530,8 @@ done:
  *              March, 2017
  */
 static void *
-RV_group_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name, hid_t gcpl_id,
-                hid_t gapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t gcpl_id,
+                hid_t gapl_id, hid_t dxpl_id, void **req)
 {
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *new_group = NULL;
@@ -5782,8 +5758,8 @@ done:
  *              March, 2017
  */
 static void *
-RV_group_open(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const char *name,
-              hid_t gapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_group_open(void *obj, H5VL_loc_params_t loc_params, const char *name,
+              hid_t gapl_id, hid_t dxpl_id, void **req)
 {
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *group = NULL;
@@ -5874,7 +5850,7 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
     size_t       host_header_len = 0;
@@ -6050,7 +6026,7 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_group_close(void *grp, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+RV_group_close(void *grp, hid_t dxpl_id, void **req)
 {
     RV_object_t *_grp = (RV_object_t *) grp;
     herr_t       ret_value = SUCCEED;
@@ -6101,7 +6077,7 @@ done:
  */
 static herr_t
 RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t loc_params,
-               hid_t lcpl_id, hid_t lapl_id, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req)
+               hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req)
 {
     H5VL_loc_params_t  hard_link_target_obj_loc_params;
     RV_object_t       *new_link_loc_obj = (RV_object_t *) obj;
@@ -6435,7 +6411,7 @@ done:
 static herr_t
 RV_link_copy(void *src_obj, H5VL_loc_params_t loc_params1,
              void *dst_obj, H5VL_loc_params_t loc_params2,
-             hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+             hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req)
 {
     herr_t ret_value = SUCCEED;
 
@@ -6465,7 +6441,7 @@ done:
 static herr_t
 RV_link_move(void *src_obj, H5VL_loc_params_t loc_params1,
              void *dst_obj, H5VL_loc_params_t loc_params2,
-             hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+             hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req)
 {
     herr_t ret_value = SUCCEED;
 
@@ -6491,7 +6467,7 @@ done:
  */
 static herr_t
 RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
-            hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+            hid_t dxpl_id, void **req, va_list arguments)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
     hbool_t      empty_dirname;
@@ -6777,7 +6753,7 @@ done:
  */
 static herr_t
 RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t specific_type,
-                 hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+                 hid_t dxpl_id, void **req, va_list arguments)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
     hbool_t      empty_dirname;
@@ -7169,7 +7145,7 @@ done:
  */
 static void *
 RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
-               hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+               hid_t dxpl_id, void **req)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
     H5I_type_t   obj_type = H5I_UNINIT;
@@ -7355,7 +7331,7 @@ done:
 static herr_t
 RV_object_copy(void *src_obj, H5VL_loc_params_t loc_params1, const char *src_name,
                void *dst_obj, H5VL_loc_params_t loc_params2, const char *dst_name,
-               hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void H5_ATTR_UNUSED **req)
+               hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req)
 {
     herr_t ret_value = SUCCEED;
 
@@ -7381,7 +7357,7 @@ done:
  */
 static herr_t
 RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_type,
-              hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+              hid_t dxpl_id, void **req, va_list arguments)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
@@ -7516,7 +7492,7 @@ done:
  */
 static herr_t
 RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific_t specific_type,
-                   hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+                   hid_t dxpl_id, void **req, va_list arguments)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
@@ -7619,7 +7595,7 @@ done:
  *              July, 2017
  */
 static herr_t
-RV_object_optional(void *obj, hid_t H5_ATTR_UNUSED dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+RV_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments)
 {
     H5VL_object_optional_t  optional_type = (H5VL_object_optional_t) va_arg(arguments, int);
     H5VL_loc_params_t       loc_params = va_arg(arguments, H5VL_loc_params_t);
@@ -7957,20 +7933,27 @@ curl_read_data_callback(char *buffer, size_t size, size_t nmemb, void *inptr)
  *              March, 2017
  */
 static size_t
-curl_write_data_callback(char *buffer, size_t size, size_t nmemb, void H5_ATTR_UNUSED *userp)
+curl_write_data_callback(char *buffer, size_t size, size_t nmemb, void *userp)
 {
-    size_t data_size = size * nmemb;
-    size_t positive_ptrdiff;
+    ptrdiff_t buf_ptrdiff;
+    size_t    data_size = size * nmemb;
+    size_t    ret_value = 0;
 
     /* If the server response is larger than the currently allocated amount for the
      * response buffer, grow the response buffer by a factor of 2
      */
-    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, (response_buffer.curr_buf_ptr + data_size) - response_buffer.buffer, ptrdiff_t);
-    while (positive_ptrdiff + 1 > response_buffer.buffer_size) {
+    buf_ptrdiff = (response_buffer.curr_buf_ptr + data_size) - response_buffer.buffer;
+    if (buf_ptrdiff < 0)
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, 0, "unsafe cast: response buffer pointer difference was negative - this should not happen!")
+
+    /* Avoid using the 'CHECKED_REALLOC' macro here because we don't necessarily
+     * want to free the plugin's response buffer if the reallocation fails.
+     */
+    while ((size_t) (buf_ptrdiff + 1) > response_buffer.buffer_size) {
         char *tmp_realloc;
 
         if (NULL == (tmp_realloc = (char *) RV_realloc(response_buffer.buffer, 2 * response_buffer.buffer_size)))
-            return 0;
+            FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, 0, "can't reallocate space for response buffer")
 
         response_buffer.curr_buf_ptr = tmp_realloc + (response_buffer.curr_buf_ptr - response_buffer.buffer);
         response_buffer.buffer = tmp_realloc;
@@ -7981,7 +7964,10 @@ curl_write_data_callback(char *buffer, size_t size, size_t nmemb, void H5_ATTR_U
     response_buffer.curr_buf_ptr += data_size;
     *response_buffer.curr_buf_ptr = '\0';
 
-    return data_size;
+    ret_value = data_size;
+
+done:
+    return ret_value;
 } /* end curl_write_data_callback() */
 
 
@@ -8157,16 +8143,16 @@ done:
 static char *
 RV_url_encode_path(const char *path)
 {
-    size_t  bytes_nalloc;
-    size_t  path_prefix_len;
-    size_t  path_component_len;
-    size_t  positive_ptrdiff;
-    char   *path_copy = NULL;
-    char   *url_encoded_path_component = NULL;
-    char   *token;
-    char   *cur_pos;
-    char   *tmp_buffer = NULL;
-    char   *ret_value = NULL;
+    ptrdiff_t  buf_ptrdiff;
+    size_t     bytes_nalloc;
+    size_t     path_prefix_len;
+    size_t     path_component_len;
+    char      *path_copy = NULL;
+    char      *url_encoded_path_component = NULL;
+    char      *token;
+    char      *cur_pos;
+    char      *tmp_buffer = NULL;
+    char      *ret_value = NULL;
 
     if (!path)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "path was NULL")
@@ -8216,8 +8202,11 @@ RV_url_encode_path(const char *path)
 
         path_component_len = strlen(url_encoded_path_component);
 
-        H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, cur_pos - tmp_buffer, ptrdiff_t);
-        CHECKED_REALLOC(tmp_buffer, bytes_nalloc, positive_ptrdiff + path_component_len, cur_pos, H5E_RESOURCE, NULL);
+        buf_ptrdiff = cur_pos - tmp_buffer;
+        if (buf_ptrdiff < 0)
+            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, NULL, "unsafe cast: path buffer pointer difference was negative - this should not happen!")
+
+        CHECKED_REALLOC(tmp_buffer, bytes_nalloc, (size_t) buf_ptrdiff + path_component_len, cur_pos, H5E_RESOURCE, NULL);
 
         strncpy(cur_pos, url_encoded_path_component, path_component_len);
         cur_pos += path_component_len;
@@ -8244,8 +8233,11 @@ RV_url_encode_path(const char *path)
         path_component_len = strlen(url_encoded_path_component);
 
         /* Check if the path components buffer needs to be grown */
-        H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, cur_pos - tmp_buffer, ptrdiff_t);
-        CHECKED_REALLOC(tmp_buffer, bytes_nalloc, positive_ptrdiff + path_component_len + 1, cur_pos, H5E_RESOURCE, NULL);
+        buf_ptrdiff = cur_pos - tmp_buffer;
+        if (buf_ptrdiff < 0)
+            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, NULL, "unsafe cast: path buffer pointer difference was negative - this should not happen!")
+
+        CHECKED_REALLOC(tmp_buffer, bytes_nalloc, (size_t) buf_ptrdiff + path_component_len + 1, cur_pos, H5E_RESOURCE, NULL);
 
         *cur_pos++ = '/';
         strncpy(cur_pos, url_encoded_path_component, path_component_len);
@@ -8255,8 +8247,11 @@ RV_url_encode_path(const char *path)
         url_encoded_path_component = NULL;
     } /* end for */
 
-    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, cur_pos - tmp_buffer, ptrdiff_t);
-    CHECKED_REALLOC(tmp_buffer, bytes_nalloc, positive_ptrdiff + 1, cur_pos, H5E_RESOURCE, NULL);
+    buf_ptrdiff = cur_pos - tmp_buffer;
+    if (buf_ptrdiff < 0)
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, NULL, "unsafe cast: path buffer pointer difference was negative - this should not happen!")
+
+    CHECKED_REALLOC(tmp_buffer, bytes_nalloc, (size_t) buf_ptrdiff + 1, cur_pos, H5E_RESOURCE, NULL);
 
     *cur_pos = '\0';
 
@@ -8391,7 +8386,7 @@ done:
  *              July, 2017
  */
 static herr_t
-RV_copy_object_URI_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
     yajl_val  parse_tree = NULL, key_obj;
     char     *parsed_string;
@@ -8597,7 +8592,7 @@ done:
  *              December, 2017
  */
 static herr_t
-RV_get_link_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
     H5L_info_t *link_info = (H5L_info_t *) callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;
@@ -8919,7 +8914,7 @@ done:
  *              January, 2018
  */
 static herr_t
-RV_attr_iter_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+RV_attr_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
     attr_table_entry *attr_table = NULL;
     iter_data        *attr_iter_data = (iter_data *) callback_data_in;
@@ -8984,7 +8979,7 @@ done:
  *              December, 2017
  */
 static herr_t
-RV_get_attr_info_callback(char *HTTP_response, void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+RV_get_attr_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
     H5A_info_t *attr_info = (H5A_info_t *) callback_data_out;
     herr_t      ret_value = SUCCEED;
@@ -9022,7 +9017,7 @@ done:
  */
 static herr_t
 RV_get_object_info_callback(char *HTTP_response,
-    void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+    void *callback_data_in, void *callback_data_out)
 {
     H5O_info_t *obj_info = (H5O_info_t *) callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;
@@ -9086,7 +9081,7 @@ done:
  */
 static herr_t
 RV_get_group_info_callback(char *HTTP_response,
-    void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+    void *callback_data_in, void *callback_data_out)
 {
     H5G_info_t *group_info = (H5G_info_t *) callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;
@@ -9164,7 +9159,7 @@ done:
  */
 static herr_t
 RV_parse_dataset_creation_properties_callback(char *HTTP_response,
-    void H5_ATTR_UNUSED *callback_data_in, void *callback_data_out)
+    void *callback_data_in, void *callback_data_out)
 {
     yajl_val  parse_tree = NULL, creation_properties_obj, key_obj;
     hid_t    *DCPL = (hid_t *) callback_data_out;
@@ -10029,12 +10024,12 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 {
     H5T_class_t   type_class;
     const char   *leading_string = "\"type\": "; /* Leading string for all datatypes */
+    ptrdiff_t     buf_ptrdiff;
     hsize_t      *array_dims = NULL;
     htri_t        type_is_committed;
     size_t        leading_string_len = strlen(leading_string);
     size_t        out_string_len;
     size_t        bytes_to_print = 0;            /* Used to calculate whether the datatype body buffer needs to be grown */
-    size_t        positive_ptrdiff = 0;
     size_t        type_size;
     size_t        i;
     hid_t         type_base_class = FAIL;
@@ -10099,14 +10094,17 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
         /* Check whether the buffer needs to be grown */
         bytes_to_print = strlen(vol_obj->URI) + 2;
 
-        H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-        CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
+        buf_ptrdiff = out_string_curr_pos - out_string;
+        if (buf_ptrdiff < 0)
+            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
 
-        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, "\"%s\"", vol_obj->URI)) < 0)
+        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
+
+        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, "\"%s\"", vol_obj->URI)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocate buffer size")
+        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size")
 
         out_string_curr_pos += bytes_printed;
 
@@ -10140,14 +10138,17 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             bytes_to_print = (H5T_INTEGER == type_class ? strlen(int_class_str) : strlen(float_class_str))
                            + strlen(type_name) + (strlen(fmt_string) - 4) + 1;
 
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
 
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
+
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
                     (H5T_INTEGER == type_class ? int_class_str : float_class_str), type_name)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size")
 
             out_string_curr_pos += bytes_printed;
@@ -10181,8 +10182,11 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 
                 bytes_to_print = (strlen(fmt_string) - 4) + strlen(cset_ascii_string) + strlen(nullterm_string) + 1;
 
-                H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
+                buf_ptrdiff = out_string_curr_pos - out_string;
+                if (buf_ptrdiff < 0)
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
+
+                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
 
                 if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - leading_string_len,
                                               fmt_string, cset_ascii_string, nullterm_string)) < 0)
@@ -10204,8 +10208,11 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 
                 bytes_to_print = (strlen(fmt_string) - 7) + strlen(cset_ascii_string) + strlen(nullpad_string) + MAX_NUM_LENGTH + 1;
 
-                H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
+                buf_ptrdiff = out_string_curr_pos - out_string;
+                if (buf_ptrdiff < 0)
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
+
+                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
 
                 if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - leading_string_len,
                                               fmt_string, cset_ascii_string, nullpad_string, type_size)) < 0)
@@ -10224,7 +10231,6 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
         {
             const char         *compound_type_leading_string = "{\"class\": \"H5T_COMPOUND\", \"fields\": [";
             size_t              compound_type_leading_strlen = strlen(compound_type_leading_string);
-            size_t              complete_section_len;
             int                 nmembers;
             const char * const  fmt_string = "{"
                                                  "\"name\": \"%s\", "
@@ -10240,8 +10246,11 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             for (i = 0; i < (size_t) nmembers + 1; i++)
                 compound_member_strings[i] = NULL;
 
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + compound_type_leading_strlen + 1,
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
+
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + compound_type_leading_strlen + 1,
                     out_string_curr_pos, H5E_DATATYPE, FAIL);
 
             strncpy(out_string_curr_pos, compound_type_leading_string, compound_type_leading_strlen);
@@ -10268,16 +10277,19 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                 bytes_to_print = strlen(compound_member_name) + strlen(compound_member_strings[i])
                         + (strlen(fmt_string) - 6) + (i < (size_t) nmembers - 1 ? 2 : 0) + 1;
 
-                H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print,
+                buf_ptrdiff = out_string_curr_pos - out_string;
+                if (buf_ptrdiff < 0)
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
+
+                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print,
                         out_string_curr_pos, H5E_DATATYPE, FAIL);
 
-                if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff,
+                if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff,
                                               fmt_string, compound_member_name, compound_member_strings[i],
                                               i < (size_t) nmembers - 1 ? ", " : "")) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-                if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size")
 
                 out_string_curr_pos += bytes_printed;
@@ -10293,8 +10305,11 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             /* Check if the buffer needs to grow to accomodate the closing ']' and '}' symbols, as well as
              * the NUL terminator
              */
-            H5_CHECKED_ASSIGN(complete_section_len, size_t, out_string_curr_pos - out_string + 3, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, complete_section_len, out_string_curr_pos, H5E_DATATYPE, FAIL);
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
+
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 3, out_string_curr_pos, H5E_DATATYPE, FAIL);
 
             strcat(out_string_curr_pos, "]}");
             out_string_curr_pos += strlen("]}");
@@ -10353,11 +10368,14 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                     bytes_to_print = strlen(enum_value_name) + MAX_NUM_LENGTH + (strlen(mapping_fmt_string) - 8)
                                    + (i < (size_t) enum_nmembers - 1 ? 2 : 0) + 1;
 
-                    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, mapping_curr_pos - enum_mapping, ptrdiff_t);
-                    CHECKED_REALLOC(enum_mapping, enum_mapping_length, positive_ptrdiff + bytes_to_print,
+                    buf_ptrdiff = mapping_curr_pos - enum_mapping;
+                    if (buf_ptrdiff < 0)
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
+
+                    CHECKED_REALLOC(enum_mapping, enum_mapping_length, (size_t) buf_ptrdiff + bytes_to_print,
                             mapping_curr_pos, H5E_DATATYPE, FAIL);
 
-                    if ((bytes_printed = snprintf(mapping_curr_pos, enum_mapping_length - positive_ptrdiff,
+                    if ((bytes_printed = snprintf(mapping_curr_pos, enum_mapping_length - (size_t) buf_ptrdiff,
                                                   mapping_fmt_string, enum_value_name, *((unsigned long long int *) enum_value),
                                                   i < (size_t) enum_nmembers - 1 ? ", " : "")) < 0)
                         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
@@ -10369,17 +10387,20 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                     bytes_to_print = strlen(enum_value_name) + MAX_NUM_LENGTH + (strlen(mapping_fmt_string) - 8)
                                    + (i < (size_t) enum_nmembers - 1 ? 2 : 0) + 1;
 
-                    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, mapping_curr_pos - enum_mapping, ptrdiff_t);
-                    CHECKED_REALLOC(enum_mapping, enum_mapping_length, positive_ptrdiff + bytes_to_print,
+                    buf_ptrdiff = mapping_curr_pos - enum_mapping;
+                    if (buf_ptrdiff < 0)
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
+
+                    CHECKED_REALLOC(enum_mapping, enum_mapping_length, (size_t) buf_ptrdiff + bytes_to_print,
                             mapping_curr_pos, H5E_DATATYPE, FAIL);
 
-                    if ((bytes_printed = snprintf(mapping_curr_pos, enum_mapping_length - positive_ptrdiff,
+                    if ((bytes_printed = snprintf(mapping_curr_pos, enum_mapping_length - (size_t) buf_ptrdiff,
                                                   mapping_fmt_string, enum_value_name, *((long long int *) enum_value),
                                                   i < (size_t) enum_nmembers - 1 ? ", " : "")) < 0)
                         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
                 } /* end else */
 
-                if ((size_t) bytes_printed >= enum_mapping_length - positive_ptrdiff)
+                if ((size_t) bytes_printed >= enum_mapping_length - (size_t) buf_ptrdiff)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "enum member string size exceeded allocated mapping buffer size")
 
                 mapping_curr_pos += bytes_printed;
@@ -10403,19 +10424,22 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             /* Check whether the buffer needs to be grown */
             bytes_to_print = strlen(base_type_name) + strlen(enum_mapping) + (strlen(fmt_string) - 4) + 1;
 
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print,
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
+
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print,
                     out_string_curr_pos, H5E_DATATYPE, FAIL);
 
             /* Build the Datatype body by appending the base integer type class for the enum
              * and the mapping values to map from numeric values to
              * string representations.
              */
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff,
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff,
                                           fmt_string, base_type_name, enum_mapping)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size")
 
             out_string_curr_pos += bytes_printed;
@@ -10482,16 +10506,19 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             /* Check whether the buffer needs to be grown */
             bytes_to_print = array_base_type_len + strlen(array_shape) + (strlen(fmt_string) - 4) + 1;
 
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print,
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
+
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print,
                     out_string_curr_pos, H5E_DATATYPE, FAIL);
 
             /* Build the Datatype body by appending the array type class and base type and dimensions of the array */
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff,
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff,
                                           fmt_string, array_base_type, array_shape)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size")
 
             out_string_curr_pos += bytes_printed;
@@ -10527,14 +10554,17 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 
             bytes_to_print = (strlen(fmt_string) - 2) + (is_obj_ref ? strlen(obj_ref_str) : strlen(reg_ref_str)) + 1;
 
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
 
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff,
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
+
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff,
                     fmt_string, is_obj_ref ? obj_ref_str : reg_ref_str)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size")
 
             out_string_curr_pos += bytes_printed;
@@ -10563,7 +10593,13 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 done:
     if (ret_value >= 0) {
         *type_body = out_string;
-        if (type_body_len) H5_CHECKED_ASSIGN(*type_body_len, size_t, out_string_curr_pos - out_string, ptrdiff_t);
+        if (type_body_len) {
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_DONE_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
+            else
+                *type_body_len = (size_t) buf_ptrdiff;
+        } /* end if */
 
 #ifdef PLUGIN_DEBUG
         printf("-> Datatype JSON representation:\n%s\n\n", out_string);
@@ -10930,11 +10966,12 @@ RV_convert_JSON_to_datatype(const char *type)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - opaque")
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_COMPOUND")) {
-        size_t  tmp_cmpd_type_buffer_size;
-        size_t  total_type_size = 0;
-        size_t  current_offset = 0;
-        char   *type_section_ptr = NULL;
-        char   *section_start, *section_end;
+        ptrdiff_t  buf_ptrdiff;
+        size_t     tmp_cmpd_type_buffer_size;
+        size_t     total_type_size = 0;
+        size_t     current_offset = 0;
+        char      *type_section_ptr = NULL;
+        char      *section_start, *section_end;
 
 #ifdef PLUGIN_DEBUG
         printf("-> Compound Datatype\n");
@@ -10987,8 +11024,6 @@ RV_convert_JSON_to_datatype(const char *type)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find \"fields\" information section in datatype string")
 
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
-            size_t  type_section_len = 0;
-
             /* Find the beginning of the "type" section for this Compound Datatype member */
             if (NULL == (type_section_ptr = strstr(type_section_ptr, "\"type\"")))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find \"type\" information section in datatype string")
@@ -11003,15 +11038,18 @@ RV_convert_JSON_to_datatype(const char *type)
             FIND_JSON_SECTION_END(section_start, section_end, H5E_DATATYPE, FAIL);
 
             /* Check if the temporary buffer needs to grow to accomodate this "type" substring */
-            H5_CHECKED_ASSIGN(type_section_len, size_t, section_end - type_section_ptr, ptrdiff_t);
-            CHECKED_REALLOC_NO_PTR(tmp_cmpd_type_buffer, tmp_cmpd_type_buffer_size, type_section_len + 3, H5E_DATATYPE, FAIL);
+            buf_ptrdiff = section_end - type_section_ptr;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
+
+            CHECKED_REALLOC_NO_PTR(tmp_cmpd_type_buffer, tmp_cmpd_type_buffer_size, (size_t) buf_ptrdiff + 3, H5E_DATATYPE, FAIL);
 
             /* Copy the "type" substring into the temporary buffer, wrapping it in enclosing braces to ensure that the
              * string-to-datatype conversion function can correctly process the string
              */
-            memcpy(tmp_cmpd_type_buffer + 1, type_section_ptr, type_section_len);
-            tmp_cmpd_type_buffer[0] = '{'; tmp_cmpd_type_buffer[type_section_len + 1] = '}';
-            tmp_cmpd_type_buffer[type_section_len + 2] = '\0';
+            memcpy(tmp_cmpd_type_buffer + 1, type_section_ptr, (size_t) buf_ptrdiff);
+            tmp_cmpd_type_buffer[0] = '{'; tmp_cmpd_type_buffer[(size_t) buf_ptrdiff + 1] = '}';
+            tmp_cmpd_type_buffer[(size_t) buf_ptrdiff + 2] = '\0';
 
 #ifdef PLUGIN_DEBUG
             printf("-> Compound datatype member %zu name: %s\n", i, compound_member_names[i]);
@@ -11039,8 +11077,8 @@ RV_convert_JSON_to_datatype(const char *type)
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_ARRAY")) {
         const char * const  type_string = "{\"type\":"; /* Gets prepended to the array "base" datatype substring */
+        ptrdiff_t           buf_ptrdiff;
         size_t              type_string_len = strlen(type_string);
-        size_t              base_type_substring_len = 0;
         char               *base_type_substring_start, *base_type_substring_end;
         hid_t               base_type_id = FAIL;
 
@@ -11083,8 +11121,11 @@ RV_convert_JSON_to_datatype(const char *type)
         /* Allocate enough memory to hold the "base" information substring, plus a few bytes for
          * the leading "type:" string and enclosing braces
          */
-        H5_CHECKED_ASSIGN(base_type_substring_len, size_t, base_type_substring_end - base_type_substring_start, ptrdiff_t);
-        if (NULL == (array_base_type_substring = (char *) RV_malloc(base_type_substring_len + type_string_len + 2)))
+        buf_ptrdiff = base_type_substring_end - base_type_substring_start;
+        if (buf_ptrdiff < 0)
+            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
+
+        if (NULL == (array_base_type_substring = (char *) RV_malloc((size_t) buf_ptrdiff + type_string_len + 2)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array base type substring")
 
         /* In order for the conversion function to correctly process the datatype string, it must be in the
@@ -11092,9 +11133,9 @@ RV_convert_JSON_to_datatype(const char *type)
          * the substring we have extracted, add them here before processing occurs.
          */
         memcpy(array_base_type_substring, type_string, type_string_len);
-        memcpy(array_base_type_substring + type_string_len, base_type_substring_start, base_type_substring_len);
-        array_base_type_substring[type_string_len + base_type_substring_len] = '}';
-        array_base_type_substring[type_string_len + base_type_substring_len + 1] = '\0';
+        memcpy(array_base_type_substring + type_string_len, base_type_substring_start, (size_t) buf_ptrdiff);
+        array_base_type_substring[type_string_len + (size_t) buf_ptrdiff] = '}';
+        array_base_type_substring[type_string_len + (size_t) buf_ptrdiff + 1] = '\0';
 
 #ifdef PLUGIN_DEBUG
         printf("-> Converting array base datatype string to hid_t\n");
@@ -11109,8 +11150,8 @@ RV_convert_JSON_to_datatype(const char *type)
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_ENUM")) {
         const char * const  type_string = "{\"type\":"; /* Gets prepended to the enum "base" datatype substring */
+        ptrdiff_t           buf_ptrdiff;
         size_t              type_string_len = strlen(type_string);
-        size_t              base_section_len;
         char               *base_section_ptr = NULL;
         char               *base_section_end = NULL;
 
@@ -11123,14 +11164,17 @@ RV_convert_JSON_to_datatype(const char *type)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "incorrectly formatted datatype string - missing \"base\" datatype section")
         if (NULL == (base_section_ptr = strstr(base_section_ptr, "{")))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "incorrectly formatted \"base\" datatype section in datatype string")
-        if (NULL == (base_section_end = strstr(base_section_ptr, "}")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "incorrectly formatted \"base\" datatype section in datatype string")
+
+        FIND_JSON_SECTION_END(base_section_ptr, base_section_end, H5E_DATATYPE, FAIL);
 
         /* Allocate enough memory to hold the "base" information substring, plus a few bytes for
          * the leading "type:" string and enclosing braces
          */
-        H5_CHECKED_ASSIGN(base_section_len, size_t, (base_section_end - base_section_ptr + 1), ptrdiff_t);
-        if (NULL == (tmp_enum_base_type_buffer = (char *) RV_malloc(base_section_len + type_string_len + 2)))
+        buf_ptrdiff = base_section_end - base_section_ptr;
+        if (buf_ptrdiff < 0)
+            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
+
+        if (NULL == (tmp_enum_base_type_buffer = (char *) RV_malloc((size_t) buf_ptrdiff + type_string_len + 2)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for enum base datatype temporary buffer")
 
         /* In order for the conversion function to correctly process the datatype string, it must be in the
@@ -11138,9 +11182,9 @@ RV_convert_JSON_to_datatype(const char *type)
          * the substring we have extracted, add them here before processing occurs.
          */
         memcpy(tmp_enum_base_type_buffer, type_string, type_string_len); /* Prepend the "type" string */
-        memcpy(tmp_enum_base_type_buffer + type_string_len, base_section_ptr, base_section_len); /* Append the "base" information substring */
-        tmp_enum_base_type_buffer[type_string_len + base_section_len] = '}';
-        tmp_enum_base_type_buffer[type_string_len + base_section_len + 1] = '\0';
+        memcpy(tmp_enum_base_type_buffer + type_string_len, base_section_ptr, (size_t) buf_ptrdiff); /* Append the "base" information substring */
+        tmp_enum_base_type_buffer[type_string_len + (size_t) buf_ptrdiff] = '}';
+        tmp_enum_base_type_buffer[type_string_len + (size_t) buf_ptrdiff + 1] = '\0';
 
 #ifdef PLUGIN_DEBUG
         printf("-> Converting enum base datatype string to hid_t\n");
@@ -11536,9 +11580,9 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "datatype JSON buffer was NULL")
 
     if (need_truncate) {
-        size_t  substring_len;
-        char   *type_section_ptr = NULL;
-        char   *type_section_start, *type_section_end;
+        ptrdiff_t  buf_ptrdiff;
+        char      *type_section_ptr = NULL;
+        char      *type_section_start, *type_section_end;
 
 #ifdef PLUGIN_DEBUG
         printf("-> Extraneous information included in HTTP response, extracting out datatype section\n\n");
@@ -11557,15 +11601,18 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
          */
         FIND_JSON_SECTION_END(type_section_start, type_section_end, H5E_DATATYPE, FAIL);
 
-        H5_CHECKED_ASSIGN(substring_len, size_t, type_section_end - type_section_ptr, ptrdiff_t);
-        if (NULL == (type_string = (char *) RV_malloc(substring_len + 3)))
+        buf_ptrdiff = type_section_end - type_section_ptr;
+        if (buf_ptrdiff < 0)
+            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!")
+
+        if (NULL == (type_string = (char *) RV_malloc((size_t) buf_ptrdiff + 3)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for \"type\" subsection")
 
-        memcpy(type_string + 1, type_section_ptr, substring_len);
+        memcpy(type_string + 1, type_section_ptr, (size_t) buf_ptrdiff);
 
         /* Wrap the "type" substring in braces and NULL terminate it */
-        type_string[0] = '{'; type_string[substring_len + 1] = '}';
-        type_string[substring_len + 2] = '\0';
+        type_string[0] = '{'; type_string[(size_t) buf_ptrdiff + 1] = '}';
+        type_string[(size_t) buf_ptrdiff + 2] = '\0';
 
         substring_allocated = TRUE;
     } /* end if */
@@ -11737,9 +11784,9 @@ static herr_t
 RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **maxdims_body)
 {
     H5S_class_t  space_type;
+    ptrdiff_t    buf_ptrdiff;
     hsize_t     *dims = NULL;
     hsize_t     *maxdims = NULL;
-    size_t       positive_ptrdiff;
     char        *shape_out_string = NULL;
     char        *maxdims_out_string = NULL;
     herr_t       ret_value = SUCCEED;
@@ -11837,8 +11884,11 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
                  * need to be grown before appending the values for the next dimension
                  * into the buffers */
                 if (shape_out_string) {
-                    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, shape_out_string_curr_pos - shape_out_string, ptrdiff_t);
-                    CHECKED_REALLOC(shape_out_string, shape_out_string_curr_len, positive_ptrdiff + MAX_NUM_LENGTH + 1,
+                    buf_ptrdiff = shape_out_string_curr_pos - shape_out_string;
+                    if (buf_ptrdiff < 0)
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!")
+
+                    CHECKED_REALLOC(shape_out_string, shape_out_string_curr_len, (size_t) buf_ptrdiff + MAX_NUM_LENGTH + 1,
                                     shape_out_string_curr_pos, H5E_DATASPACE, FAIL);
 
                     if ((bytes_printed = sprintf(shape_out_string_curr_pos, "%s%llu", i > 0 ? "," : "", dims[i])) < 0)
@@ -11847,8 +11897,11 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
                 } /* end if */
 
                 if (maxdims_out_string) {
-                    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, maxdims_out_string_curr_pos - maxdims_out_string, ptrdiff_t);
-                    CHECKED_REALLOC(maxdims_out_string, maxdims_out_string_curr_len, positive_ptrdiff + MAX_NUM_LENGTH + 1,
+                    buf_ptrdiff = maxdims_out_string_curr_pos - maxdims_out_string;
+                    if (buf_ptrdiff < 0)
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!")
+
+                    CHECKED_REALLOC(maxdims_out_string, maxdims_out_string_curr_len, (size_t) buf_ptrdiff + MAX_NUM_LENGTH + 1,
                                     maxdims_out_string_curr_pos, H5E_DATASPACE, FAIL);
 
                     /* According to the server specification, unlimited dimension extents should be specified
@@ -11940,22 +11993,22 @@ static herr_t
 RV_convert_dataspace_selection_to_string(hid_t space_id,
     char **selection_string, size_t *selection_string_len, hbool_t req_param)
 {
-    hsize_t *point_list = NULL;
-    hsize_t *start = NULL;
-    hsize_t *stride = NULL;
-    hsize_t *count = NULL;
-    hsize_t *block = NULL;
-    size_t   i;
-    size_t   out_string_len;
-    size_t   positive_ptrdiff = 0;
-    char    *out_string = NULL;
-    char    *out_string_curr_pos;
-    char    *start_body = NULL;
-    char    *stop_body = NULL;
-    char    *step_body = NULL;
-    int      bytes_printed = 0;
-    int      ndims;
-    herr_t   ret_value = SUCCEED;
+    ptrdiff_t  buf_ptrdiff;
+    hsize_t   *point_list = NULL;
+    hsize_t   *start = NULL;
+    hsize_t   *stride = NULL;
+    hsize_t   *count = NULL;
+    hsize_t   *block = NULL;
+    size_t     i;
+    size_t     out_string_len;
+    char      *out_string = NULL;
+    char      *out_string_curr_pos;
+    char      *start_body = NULL;
+    char      *stop_body = NULL;
+    char      *step_body = NULL;
+    int        bytes_printed = 0;
+    int        ndims;
+    herr_t     ret_value = SUCCEED;
 
 #ifdef PLUGIN_DEBUG
     printf("-> Converting selection within dataspace to JSON\n\n");
@@ -12026,8 +12079,11 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
 
                 /* Append a tuple for each dimension of the dataspace */
                 for (i = 0; i < (size_t) ndims; i++) {
-                    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                    CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + (3 * MAX_NUM_LENGTH) + 4,
+                    buf_ptrdiff = out_string_curr_pos - out_string;
+                    if (buf_ptrdiff < 0)
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!")
+
+                    CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + (3 * MAX_NUM_LENGTH) + 4,
                             out_string_curr_pos, H5E_DATASPACE, FAIL);
 
                     if ((bytes_printed = sprintf(out_string_curr_pos,
@@ -12042,8 +12098,11 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                     out_string_curr_pos += bytes_printed;
                 } /* end for */
 
-                H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + 2, out_string_curr_pos, H5E_DATASPACE, FAIL);
+                buf_ptrdiff = out_string_curr_pos - out_string;
+                if (buf_ptrdiff < 0)
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!")
+
+                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 2, out_string_curr_pos, H5E_DATASPACE, FAIL);
 
                 strcat(out_string_curr_pos++, "]");
 
@@ -12095,8 +12154,12 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                 for (i = 0; i < (hsize_t) num_points; i++) {
                     size_t j;
 
-                    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                    CHECKED_REALLOC(out_string, out_string_len, ((size_t) ((ndims * MAX_NUM_LENGTH) + (ndims) + (ndims > 1 ? 3 : 1))),
+                    /* Check whether the buffer needs to grow to accomodate the next point */
+                    buf_ptrdiff = out_string_curr_pos - out_string;
+                    if (buf_ptrdiff < 0)
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!")
+
+                    CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + ((size_t) ((ndims * MAX_NUM_LENGTH) + (ndims) + (ndims > 1 ? 3 : 1))),
                             out_string_curr_pos, H5E_DATASPACE, FAIL);
 
                     /* Add the delimiter between individual points */
@@ -12116,8 +12179,11 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                     if (ndims > 1) strcat(out_string_curr_pos++, "]");
                 } /* end for */
 
-                H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + 2, out_string_curr_pos, H5E_DATASPACE, FAIL);
+                buf_ptrdiff = out_string_curr_pos - out_string;
+                if (buf_ptrdiff < 0)
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!")
+
+                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 2, out_string_curr_pos, H5E_DATASPACE, FAIL);
 
                 strcat(out_string_curr_pos++, "]");
 
@@ -12188,12 +12254,15 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                 strcat(stop_body_curr_pos, "]");
                 strcat(step_body_curr_pos, "]");
 
-                H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
+                buf_ptrdiff = out_string_curr_pos - out_string;
+                if (buf_ptrdiff < 0)
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!")
+
                 CHECKED_REALLOC(out_string, out_string_len,
-                        positive_ptrdiff + strlen(start_body) + strlen(stop_body) + strlen(step_body) + 1,
+                        (size_t) buf_ptrdiff + strlen(start_body) + strlen(stop_body) + strlen(step_body) + 1,
                         out_string_curr_pos, H5E_DATASPACE, FAIL);
 
-                if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff,
+                if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff,
                                               slab_format,
                                               start_body,
                                               stop_body,
@@ -12201,7 +12270,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                                      )) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-                if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "dataspace string size exceeded allocated buffer size")
 
                 out_string_curr_pos += bytes_printed;
@@ -12219,8 +12288,13 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
 done:
     if (ret_value >= 0) {
         *selection_string = out_string;
-        if (selection_string_len)
-            H5_CHECKED_ASSIGN(*selection_string_len, size_t, out_string_curr_pos - out_string, ptrdiff_t);
+        if (selection_string_len) {
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_DONE_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!")
+            else
+                *selection_string_len = (size_t) buf_ptrdiff;
+        } /* end if */
 
 #ifdef PLUGIN_DEBUG
         printf("-> Dataspace selection JSON representation:\n%s\n\n", out_string);
@@ -12458,9 +12532,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 {
     const char * const  leading_string = "\"creationProperties\": {";
     H5D_alloc_time_t    alloc_time;
+    ptrdiff_t           buf_ptrdiff;
     size_t              leading_string_len = strlen(leading_string);
     size_t              bytes_to_print = 0;
-    size_t              positive_ptrdiff = 0;
     size_t              out_string_len;
     char               *chunk_dims_string = NULL;
     char               *out_string = NULL;
@@ -12506,8 +12580,11 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
     /* Check whether the buffer needs to be grown */
     bytes_to_print = strlen("\"allocTime\": \"H5D_ALLOC_TIME_DEFAULT\"") + 1;
 
-    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-    CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+    buf_ptrdiff = out_string_curr_pos - out_string;
+    if (buf_ptrdiff < 0)
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+
+    CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
 
     switch (alloc_time) {
         case H5D_ALLOC_TIME_DEFAULT:
@@ -12576,15 +12653,18 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             /* Check whether the buffer needs to be grown */
             bytes_to_print = strlen(fmt_string) + strlen("INDEXED") + 1;
 
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
 
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
                     (H5P_CRT_ORDER_INDEXED | H5P_CRT_ORDER_TRACKED) == crt_order_flags ? "INDEXED" : "TRACKED")
                 ) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset creation order property string size exceeded allocated buffer size")
 
             out_string_curr_pos += bytes_printed;
@@ -12616,13 +12696,16 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             /* Check whether the buffer needs to be grown */
             bytes_to_print = strlen(fmt_string) + (2 * MAX_NUM_LENGTH) + 1;
 
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
 
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string, max_compact, min_dense)) < 0)
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string, max_compact, min_dense)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset attribute phase change property string size exceeded allocated buffer size")
 
             out_string_curr_pos += bytes_printed;
@@ -12649,15 +12732,18 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             /* Check whether the buffer needs to be grown */
             bytes_to_print = strlen(fmt_string) + strlen("ALLOC") + 1;
 
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
 
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
                     H5D_FILL_TIME_ALLOC == fill_time ? "ALLOC" : "NEVER")
                 ) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset fill time property string size exceeded allocated buffer size")
 
             out_string_curr_pos += bytes_printed;
@@ -12687,8 +12773,11 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                 /* Check whether the buffer needs to be grown */
                 bytes_to_print = null_value_len + 1;
 
-                H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                buf_ptrdiff = out_string_curr_pos - out_string;
+                if (buf_ptrdiff < 0)
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+
+                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
 
                 strncat(out_string_curr_pos, null_value, null_value_len);
                 out_string_curr_pos += null_value_len;
@@ -12726,16 +12815,22 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             /* Check whether the buffer needs to be grown */
             bytes_to_print = filters_string_len + 1;
 
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
 
             strncat(out_string_curr_pos, filters_string, filters_string_len);
             out_string_curr_pos += filters_string_len;
 
             for (i = 0; i < (size_t) nfilters; i++) {
                 if (i > 0) {
-                    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                    CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
+                    buf_ptrdiff = out_string_curr_pos - out_string;
+                    if (buf_ptrdiff < 0)
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+
+                    CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
 
                     strcat(out_string_curr_pos++, ",");
                 } /* end if */
@@ -12752,16 +12847,19 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                         /* Check whether the buffer needs to be grown */
                         bytes_to_print = strlen(fmt_string) + (2 * MAX_NUM_LENGTH) + 1;
 
-                        H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                        CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        buf_ptrdiff = out_string_curr_pos - out_string;
+                        if (buf_ptrdiff < 0)
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
                                 H5Z_FILTER_DEFLATE,
                                 cd_values[0])
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset deflate filter property string size exceeded allocated buffer size")
 
                         out_string_curr_pos += bytes_printed;
@@ -12778,15 +12876,18 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                         /* Check whether the buffer needs to be grown */
                         bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH + 1;
 
-                        H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                        CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        buf_ptrdiff = out_string_curr_pos - out_string;
+                        if (buf_ptrdiff < 0)
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
                                 H5Z_FILTER_SHUFFLE)
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset shuffle filter property string size exceeded allocated buffer size")
 
                         out_string_curr_pos += bytes_printed;
@@ -12803,15 +12904,18 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                         /* Check whether the buffer needs to be grown */
                         bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH + 1;
 
-                        H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                        CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        buf_ptrdiff = out_string_curr_pos - out_string;
+                        if (buf_ptrdiff < 0)
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
                                 H5Z_FILTER_FLETCHER32)
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset fletcher32 filter property string size exceeded allocated buffer size")
 
                         out_string_curr_pos += bytes_printed;
@@ -12855,10 +12959,13 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                         /* Check whether the buffer needs to be grown */
                         bytes_to_print = strlen(fmt_string) + (4 * MAX_NUM_LENGTH) + strlen(szip_option_mask) + 1;
 
-                        H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                        CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        buf_ptrdiff = out_string_curr_pos - out_string;
+                        if (buf_ptrdiff < 0)
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
                                 H5Z_FILTER_SZIP,
                                 cd_values[H5Z_SZIP_PARM_BPP],
                                 cd_values[H5Z_SZIP_PARM_MASK] == H5_SZIP_EC_OPTION_MASK ? "H5_SZIP_EC_OPTION_MASK" : "H5_SZIP_NN_OPTION_MASK",
@@ -12867,7 +12974,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset szip filter property string size exceeded allocated buffer size")
 
                         out_string_curr_pos += bytes_printed;
@@ -12884,15 +12991,18 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                         /* Check whether the buffer needs to be grown */
                         bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH + 1;
 
-                        H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                        CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        buf_ptrdiff = out_string_curr_pos - out_string;
+                        if (buf_ptrdiff < 0)
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
                                 H5Z_FILTER_NBIT)
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset nbit filter property string size exceeded allocated buffer size")
 
                         out_string_curr_pos += bytes_printed;
@@ -12938,17 +13048,20 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                         /* Check whether the buffer needs to be grown */
                         bytes_to_print = strlen(fmt_string) + (2 * MAX_NUM_LENGTH) + strlen(scaleType) + 1;
 
-                        H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                        CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        buf_ptrdiff = out_string_curr_pos - out_string;
+                        if (buf_ptrdiff < 0)
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
                                 H5Z_FILTER_SCALEOFFSET,
                                 scaleType,
                                 cd_values[H5Z_SCALEOFFSET_PARM_SCALEFACTOR])
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset scaleoffset filter property string size exceeded allocated buffer size")
 
                         out_string_curr_pos += bytes_printed;
@@ -12965,15 +13078,18 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                         /* Check whether the buffer needs to be grown */
                         bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH + 1;
 
-                        H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                        CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        buf_ptrdiff = out_string_curr_pos - out_string;
+                        if (buf_ptrdiff < 0)
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
                                 LZF_FILTER_ID)
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset lzf filter property string size exceeded allocated buffer size")
 
                         out_string_curr_pos += bytes_printed;
@@ -13013,17 +13129,20 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                         /* Check whether the buffer needs to be grown */
                         bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH + strlen(parameters) + 1;
 
-                        H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                        CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        buf_ptrdiff = out_string_curr_pos - out_string;
+                        if (buf_ptrdiff < 0)
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string,
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
                                 filter_id,
                                 parameters)
                             ) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-                        if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
-                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset user-defined filter property string size exceeded allocate buffer size")
+                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset user-defined filter property string size exceeded allocated buffer size")
 
                         out_string_curr_pos += bytes_printed;
                         break;
@@ -13032,8 +13151,11 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             } /* end for */
 
             /* Make sure to add a closing ']' to close the 'filters' section */
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
 
             strcat(out_string_curr_pos++, "]");
         } /* end if */
@@ -13058,8 +13180,11 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             /* Check whether the buffer needs to be grown */
             bytes_to_print = compact_layout_str_len + 1;
 
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
 
             strncat(out_string_curr_pos, compact_layout_str, compact_layout_str_len);
             out_string_curr_pos += compact_layout_str_len;
@@ -13074,8 +13199,11 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             /* Check whether the buffer needs to be grown */
             bytes_to_print = strlen(contiguous_layout_str);
 
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
 
             /* Append the "contiguous layout" string */
             strncat(out_string_curr_pos, contiguous_layout_str, bytes_to_print);
@@ -13094,8 +13222,11 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                 /* Check whether the buffer needs to be grown */
                 bytes_to_print += strlen(external_storage_str);
 
-                H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                buf_ptrdiff = out_string_curr_pos - out_string;
+                if (buf_ptrdiff < 0)
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+
+                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
 
                 /* Append the "external storage" string */
                 strncat(out_string_curr_pos, external_storage_str, bytes_to_print);
@@ -13116,10 +13247,13 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                     bytes_to_print += strlen(external_file_str) + strlen(file_name) + (2 * MAX_NUM_LENGTH) + (i > 0 ? 1 : 0) - 8;
 
                     /* Check whether the buffer needs to be grown */
-                    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                    CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                    buf_ptrdiff = out_string_curr_pos - out_string;
+                    if (buf_ptrdiff < 0)
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
 
-                    if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff,
+                    CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+                    if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff,
                             external_file_str,
                             (i > 0) ? "," : "",
                             file_name,
@@ -13128,22 +13262,28 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                         ) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-                    if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+                    if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset external file list property string size exceeded allocated buffer size")
 
                     out_string_curr_pos += bytes_printed;
                 } /* end for */
 
                 /* Make sure to add a closing ']' to close the external file section */
-                H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-                CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
+                buf_ptrdiff = out_string_curr_pos - out_string;
+                if (buf_ptrdiff < 0)
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+
+                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
 
                 strcat(out_string_curr_pos++, "]");
             } /* end if */
 
             /* Make sure to add a closing '}' to close the 'layout' section */
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
 
             strcat(out_string_curr_pos++, "}");
 
@@ -13189,13 +13329,16 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             /* Check whether the buffer needs to be grown */
             bytes_to_print = strlen(fmt_string) + strlen(chunk_dims_string) + 1;
 
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
 
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - positive_ptrdiff, fmt_string, chunk_dims_string)) < 0)
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string, chunk_dims_string)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-            if ((size_t) bytes_printed >= out_string_len - positive_ptrdiff)
+            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset chunk dimensionality property string size exceeded allocated buffer size")
 
             out_string_curr_pos += bytes_printed;
@@ -13232,8 +13375,11 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             /* Check whether the buffer needs to be grown */
             bytes_to_print = track_times_true_len + 1;
 
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
 
             strncat(out_string_curr_pos, track_times_true, track_times_true_len);
             out_string_curr_pos += track_times_true_len;
@@ -13245,25 +13391,36 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             /* Check whether the buffer needs to be grown */
             bytes_to_print = track_times_false_len + 1;
 
-            H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-            CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+
+            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
 
             strncat(out_string_curr_pos, track_times_false, track_times_false_len);
             out_string_curr_pos += track_times_false_len;
         } /* end else */
     }
 
-
     /* Make sure to add a closing '}' to close the creationProperties section */
-    H5_CHECKED_ASSIGN(positive_ptrdiff, size_t, out_string_curr_pos - out_string, ptrdiff_t);
-    CHECKED_REALLOC(out_string, out_string_len, positive_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
+    buf_ptrdiff = out_string_curr_pos - out_string;
+    if (buf_ptrdiff < 0)
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+
+    CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
 
     strcat(out_string_curr_pos++, "}");
 
 done:
     if (ret_value >= 0) {
         *creation_properties_body = out_string;
-        if (creation_properties_body_len) H5_CHECKED_ASSIGN(*creation_properties_body_len, size_t, out_string_curr_pos - out_string, ptrdiff_t);
+        if (creation_properties_body_len) {
+            buf_ptrdiff = out_string_curr_pos - out_string;
+            if (buf_ptrdiff < 0)
+                FUNC_DONE_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+            else
+                *creation_properties_body_len = (size_t) buf_ptrdiff;
+        } /* end if */
 
 #ifdef PLUGIN_DEBUG
         printf("-> DCPL JSON representation:\n%s\n\n", out_string);

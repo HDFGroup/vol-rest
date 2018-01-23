@@ -50,6 +50,15 @@ extern hid_t attr_table_iter_err_min_g;
 #define H5E_LINKITERERROR link_table_iter_err_min_g
 #define H5E_ATTRITERERROR attr_table_iter_err_min_g
 
+#define SUCCEED    0
+#define FAIL    (-1)
+
+#ifndef FALSE
+  #define FALSE false
+#endif
+#ifndef TRUE
+  #define TRUE true
+#endif
 
 /* Use FUNC to safely handle variations of C99 __func__ keyword handling */
 #ifdef H5_HAVE_C99_FUNC
