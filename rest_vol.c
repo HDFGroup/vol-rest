@@ -235,6 +235,19 @@ do {                                                                            
 }
 
 /* Macro borrowed from H5private.h to assign a value between two types of the
+ * same size, where the source type is an unsigned type and the destination
+ * type is a signed type
+ */
+#define ASSIGN_TO_SAME_SIZE_UNSIGNED_TO_SIGNED(dst, dsttype, src, srctype)                                                  \
+{                                                                                                                           \
+    srctype _tmp_src = (srctype)(src);                                                                                      \
+    dsttype _tmp_dst = (dsttype)(_tmp_src);                                                                                 \
+    assert(_tmp_dst >= 0);                                                                                                  \
+    assert(_tmp_src == (srctype)_tmp_dst);                                                                                  \
+    (dst) = _tmp_dst;                                                                                                       \
+}
+
+/* Macro borrowed from H5private.h to assign a value between two types of the
  * same size, where the source type is a signed type and the destination type
  * is an unsigned type
  */
@@ -3895,11 +3908,11 @@ RV_dataset_create(void *obj, H5VL_loc_params_t H5_ATTR_UNUSED loc_params, const 
 
         /* Check to make sure that the size of the create request HTTP body can safely be cast to a curl_off_t */
         if (sizeof(curl_off_t) < sizeof(size_t))
-            ASSIGN_TO_LARGER_SIZE_SIGNED_TO_UNSIGNED(create_request_body_len, curl_off_t, tmp_len, size_t)
-        else if (sizeof(curl_off_t) > sizeof(size_t))
             ASSIGN_TO_SMALLER_SIZE(create_request_body_len, curl_off_t, tmp_len, size_t)
+        else if (sizeof(curl_off_t) > sizeof(size_t))
+            create_request_body_len = (curl_off_t) tmp_len;
         else
-            ASSIGN_TO_SAME_SIZE_SIGNED_TO_UNSIGNED(create_request_body_len, curl_off_t, tmp_len, size_t)
+            ASSIGN_TO_SAME_SIZE_UNSIGNED_TO_SIGNED(create_request_body_len, curl_off_t, tmp_len, size_t)
     }
 
     /* Setup the "Host: " header */
@@ -4266,7 +4279,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
      * added as a request parameter to the GET URL.
      */
     if (H5S_SEL_POINTS == sel_type) {
-        curl_off_t write_len;
+        curl_off_t post_len;
 
         /* As the dataspace-selection-to-string function is not designed to include the enclosing '{' and '}',
          * since returning just the selection string to the user makes more sense if they are including more
@@ -4286,17 +4299,17 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
         /* Check to make sure that the size of the selection HTTP body can safely be cast to a curl_off_t */
         if (sizeof(curl_off_t) < sizeof(size_t))
-            ASSIGN_TO_LARGER_SIZE_SIGNED_TO_UNSIGNED(write_len, curl_off_t, selection_body_len + 2, size_t)
+            ASSIGN_TO_SMALLER_SIZE(post_len, curl_off_t, selection_body_len + 2, size_t)
         else if (sizeof(curl_off_t) > sizeof(size_t))
-            ASSIGN_TO_SMALLER_SIZE(write_len, curl_off_t, selection_body_len + 2, size_t)
+            post_len = (curl_off_t) (selection_body_len + 2);
         else
-            ASSIGN_TO_SAME_SIZE_SIGNED_TO_UNSIGNED(write_len, curl_off_t, selection_body_len + 2, size_t)
+            ASSIGN_TO_SAME_SIZE_UNSIGNED_TO_SIGNED(post_len, curl_off_t, selection_body_len + 2, size_t)
 
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, selection_body))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL POST data: %s", curl_err_buf)
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, write_len))
+        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, post_len))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL POST data size: %s", curl_err_buf)
 
         curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
@@ -4391,6 +4404,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     RV_object_t  *dataset = (RV_object_t *) obj;
     upload_info   uinfo;
     H5T_class_t   dtype_class;
+    curl_off_t    write_len;
     hssize_t      mem_select_npoints, file_select_npoints;
     hbool_t       is_transfer_binary = FALSE;
     htri_t        is_variable_str;
@@ -4553,7 +4567,6 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
      */
     if (H5S_SEL_POINTS == sel_type) {
         const char * const fmt_string = "{%s,\"value_base64\": \"%s\"}";
-        curl_off_t         off_t_len;
         size_t             value_body_len;
         int                bytes_printed;
 
@@ -4586,42 +4599,30 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         if (bytes_printed >= write_body_len + 1)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "point selection write buffer exceeded allocate buffer size")
 
-        /* Check to make sure that the size of the selection HTTP body can safely be cast to a curl_off_t */
-        if (sizeof(curl_off_t) < sizeof(size_t))
-            ASSIGN_TO_LARGER_SIZE_SIGNED_TO_UNSIGNED(off_t_len, curl_off_t, write_body_len, size_t)
-        else if (sizeof(curl_off_t) > sizeof(size_t))
-            ASSIGN_TO_SMALLER_SIZE(off_t_len, curl_off_t, write_body_len, size_t)
-        else
-            ASSIGN_TO_SAME_SIZE_SIGNED_TO_UNSIGNED(off_t_len, curl_off_t, write_body_len, size_t)
-
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf)
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, write_body))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL POST data: %s", curl_err_buf)
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, off_t_len))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL POST data size: %s", curl_err_buf)
-
         curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
 
 #ifdef PLUGIN_DEBUG
         printf("-> Setup cURL to POST point list for dataset write\n\n");
 #endif
     } /* end if */
-    else {
-        /* Check to make sure that the size of the write body can safely be cast to a curl_off_t */
-        H5_CHECK_OVERFLOW(write_body_len, size_t, curl_off_t);
 
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, &uinfo))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t) write_body_len))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
+    uinfo.buffer = is_transfer_binary ? buf : write_body;
+    uinfo.buffer_size = write_body_len;
 
-        uinfo.buffer = is_transfer_binary ? buf : write_body;
-        uinfo.buffer_size = write_body_len;
-    } /* end else */
+    /* Check to make sure that the size of the write body can safely be cast to a curl_off_t */
+    if (sizeof(curl_off_t) < sizeof(size_t))
+        ASSIGN_TO_SMALLER_SIZE(write_len, curl_off_t, write_body_len, size_t)
+    else if (sizeof(curl_off_t) > sizeof(size_t))
+        write_len = (curl_off_t) write_body_len;
+    else
+        ASSIGN_TO_SAME_SIZE_UNSIGNED_TO_SIGNED(write_len, curl_off_t, write_body_len, size_t)
 
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf)
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, &uinfo))
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf)
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, write_len))
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
@@ -8063,21 +8064,27 @@ RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size)
     uint32_t       three_byte_set;
     uint8_t        c0, c1, c2, c3;
     size_t         i;
-    size_t         nalloc = *out_size;
+    size_t         nalloc;
     size_t         out_index = 0;
-    char          *tmp_realloc;
-    int            npad = (int) (*out_size % 3);
+    int            npad;
     herr_t         ret_value = SUCCEED;
+
+    if (!in)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "input buffer pointer was NULL")
+    if (!out)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer pointer was NULL")
 
     /* If the caller has specified a 0-sized buffer, allocate one and set nalloc
      * so that the following 'nalloc *= 2' calls don't result in 0-sized
      * allocations.
      */
-    if (!nalloc) {
+    if (!out_size || (out_size && !*out_size)) {
         nalloc = BASE64_ENCODE_DEFAULT_BUFFER_SIZE;
         if (NULL == (*out = (char *) RV_malloc(nalloc)))
             FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't allocate space for base64-encoding output buffer")
     } /* end if */
+    else
+        nalloc = *out_size;
 
     for (i = 0; i < in_size; i += 3) {
         three_byte_set = ((uint32_t) buf[i]) << 16;
@@ -8094,75 +8101,40 @@ RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size)
         c2 = (uint8_t) (three_byte_set >> 6)  & 0x3f;
         c3 = (uint8_t)  three_byte_set        & 0x3f;
 
-        if (out_index + 1 >= nalloc) {
-            nalloc *= 2;
-
-            if (NULL == (tmp_realloc = (char *) RV_realloc(*out, nalloc)))
-                FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't reallocate space for base64-encoding output buffer")
-
-            *out = tmp_realloc;
-        } /* end if */
+        CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 2, H5E_RESOURCE, FAIL);
 
         (*out)[out_index++] = charset[c0];
         (*out)[out_index++] = charset[c1];
 
         if (i + 1 < in_size) {
-            if (out_index >= nalloc) {
-                nalloc *= 2;
-
-                if (NULL == (tmp_realloc = (char *) RV_realloc(*out, nalloc)))
-                    FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't reallocate space for base64-encoding output buffer")
-
-                *out = tmp_realloc;
-            } /* end if */
+            CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
 
             (*out)[out_index++] = charset[c2];
         } /* end if */
 
         if (i + 2 < in_size) {
-            if (out_index >= nalloc) {
-                nalloc *= 2;
-
-                if (NULL == (tmp_realloc = (char *) RV_realloc(*out, nalloc)))
-                    FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't reallocate space for base64-encoding output buffer")
-
-                *out = tmp_realloc;
-            } /* end if */
+            CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
 
             (*out)[out_index++] = charset[c3];
         } /* end if */
     } /* end for */
 
-    /* Add trailing padding when in_size is not a multiple of 3 */
-    if (npad) {
-        while (npad < 3) {
-            if (out_index >= nalloc) {
-                nalloc *= 2;
+    /* Add trailing padding when out_index does not fall on the beginning of a 4-byte set */
+    npad = (4 - (out_index % 4)) % 4;
+    while (npad) {
+        CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
 
-                if (NULL == (tmp_realloc = (char *) RV_realloc(*out, nalloc)))
-                    FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't reallocate space for base64-encoding output buffer")
+        (*out)[out_index++] = '=';
 
-                *out = tmp_realloc;
-            } /* end if */
+        npad--;
+    } /* end while */
 
-            (*out)[out_index++] = '=';
-
-            npad++;
-        } /* end while */
-    } /* end if */
-
-    if (out_index >= nalloc) {
-        nalloc *= 2;
-
-        if (NULL == (tmp_realloc = (char *) RV_realloc(*out, nalloc)))
-            FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't reallocate space for base64-encoding output buffer")
-
-        *out = tmp_realloc;
-    } /* end if */
+    CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
 
     (*out)[out_index] = '\0';
 
-    *out_size = out_index;
+    if (out_size)
+        *out_size = out_index;
 
 done:
     return ret_value;

@@ -507,7 +507,7 @@
 #define LINK_VISIT_TEST_CYCLE_LINK_NAME3     "ext_link1"
 #define LINK_VISIT_TEST_CYCLE_LINK_NAME4     "hard_link2"
 
-#define LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME "link_visit_test_0_links"
+#define LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME   "link_visit_test_0_links"
 #define LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME2  "link_visit_test_0_links_subgroup1"
 #define LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME3  "link_visit_test_0_links_subgroup2"
 
@@ -8586,34 +8586,11 @@ test_write_dataset_data_verification(void)
         goto error;
     }
 
-#if 0
-    printf("Data buffer: [");
-    for (i = 0; i < data_size / DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE; i++) {
-        if (i > 0) {
-            printf(",");
-        }
-
-        printf("%d", ((int *) data)[i]);
-    }
-    printf("]\n\n");
-
-    printf("Read buffer: [");
-    for (i = 0; i < data_size / DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE; i++) {
-        if (i > 0) {
-            printf(",");
-        }
-
-        printf("%d", ((int *) read_buf)[i]);
-    }
-    printf("]\n\n");
-
-
     if (memcmp(data, read_buf, data_size)) {
         H5_FAILED();
         printf("    point selection data verification failed\n");
         goto error;
     }
-#endif
 
     if (data) {
         free(data);
