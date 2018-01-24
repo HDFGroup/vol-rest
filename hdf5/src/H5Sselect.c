@@ -114,7 +114,7 @@ H5Sselect_copy(hid_t dst_id, hid_t src_id, hbool_t share_selection)
     herr_t  ret_value = SUCCEED;
 
     FUNC_ENTER_API(FAIL)
-    H5TRACE2("e", "ii", dst_id, src_id);
+    H5TRACE3("e", "iib", dst_id, src_id, share_selection);
 
     /* Check args */
     if(NULL == (src = (H5S_t *)H5I_object_verify(src_id, H5I_DATASPACE)))

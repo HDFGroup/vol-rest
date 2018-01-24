@@ -39,7 +39,6 @@
 #include "H5Ppublic.h"       /* Property Lists    */
 #include "H5Spublic.h"       /* Dataspaces        */
 #include "H5VLpublic.h"      /* VOL plugins       */
-#include "H5VLprivate.h"     /* XXX: Temporarily needed */
 
 /* Includes for the REST VOL itself */
 #include "rest_vol.h"        /* REST VOL plugin   */
@@ -1031,7 +1030,7 @@ RVget_uri(hid_t obj_id)
     RV_object_t *VOL_obj;
     char        *ret_value = NULL;
 
-    if (NULL == (VOL_obj = (RV_object_t *) H5VL_object(obj_id)))
+    if (NULL == (VOL_obj = (RV_object_t *) H5VLobject(obj_id)))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, NULL, "invalid identifier")
     ret_value = VOL_obj->URI;
 
@@ -10078,18 +10077,15 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine if datatype is committed")
 
     if (type_is_committed) {
-        H5VL_object_t *vol_container;
-        RV_object_t   *vol_obj;
+        RV_object_t *vol_obj;
 
 #ifdef PLUGIN_DEBUG
         printf("-> Datatype was a committed type\n\n");
 #endif
 
-        /* Retrieve the VOL object's container */
-        if (H5VLget_object(type_id, (void **) &vol_container) < 0)
+        /* Retrieve the VOL object (RV_object_t *) from the datatype container */
+        if (NULL == (vol_obj = H5VLobject(type_id)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get VOL object for committed datatype")
-
-        vol_obj = (RV_object_t *) vol_container->vol_obj;
 
         /* Check whether the buffer needs to be grown */
         bytes_to_print = strlen(vol_obj->URI) + 2;
