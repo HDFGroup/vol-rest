@@ -153,7 +153,7 @@ extern hid_t attr_table_iter_err_min_g;
  * should print additional information to stdout indented by at least four
  * spaces.
  */
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
 #define TESTING(S)  {printf("Testing %-66s\n\n", S); fflush(stdout);}
 #define PASSED()    {puts("PASSED\n"); fflush(stdout);}
 #define H5_FAILED() {puts("*FAILED*\n"); fflush(stdout);}

@@ -984,7 +984,7 @@ test_create_file(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Setting up container groups\n");
 #endif
 
@@ -1095,7 +1095,7 @@ test_get_file_info(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving file info\n");
 #endif
 
@@ -1141,7 +1141,7 @@ test_nonexistent_file(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to open non-existent file\n");
 #endif
 
@@ -1153,7 +1153,7 @@ test_nonexistent_file(void)
         }
     } H5E_END_TRY;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("File open call successfully failed for non-existent file\n");
 #endif
 
@@ -1203,7 +1203,7 @@ test_get_file_intent(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Checking to make sure H5F_ACC_TRUNC works correctly\n");
 #endif
 
@@ -1226,7 +1226,7 @@ test_get_file_intent(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Checking to make sure H5F_ACC_RDONLY works correctly\n");
 #endif
 
@@ -1248,7 +1248,7 @@ test_get_file_intent(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Checking to make sure we can't create an object when H5F_ACC_RDONLY is specified\n");
 #endif
 
@@ -1271,7 +1271,7 @@ test_get_file_intent(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Checking to make sure H5F_ACC_RDWR works correctly\n");
 #endif
 
@@ -1335,7 +1335,7 @@ test_get_file_name(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving size of file name\n");
 #endif
 
@@ -1347,7 +1347,7 @@ test_get_file_name(void)
     if (NULL == (file_name_buf = (char *) malloc((size_t) file_name_buf_len + 1)))
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving file name\n");
 #endif
 
@@ -1403,7 +1403,7 @@ test_file_reopen(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Re-opening file\n");
 #endif
 
@@ -1458,7 +1458,7 @@ test_unused_file_API_calls(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing that all of the unused file API calls don't cause application issues\n");
 #endif
 
@@ -1715,7 +1715,7 @@ test_create_group_invalid_loc_id(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Trying to create a group with an invalid loc_id\n");
 #endif
 
@@ -1727,7 +1727,7 @@ test_create_group_invalid_loc_id(void)
         }
     } H5E_END_TRY;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Group create call successfully failed with invalid loc_id\n");
 #endif
 
@@ -1770,7 +1770,7 @@ test_create_group_under_root(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating group under root group\n");
 #endif
 
@@ -1835,7 +1835,7 @@ test_create_group_under_existing_group(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating group under non-root group\n");
 #endif
 
@@ -1902,7 +1902,7 @@ test_create_anonymous_group(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating anonymous group\n");
 #endif
 
@@ -1912,7 +1912,7 @@ test_create_anonymous_group(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Linking anonymous group into file structure\n");
 #endif
 
@@ -1971,7 +1971,7 @@ test_get_group_info(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving group info with H5Gget_info\n");
 #endif
 
@@ -1981,7 +1981,7 @@ test_get_group_info(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving group info with H5Gget_info_by_name\n");
 #endif
 
@@ -1992,7 +1992,7 @@ test_get_group_info(void)
     }
 
     H5E_BEGIN_TRY {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving group info with H5Gget_info_by_idx\n");
 #endif
 
@@ -2045,7 +2045,7 @@ test_nonexistent_group(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to open a non-existent group\n");
 #endif
 
@@ -2057,7 +2057,7 @@ test_nonexistent_group(void)
         }
     } H5E_END_TRY;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Group open call successfully failed for non-existent group\n");
 #endif
 
@@ -2088,7 +2088,7 @@ test_unused_group_API_calls(void)
     TESTING("unused group API calls")
 
     /* None currently that aren't planned to be used */
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Currently no APIs to test here\n");
 #endif
 
@@ -2134,7 +2134,7 @@ test_group_property_lists(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Setting property on GCPL\n");
 #endif
 
@@ -2183,7 +2183,7 @@ test_group_property_lists(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Checking that property value is retrieved correctly\n");
 #endif
 
@@ -2324,7 +2324,7 @@ test_create_attribute_on_root(void)
     if ((attr_dtype2 = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating attribute on root group with H5Acreate2\n");
 #endif
 
@@ -2334,7 +2334,7 @@ test_create_attribute_on_root(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating attribute on root group with H5Acreate_by_name\n");
 #endif
 
@@ -2344,7 +2344,7 @@ test_create_attribute_on_root(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the attributes exist\n");
 #endif
 
@@ -2403,7 +2403,7 @@ test_create_attribute_on_root(void)
     if (H5Aclose(attr_id2) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to open the attributes with H5Aopen\n");
 #endif
 
@@ -2424,7 +2424,7 @@ test_create_attribute_on_root(void)
     if (H5Aclose(attr_id2) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to open the attributes with H5Aopen_by_name\n");
 #endif
 
@@ -2448,7 +2448,7 @@ test_create_attribute_on_root(void)
             TEST_ERROR
 #endif
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to open the attributes with H5Aopen_by_idx\n");
 #endif
 
@@ -2563,7 +2563,7 @@ test_create_attribute_on_dataset(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating attribute on dataset with H5Acreate2\n");
 #endif
 
@@ -2574,7 +2574,7 @@ test_create_attribute_on_dataset(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating attribute on dataset with H5Acreate_by_name\n");
 #endif
 
@@ -2585,7 +2585,7 @@ test_create_attribute_on_dataset(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the attributes exist\n");
 #endif
 
@@ -2620,7 +2620,7 @@ test_create_attribute_on_dataset(void)
     if (H5Aclose(attr_id2) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to open the attributes with H5Aopen\n");
 #endif
 
@@ -2641,7 +2641,7 @@ test_create_attribute_on_dataset(void)
     if (H5Aclose(attr_id2) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to open the attributes with H5Aopen_by_name\n");
 #endif
 
@@ -2667,7 +2667,7 @@ test_create_attribute_on_dataset(void)
             TEST_ERROR
 #endif
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to open the attributes with H5Aopen_by_idx\n");
 #endif
 
@@ -2805,7 +2805,7 @@ test_create_attribute_on_datatype(void)
     if ((attr_dtype2 = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating attribute on datatype with H5Acreate2\n");
 #endif
 
@@ -2816,7 +2816,7 @@ test_create_attribute_on_datatype(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating attribute on datatype with H5Acreate_by_name\n");
 #endif
 
@@ -2827,7 +2827,7 @@ test_create_attribute_on_datatype(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the attributes exist\n");
 #endif
 
@@ -2862,7 +2862,7 @@ test_create_attribute_on_datatype(void)
     if (H5Aclose(attr_id2) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to open the attributes with H5Aopen\n");
 #endif
 
@@ -2883,7 +2883,7 @@ test_create_attribute_on_datatype(void)
     if (H5Aclose(attr_id2) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to open the attributes with H5Aopen_by_name\n");
 #endif
 
@@ -2909,7 +2909,7 @@ test_create_attribute_on_datatype(void)
             TEST_ERROR
 #endif
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to open the attributes with H5Aopen_by_idx\n");
 #endif
 
@@ -3014,7 +3014,7 @@ test_create_attribute_with_null_space(void)
     if ((attr_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("Creating attribute with NULL dataspace\n");
 #endif
 
@@ -3126,7 +3126,7 @@ test_create_attribute_with_scalar_space(void)
     if ((attr_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("Creating attribute with SCALAR dataspace\n");
 #endif
 
@@ -3258,7 +3258,7 @@ test_get_attribute_info(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving attribute's info with H5Aget_info\n");
 #endif
 
@@ -3268,7 +3268,7 @@ test_get_attribute_info(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving attribute's info with H5Aget_info_by_name\n");
 #endif
 
@@ -3279,7 +3279,7 @@ test_get_attribute_info(void)
     }
 
     H5E_BEGIN_TRY {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving attribute's info with H5Aget_info_by_idx\n");
 #endif
 
@@ -3388,7 +3388,7 @@ test_get_attribute_space_and_type(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving attribute's datatype\n");
 #endif
 
@@ -3399,7 +3399,7 @@ test_get_attribute_space_and_type(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving attribute's dataspace\n");
 #endif
 
@@ -3410,7 +3410,7 @@ test_get_attribute_space_and_type(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Checking to make sure the attribute's datatype and dataspace match what was provided at creation time\n");
 #endif
 
@@ -3441,7 +3441,7 @@ test_get_attribute_space_and_type(void)
             }
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the previous checks hold true after closing and re-opening the attribute\n");
 #endif
 
@@ -3610,7 +3610,7 @@ test_get_attribute_name(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving size of attribute's name\n");
 #endif
 
@@ -3624,7 +3624,7 @@ test_get_attribute_name(void)
     if (NULL == (name_buf = (char *) malloc((size_t) name_buf_size + 1)))
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving attribute's name\n");
 #endif
 
@@ -3639,7 +3639,7 @@ test_get_attribute_name(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that this still works after closing and re-opening the attribute\n");
 #endif
 
@@ -3758,7 +3758,7 @@ test_create_attribute_with_space_in_name(void)
     if ((attr_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to create an attribute with a space in its name\n");
 #endif
 
@@ -3879,7 +3879,7 @@ test_delete_attribute(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to delete attribute with H5Adelete\n");
 #endif
 
@@ -3927,7 +3927,7 @@ test_delete_attribute(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to delete attribute with H5Adelete_by_name\n");
 #endif
 
@@ -3951,7 +3951,7 @@ test_delete_attribute(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to delete attribute with H5Adelete_by_idx\n");
 #endif
 
@@ -4066,7 +4066,7 @@ test_write_attribute(void)
     for (i = 0; i < data_size / ATTRIBUTE_WRITE_TEST_ATTR_DTYPE_SIZE; i++)
         ((int *) data)[i] = (int) i;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Writing to the attribute\n");
 #endif
 
@@ -4184,7 +4184,7 @@ test_read_attribute(void)
     for (i = 0; i < data_size / ATTRIBUTE_READ_TEST_ATTR_DTYPE_SIZE; i++)
         ((int *) data)[i] = (int) i;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Writing to the attribute\n");
 #endif
 
@@ -4208,7 +4208,7 @@ test_read_attribute(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Reading from the attribute\n");
 #endif
 
@@ -4326,7 +4326,7 @@ test_rename_attribute(void)
     }
 
     H5E_BEGIN_TRY {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to rename the attribute with H5Arename\n");
 #endif
 
@@ -4336,7 +4336,7 @@ test_rename_attribute(void)
             goto error;
         }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to rename the attribute with H5Arename_by_name\n");
 #endif
 
@@ -4445,7 +4445,7 @@ test_get_number_attributes(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to retrieve the number of attributes on a group with H5Oget_info\n");
 #endif
 
@@ -4462,7 +4462,7 @@ test_get_number_attributes(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to retrieve the number of attributes on a group with H5Oget_info_by_name\n");
 #endif
 
@@ -4478,7 +4478,7 @@ test_get_number_attributes(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to retrieve the number of attributes on a group with H5Oget_info_by_idx\n");
 #endif
 
@@ -4597,7 +4597,7 @@ test_attribute_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("Creating attributes on dataset\n");
 #endif
 
@@ -4629,7 +4629,7 @@ test_attribute_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("Verifying that the attributes exist\n");
 #endif
 
@@ -4682,7 +4682,7 @@ test_attribute_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("Iterating over attributes by attribute name in increasing order with H5Aiterate2\n");
 #endif
 
@@ -4693,7 +4693,7 @@ test_attribute_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("Iterating over attributes by attribute name in decreasing order with H5Aiterate2\n");
 #endif
 
@@ -4703,7 +4703,7 @@ test_attribute_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("Iterating over attributes by creation order in increasing order with H5Aiterate2\n");
 #endif
 
@@ -4713,7 +4713,7 @@ test_attribute_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("Iterating over attributes by creation order in decreasing order with H5Aiterate2\n");
 #endif
 
@@ -4723,7 +4723,7 @@ test_attribute_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("Iterating over attributes by attribute name in increasing order with H5Aiterate_by_name\n");
 #endif
 
@@ -4734,7 +4734,7 @@ test_attribute_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("Iterating over attributes by attribute name in decreasing order with H5Aiterate_by_name\n");
 #endif
 
@@ -4745,7 +4745,7 @@ test_attribute_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("Iterating over attributes by creation order in increasing order with H5Aiterate_by_name\n");
 #endif
 
@@ -4756,7 +4756,7 @@ test_attribute_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("Iterating over attributes by creation order in decreasing order with H5Aiterate_by_name\n");
 #endif
 
@@ -4970,7 +4970,7 @@ test_unused_attribute_API_calls(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing that all of the unused attribute API calls don't cause application issues\n");
 #endif
 
@@ -5071,7 +5071,7 @@ test_attribute_property_lists(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Setting property on ACPL\n");
 #endif
 
@@ -5145,7 +5145,7 @@ test_attribute_property_lists(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Checking that property set on ACPL was retrieved correctly\n");
 #endif
 
@@ -5295,7 +5295,7 @@ test_create_dataset_under_root(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating a dataset under the root group\n");
 #endif
 
@@ -5379,7 +5379,7 @@ test_create_anonymous_dataset(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating an anonymous dataset\n");
 #endif
 
@@ -5389,7 +5389,7 @@ test_create_anonymous_dataset(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Linking the anonymous dataset into the file structure\n");
 #endif
 
@@ -5474,7 +5474,7 @@ test_create_dataset_under_existing_group(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating dataset under non-root group\n");
 #endif
 
@@ -5560,7 +5560,7 @@ static int test_create_dataset_null_space(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("Creating dataset with NULL dataspace\n");
 #endif
 
@@ -5658,7 +5658,7 @@ static int test_create_dataset_scalar_space(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("Creating dataset with SCALAR dataspace\n");
 #endif
 
@@ -5758,7 +5758,7 @@ test_create_dataset_predefined_types(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating datasets with the different predefined integer/floating-point datatypes\n");
 #endif
 
@@ -5882,7 +5882,7 @@ test_create_dataset_string_types(void)
     if ((fspace_id = H5Screate_simple(DATASET_STRING_TYPE_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating dataset with fixed-length string datatype\n");
 #endif
 
@@ -5892,7 +5892,7 @@ test_create_dataset_string_types(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating dataset with variable-length string datatype\n");
 #endif
 
@@ -5902,7 +5902,7 @@ test_create_dataset_string_types(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to re-open the datasets\n");
 #endif
 
@@ -6014,7 +6014,7 @@ test_create_dataset_compound_types(void)
 
     num_passes = (rand() % DATASET_COMPOUND_TYPE_TEST_MAX_PASSES) + 1;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating datasets with a variety of randomly-generated compound datatypes\n");
 #endif
 
@@ -6203,7 +6203,7 @@ test_create_dataset_enum_types(void)
     if ((fspace_id = H5Screate_simple(DATASET_ENUM_TYPE_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating dataset with native enum datatype\n");
 #endif
 
@@ -6213,7 +6213,7 @@ test_create_dataset_enum_types(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating dataset with non-native enum datatype\n");
 #endif
 
@@ -6223,7 +6223,7 @@ test_create_dataset_enum_types(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to re-open the datasets\n");
 #endif
 
@@ -6390,7 +6390,7 @@ test_create_dataset_array_types(void)
     if ((fspace_id = H5Screate_simple(DATASET_ARRAY_TYPE_TEST_SPACE_RANK, dset_dims, NULL)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating datasets with variet of randomly-generated array datatypes\n");
 #endif
 
@@ -6417,7 +6417,7 @@ test_create_dataset_array_types(void)
     }
 #endif
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to re-open the datasets\n");
 #endif
 
@@ -6551,7 +6551,7 @@ test_create_dataset_shapes(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating datasets with a variety of randomly-generated dataspace shapes\n");
 #endif
 
@@ -6675,7 +6675,7 @@ test_create_dataset_creation_properties(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating a variety of datasets with different creation properties\n");
 #endif
 
@@ -6686,7 +6686,7 @@ test_create_dataset_creation_properties(void)
                 H5D_ALLOC_TIME_INCR, H5D_ALLOC_TIME_LATE
         };
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing the alloc time property\n");
 #endif
 
@@ -6731,7 +6731,7 @@ test_create_dataset_creation_properties(void)
                 H5P_CRT_ORDER_TRACKED | H5P_CRT_ORDER_INDEXED
         };
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing the attribute creation order property\n");
 #endif
 
@@ -6771,7 +6771,7 @@ test_create_dataset_creation_properties(void)
 
     /* Test the attribute phase change property */
     {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing the attribute phase change property\n");
 #endif
 
@@ -6811,7 +6811,7 @@ test_create_dataset_creation_properties(void)
                 H5D_FILL_TIME_NEVER
         };
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing the fill time property\n");
 #endif
 
@@ -6865,7 +6865,7 @@ test_create_dataset_creation_properties(void)
                 H5D_COMPACT, H5D_CONTIGUOUS, H5D_CHUNKED
         };
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing the storage layout property\n");
 #endif
 
@@ -6916,7 +6916,7 @@ test_create_dataset_creation_properties(void)
 
     /* Test the "track object times" property */
     {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing the object time tracking property\n");
 #endif
 
@@ -7079,7 +7079,7 @@ test_write_dataset_small_all(void)
     for (i = 0; i < (hsize_t) space_npoints; i++)
         ((int *) data)[i] = (int) i;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Writing to entire dataset with a small amount of data\n");
 #endif
 
@@ -7196,7 +7196,7 @@ test_write_dataset_small_hyperslab(void)
     if (H5Sselect_hyperslab(fspace_id, H5S_SELECT_SET, start, stride, count, block) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Writing small amount of data to dataset using a hyperslab selection\n");
 #endif
 
@@ -7310,7 +7310,7 @@ test_write_dataset_small_point_selection(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Writing a small amount of data to dataset using a point selection\n");
 #endif
 
@@ -7431,7 +7431,7 @@ test_write_dataset_large_all(void)
     for (i = 0; i < (hsize_t) space_npoints; i++)
         ((int *) data)[i] = (int) i;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Writing to entire dataset with a large amount of data\n");
 #endif
 
@@ -7545,7 +7545,7 @@ test_write_dataset_large_hyperslab(void)
     if (H5Sselect_hyperslab(fspace_id, H5S_SELECT_SET, start, stride, count, block) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Writing large amount of data to dataset using a hyperslab selection\n");
 #endif
 
@@ -7658,7 +7658,7 @@ test_read_dataset_small_all(void)
     if (NULL == (read_buf = malloc(data_size)))
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Reading entirety of small dataset\n");
 #endif
 
@@ -7772,7 +7772,7 @@ test_read_dataset_small_hyperslab(void)
     if (NULL == (read_buf = malloc(data_size)))
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Reading portion of small dataset using hyperslab selection\n");
 #endif
 
@@ -7887,7 +7887,7 @@ test_read_dataset_small_point_selection(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Reading portion of small dataset using a point selection\n");
 #endif
 
@@ -7987,7 +7987,7 @@ test_read_dataset_large_all(void)
     if (NULL == (read_buf = malloc(data_size)))
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Reading entirety of large dataset\n");
 #endif
 
@@ -8099,7 +8099,7 @@ test_read_dataset_large_hyperslab(void)
     if (NULL == (read_buf = malloc(data_size)))
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Reading portion of large dataset using hyperslab selection\n");
 #endif
 
@@ -8213,7 +8213,7 @@ test_read_dataset_large_point_selection(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Reading portion of large dataset using a point selection\n");
 #endif
 
@@ -8317,7 +8317,7 @@ test_write_dataset_data_verification(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Writing to dataset using H5S_ALL\n");
 #endif
 
@@ -8368,7 +8368,7 @@ test_write_dataset_data_verification(void)
     if (NULL == (data = malloc((hsize_t) space_npoints * DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE)))
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the data that comes back is correct after writing to entire dataset\n");
 #endif
 
@@ -8390,7 +8390,7 @@ test_write_dataset_data_verification(void)
         data = NULL;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Writing to dataset using hyperslab selection\n");
 #endif
 
@@ -8463,7 +8463,7 @@ test_write_dataset_data_verification(void)
     if (NULL == (read_buf = malloc((hsize_t) space_npoints * DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE)))
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the data that comes back is correct after writing to the dataset using a hyperslab selection\n");
 #endif
 
@@ -8494,7 +8494,7 @@ test_write_dataset_data_verification(void)
         read_buf = NULL;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Writing to dataset using point selection\n");
 #endif
 
@@ -8576,7 +8576,7 @@ test_write_dataset_data_verification(void)
     if (NULL == (read_buf = malloc((hsize_t) space_npoints * DATASET_DATA_VERIFY_WRITE_TEST_DSET_DTYPESIZE)))
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the data that comes back is correct after writing to dataset using point selection\n");
 #endif
 
@@ -8692,7 +8692,7 @@ test_dataset_set_extent(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing use of H5Dset_extent to change dataset's extent\n");
 #endif
 
@@ -8787,7 +8787,7 @@ test_unused_dataset_API_calls(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing that all of the unused dataset API calls don't cause application issues\n");
 #endif
 
@@ -8900,7 +8900,7 @@ test_dataset_property_lists(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Setting property on DCPL\n");
 #endif
 
@@ -8952,7 +8952,7 @@ test_dataset_property_lists(void)
             goto error;
         }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Ensuring that the property on the DCPL was received back correctly\n");
 #endif
 
@@ -8978,7 +8978,7 @@ test_dataset_property_lists(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Setting property on DAPL\n");
 #endif
 
@@ -9022,7 +9022,7 @@ test_dataset_property_lists(void)
     {
         ssize_t buf_size = 0;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Ensuring that the property on the DAPL was received back correctly\n");
 #endif
 
@@ -9244,7 +9244,7 @@ test_create_committed_datatype(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Committing datatype\n");
 #endif
 
@@ -9316,7 +9316,7 @@ test_create_anonymous_committed_datatype(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Committing anonymous datatype\n");
 #endif
 
@@ -9326,7 +9326,7 @@ test_create_anonymous_committed_datatype(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Linking anonymous datatype into file structure\n");
 #endif
 
@@ -9439,7 +9439,7 @@ test_create_dataset_with_committed_type(void)
     if ((fspace_id = H5Screate_simple(DATATYPE_CREATE_TEST_DATASET_DIMS, dims, NULL)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating dataset with a committed type\n");
 #endif
 
@@ -9552,7 +9552,7 @@ test_create_attribute_with_committed_type(void)
     if ((space_id = H5Screate_simple(ATTRIBUTE_CREATE_WITH_DATATYPE_TEST_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating attribute with a committed type\n");
 #endif
 
@@ -9663,7 +9663,7 @@ test_delete_committed_type(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Deleting committed type with H5Ldelete\n");
 #endif
 
@@ -9718,7 +9718,7 @@ test_unused_datatype_API_calls(void)
     TESTING("unused datatype API calls")
 
     /* None currently that aren't planned to be used */
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Currently no API calls to test here\n");
 #endif
 
@@ -9922,7 +9922,7 @@ test_create_hard_link(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating a hard link\n");
 #endif
 
@@ -9933,7 +9933,7 @@ test_create_hard_link(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the link exists\n");
 #endif
 
@@ -10036,7 +10036,7 @@ test_create_hard_link_same_loc(void)
     }
 
 #if 0 /* Library functionality for this part of the test is broken */
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Calling H5Lcreate_hard with H5L_SAME_LOC as first parameter\n");
 #endif
 
@@ -10060,7 +10060,7 @@ test_create_hard_link_same_loc(void)
     }
 #endif
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Calling H5Lcreate_hard with H5L_SAME_LOC as second parameter\n");
 #endif
 
@@ -10178,7 +10178,7 @@ test_create_soft_link_existing_relative(void)
     if (H5Dclose(dset_id) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating soft link with relative path value to an existing object\n");
 #endif
 
@@ -10189,7 +10189,7 @@ test_create_soft_link_existing_relative(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the link exists\n");
 #endif
 
@@ -10283,7 +10283,7 @@ test_create_soft_link_existing_absolute(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating a soft link with absolute path value to an existing object\n");
 #endif
 
@@ -10293,7 +10293,7 @@ test_create_soft_link_existing_absolute(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the link exists\n");
 #endif
 
@@ -10388,7 +10388,7 @@ test_create_soft_link_dangling_relative(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating a dangling soft link with relative path value\n");
 #endif
 
@@ -10399,7 +10399,7 @@ test_create_soft_link_dangling_relative(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the link exists\n");
 #endif
 
@@ -10525,7 +10525,7 @@ test_create_soft_link_dangling_absolute(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating dangling soft link with absolute path value\n");
 #endif
 
@@ -10536,7 +10536,7 @@ test_create_soft_link_dangling_absolute(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the link exists\n");
 #endif
 
@@ -10667,7 +10667,7 @@ test_create_external_link(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating an external link to root group of other file\n");
 #endif
 
@@ -10678,7 +10678,7 @@ test_create_external_link(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the link exists\n");
 #endif
 
@@ -10778,7 +10778,7 @@ test_create_dangling_external_link(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating a dangling external link to a dataset in other file\n");
 #endif
 
@@ -10789,7 +10789,7 @@ test_create_dangling_external_link(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the link exists\n");
 #endif
 
@@ -10806,7 +10806,7 @@ test_create_dangling_external_link(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to open non-existent dataset using dangling external link\n");
 #endif
 
@@ -10827,7 +10827,7 @@ test_create_dangling_external_link(void)
     if ((dset_dspace = H5Screate_simple(EXTERNAL_LINK_TEST_DANGLING_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating target dataset for dangling external link\n");
 #endif
 
@@ -10841,7 +10841,7 @@ test_create_dangling_external_link(void)
     if (H5Dclose(dset_id) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Re-attempting to open dataset using external link\n");
 #endif
 
@@ -10924,7 +10924,7 @@ test_create_user_defined_link(void)
     if ((udata_size = snprintf(udata, UD_LINK_TEST_UDATA_MAX_SIZE, "udata")) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating user-defined link\n");
 #endif
 
@@ -10937,7 +10937,7 @@ test_create_user_defined_link(void)
         }
     } H5E_END_TRY;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that the link exists\n");
 #endif
 
@@ -11142,7 +11142,7 @@ test_delete_link(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Deleting links with H5Ldelete\n");
 #endif
 
@@ -11164,7 +11164,7 @@ test_delete_link(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Deleting links with H5Ldelete_by_idx\n");
 #endif
 
@@ -11188,7 +11188,7 @@ test_delete_link(void)
         }
     } H5E_END_TRY;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that all links have been deleted\n");
 #endif
 
@@ -11381,7 +11381,7 @@ test_copy_link(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to copy a hard link to another location\n");
 #endif
 
@@ -11430,7 +11430,7 @@ test_copy_link(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to copy a soft link to another location\n");
 #endif
 
@@ -11571,7 +11571,7 @@ test_move_link(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to move a hard link to another location\n");
 #endif
 
@@ -11633,7 +11633,7 @@ test_move_link(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to move a soft link to another location\n");
 #endif
 
@@ -11817,7 +11817,7 @@ test_get_link_info(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving hard link info with H5Lget_info\n");
 #endif
 
@@ -11835,7 +11835,7 @@ test_get_link_info(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving soft link info with H5Lget_info\n");
 #endif
 
@@ -11854,7 +11854,7 @@ test_get_link_info(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving external link info with H5Lget_info\n");
 #endif
 
@@ -11873,7 +11873,7 @@ test_get_link_info(void)
     }
 
     H5E_BEGIN_TRY {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving hard link info with H5Lget_info_by_idx\n");
 #endif
 
@@ -11893,7 +11893,7 @@ test_get_link_info(void)
         }
 #endif
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving soft link info with H5Lget_info_by_idx\n");
 #endif
 
@@ -11914,7 +11914,7 @@ test_get_link_info(void)
         }
 #endif
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving external link info with H5Lget_info_by_idx\n");
 #endif
 
@@ -12044,7 +12044,7 @@ test_get_link_name(void)
     }
 
     H5E_BEGIN_TRY {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         puts("Retrieving size of link name\n");
 #endif
 
@@ -12060,7 +12060,7 @@ test_get_link_name(void)
             TEST_ERROR
 #endif
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving link name\n");
 #endif
 
@@ -12217,7 +12217,7 @@ test_get_link_val(void)
     if (NULL == (link_val_buf = (char *) malloc(link_val_buf_size)))
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving value of soft link with H5Lget_val\n");
 #endif
 
@@ -12257,7 +12257,7 @@ test_get_link_val(void)
         link_val_buf = tmp_realloc;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving value of external link with H5Lget_val\n");
 #endif
 
@@ -12310,7 +12310,7 @@ test_get_link_val(void)
             link_val_buf = tmp_realloc;
         }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving value of soft link with H5Lget_val_by_idx\n");
 #endif
 
@@ -12352,7 +12352,7 @@ test_get_link_val(void)
             link_val_buf = tmp_realloc;
         }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving value of external link with H5Lget_val_by_idx\n");
 #endif
 
@@ -12524,7 +12524,7 @@ test_link_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link name in increasing order with H5Literate\n");
 #endif
 
@@ -12535,7 +12535,7 @@ test_link_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link name in decreasing order with H5Literate\n");
 #endif
 
@@ -12545,7 +12545,7 @@ test_link_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link creation order in increasing order with H5Literate\n");
 #endif
 
@@ -12555,7 +12555,7 @@ test_link_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link creation order in decreasing order with H5Literate\n");
 #endif
 
@@ -12565,7 +12565,7 @@ test_link_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link name in increasing order with H5Literate_by_name\n");
 #endif
 
@@ -12576,7 +12576,7 @@ test_link_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link name in decreasing order with H5Literate_by_name\n");
 #endif
 
@@ -12587,7 +12587,7 @@ test_link_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link creation order in increasing order with H5Literate_by_name\n");
 #endif
 
@@ -12598,7 +12598,7 @@ test_link_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link creation order in decreasing order with H5Literate_by_name\n");
 #endif
 
@@ -12609,7 +12609,7 @@ test_link_iterate(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing H5Literate's index-saving capability in increasing iteration order\n");
 #endif
 
@@ -12635,7 +12635,7 @@ test_link_iterate(void)
     saved_idx = LINK_ITER_TEST_NUM_LINKS - 1;
     halted = 0;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing H5Literate's index-saving capability in decreasing iteration order\n");
 #endif
 
@@ -12727,7 +12727,7 @@ test_link_iterate_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link name in increasing order with H5Literate\n");
 #endif
 
@@ -12738,7 +12738,7 @@ test_link_iterate_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link name in decreasing order with H5Literate\n");
 #endif
 
@@ -12748,7 +12748,7 @@ test_link_iterate_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link creation order in increasing order with H5Literate\n");
 #endif
 
@@ -12758,7 +12758,7 @@ test_link_iterate_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link creation order in decreasing order with H5Literate\n");
 #endif
 
@@ -12768,7 +12768,7 @@ test_link_iterate_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link name in increasing order with H5Literate_by_name\n");
 #endif
 
@@ -12779,7 +12779,7 @@ test_link_iterate_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link name in decreasing order with H5Literate_by_name\n");
 #endif
 
@@ -12790,7 +12790,7 @@ test_link_iterate_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link creation order in increasing order with H5Literate_by_name\n");
 #endif
 
@@ -12801,7 +12801,7 @@ test_link_iterate_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link creation order in decreasing order with H5Literate_by_name\n");
 #endif
 
@@ -12995,7 +12995,7 @@ test_link_visit(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link name in increasing order with H5Lvisit\n");
 #endif
 
@@ -13005,7 +13005,7 @@ test_link_visit(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link name in decreasing order with H5Lvisit\n");
 #endif
 
@@ -13015,7 +13015,7 @@ test_link_visit(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link creation order in increasing order with H5Lvisit\n");
 #endif
 
@@ -13025,7 +13025,7 @@ test_link_visit(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link creation order in decreasing order with H5Lvisit\n");
 #endif
 
@@ -13035,7 +13035,7 @@ test_link_visit(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link name in increasing order with H5Lvisit_by_name\n");
 #endif
 
@@ -13046,7 +13046,7 @@ test_link_visit(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link name in decreasing order with H5Lvisit_by_name\n");
 #endif
 
@@ -13057,7 +13057,7 @@ test_link_visit(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link creation order in increasing order with H5Lvisit_by_name\n");
 #endif
 
@@ -13068,7 +13068,7 @@ test_link_visit(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link creation order in decreasing order with H5Lvisit_by_name\n");
 #endif
 
@@ -13243,7 +13243,7 @@ test_link_visit_cycles(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link name in increasing order with H5Lvisit\n");
 #endif
 
@@ -13253,7 +13253,7 @@ test_link_visit_cycles(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link name in decreasing order with H5Lvisit\n");
 #endif
 
@@ -13263,7 +13263,7 @@ test_link_visit_cycles(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link creation order in increasing order with H5Lvisit\n");
 #endif
 
@@ -13273,7 +13273,7 @@ test_link_visit_cycles(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link creation order in decreasing order with H5Lvisit\n");
 #endif
 
@@ -13283,7 +13283,7 @@ test_link_visit_cycles(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link name in increasing order with H5Lvisit_by_name\n");
 #endif
 
@@ -13294,7 +13294,7 @@ test_link_visit_cycles(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link name in decreasing order with H5Lvisit_by_name\n");
 #endif
 
@@ -13305,7 +13305,7 @@ test_link_visit_cycles(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link creation order in increasing order with H5Lvisit_by_name\n");
 #endif
 
@@ -13316,7 +13316,7 @@ test_link_visit_cycles(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link creation order in decreasing order with H5Lvisit_by_name\n");
 #endif
 
@@ -13407,7 +13407,7 @@ test_link_visit_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link name in increasing order with H5Lvisit\n");
 #endif
 
@@ -13417,7 +13417,7 @@ test_link_visit_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link name in decreasing order with H5Lvisit\n");
 #endif
 
@@ -13427,7 +13427,7 @@ test_link_visit_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link creation order in increasing order with H5Lvisit\n");
 #endif
 
@@ -13437,7 +13437,7 @@ test_link_visit_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link creation order in decreasing order with H5Lvisit\n");
 #endif
 
@@ -13447,7 +13447,7 @@ test_link_visit_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link name in increasing order with H5Lvisit_by_name\n");
 #endif
 
@@ -13458,7 +13458,7 @@ test_link_visit_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link name in decreasing order with H5Lvisit_by_name\n");
 #endif
 
@@ -13469,7 +13469,7 @@ test_link_visit_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link creation order in increasing order with H5Lvisit_by_name\n");
 #endif
 
@@ -13480,7 +13480,7 @@ test_link_visit_0_links(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Recursively iterating over links by link creation order in decreasing order with H5Lvisit_by_name\n");
 #endif
 
@@ -13530,7 +13530,7 @@ test_unused_link_API_calls(void)
     TESTING("unused link API calls")
 
     /* None currently that aren't planned to be used */
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Currently no API calls to test here\n");
 #endif
 
@@ -13598,7 +13598,7 @@ test_open_dataset_generically(void)
     if (H5Dclose(dset_id) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Opening dataset with H5Oopen\n");
 #endif
 
@@ -13614,7 +13614,7 @@ test_open_dataset_generically(void)
             TEST_ERROR
 #endif
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Opening dataset with H5Oopen_by_idx\n");
 #endif
 
@@ -13629,7 +13629,7 @@ test_open_dataset_generically(void)
             TEST_ERROR
 #endif
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Opening dataset with H5Oopen_by_addr\n");
 #endif
 
@@ -13712,7 +13712,7 @@ test_open_group_generically(void)
     if (H5Gclose(group_id) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Opening group with H5Oopen\n");
 #endif
 
@@ -13728,7 +13728,7 @@ test_open_group_generically(void)
             TEST_ERROR
 #endif
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Opening group with H5Oopen_by_idx\n");
 #endif
 
@@ -13743,7 +13743,7 @@ test_open_group_generically(void)
             TEST_ERROR
 #endif
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Opening group with H5Oopen_by_addr\n");
 #endif
 
@@ -13825,7 +13825,7 @@ test_open_datatype_generically(void)
     if (H5Tclose(type_id) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Opening datatype with H5Oopen\n");
 #endif
 
@@ -13841,7 +13841,7 @@ test_open_datatype_generically(void)
             TEST_ERROR
 #endif
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Opening datatype with H5Oopen_by_idx\n");
 #endif
 
@@ -13856,7 +13856,7 @@ test_open_datatype_generically(void)
             TEST_ERROR
 #endif
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Opening datatype with H5Oopen_by_addr\n");
 #endif
 
@@ -14052,7 +14052,7 @@ test_incr_decr_refcount(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing unsupported APIs H5Oincr/decr_refcount\n");
 #endif
 
@@ -14135,7 +14135,7 @@ test_h5o_copy(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Copying object with H5Ocopy\n");
 #endif
 
@@ -14266,7 +14266,7 @@ test_h5o_close(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Making sure H5Oclose does its job correctly\n");
 #endif
 
@@ -14338,7 +14338,7 @@ test_object_visit(void)
     }
 
     H5E_BEGIN_TRY {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Visiting objects with H5Ovisit\n");
 #endif
 
@@ -14348,7 +14348,7 @@ test_object_visit(void)
             goto error;
         }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Visiting objects with H5Ovisit_by_name\n");
 #endif
 
@@ -14405,7 +14405,7 @@ test_create_obj_ref(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating an object reference\n");
 #endif
 
@@ -14546,7 +14546,7 @@ test_get_ref_type(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving the type of the referenced object for this reference\n");
 #endif
 
@@ -14569,7 +14569,7 @@ test_get_ref_type(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving the type of the referenced object for this reference\n");
 #endif
 
@@ -14592,7 +14592,7 @@ test_get_ref_type(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Retrieving the type of the referenced object for this reference\n");
 #endif
 
@@ -14828,7 +14828,7 @@ test_write_dataset_w_obj_refs(void)
         }
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Writing to dataset with buffer of object references\n");
 #endif
 
@@ -15050,7 +15050,7 @@ test_read_dataset_w_obj_refs(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Reading from dataset with object reference type\n");
 #endif
 
@@ -15232,7 +15232,7 @@ test_write_dataset_w_obj_refs_empty_data(void)
         }
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Writing to dataset with buffer of empty object references\n");
 #endif
 
@@ -15301,7 +15301,7 @@ test_unused_object_API_calls(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing that all of the unused object API calls don't cause application issues\n");
 #endif
 
@@ -15412,7 +15412,7 @@ test_open_link_without_leading_slash(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Testing that an object can be opened by a relative path\n");
 #endif
 
@@ -15501,7 +15501,7 @@ test_object_creation_by_absolute_path(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating a variety of objects using absolute pathnames\n");
 #endif
 
@@ -15544,7 +15544,7 @@ test_object_creation_by_absolute_path(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that all of the objects exist in the correct place\n");
 #endif
 
@@ -15699,7 +15699,7 @@ test_absolute_vs_relative_path(void)
     if ((dset_dtype6 = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating a variety of datasets using different forms of absolute and relative pathnames\n");
 #endif
 
@@ -15751,7 +15751,7 @@ test_absolute_vs_relative_path(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Verifying that all of the datasets are in the correct place\n");
 #endif
 
@@ -15973,7 +15973,7 @@ test_url_encoding(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating group with variety of symbols in name\n");
 #endif
 
@@ -15994,7 +15994,7 @@ test_url_encoding(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating dataset with variety of symbols in name\n");
 #endif
 
@@ -16005,7 +16005,7 @@ test_url_encoding(void)
         goto error;
     }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Creating attribute with variety of symbols in name\n");
 #endif
 
@@ -16023,7 +16023,7 @@ test_url_encoding(void)
     if (H5Gclose(group_id) < 0)
         TEST_ERROR
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     puts("Attempting to re-open these objects\n");
 #endif
 

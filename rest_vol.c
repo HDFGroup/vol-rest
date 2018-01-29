@@ -339,7 +339,7 @@ struct curl_slist *curl_headers = NULL;
  */
 static char *base_URL = NULL;
 
-#ifdef TRACK_MEM_USAGE
+#ifdef RV_TRACK_MEM_USAGE
 /*
  * Counter to keep track of the currently allocated amount of bytes
  */
@@ -649,7 +649,7 @@ static herr_t RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbo
 static void   RV_free_link_table(link_table_entry *link_table, size_t num_entries);
 static herr_t RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_data *iter_data, const char *cur_link_rel_path);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
 /* Helper functions to print out useful debugging information */
 static const char *object_type_to_string(H5I_type_t obj_type);
 static const char *object_type_to_string2(H5O_type_t obj_type);
@@ -770,7 +770,7 @@ RVinit(void)
     if (REST_g >= 0)
         FUNC_GOTO_DONE(SUCCEED)
 
-#ifdef TRACK_MEM_USAGE
+#ifdef RV_TRACK_MEM_USAGE
     /* Initialize allocated memory counter */
     rest_curr_alloc_bytes = 0;
 #endif
@@ -800,7 +800,7 @@ RVinit(void)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READFUNCTION, curl_read_data_callback))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL read function: %s", curl_err_buf)
 
-#ifdef CURL_DEBUG
+#ifdef RV_CURL_DEBUG
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
 #endif
 
@@ -886,7 +886,7 @@ RVterm(void)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't close REST VOL plugin")
 
 done:
-#ifdef TRACK_MEM_USAGE
+#ifdef RV_TRACK_MEM_USAGE
     /* Check for allocated memory */
     if (0 != rest_curr_alloc_bytes)
         FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "%zu bytes were still left allocated", rest_curr_alloc_bytes)
@@ -1064,7 +1064,7 @@ RV_malloc(size_t size)
     void *ret_value = NULL;
 
     if (size) {
-#ifdef TRACK_MEM_USAGE
+#ifdef RV_TRACK_MEM_USAGE
         size_t block_size = size;
 
         /* Keep track of the allocated size */
@@ -1110,7 +1110,7 @@ RV_calloc(size_t size)
     void *ret_value = NULL;
 
     if (size) {
-#ifdef TRACK_MEM_USAGE
+#ifdef RV_TRACK_MEM_USAGE
         if (NULL != (ret_value = RV_malloc(size)))
             memset(ret_value, 0, size);
 #else
@@ -1150,7 +1150,7 @@ RV_realloc(void *mem, size_t size)
     void *ret_value = NULL;
 
     if (!(NULL == mem && 0 == size)) {
-#ifdef TRACK_MEM_USAGE
+#ifdef RV_TRACK_MEM_USAGE
         if (size > 0) {
             if (mem) {
                 size_t block_size;
@@ -1197,7 +1197,7 @@ static void *
 RV_free(void *mem)
 {
     if (mem) {
-#ifdef TRACK_MEM_USAGE
+#ifdef RV_TRACK_MEM_USAGE
         size_t block_size;
 
         memcpy(&block_size, (char *) mem - sizeof(block_size), sizeof(block_size));
@@ -1252,7 +1252,7 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
     int          url_len = 0;
     void        *ret_value = NULL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received attribute create call with following parameters:\n");
 
     if (H5VL_OBJECT_BY_NAME == loc_params.type) {
@@ -1307,7 +1307,7 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
         if (!search_ret || search_ret < 0)
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, NULL, "can't locate object that attribute is to be attached to")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> H5Acreate_by_name(): found attribute's parent object by given path\n");
         printf("-> H5Acreate_by_name(): new attribute's parent object URI: %s\n", new_attribute->u.attribute.parent_obj_URI);
         printf("-> H5Acreate_by_name(): new attribute's parent object type: %s\n\n", object_type_to_string(new_attribute->u.attribute.parent_obj_type));
@@ -1383,7 +1383,7 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
     if ((size_t) create_request_body_len >= create_request_nalloc)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "attribute create request body size exceeded allocated buffer size")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Attribute create request JSON:\n%s\n\n", create_request_body);
 #endif
 
@@ -1466,7 +1466,7 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "parent object not a group, datatype or dataset")
     } /* end switch */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> URL for attribute creation request: %s\n\n", request_url);
 #endif
 
@@ -1484,7 +1484,7 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Creating attribute\n\n");
 
     printf("   /**********************************\\\n");
@@ -1494,14 +1494,14 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
 
     CURL_PERFORM(curl, H5E_ATTR, H5E_CANTCREATE, NULL);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Created attribute\n\n");
 #endif
 
     ret_value = (void *) new_attribute;
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Attribute create response buffer:\n%s\n\n", response_buffer.buffer);
 
     if (new_attribute && ret_value) {
@@ -1572,7 +1572,7 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
     int          url_len = 0;
     void        *ret_value = NULL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received attribute open call with following parameters:\n");
 
     if (H5VL_OBJECT_BY_NAME == loc_params.type) {
@@ -1641,7 +1641,7 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
             if (!search_ret || search_ret < 0)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, NULL, "can't locate object that attribute is attached to")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> H5Aopen_by_name(): found attribute's parent object by given path\n");
             printf("-> H5Aopen_by_name(): attribute's parent object URI: %s\n", attribute->u.attribute.parent_obj_URI);
             printf("-> H5Aopen_by_name(): attribute's parent object type: %s\n\n", object_type_to_string(attribute->u.attribute.parent_obj_type));
@@ -1742,7 +1742,7 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "parent object not a group, datatype or dataset")
     } /* end switch */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> URL for attribute open request: %s\n\n", request_url);
 #endif
 
@@ -1753,7 +1753,7 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Retrieving attribute's info\n\n");
 
     printf("   /**********************************\\\n");
@@ -1795,7 +1795,7 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
     ret_value = (void *) attribute;
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Attribute open response buffer:\n%s\n\n", response_buffer.buffer);
 
     if (attribute && ret_value) {
@@ -1854,7 +1854,7 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
     int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received attribute read call with following parameters:\n");
     printf("     - Attribute's object type: %s\n", object_type_to_string(attribute->obj_type));
     if (H5I_ATTR == attribute->obj_type && attribute->u.attribute.attr_name)
@@ -1882,7 +1882,7 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
     if (0 == (dtype_size = H5Tget_size(dtype_id)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> %lld points selected for attribute read\n", file_select_npoints);
     printf("-> Attribute's datatype size: %zu\n\n", dtype_size);
 #endif
@@ -1966,7 +1966,7 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
     } /* end switch */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> URL for attribute read request: %s\n\n", request_url);
 #endif
 
@@ -1977,7 +1977,7 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Reading attribute\n\n");
 
     printf("   /**********************************\\\n");
@@ -1990,7 +1990,7 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
     memcpy(buf, response_buffer.buffer, (size_t) file_select_npoints * dtype_size);
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Attribute read response buffer:\n%s\n\n", response_buffer.buffer);
 #endif
 
@@ -2038,7 +2038,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
     int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received attribute write call with following parameters:\n");
     printf("     - Attribute's object type: %s\n", object_type_to_string(attribute->obj_type));
     if (H5I_ATTR == attribute->obj_type && attribute->u.attribute.attr_name)
@@ -2068,7 +2068,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
     if (0 == (dtype_size = H5Tget_size(dtype_id)))
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory datatype is invalid")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> %lld points selected for attribute write\n", file_select_npoints);
     printf("-> Attribute's datatype size: %zu\n\n", dtype_size);
 #endif
@@ -2154,7 +2154,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
     } /* end switch */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> URL for attribute write request: %s\n\n", request_url);
 #endif
 
@@ -2180,7 +2180,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Writing attribute\n\n");
 
     printf("   /**********************************\\\n");
@@ -2191,7 +2191,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
     CURL_PERFORM(curl, H5E_ATTR, H5E_WRITEERROR, FAIL);
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Attribute write response buffer:\n%s\n\n", response_buffer.buffer);
 #endif
 
@@ -2237,7 +2237,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
     int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received attribute get call with following parameters:\n");
     printf("     - Attribute get call type: %s\n\n", attr_get_type_to_string(get_type));
 #endif
@@ -2271,7 +2271,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
                 /* H5Aget_info */
                 case H5VL_OBJECT_BY_SELF:
                 {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Aget_info(): Attribute's parent object URI: %s\n", loc_obj->u.attribute.parent_obj_URI);
                     printf("-> H5Aget_info(): Attribute's parent object type: %s\n\n", object_type_to_string(loc_obj->u.attribute.parent_obj_type));
 #endif
@@ -2345,7 +2345,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
                     htri_t      search_ret;
                     char        parent_obj_URI[URI_MAX_LENGTH];
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Aget_info_by_name(): loc_id object's URI: %s\n", loc_obj->URI);
                     printf("-> H5Aget_info_by_name(): loc_id object type: %s\n", object_type_to_string(loc_obj->obj_type));
                     printf("-> H5Aget_info_by_name(): Path to object that attribute is attached to: %s\n\n", loc_params.loc_data.loc_by_name.name);
@@ -2357,7 +2357,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, FAIL, "can't find parent object by name")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Aget_info_by_name(): found attribute's parent object by given path\n");
                     printf("-> H5Aget_info_by_name(): attribute's parent object URI: %s\n", parent_obj_URI);
                     printf("-> H5Aget_info_by_name(): attribute's parent object type: %s\n\n", object_type_to_string(parent_obj_type));
@@ -2458,7 +2458,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Retrieving attribute info at URL: %s\n\n", request_url);
 
             printf("   /**********************************\\\n");
@@ -2487,7 +2487,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
                 /* H5Aget_name */
                 case H5VL_OBJECT_BY_SELF:
                 {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Aget_name(): Attribute's parent object URI: %s\n", loc_obj->u.attribute.parent_obj_URI);
                     printf("-> H5Aget_name(): Attribute's parent object type: %s\n\n", object_type_to_string(loc_obj->u.attribute.parent_obj_type));
 #endif
@@ -2594,7 +2594,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
     int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received attribute-specific call with following parameters:\n");
     printf("     - Attribute-specific call type: %s\n\n", attr_specific_type_to_string(specific_type));
 #endif
@@ -2623,7 +2623,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                     obj_URI = loc_obj->URI;
                     parent_obj_type = loc_obj->obj_type;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Adelete(): Attribute's name: %s\n", attr_name);
                     printf("-> H5Adelete(): Attribute's parent object URI: %s\n", loc_obj->URI);
                     printf("-> H5Adelete(): Attribute's parent object type: %s\n\n", object_type_to_string(parent_obj_type));
@@ -2639,7 +2639,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
 
                     attr_name = va_arg(arguments, char *);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Adelete_by_name(): loc_id object type: %s\n", object_type_to_string(loc_obj->obj_type));
                     printf("-> H5Adelete_by_name(): Path to object that attribute is attached to: %s\n\n", loc_params.loc_data.loc_by_name.name);
 #endif
@@ -2649,7 +2649,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, FAIL, "can't locate object that attribute is attached to")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Adelete_by_name(): found attribute's parent object by given path\n");
                     printf("-> H5Adelete_by_name(): attribute's parent object URI: %s\n", temp_URI);
                     printf("-> H5Adelete_by_name(): attribute's parent object type: %s\n\n", object_type_to_string(parent_obj_type));
@@ -2756,7 +2756,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Deleting attribute at URL: %s\n\n", request_url);
 
             printf("   /*************************************\\\n");
@@ -2783,7 +2783,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                     obj_URI = loc_obj->URI;
                     parent_obj_type = loc_obj->obj_type;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Aexists(): Attribute's parent object URI: %s\n", loc_obj->URI);
                     printf("-> H5Aexists(): Attribute's parent object type: %s\n\n", object_type_to_string(parent_obj_type));
 #endif
@@ -2796,7 +2796,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                 {
                     htri_t search_ret;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Aexists_by_name(): loc_id object type: %s\n", object_type_to_string(loc_obj->obj_type));
                     printf("-> H5Aexists_by_name(): Path to object that attribute is attached to: %s\n\n", loc_params.loc_data.loc_by_name.name);
 #endif
@@ -2806,7 +2806,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, FAIL, "can't locate object that attribute is attached to")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Aexists_by_name(): found attribute's parent object by given path\n");
                     printf("-> H5Aexists_by_name(): attribute's parent object URI: %s\n", temp_URI);
                     printf("-> H5Aexists_by_name(): attribute's parent object type: %s\n\n", object_type_to_string(parent_obj_type));
@@ -2907,7 +2907,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Attribute existence check at URL: %s\n\n", request_url);
 
             printf("   /**********************************\\\n");
@@ -3005,7 +3005,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                             FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
                     } /* end switch */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Aiterate2(): Attribute's parent object URI: %s\n", loc_obj->URI);
                     printf("-> H5Aiterate2(): Attribute's parent object type: %s\n\n", object_type_to_string(parent_obj_type));
 #endif
@@ -3018,7 +3018,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                 {
                     htri_t search_ret;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Aiterate_by_name(): loc_id object type: %s\n", object_type_to_string(loc_obj->obj_type));
                     printf("-> H5Aiterate_by_name(): Path to object that attribute is attached to: %s\n\n", loc_params.loc_data.loc_by_name.name);
 #endif
@@ -3028,7 +3028,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, FAIL, "can't locate object that attribute is attached to")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Aiterate_by_name(): found attribute's parent object by given path\n");
                     printf("-> H5Aiterate_by_name(): attribute's parent object URI: %s\n", temp_URI);
                     printf("-> H5Aiterate_by_name(): attribute's parent object type: %s\n\n", object_type_to_string(parent_obj_type));
@@ -3195,7 +3195,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Retrieving all attributes attached to object using URL: %s\n\n", request_url);
 
             printf("   /**********************************\\\n");
@@ -3281,7 +3281,7 @@ RV_attr_close(void *attr, hid_t dxpl_id, void **req)
     if (!_attr)
         FUNC_GOTO_DONE(SUCCEED);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received attribute close call with following parameters:\n");
     printf("     - Attribute's object type: %s\n", object_type_to_string(_attr->obj_type));
     if (H5I_ATTR == _attr->obj_type && _attr->u.attribute.attr_name)
@@ -3354,7 +3354,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, hi
     int          url_len = 0;
     void        *ret_value = NULL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received datatype commit call with following parameters:\n");
     printf("     - H5Tcommit variant: %s\n", name ? "H5Tcommit2" : "H5Tcommit_anon");
     if (name) printf("     - Datatype's name: %s\n", name);
@@ -3420,7 +3420,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, hi
                                                   "\"name\": \"%s\""
                                               "}";
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Creating JSON link for datatype\n\n");
 #endif
 
@@ -3473,7 +3473,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, hi
     if ((size_t) commit_request_len >= commit_request_nalloc)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "datatype create request body size exceeded allocated buffer size")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Datatype commit request body:\n%s\n\n", commit_request_body);
 #endif
 
@@ -3499,7 +3499,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, hi
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "datatype create URL size exceeded maximum URL size")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Datatype commit URL: %s\n\n", request_url);
 #endif
 
@@ -3514,7 +3514,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, hi
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Committing datatype\n\n");
 
     printf("   /***********************************\\\n");
@@ -3524,7 +3524,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, hi
 
     CURL_PERFORM(curl, H5E_DATATYPE, H5E_BADVALUE, NULL);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Committed datatype\n\n");
 #endif
 
@@ -3535,7 +3535,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, hi
     ret_value = (void *) new_datatype;
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Datatype commit response buffer:\n%s\n\n", response_buffer.buffer);
 
     if (new_datatype && ret_value) {
@@ -3596,7 +3596,7 @@ RV_datatype_open(void *obj, H5VL_loc_params_t loc_params, const char *name,
     htri_t       search_ret;
     void        *ret_value = NULL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received datatype open call with following parameters:\n");
     printf("     - loc_id object's URI: %s\n", parent->URI);
     printf("     - loc_id object's type: %s\n", object_type_to_string(parent->obj_type));
@@ -3624,7 +3624,7 @@ RV_datatype_open(void *obj, H5VL_loc_params_t loc_params, const char *name,
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't locate datatype by path")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Found datatype by given path\n\n");
 #endif
 
@@ -3651,7 +3651,7 @@ RV_datatype_open(void *obj, H5VL_loc_params_t loc_params, const char *name,
     ret_value = (void *) datatype;
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Datatype open response buffer:\n%s\n\n", response_buffer.buffer);
 
     if (datatype && ret_value) {
@@ -3692,7 +3692,7 @@ RV_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t dxpl_id,
     RV_object_t *dtype = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received datatype get call with following parameters:\n");
     printf("     - Datatype get call type: %s\n", datatype_get_type_to_string(get_type));
     printf("     - Datatype's URI: %s\n", dtype->URI);
@@ -3763,7 +3763,7 @@ RV_datatype_close(void *dt, hid_t dxpl_id, void **req)
     if (!_dtype)
         FUNC_GOTO_DONE(SUCCEED);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received datatype close call with following parameters:\n");
     printf("     - Datatype's URI: %s\n", _dtype->URI);
     printf("     - Datatype's object type: %s\n", object_type_to_string(_dtype->obj_type));
@@ -3824,7 +3824,7 @@ RV_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid
     int          url_len = 0;
     void        *ret_value = NULL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received dataset create call with following parameters:\n");
     printf("     - H5Dcreate variant: %s\n", name ? "H5Dcreate2" : "H5Dcreate_anon");
     if (name) printf("     - Dataset's name: %s\n", name);
@@ -3912,7 +3912,7 @@ RV_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, NULL, "dataset create URL size exceeded maximum URL size")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Dataset creation request URL: %s\n\n", request_url);
 #endif
 
@@ -3927,7 +3927,7 @@ RV_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Creating dataset\n\n");
 
     printf("   /***********************************\\\n");
@@ -3937,7 +3937,7 @@ RV_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid
 
     CURL_PERFORM(curl, H5E_DATASET, H5E_CANTCREATE, NULL);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Created dataset\n\n");
 #endif
 
@@ -3958,7 +3958,7 @@ RV_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid
     ret_value = (void *) new_dataset;
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Dataset create response buffer:\n%s\n\n", response_buffer.buffer);
 
     if (new_dataset && ret_value) {
@@ -4013,7 +4013,7 @@ RV_dataset_open(void *obj, H5VL_loc_params_t loc_params, const char *name,
     htri_t       search_ret;
     void        *ret_value = NULL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received dataset open call with following parameters:\n");
     printf("     - loc_id object's URI: %s\n", parent->URI);
     printf("     - loc_id object's type: %s\n", object_type_to_string(parent->obj_type));
@@ -4042,7 +4042,7 @@ RV_dataset_open(void *obj, H5VL_loc_params_t loc_params, const char *name,
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate dataset by path")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Found dataset by given path\n\n");
 #endif
 
@@ -4075,7 +4075,7 @@ RV_dataset_open(void *obj, H5VL_loc_params_t loc_params, const char *name,
     ret_value = (void *) dataset;
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Dataset open response buffer:\n%s\n\n", response_buffer.buffer);
 
     if (dataset && ret_value) {
@@ -4130,7 +4130,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     int           url_len = 0;
     herr_t        ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received dataset read call with following parameters:\n");
     printf("     - Dataset's URI: %s\n", dataset->URI);
     printf("     - Dataset's object type: %s\n", object_type_to_string(dataset->obj_type));
@@ -4211,7 +4211,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     if (mem_select_npoints != file_select_npoints)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory selection num points != file selection num points")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> %lld points selected in file dataspace\n", file_select_npoints);
     printf("-> %lld points selected in memory dataspace\n\n", mem_select_npoints);
 #endif
@@ -4244,7 +4244,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset read URL size exceeded maximum URL size")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Dataset read URL: %s\n\n", request_url);
 #endif
 
@@ -4289,7 +4289,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
         curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Setup cURL to POST point list for dataset read\n\n");
 #endif
     } /* end if */
@@ -4303,7 +4303,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Reading dataset\n\n");
 
     printf("   /***************************************\\\n");
@@ -4337,7 +4337,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     } /* end else */
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Dataset read response buffer:\n%s\n\n", response_buffer.buffer);
 #endif
 
@@ -4394,7 +4394,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     int           url_len = 0;
     herr_t        ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received dataset write call with following parameters:\n");
     printf("     - Dataset's URI: %s\n", dataset->URI);
     printf("     - Dataset's object type: %s\n", object_type_to_string(dataset->obj_type));
@@ -4479,7 +4479,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     if (mem_select_npoints != file_select_npoints)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory selection num points != file selection num points")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> %lld points selected in file dataspace\n", file_select_npoints);
     printf("-> %lld points selected in memory dataspace\n\n", mem_select_npoints);
 #endif
@@ -4533,7 +4533,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset write URL size exceeded maximum URL size")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Dataset write URL: %s\n\n", request_url);
 #endif
 
@@ -4556,7 +4556,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         if (RV_base64_encode(buf, write_body_len, &base64_encoded_value, &value_body_len) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTENCODE, FAIL, "can't base64-encode write buffer")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Base64-encoded data buffer: %s\n\n", base64_encoded_value);
 #endif
 
@@ -4567,7 +4567,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         if ((bytes_printed = snprintf(write_body, write_body_len + 1, fmt_string, selection_body, base64_encoded_value)) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Write body: %s\n\n", write_body);
 #endif
 
@@ -4576,7 +4576,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 
         curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Setup cURL to POST point list for dataset write\n\n");
 #endif
     } /* end if */
@@ -4603,7 +4603,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Writing dataset\n\n");
 
     printf("   /**********************************\\\n");
@@ -4614,7 +4614,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     CURL_PERFORM(curl, H5E_DATASET, H5E_WRITEERROR, FAIL);
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Dataset write response buffer:\n%s\n\n", response_buffer.buffer);
 #endif
 
@@ -4660,7 +4660,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t dxpl_id,
     RV_object_t *dset = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received dataset get call with following parameters:\n");
     printf("     - Dataset get call type: %s\n", dataset_get_type_to_string(get_type));
     printf("     - Dataset's URI: %s\n", dset->URI);
@@ -4757,7 +4757,7 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
     RV_object_t *dset = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received dataset-specific call with following parameters:\n");
     printf("     - Dataset-specific call type: %s\n", dataset_specific_type_to_string(specific_type));
     printf("     - Dataset's URI: %s\n", dset->URI);
@@ -4810,7 +4810,7 @@ RV_dataset_close(void *dset, hid_t dxpl_id, void **req)
     if (!_dset)
         FUNC_GOTO_DONE(SUCCEED);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received dataset close call with following parameters:\n");
     printf("     - Dataset's URI: %s\n", _dset->URI);
     printf("     - Dataset's object type: %s\n", object_type_to_string(_dset->obj_type));
@@ -4868,7 +4868,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     char        *host_header = NULL;
     void        *ret_value = NULL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received file create call with following parameters:\n");
     printf("     - Filename: %s\n", name);
     printf("     - Creation flags: %s\n", file_flags_to_string(flags));
@@ -4950,7 +4950,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
             FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> H5F_ACC_TRUNC specified; checking if file exists\n\n");
 
         printf("   /**********************************\\\n");
@@ -4974,7 +4974,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> File existed and H5F_ACC_TRUNC specified; deleting file\n\n");
 
             printf("   /*************************************\\\n");
@@ -4996,7 +4996,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, 0))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL PUT data size: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Creating file\n\n");
 
     printf("   /**********************************\\\n");
@@ -5006,7 +5006,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
 
     CURL_PERFORM(curl, H5E_FILE, H5E_CANTCREATE, NULL);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Created file\n\n");
 #endif
 
@@ -5017,7 +5017,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     ret_value = (void *) new_file;
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> File create response buffer:\n%s\n\n", response_buffer.buffer);
 
     if (new_file && ret_value) {
@@ -5077,7 +5077,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     char        *host_header = NULL;
     void        *ret_value = NULL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received file open call with following parameters:\n");
     printf("     - Filename: %s\n", name);
     printf("     - File access flags: %s\n", file_flags_to_string(flags));
@@ -5127,7 +5127,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Retrieving info for file open\n\n");
 
     printf("   /**********************************\\\n");
@@ -5159,7 +5159,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     ret_value = (void *) file;
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> File open response buffer:\n%s\n\n", response_buffer.buffer);
 
     if (file && ret_value) {
@@ -5206,7 +5206,7 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_l
     RV_object_t *_obj = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received file get call with following parameters:\n");
     printf("     - File get call type: %s\n", file_get_type_to_string(get_type));
     printf("     - File's URI: %s\n", _obj->URI);
@@ -5310,7 +5310,7 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t dxpl_id,
     RV_object_t *file = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received file-specific call with following parameters:\n");
     printf("     - File-specific call type: %s\n", file_specific_type_to_string(specific_type));
     if (file) {
@@ -5369,7 +5369,7 @@ RV_file_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments)
     RV_object_t          *file = (RV_object_t *) obj;
     herr_t                ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received file optional call with following parameters:\n");
     printf("     - File optional call type: %s\n", file_optional_type_to_string(optional_type));
     printf("     - File's URI: %s\n", file->URI);
@@ -5482,7 +5482,7 @@ RV_file_close(void *file, hid_t dxpl_id, void **req)
     if (!_file)
         FUNC_GOTO_DONE(SUCCEED);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received file close call with following parameters:\n");
     printf("     - File's URI: %s\n", _file->URI);
     printf("     - File's object type: %s\n", object_type_to_string(_file->obj_type));
@@ -5545,7 +5545,7 @@ RV_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t
     int          url_len = 0;
     void        *ret_value = NULL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received group create call with following parameters:\n");
     printf("     - H5Gcreate variant: %s\n", name ? "H5Gcreate2" : "H5Gcreate_anon");
     if (name) printf("     - Group's name: %s\n", name);
@@ -5600,7 +5600,7 @@ RV_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t
         const char *path_basename = RV_basename(name);
         hbool_t     empty_dirname;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Creating JSON link for group\n\n");
 #endif
 
@@ -5646,7 +5646,7 @@ RV_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "group link create request body size exceeded allocated buffer size")
         }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Group create request body:\n%s\n\n", create_request_body);
 #endif
     } /* end if */
@@ -5673,7 +5673,7 @@ RV_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "group create URL size exceeded maximum URL size")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Group create request URL: %s\n\n", request_url);
 #endif
 
@@ -5688,7 +5688,7 @@ RV_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Creating group\n\n");
 
     printf("   /***********************************\\\n");
@@ -5698,7 +5698,7 @@ RV_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t
 
     CURL_PERFORM(curl, H5E_SYM, H5E_CANTCREATE, NULL);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Created group\n\n");
 #endif
 
@@ -5709,7 +5709,7 @@ RV_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t
     ret_value = (void *) new_group;
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Group create response buffer:\n%s\n\n", response_buffer.buffer);
 
     if (new_group && ret_value) {
@@ -5766,7 +5766,7 @@ RV_group_open(void *obj, H5VL_loc_params_t loc_params, const char *name,
     htri_t       search_ret;
     void        *ret_value = NULL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received group open call with following parameters:\n");
     printf("     - loc_id object's URI: %s\n", parent->URI);
     printf("     - loc_id object's type: %s\n", object_type_to_string(parent->obj_type));
@@ -5793,7 +5793,7 @@ RV_group_open(void *obj, H5VL_loc_params_t loc_params, const char *name,
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate group by path")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Found group by given path\n\n");
 #endif
 
@@ -5815,7 +5815,7 @@ RV_group_open(void *obj, H5VL_loc_params_t loc_params, const char *name,
     ret_value = (void *) group;
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Group open response buffer:\n%s\n\n", response_buffer.buffer);
 
     if (group && ret_value) {
@@ -5858,7 +5858,7 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va
     int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received group get call with following parameters:\n");
     printf("     - Group get call type: %s\n\n", group_get_type_to_string(get_type));
 #endif
@@ -5888,7 +5888,7 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va
                 /* H5Gget_info */
                 case H5VL_OBJECT_BY_SELF:
                 {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Gget_info(): Group's URI: %s\n", loc_obj->URI);
                     printf("-> H5Gget_info(): Group's object type: %s\n\n", object_type_to_string(loc_obj->obj_type));
 #endif
@@ -5910,7 +5910,7 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va
                     htri_t     search_ret;
                     char       temp_URI[URI_MAX_LENGTH];
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Gget_info_by_name(): loc_id object's URI: %s\n", loc_obj->URI);
                     printf("-> H5Gget_info_by_name(): loc_id object's type: %s\n", object_type_to_string(loc_obj->obj_type));
                     printf("-> H5Gget_info_by_name(): Path to group's parent object: %s\n\n", loc_params.loc_data.loc_by_name.name);
@@ -5921,7 +5921,7 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate group")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Gget_info_by_name(): found group's parent object by given path\n");
                     printf("-> H5Gget_info_by_name(): group's parent object URI: %s\n", temp_URI);
                     printf("-> H5Gget_info_by_name(): group's parent object type: %s\n\n", object_type_to_string(obj_type));
@@ -5969,7 +5969,7 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Retrieving group info at URL: %s\n\n", request_url);
 
             printf("   /**********************************\\\n");
@@ -5994,7 +5994,7 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va
     } /* end switch */
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Group get response buffer:\n%s\n\n", response_buffer.buffer);
 #endif
 
@@ -6033,7 +6033,7 @@ RV_group_close(void *grp, hid_t dxpl_id, void **req)
     if (!_grp)
         FUNC_GOTO_DONE(SUCCEED);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received group close call with following parameters:\n");
     printf("     - Group's URI: %s\n", _grp->URI);
     printf("     - Group's object type: %s\n", object_type_to_string(_grp->obj_type));
@@ -6092,7 +6092,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
     int                url_len = 0;
     herr_t             ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received link create call with following parameters:\n");
     printf("     - Link Name: %s\n", loc_params.loc_data.loc_by_name.name);
     printf("     - Link Type: %s\n", link_create_type_to_string(create_type));
@@ -6162,7 +6162,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                 {
                     H5I_type_t obj_type = H5I_UNINIT;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> Locating hard link's target object\n\n");
 #endif
 
@@ -6171,7 +6171,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_PATH, FAIL, "can't locate link target object")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> Found hard link's target object by given path\n\n");
 #endif
 
@@ -6187,7 +6187,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
             } /* end switch */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Hard link target object's URI: %s\n\n", target_URI);
 #endif
 
@@ -6206,7 +6206,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link create request body size exceeded allocated buffer size")
             }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Hard link create request JSON:\n%s\n\n", create_request_body);
 #endif
 
@@ -6221,7 +6221,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
             if (H5Pget(lcpl_id, H5VL_PROP_LINK_TARGET_NAME, &link_target) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get property list value for link's target")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Soft link target: %s\n\n", link_target);
 #endif
 
@@ -6240,7 +6240,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link create request body size exceeded allocated buffer size")
             }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Soft link create request JSON:\n%s\n\n", create_request_body);
 #endif
 
@@ -6271,7 +6271,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
             if (H5Lunpack_elink_val(elink_buf, elink_buf_size, &elink_flags, &file_path, &link_target) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't unpack contents of external link buffer")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> External link's domain path: %s\n", file_path);
             printf("-> External link's link target: %s\n\n", link_target);
 #endif
@@ -6291,7 +6291,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link create request body size exceeded allocated buffer size")
             }
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> External link create request JSON:\n%s\n\n", create_request_body);
 #endif
 
@@ -6335,7 +6335,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link create URL size exceeded maximum URL size")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Link create request URL: %s\n\n", request_url);
 #endif
 
@@ -6353,7 +6353,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Creating link\n\n");
 
     printf("   /**********************************\\\n");
@@ -6363,12 +6363,12 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
 
     CURL_PERFORM(curl, H5E_LINK, H5E_CANTCREATE, FAIL);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Created link\n\n");
 #endif
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Link create response buffer:\n%s\n\n", response_buffer.buffer);
 #endif
 
@@ -6479,7 +6479,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
     int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received link get call with following parameters:\n");
     printf("     - Link get call type: %s\n", link_get_type_to_string(get_type));
     printf("     - Link loc_obj's URI: %s\n", loc_obj->URI);
@@ -6517,7 +6517,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
                         if (!search_ret || search_ret < 0)
                             FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate parent group")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                         printf("-> H5Lget_info(): Found link's parent object by given path\n");
                         printf("-> H5Lget_info(): link's parent object URI: %s\n", temp_URI);
                         printf("-> H5Lget_info(): link's parent object type: %s\n\n", object_type_to_string(obj_type));
@@ -6579,7 +6579,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Retrieving link info at URL: %s\n\n", request_url);
 
             printf("   /**********************************\\\n");
@@ -6633,7 +6633,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
                         if (!search_ret || search_ret < 0)
                             FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate parent group")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                         printf("-> H5Lget_val(): Found link's parent object by given path\n");
                         printf("-> H5Lget_val(): link's parent object URI: %s\n", temp_URI);
                         printf("-> H5Lget_val(): link's parent object type: %s\n\n", object_type_to_string(obj_type));
@@ -6695,7 +6695,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Retrieving link value from URL: %s\n\n", request_url);
 
             printf("   /**********************************\\\n");
@@ -6717,7 +6717,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
     } /* end switch */
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Link get response buffer:\n%s\n\n", response_buffer.buffer);
 #endif
 
@@ -6767,7 +6767,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
     int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received link-specific call with following parameters:\n");
     printf("     - Link-specific call type: %s\n", link_specific_type_to_string(specific_type));
     printf("     - Link loc_obj's URI: %s\n", loc_obj->URI);
@@ -6862,7 +6862,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Deleting link using URL: %s\n\n", request_url);
 
             printf("   /*************************************\\\n");
@@ -6939,7 +6939,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Checking for existence of link using URL: %s\n\n", request_url);
 
             printf("   /**********************************\\\n");
@@ -6976,7 +6976,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                 /* H5Literate/H5Lvisit */
                 case H5VL_OBJECT_BY_SELF:
                 {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> Opening group for link iteration to generate an hid_t and work around VOL layer\n\n");
 #endif
 
@@ -7003,7 +7003,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                 /* H5Literate_by_name/H5Lvisit_by_name */
                 case H5VL_OBJECT_BY_NAME:
                 {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> Opening group for link iteration to generate an hid_t and work around VOL layer\n\n");
 #endif
 
@@ -7034,7 +7034,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type")
             } /* end switch */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Registering hid_t for opened group\n\n");
 #endif
 
@@ -7077,7 +7077,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Retrieving all links in group using URL: %s\n\n", request_url);
 
             printf("   /**********************************\\\n");
@@ -7151,7 +7151,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
     hid_t        lapl_id;
     void        *ret_value = NULL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received object open call with following parameters:\n");
     if (H5VL_OBJECT_BY_NAME == loc_params.type) {
         printf("     - H5Oopen variant: H5Oopen\n");
@@ -7183,7 +7183,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
             if (!search_ret || search_ret < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_PATH, NULL, "can't find object by name")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Found object by given path\n\n");
 #endif
 
@@ -7219,7 +7219,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
     /* Call the appropriate RV_*_open call based upon the object type */
     switch (obj_type) {
         case H5I_DATATYPE:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Opening datatype\n\n");
 #endif
 
@@ -7242,7 +7242,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
             break;
 
         case H5I_DATASET:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Opening dataset\n\n");
 #endif
 
@@ -7265,7 +7265,7 @@ RV_object_open(void *obj, H5VL_loc_params_t loc_params, H5I_type_t *opened_type,
             break;
 
         case H5I_GROUP:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Opening group\n\n");
 #endif
 
@@ -7361,7 +7361,7 @@ RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_typ
     RV_object_t *loc_obj = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received object get call with following parameters:\n");
     printf("     - Object get call type: %s\n", object_get_type_to_string(get_type));
     printf("     - loc_id object's URI: %s\n", loc_obj->URI);
@@ -7445,7 +7445,7 @@ RV_object_get(void *obj, H5VL_loc_params_t loc_params, H5VL_object_get_t get_typ
                             FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_BADVALUE, FAIL, "referenced object not a group, datatype or dataset")
                     } /* end switch */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> Object reference to object of type: %s\n\n", object_type_to_string2(*obj_type));
 #endif
 
@@ -7496,7 +7496,7 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
     RV_object_t *loc_obj = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received object-specific call with following parameters:\n");
     printf("     - Object-specific call type: %s\n", object_specific_type_to_string(specific_type));
     printf("     - loc_id object's URI: %s\n", loc_obj->URI);
@@ -7531,7 +7531,7 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
                     rv_obj_ref_t *objref = (rv_obj_ref_t *) ref;
                     htri_t        search_ret;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> Object reference; locating referenced object\n\n");
 #endif
 
@@ -7542,7 +7542,7 @@ RV_object_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_object_specific
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_PATH, FAIL, "can't locate ref obj. by path")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> Found referenced object\n");
                     printf("-> Referenced object's URI: %s\n", objref->ref_obj_URI);
                     printf("-> Referenced object's type: %s\n\n", object_type_to_string(objref->ref_obj_type));
@@ -7605,7 +7605,7 @@ RV_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments)
     int                     url_len = 0;
     herr_t                  ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Received object optional call with following parameters:\n");
     printf("     - Object optional call type: %s\n", object_optional_type_to_string(optional_type));
     printf("     - loc_id object's URI: %s\n", loc_obj->URI);
@@ -7712,7 +7712,7 @@ RV_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments)
                             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "loc_id object is not a group, datatype or dataset")
                     } /* end switch */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Oget_info(): Object type: %s\n\n", object_type_to_string(obj_type));
 #endif
 
@@ -7727,7 +7727,7 @@ RV_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments)
 
                     obj_type = H5I_UNINIT;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Oget_info_by_name(): locating object by given path\n\n");
 #endif
 
@@ -7736,7 +7736,7 @@ RV_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments)
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, FAIL, "can't locate object")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> H5Oget_info_by_name(): found object by given path\n");
                     printf("-> H5Oget_info_by_name(): object's URI: %s\n", temp_URI);
                     printf("-> H5Oget_info_by_name(): object's type: %s\n\n", object_type_to_string(obj_type));
@@ -7836,7 +7836,7 @@ RV_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Retrieving object info using URL: %s\n\n", request_url);
 
             printf("   /**********************************\\\n");
@@ -8162,7 +8162,7 @@ RV_url_encode_path(const char *path)
         cur_pos++;
     path_prefix_len = (size_t) (cur_pos - path);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Length of path prefix: %zu\n\n", path_prefix_len);
 #endif
 
@@ -8173,7 +8173,7 @@ RV_url_encode_path(const char *path)
 
     strncpy(path_copy, path + path_prefix_len, bytes_nalloc);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Allocated copy of path: %s\n\n", path_copy);
 #endif
 
@@ -8218,14 +8218,14 @@ RV_url_encode_path(const char *path)
      * the resulting path buffer, dynamically growing the buffer as necessary.
      */
     for (token = strtok(NULL, "/"); token; token = strtok(NULL, "/")) {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Processing next token: %s\n\n", token);
 #endif
 
         if (NULL == (url_encoded_path_component = curl_easy_escape(curl, token, 0)))
             FUNC_GOTO_ERROR(H5E_NONE_MAJOR, H5E_CANTENCODE, NULL, "can't URL-encode path component")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> URL-encoded form of token: %s\n\n", url_encoded_path_component);
 #endif
 
@@ -8254,7 +8254,7 @@ RV_url_encode_path(const char *path)
 
     *cur_pos = '\0';
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Final URL-encoded string: %s\n\n", tmp_buffer);
 #endif
 
@@ -8392,7 +8392,7 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
     char     *buf_out = (char *) callback_data_out;
     herr_t    ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Retrieving object's URI from server's HTTP response\n\n");
 #endif
 
@@ -8430,12 +8430,12 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
         if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "URI was NULL")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Found object's URI by \"link\" -> \"id\" JSON key path\n\n");
 #endif
     } /* end if */
     else {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Could not find object's URI by \"link\" -> \"id\" JSON key path\n");
         printf("-> Trying \"id\" JSON key path instead\n");
 #endif
@@ -8452,12 +8452,12 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
             if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "URI was NULL")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Found object's URI by \"id\" JSON key path\n\n");
 #endif
         } /* end if */
         else {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Could not find object's URI by \"id\" JSON key path\n");
             printf("-> Trying \"root\" JSON key path instead\n");
 #endif
@@ -8476,7 +8476,7 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
             if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "URI was NULL")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Found object's URI by \"root\" JSON key path\n\n");
 #endif
         } /* end else */
@@ -8515,7 +8515,7 @@ RV_get_link_obj_type_callback(char *HTTP_response, void *callback_data_in, void 
     char       *parsed_string;
     herr_t      ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Retrieving object's type from server's HTTP response\n\n");
 #endif
 
@@ -8560,7 +8560,7 @@ RV_get_link_obj_type_callback(char *HTTP_response, void *callback_data_in, void 
     else
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid object type")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Retrieved object's type: %s\n\n", object_type_to_string(*obj_type));
 #endif
 
@@ -8598,7 +8598,7 @@ RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *cal
     char       *parsed_string;
     herr_t      ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Retrieving link's info from server's HTTP response\n\n");
 #endif
 
@@ -8633,7 +8633,7 @@ RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *cal
     else
         FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid link class")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Retrieved link's class: %s\n\n", link_class_to_string(link_info->type));
 #endif
 
@@ -8644,7 +8644,7 @@ RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *cal
         if (RV_parse_response(HTTP_response, &link_info->u.val_size, NULL, RV_get_link_val_callback) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link value size")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Retrieved link's value size: %zu\n\n", link_info->u.val_size);
 #endif
     } /* end if */
@@ -8695,7 +8695,7 @@ RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *call
     char     *out_buf = (char *) callback_data_out;
     herr_t    ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Retrieving link's value from server's HTTP response\n\n");
 #endif
 
@@ -8742,7 +8742,7 @@ RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *call
              */
             *in_buf_size = strlen(link_path) + 1;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Returning size of soft link's value\n\n");
 #endif
         } /* end if */
@@ -8753,7 +8753,7 @@ RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *call
             /* Ensure that the buffer is NULL-terminated */
             out_buf[*in_buf_size - 1] = '\0';
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Returning soft link's value\n\n");
 #endif
         } /* end else */
@@ -8783,7 +8783,7 @@ RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *call
              */
             *in_buf_size = 1 + (strlen(link_domain) + 1) + (strlen(link_path) + 1);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Returning size of external link's value\n\n");
 #endif
         } /* end if */
@@ -8815,7 +8815,7 @@ RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *call
                 /* Finally comes the external link's target path */
                 strncpy((char *) p, link_path, (*in_buf_size - 1) - (strlen(link_domain) + 1));
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                 printf("-> Returning external link's value\n\n");
 #endif
             } /* end if */
@@ -8853,7 +8853,7 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
     size_t            link_table_num_entries;
     herr_t            ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Iterating %s through links according to server's HTTP response\n\n", link_iter_data->is_recursive ? "recursively" : "non-recursively");
 #endif
 
@@ -8872,7 +8872,7 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
                 &link_table, &link_table_num_entries) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Link table sorted according to link creation order\n\n");
 #endif
     } /* end if */
@@ -8920,7 +8920,7 @@ RV_attr_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
     size_t            attr_table_num_entries;
     herr_t            ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Iterating through attributes according to server's HTTP response\n\n");
 #endif
 
@@ -8938,7 +8938,7 @@ RV_attr_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
         if (RV_build_attr_table(HTTP_response, TRUE, cmp_attributes_by_creation_order, &attr_table, &attr_table_num_entries) < 0)
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTBUILDATTRTABLE, FAIL, "can't build attribute table")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Attribute table sorted according to creation order\n\n");
 #endif
     } /* end if */
@@ -8983,7 +8983,7 @@ RV_get_attr_info_callback(char *HTTP_response, void *callback_data_in, void *cal
     H5A_info_t *attr_info = (H5A_info_t *) callback_data_out;
     herr_t      ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Retrieving attribute info from server's HTTP response\n\n");
 #endif
 
@@ -9022,7 +9022,7 @@ RV_get_object_info_callback(char *HTTP_response,
     yajl_val    parse_tree = NULL, key_obj;
     herr_t      ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Retrieving object's info from server's HTTP response\n\n");
 #endif
 
@@ -9048,7 +9048,7 @@ RV_get_object_info_callback(char *HTTP_response,
 
     obj_info->num_attrs = YAJL_GET_INTEGER(key_obj);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Object had %llu attributes attached to it\n\n", obj_info->num_attrs);
 #endif
 
@@ -9086,7 +9086,7 @@ RV_get_group_info_callback(char *HTTP_response,
     yajl_val    parse_tree = NULL, key_obj;
     herr_t      ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Retrieving group's info from server's HTTP response\n\n");
 #endif
 
@@ -9112,7 +9112,7 @@ RV_get_group_info_callback(char *HTTP_response,
 
     group_info->nlinks = (hsize_t) YAJL_GET_INTEGER(key_obj);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Group had %llu links in it\n\n", group_info->nlinks);
 #endif
 
@@ -9164,7 +9164,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
     hid_t    *DCPL = (hid_t *) callback_data_out;
     herr_t    ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Retrieving dataset's creation properties from server's HTTP response\n");
 #endif
 
@@ -9199,28 +9199,28 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         if (!strcmp(alloc_time_string, "H5D_ALLOC_TIME_EARLY")) {
             alloc_time = H5D_ALLOC_TIME_EARLY;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Setting AllocTime H5D_ALLOC_TIME_EARLY on DCPL\n");
 #endif
         } /* end if */
         else if (!strcmp(alloc_time_string, "H5D_ALLOC_TIME_INCR")) {
             alloc_time = H5D_ALLOC_TIME_INCR;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Setting AllocTime H5D_ALLOC_TIME_INCR on DCPL\n");
 #endif
         } /* end else if */
         else if (!strcmp(alloc_time_string, "H5D_ALLOC_TIME_LATE")) {
             alloc_time = H5D_ALLOC_TIME_LATE;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Setting AllocTime H5D_ALLOC_TIME_LATE on DCPL\n");
 #endif
         } /* end else if */
         else {
             alloc_time = H5D_ALLOC_TIME_DEFAULT;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Setting AllocTime H5D_ALLOC_TIME_DEFAULT on DCPL\n");
 #endif
         } /* end else */
@@ -9248,14 +9248,14 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         if (!strcmp(crt_order_string, "H5P_CRT_ORDER_INDEXED")) {
             crt_order_flags = H5P_CRT_ORDER_INDEXED | H5P_CRT_ORDER_TRACKED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Setting attribute creation order H5P_CRT_ORDER_INDEXED + H5P_CRT_ORDER_TRACKED on DCPL\n");
 #endif
         } /* end if */
         else {
             crt_order_flags = H5P_CRT_ORDER_TRACKED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Setting attribute creation order H5P_CRT_ORDER_TRACKED on DCPL\n");
 #endif
         } /* end else */
@@ -9297,7 +9297,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
             minDense = (unsigned) YAJL_GET_INTEGER(sub_obj);
 
         if (minDense != DATASET_CREATE_MIN_DENSE_ATTRIBUTES_DEFAULT || maxCompact != DATASET_CREATE_MAX_COMPACT_ATTRIBUTES_DEFAULT) {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Setting attribute phase change values: [ minDense: %u, maxCompact: %u ] on DCPL\n", minDense, maxCompact);
 #endif
 
@@ -9324,21 +9324,21 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         if (!strcmp(fill_time_str, "H5D_FILL_TIME_ALLOC")) {
             fill_time = H5D_FILL_TIME_ALLOC;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Setting fill time H5D_FILL_TIME_ALLOC on DCPL\n");
 #endif
         } /* end else if */
         else if (!strcmp(fill_time_str, "H5D_FILL_TIME_NEVER")) {
             fill_time = H5D_FILL_TIME_NEVER;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Setting fill time H5D_FILL_TIME_NEVER on DCPL\n");
 #endif
         } /* end else if */
         else {
             fill_time = H5D_FILL_TIME_IFSET;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Setting fill time H5D_FILL_TIME_IFSET on DCPL\n");
 #endif
         } /* end else */
@@ -9410,7 +9410,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
                 chunk_dims[i] = (hsize_t) val;
             } /* end for */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Setting chunked layout on DCPL\n");
             printf("-> Chunk dims: [ ");
             for (i = 0; i < YAJL_GET_ARRAY(chunk_dims_obj)->len; i++) {
@@ -9429,7 +9429,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset external file storage is unsupported")
             } /* end if */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Setting contiguous layout on DCPL\n");
 #endif
 
@@ -9437,7 +9437,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set contiguous storage layout on DCPL")
         } /* end if */
         else if (!strcmp(layout_class, "H5D_COMPACT")) {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Setting compact layout on DCPL\n");
 #endif
 
@@ -9463,7 +9463,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
 
         track_times = !strcmp(track_times_str, "true");
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Setting track times: %s on DCPL\n", track_times ? "true" : "false");
 #endif
 
@@ -9472,7 +9472,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
     } /* end if */
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("\n");
 #endif
 
@@ -9563,7 +9563,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
     if (!target_object_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "target object type pointer was NULL")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Finding object by path '%s' from parent object of type %s with URI %s\n\n",
             obj_path, object_type_to_string(parent_obj->obj_type), parent_obj->URI);
 #endif
@@ -9577,7 +9577,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
          * information about the current group and supply it to the optional callback.
          */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Path provided was '.', short-circuiting to GET request and callback function\n\n");
 #endif
 
@@ -9589,7 +9589,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
          * information about the root group and supply it to the optional callback.
          */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Path provided was '/', short-circuiting to GET request and callback function\n\n");
 #endif
 
@@ -9628,7 +9628,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
         char       *pobj_URI = parent_obj->URI;
         char        temp_URI[URI_MAX_LENGTH];
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Unknown target object type; retrieving object type\n\n");
 #endif
 
@@ -9639,7 +9639,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get path dirname")
         empty_dirname = !strcmp(path_dirname, "");
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Retrieving URI for final group in path chain\n\n");
 #endif
 
@@ -9682,7 +9682,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
         if (url_len >= URL_MAX_LENGTH)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Retrieving link type for link to target object of unknown type at URL %s\n\n", request_url);
 #endif
 
@@ -9707,7 +9707,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("   /**********************************\\\n");
         printf("-> | Making GET request to the server |\n");
         printf("   \\**********************************/\n\n");
@@ -9723,7 +9723,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
         curl_headers = NULL;
 
         if (H5L_TYPE_HARD == link_info.type) {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Link was a hard link; retrieving target object's info\n\n");
 #endif
 
@@ -9733,7 +9733,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
         else {
             size_t link_val_len = 0;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Link was a %s link; retrieving link's value\n\n", H5L_TYPE_SOFT == link_info.type ? "soft" : "external");
 #endif
 
@@ -9868,7 +9868,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "target object not a group, datatype or dataset")
         } /* end switch */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Searching for object by URL: %s\n\n", request_url);
 #endif
 
@@ -9893,7 +9893,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("   /**********************************\\\n");
         printf("-> | Making GET request to the server |\n");
         printf("   \\**********************************/\n\n");
@@ -9906,7 +9906,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
 
         ret_value = HTTP_SUCCESS(http_response);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Object %s\n\n", ret_value ? "found" : "not found");
 #endif
 
@@ -9989,7 +9989,7 @@ RV_convert_predefined_datatype_to_string(hid_t type_id)
     if (type_str_len >= PREDEFINED_DATATYPE_NAME_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "predefined datatype name string size exceeded maximum size")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Converted predefined datatype to string representation %s\n\n", type_name);
 #endif
 
@@ -10046,7 +10046,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
     int           bytes_printed = 0;
     herr_t        ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Converting datatype to JSON\n\n");
 #endif
 
@@ -10079,7 +10079,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
     if (type_is_committed) {
         RV_object_t *vol_obj;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Datatype was a committed type\n\n");
 #endif
 
@@ -10107,7 +10107,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
         FUNC_GOTO_DONE(SUCCEED);
     } /* end if */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Datatype was not a committed type\n\n");
 #endif
 
@@ -10259,7 +10259,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                 if ((compound_member = H5Tget_member_type(type_id, (unsigned) i)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound datatype member")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                 printf("-> Converting compound datatype member %zu to JSON\n\n", i);
 #endif
 
@@ -10410,7 +10410,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             if ((type_base_class = H5Tget_super(type_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "cant get base datatype for enum type")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Converting enum datatype's base datatype to JSON\n\n");
 #endif
 
@@ -10492,7 +10492,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             if ((type_is_committed = H5Tcommitted(type_base_class)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine if array base datatype is committed")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Converting array datatype's base datatype to JSON\n\n");
 #endif
 
@@ -10597,7 +10597,7 @@ done:
                 *type_body_len = (size_t) buf_ptrdiff;
         } /* end if */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Datatype JSON representation:\n%s\n\n", out_string);
 #endif
     } /* end if */
@@ -10698,7 +10698,7 @@ RV_convert_JSON_to_datatype(const char *type)
     char      *tmp_enum_base_type_buffer = NULL;
     hid_t      ret_value = FAIL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Converting JSON buffer %s to hid_t\n", type);
 #endif
 
@@ -10728,7 +10728,7 @@ RV_convert_JSON_to_datatype(const char *type)
             hid_t    predefined_type = FAIL;
             char    *type_base_ptr = type_base + 8;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Predefined Integer type sign: %c\n", *type_base_ptr);
 #endif
 
@@ -10737,20 +10737,20 @@ RV_convert_JSON_to_datatype(const char *type)
             switch (*(type_base_ptr + 1)) {
                 /* 8-bit integer */
                 case '8':
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> 8-bit Integer type\n");
 #endif
 
                     if (*(type_base_ptr + 2) == 'L') {
                         /* Litle-endian */
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                         printf("-> Little-endian - %s\n", is_unsigned ? "unsigned" : "signed");
 #endif
 
                         predefined_type = is_unsigned ? H5T_STD_U8LE : H5T_STD_I8LE;
                     } /* end if */
                     else {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                         printf("-> Big-endian - %s\n", is_unsigned ? "unsigned" : "signed");
 #endif
 
@@ -10761,20 +10761,20 @@ RV_convert_JSON_to_datatype(const char *type)
 
                 /* 16-bit integer */
                 case '1':
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> 16-bit Integer type\n");
 #endif
 
                     if (*(type_base_ptr + 3) == 'L') {
                         /* Litle-endian */
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                         printf("-> Little-endian - %s\n", is_unsigned ? "unsigned" : "signed");
 #endif
 
                         predefined_type = is_unsigned ? H5T_STD_U16LE : H5T_STD_I16LE;
                     } /* end if */
                     else {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                         printf("-> Big-endian - %s\n", is_unsigned ? "unsigned" : "signed");
 #endif
 
@@ -10785,20 +10785,20 @@ RV_convert_JSON_to_datatype(const char *type)
 
                 /* 32-bit integer */
                 case '3':
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> 32-bit Integer type\n");
 #endif
 
                     if (*(type_base_ptr + 3) == 'L') {
                         /* Litle-endian */
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                         printf("-> Little-endian - %s\n", is_unsigned ? "unsigned" : "signed");
 #endif
 
                         predefined_type = is_unsigned ? H5T_STD_U32LE : H5T_STD_I32LE;
                     } /* end if */
                     else {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                         printf("-> Big-endian - %s\n", is_unsigned ? "unsigned" : "signed");
 #endif
 
@@ -10809,20 +10809,20 @@ RV_convert_JSON_to_datatype(const char *type)
 
                 /* 64-bit integer */
                 case '6':
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> 64-bit Integer type\n");
 #endif
 
                     if (*(type_base_ptr + 3) == 'L') {
                         /* Litle-endian */
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                         printf("-> Little-endian - %s\n", is_unsigned ? "unsigned" : "signed");
 #endif
 
                         predefined_type = is_unsigned ? H5T_STD_U64LE : H5T_STD_I64LE;
                     } /* end if */
                     else {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                         printf("-> Big-endian - %s\n", is_unsigned ? "unsigned" : "signed");
 #endif
 
@@ -10856,14 +10856,14 @@ RV_convert_JSON_to_datatype(const char *type)
         if (is_predefined) {
             char *type_base_ptr = type_base + 10;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Predefined Float type\n");
 #endif
 
             switch (*type_base_ptr) {
                 /* 32-bit floating point */
                 case '3':
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> 32-bit Floating Point - %s\n", (*(type_base_ptr + 2) == 'L') ? "Little-endian" : "Big-endian");
 #endif
 
@@ -10874,7 +10874,7 @@ RV_convert_JSON_to_datatype(const char *type)
 
                 /* 64-bit floating point */
                 case '6':
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> 64-bit Floating Point - %s\n", (*(type_base_ptr + 2) == 'L') ? "Little-endian" : "Big-endian");
 #endif
 
@@ -10899,7 +10899,7 @@ RV_convert_JSON_to_datatype(const char *type)
         char      *charSet = NULL;
         char      *strPad = NULL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> String datatype\n");
 #endif
 
@@ -10909,7 +10909,7 @@ RV_convert_JSON_to_datatype(const char *type)
 
         is_variable_str = YAJL_IS_STRING(key_obj);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> %s string\n", is_variable_str ? "Variable-length" : "Fixed-length");
 #endif
 
@@ -10921,7 +10921,7 @@ RV_convert_JSON_to_datatype(const char *type)
         if (NULL == (charSet = YAJL_GET_STRING(key_obj)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's character set")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> String charSet: %s\n", charSet);
 #endif
 
@@ -10941,7 +10941,7 @@ RV_convert_JSON_to_datatype(const char *type)
         if (strcmp(strPad, is_variable_str ? "H5T_STR_NULLTERM" : "H5T_STR_NULLPAD"))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported string padding type for string datatype")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> String padding: %s\n", strPad);
 #endif
 
@@ -10969,7 +10969,7 @@ RV_convert_JSON_to_datatype(const char *type)
         char      *type_section_ptr = NULL;
         char      *section_start, *section_end;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Compound Datatype\n");
 #endif
 
@@ -11047,7 +11047,7 @@ RV_convert_JSON_to_datatype(const char *type)
             tmp_cmpd_type_buffer[0] = '{'; tmp_cmpd_type_buffer[(size_t) buf_ptrdiff + 1] = '}';
             tmp_cmpd_type_buffer[(size_t) buf_ptrdiff + 2] = '\0';
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Compound datatype member %zu name: %s\n", i, compound_member_names[i]);
             printf("-> Converting compound datatype member %zu from JSON to hid_t\n", i);
 #endif
@@ -11078,7 +11078,7 @@ RV_convert_JSON_to_datatype(const char *type)
         char               *base_type_substring_start, *base_type_substring_end;
         hid_t               base_type_id = FAIL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Array datatype\n");
 #endif
 
@@ -11097,7 +11097,7 @@ RV_convert_JSON_to_datatype(const char *type)
                 array_dims[i] = (hsize_t) YAJL_GET_INTEGER(YAJL_GET_ARRAY(key_obj)->values[i]);
         } /* end for */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Array datatype dimensions: [");
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
             if (i > 0) printf(", ");
@@ -11133,7 +11133,7 @@ RV_convert_JSON_to_datatype(const char *type)
         array_base_type_substring[type_string_len + (size_t) buf_ptrdiff] = '}';
         array_base_type_substring[type_string_len + (size_t) buf_ptrdiff + 1] = '\0';
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Converting array base datatype string to hid_t\n");
 #endif
 
@@ -11151,7 +11151,7 @@ RV_convert_JSON_to_datatype(const char *type)
         char               *base_section_ptr = NULL;
         char               *base_section_end = NULL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Enum Datatype\n");
 #endif
 
@@ -11182,7 +11182,7 @@ RV_convert_JSON_to_datatype(const char *type)
         tmp_enum_base_type_buffer[type_string_len + (size_t) buf_ptrdiff] = '}';
         tmp_enum_base_type_buffer[type_string_len + (size_t) buf_ptrdiff + 1] = '\0';
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Converting enum base datatype string to hid_t\n");
 #endif
 
@@ -11216,7 +11216,7 @@ RV_convert_JSON_to_datatype(const char *type)
     else if (!strcmp(datatype_class, "H5T_REFERENCE")) {
         char *type_base;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Reference datatype\n");
 #endif
 
@@ -11227,7 +11227,7 @@ RV_convert_JSON_to_datatype(const char *type)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type")
 
         if (!strcmp(type_base, "H5T_STD_REF_OBJ")) {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Object reference\n");
 #endif
 
@@ -11235,7 +11235,7 @@ RV_convert_JSON_to_datatype(const char *type)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy object reference datatype")
         } /* end if */
         else if (!strcmp(type_base, "H5T_STD_REF_DSETREG")) {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Region reference\n");
 #endif
 
@@ -11250,12 +11250,12 @@ RV_convert_JSON_to_datatype(const char *type)
 
     ret_value = datatype;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Converted JSON buffer to hid_t ID %ld\n", datatype);
 #endif
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("\n");
 #endif
 
@@ -11335,7 +11335,7 @@ RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_le
     int     ref_string_len = 0;
     herr_t  ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Converting object ref. array to binary buffer\n\n");
 #endif
 
@@ -11411,7 +11411,7 @@ done:
         *buf_out = out;
         *buf_out_len = out_len;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         for (i = 0; i < ref_array_len; i++) {
             printf("-> Ref_array[%zu]: %s\n", i, (out + (i * OBJECT_REF_STRING_LEN)));
         } /* end for */
@@ -11459,7 +11459,7 @@ RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
     size_t        out_len = 0;
     herr_t        ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Converting binary buffer to ref. array\n\n");
 #endif
 
@@ -11521,7 +11521,7 @@ done:
         *buf_out = out;
         *buf_out_len = out_len;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         for (i = 0; i < ref_buf_len; i++) {
             printf("-> Ref_array[%zu]: %s\n", i, out[i].ref_obj_URI);
         } /* end for */
@@ -11568,7 +11568,7 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
     char    *type_string = type;
     hid_t    ret_value = FAIL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Parsing datatype from HTTP response\n\n");
 #endif
 
@@ -11580,7 +11580,7 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
         char      *type_section_ptr = NULL;
         char      *type_section_start, *type_section_end;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Extraneous information included in HTTP response, extracting out datatype section\n\n");
 #endif
 
@@ -11652,7 +11652,7 @@ RV_parse_dataspace(char *space)
     char     *dataspace_type = NULL;
     hid_t     ret_value = FAIL;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Parsing dataspace from HTTP response\n\n");
 #endif
 
@@ -11671,7 +11671,7 @@ RV_parse_dataspace(char *space)
 
     /* Create the appropriate type of Dataspace */
     if (!strcmp(dataspace_type, "H5S_NULL")) {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> NULL dataspace\n\n");
 #endif
 
@@ -11679,7 +11679,7 @@ RV_parse_dataspace(char *space)
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCREATE, FAIL, "can't create null dataspace")
     } /* end if */
     else if (!strcmp(dataspace_type, "H5S_SCALAR")) {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> SCALAR dataspace\n\n");
 #endif
 
@@ -11691,7 +11691,7 @@ RV_parse_dataspace(char *space)
         hbool_t  maxdims_specified = TRUE;
         size_t   i;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> SIMPLE dataspace\n\n");
 #endif
 
@@ -11726,7 +11726,7 @@ RV_parse_dataspace(char *space)
             } /* end if */
         } /* end for */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Creating simple dataspace\n");
         printf("-> Dims: [ ");
         for (i = 0; i < dims_obj->u.array.len; i++) {
@@ -11787,7 +11787,7 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
     char        *maxdims_out_string = NULL;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Converting dataspace to JSON representation\n\n");
 #endif
 
@@ -11934,7 +11934,7 @@ done:
         if (maxdims_body)
             *maxdims_body = maxdims_out_string;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         if (shape_out_string) printf("-> Dataspace dimensions:\n%s\n\n", shape_out_string);
         if (maxdims_out_string) printf("-> Dataspace maximum dimensions:\n%s\n\n", maxdims_out_string);
 #endif
@@ -12006,7 +12006,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
     int        ndims;
     herr_t     ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Converting selection within dataspace to JSON\n\n");
 #endif
 
@@ -12047,7 +12047,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
 
             case H5S_SEL_HYPERSLABS:
             {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                 printf("-> Hyperslab selection\n\n");
 #endif
 
@@ -12129,7 +12129,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                 hssize_t           num_points;
                 size_t             points_strlen = strlen(points_str);
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                 printf("-> Point selection\n\n");
 #endif
 
@@ -12200,7 +12200,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                                                  "\"stop\": %s,"
                                                  "\"step\": %s";
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                 printf("-> Hyperslab selection\n\n");
 #endif
 
@@ -12292,7 +12292,7 @@ done:
                 *selection_string_len = (size_t) buf_ptrdiff;
         } /* end if */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Dataspace selection JSON representation:\n%s\n\n", out_string);
 #endif
     } /* end if */
@@ -12361,7 +12361,7 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
     int          link_body_len = 0;
     herr_t       ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Setting up dataset creation request\n\n");
 #endif
 
@@ -12407,7 +12407,7 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
                                                  "\"name\": \"%s\""
                                               "}";
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Creating JSON link for dataset\n\n");
 #endif
 
@@ -12474,7 +12474,7 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset create request body size exceeded allocated buffer size")
 
 done:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("\n");
 #endif
 
@@ -12482,7 +12482,7 @@ done:
         *create_request_body = out_string;
         if (create_request_body_len) *create_request_body_len = (size_t) create_request_len;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> Dataset creation request JSON:\n%s\n\n", out_string);
 #endif
     } /* end if */
@@ -12539,7 +12539,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
     int                 bytes_printed = 0;
     herr_t              ret_value = SUCCEED;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Converting dataset creation properties from DCPL to JSON\n\n");
 #endif
 
@@ -12940,7 +12940,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                                 break;
 
                             default:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                                 printf("-> Unable to add SZIP filter to DCPL - unsupported mask value specified (not H5_SZIP_EC_OPTION_MASK or H5_SZIP_NN_OPTION_MASK)\n\n");
 #endif
 
@@ -13029,7 +13029,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                                 break;
 
                             default:
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                                 printf("-> Unable to add ScaleOffset filter to DCPL - unsupported scale type specified (not H5Z_SO_FLOAT_DSCALE, H5Z_SO_FLOAT_ESCALE or H5Z_SO_INT)\n\n");
 #endif
 
@@ -13094,7 +13094,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                     case H5Z_FILTER_ERROR:
                     {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                         printf("-> Unknown filter specified for filter %zu - not adding to DCPL\n\n", i);
 #endif
 
@@ -13418,7 +13418,7 @@ done:
                 *creation_properties_body_len = (size_t) buf_ptrdiff;
         } /* end if */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
         printf("-> DCPL JSON representation:\n%s\n\n", out_string);
 #endif
     } /* end if */
@@ -13472,7 +13472,7 @@ RV_build_attr_table(char *HTTP_response, hbool_t sort, int (*sort_func)(const vo
     if (!num_entries)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "attr table num. entries pointer was NULL")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Building table of attributes\n\n");
 #endif
 
@@ -13550,7 +13550,7 @@ RV_build_attr_table(char *HTTP_response, hbool_t sort, int (*sort_func)(const vo
         attribute_section_start = attribute_section_end + 1;
     } /* end for */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Attribute table built\n\n");
 #endif
 
@@ -13593,12 +13593,12 @@ RV_traverse_attr_table(attr_table_entry *attr_table, size_t num_entries, iter_da
         case H5_ITER_NATIVE:
         case H5_ITER_INC:
         {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Beginning iteration in increasing order\n\n");
 #endif
 
             for (last_idx = (attr_iter_data->idx_p ? *attr_iter_data->idx_p : 0); last_idx < num_entries; last_idx++) {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                 printf("-> Attribute %zu name: %s\n", last_idx, attr_table[last_idx].attr_name);
                 printf("-> Attribute %zu creation time: %f\n", last_idx, attr_table[last_idx].crt_time);
                 printf("-> Attribute %zu data size: %llu\n\n", last_idx, attr_table[last_idx].attr_info.data_size);
@@ -13619,12 +13619,12 @@ RV_traverse_attr_table(attr_table_entry *attr_table, size_t num_entries, iter_da
 
         case H5_ITER_DEC:
         {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Beginning iteration in decreasing order\n\n");
 #endif
 
             for (last_idx = (attr_iter_data->idx_p ? *attr_iter_data->idx_p : num_entries - 1); last_idx >= 0; last_idx--) {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                 printf("-> Attribute %zu name: %s\n", last_idx, attr_table[last_idx].attr_name);
                 printf("-> Attribute %zu creation time: %f\n", last_idx, attr_table[last_idx].crt_time);
                 printf("-> Attribute %zu data size: %llu\n\n", last_idx, attr_table[last_idx].attr_info.data_size);
@@ -13651,7 +13651,7 @@ RV_traverse_attr_table(attr_table_entry *attr_table, size_t num_entries, iter_da
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "unknown attribute iteration order")
     } /* end switch */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Attribute iteration finished\n\n");
 #endif
 
@@ -13711,7 +13711,7 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
     if (!num_entries)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link table num. entries pointer was NULL")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Building table of links %s\n\n", is_recursive ? "recursively" : "non-recursively");
 #endif
 
@@ -13850,7 +13850,7 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
                 if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                 printf("-> Retrieving all links in subgroup using URL: %s\n\n", request_url);
 
                 printf("   /**********************************\\\n");
@@ -13873,7 +13873,7 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
         link_section_start = link_section_end + 1;
     } /* end for */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     printf("-> Link table built\n\n");
 #endif
 
@@ -13952,12 +13952,12 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_da
         case H5_ITER_NATIVE:
         case H5_ITER_INC:
         {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Beginning iteration in increasing order\n\n");
 #endif
 
             for (last_idx = (link_iter_data->idx_p ? *link_iter_data->idx_p : 0); last_idx < num_entries; last_idx++) {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                 printf("-> Link %zu name: %s\n", last_idx, link_table[last_idx].link_name);
                 printf("-> Link %zu creation time: %f\n", last_idx, link_table[last_idx].crt_time);
                 printf("-> Link %zu type: %s\n\n", last_idx, link_class_to_string(link_table[last_idx].link_info.type));
@@ -13975,7 +13975,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_da
                 if ((size_t) snprintf_ret >= link_rel_path_len)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link's relative path string size exceeded allocated buffer size")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                 printf("-> Calling supplied callback function with relative link path %s\n\n", link_rel_path);
 #endif
 
@@ -13988,7 +13988,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_da
 
                 /* If this is a group and H5Lvisit has been called, descend into the group */
                 if (link_table[last_idx].subgroup.subgroup_link_table) {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> Descending into subgroup '%s'\n\n", link_table[last_idx].link_name);
 #endif
 
@@ -13997,7 +13997,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_da
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_LINKITERERROR, FAIL, "can't iterate over links in subgroup '%s'", link_table[last_idx].link_name)
                     depth--;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> Exiting subgroup '%s'\n\n", link_table[last_idx].link_name);
 #endif
                 } /* end if */
@@ -14007,7 +14007,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_da
                     /* Truncate the relative path buffer by cutting off the trailing link name from the current path chain */
                     if (last_slash) *last_slash = '\0';
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> Relative link path after truncating trailing link name: %s\n\n", link_rel_path);
 #endif
                 } /* end else */
@@ -14018,12 +14018,12 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_da
 
         case H5_ITER_DEC:
         {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
             printf("-> Beginning iteration in decreasing order\n\n");
 #endif
 
             for (last_idx = (link_iter_data->idx_p ? *link_iter_data->idx_p : num_entries - 1); last_idx >= 0; last_idx--) {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                 printf("-> Link %zu name: %s\n", last_idx, link_table[last_idx].link_name);
                 printf("-> Link %zu creation time: %f\n", last_idx, link_table[last_idx].crt_time);
                 printf("-> Link %zu type: %s\n\n", last_idx, link_class_to_string(link_table[last_idx].link_info.type));
@@ -14040,7 +14040,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_da
                 if ((size_t) snprintf_ret >= link_rel_path_len)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link's relative path string size exceeded allocated buffer size")
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                 printf("-> Calling supplied callback function with relative link path %s\n\n", link_rel_path);
 #endif
 
@@ -14053,7 +14053,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_da
 
                 /* If this is a group and H5Lvisit has been called, descend into the group */
                 if (link_table[last_idx].subgroup.subgroup_link_table) {
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> Descending into subgroup '%s'\n\n", link_table[last_idx].link_name);
 #endif
 
@@ -14062,7 +14062,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_da
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_LINKITERERROR, FAIL, "can't iterate over links in subgroup '%s'", link_table[last_idx].link_name)
                     depth--;
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> Exiting subgroup '%s'\n\n", link_table[last_idx].link_name);
 #endif
                 } /* end if */
@@ -14072,7 +14072,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_da
                     /* Truncate the relative path buffer by cutting off the trailing link name from the current path chain */
                     if (last_slash) *last_slash = '\0';
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
                     printf("-> Relative link path after truncating trailing link name: %s\n\n", link_rel_path);
 #endif
                 } /* end else */
@@ -14089,7 +14089,7 @@ RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_da
             FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "unknown link iteration order")
     } /* end switch */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
     if (depth == 0)
         printf("-> Link iteration finished\n\n");
 #endif
@@ -14105,7 +14105,7 @@ done:
     return ret_value;
 } /* end RV_traverse_link_table() */
 
-#ifdef PLUGIN_DEBUG
+#ifdef RV_PLUGIN_DEBUG
 
 /*-------------------------------------------------------------------------
  * Function:    object_type_to_string
