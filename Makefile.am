@@ -25,7 +25,6 @@ CP=cp
 INSTALL_DIR=@RV_HDF5_INSTALL_DIR@
 
 AM_CFLAGS=@AM_CFLAGS@ @RV_CFLAGS@
-AM_CXXFLAGS=@AM_CXXFLAGS@ @RV_CXXFLAGS@
 AM_CPPFLAGS=@AM_CPPFLAGS@ @RV_CPPFLAGS@
 AM_LDFLAGS=@AM_LDFLAGS@ @RV_LDFLAGS@
 
@@ -43,7 +42,7 @@ include_HEADERS=rest_vol_public.h
 # Defines for building the test suite
 test_PROGRAMS = test_rest_vol
 test_rest_vol_SOURCES = test_rest_vol.c
-test_rest_vol_LDADD = librestvol.a $(INSTALL_DIR)/lib/libhdf5.la
+test_rest_vol_LDADD = librestvol.la $(INSTALL_DIR)/lib/libhdf5.la
 
 testdir=$(bindir)
 
@@ -64,4 +63,4 @@ build-tests: $(LIB) $(PROGS) $(TESTS)
 
 # Tell Automake to build tests when the user types `make all' (this is
 # not its default behavior).
-all-local: $(LIB) $(TESTS)
+all-local: $(TESTS)
