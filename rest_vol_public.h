@@ -29,8 +29,6 @@
 #include "H5public.h"
 #include "H5Rpublic.h"
 
-#include "rest_vol_config.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
