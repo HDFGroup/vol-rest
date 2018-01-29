@@ -22,7 +22,6 @@
 # folder is called "hdf5" and is installed to a subdirectory also called "hdf5".
 HDF5_DIR="hdf5"
 HDF5_INSTALL_DIR="${HDF5_DIR}/hdf5"
-HDF5_LINK="-L${HDF5_INSTALL_DIR}/lib -lhdf5"
 
 NPROCS=0
 
@@ -157,24 +156,17 @@ make -j${NPROCS} && make install || exit 1
 
 # Once HDF5 has been built, use the 'h5cc' script to build the REST VOL plugin
 # against HDF5.
-echo "****************************"
-echo "* Building REST VOL plugin *"
-echo "****************************"
+echo "*******************************************"
+echo "* Building REST VOL plugin and test suite *"
+echo "*******************************************"
 echo
 
 cd ..
 
 ./autogen.sh
 
-./configure CFLAGS="-I ${HDF5_DIR}/src ${COMP_OPTS} ${CURL_LINK} ${YAJL_LINK}"
+./configure CFLAGS="-I${HDF5_DIR}/src ${COMP_OPTS} ${CURL_LINK} ${YAJL_LINK}"
 
 make -j${NPROCS} && make install || exit 1
-
-
-# Finally, build the test suite against the built REST VOL
-echo "***********************"
-echo "* Building test suite *"
-echo "***********************"
-echo
 
 exit 0
