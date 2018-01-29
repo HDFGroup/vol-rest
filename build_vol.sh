@@ -154,8 +154,7 @@ fi
 make -j${NPROCS} && make install || exit 1
 
 
-# Once HDF5 has been built, use the 'h5cc' script to build the REST VOL plugin
-# against HDF5.
+# Once HDF5 has been built, build the REST VOL plugin against HDF5.
 echo "*******************************************"
 echo "* Building REST VOL plugin and test suite *"
 echo "*******************************************"
