@@ -13,8 +13,7 @@
 # to either file, you may request a copy from help@hdfgroup.org.           
 #
 
-# A script to reconfigure autotools for HDF5, and to recreate other
-# generated files specifc to HDF5.
+# A script to reconfigure autotools for the REST VOL.
 #
 # IMPORTANT OS X NOTE
 #
@@ -157,10 +156,6 @@ esac
 # during the 'make' step, which can be a problem if environment variables
 # were set on the command line during autogen invocation.
 
-# Some versions of libtoolize will suggest that we add ACLOCAL_AMFLAGS
-# = '-I m4'. This is already done in commence.am, which is included
-# in Makefile.am. You can ignore this suggestion.
-
 # LIBTOOLIZE
 libtoolize_cmd="${HDF5_LIBTOOLIZE} --copy --force"
 echo ${libtoolize_cmd}
@@ -211,4 +206,3 @@ echo
 
 echo
 exit 0
-

@@ -22,6 +22,8 @@
 RM=rm -f
 CP=cp
 
+INSTALL_DIR=@RV_HDF5_INSTALL_DIR@
+
 AM_CFLAGS=@AM_CFLAGS@ @RV_CFLAGS@
 AM_CXXFLAGS=@AM_CXXFLAGS@ @RV_CXXFLAGS@
 AM_CPPFLAGS=@AM_CPPFLAGS@ @RV_CPPFLAGS@
@@ -41,9 +43,9 @@ include_HEADERS=rest_vol_public.h
 # Defines for building the test suite
 test_PROGRAMS = test_rest_vol
 test_rest_vol_SOURCES = test_rest_vol.c
-test_rest_vol_LDADD = librestvol.la
+test_rest_vol_LDADD = librestvol.a $(INSTALL_DIR)/lib/libhdf5.la
 
-testdir=.
+testdir=$(bindir)
 
 # Automake needs to be taught how to build lib, progs, and tests targets.
 # These will be filled in automatically for the most part (e.g.,
