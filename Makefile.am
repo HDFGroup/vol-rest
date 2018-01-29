@@ -64,4 +64,4 @@ build-tests: $(LIB) $(PROGS) $(TESTS)
 
 # Tell Automake to build tests when the user types `make all' (this is
 # not its default behavior).
-all-local: $(TESTS)
+all-local: $(LIB) $(TESTS)
