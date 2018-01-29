@@ -22,6 +22,7 @@
 # folder is called "hdf5" and is installed to a subdirectory also called "hdf5".
 HDF5_DIR="hdf5"
 HDF5_INSTALL_DIR="${HDF5_DIR}/hdf5"
+HDF5_LINK="-L${HDF5_INSTALL_DIR}/lib -lhdf5"
 
 NPROCS=0
 
@@ -163,15 +164,11 @@ echo
 
 cd ..
 
-if [ "${build_static}" = true ]; then
-    ${HDF5_INSTALL_DIR}/bin/h5cc -c rest_vol.c -o rest_vol.o ${COMP_OPTS} ${CURL_LINK} ${YAJL_LINK} || exit 1
-    
-    ar rcs librestvol.a rest_vol.o || exit 1
-else
-    ${HDF5_INSTALL_DIR}/bin/h5cc -fPIC -c rest_vol.c -o rest_vol.o ${COMP_OPTS} ${CURL_LINK} ${YAJL_LINK} || exit 1
-    
-    ${HDF5_INSTALL_DIR}/bin/h5cc -shared librestvol.so rest_vol.o
-fi
+./autogen.sh
+
+./configure CFLAGS="-I ${HDF5_DIR}/src ${COMP_OPTS} ${CURL_LINK} ${YAJL_LINK}"
+
+make -j${NPROCS} && make install || exit 1
 
 
 # Finally, build the test suite against the built REST VOL
@@ -180,7 +177,4 @@ echo "* Building test suite *"
 echo "***********************"
 echo
 
-${HDF5_INSTALL_DIR}/bin/h5cc test_rest_vol.c -o test_rest_vol ${COMP_OPTS} -L. ${REST_VOL_LINK} ${CURL_LINK} ${YAJL_LINK} || exit 1
-
-echo
 exit 0

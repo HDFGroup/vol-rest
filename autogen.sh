@@ -75,10 +75,6 @@ while getopts "$optspec" optchar; do
         echo
         echo "      -h      Print this help message."
         echo
-        echo "      -p      Used by THG to use hard-codes autotools"
-        echo "              paths on THG machines. Not for non-HDF-Group"
-        echo "              users!"
-        echo
         echo "      -v      Show more verbose output."
         echo
         echo "  NOTE: Each tool can be set via an environment variable."
@@ -172,9 +168,6 @@ if [ "$verbose" = true ] ; then
     ${HDF5_LIBTOOLIZE} --version
 fi
 ${libtoolize_cmd} || exit 1
-echo
-echo "NOTE: You can ignore the warning about adding -I m4."
-echo "      We already do this in an included file."
 echo
 
 # ACLOCAL
