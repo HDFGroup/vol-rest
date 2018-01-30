@@ -52,7 +52,7 @@ testdir=$(bindir)
 # EXTRA_TEST variables are supplied to allow the user to force targets to
 # be built at certain times.
 LIB = $(lib_LTLIBRARIES)
-PROGS =  
+PROGS = 
 TESTS = $(test_PROGRAMS)
 
 # lib/progs/tests targets recurse into subdirectories. build-* targets

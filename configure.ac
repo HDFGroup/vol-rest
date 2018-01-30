@@ -55,6 +55,10 @@ AM_MAINTAINER_MODE([disable])
 ## This allows multiple src-dir builds within one host.
 AC_PREFIX_DEFAULT([`pwd`/rest_vol_build])
 
+if test "${prefix}" = NONE; then
+  prefix=$ac_default_prefix
+fi
+
 AC_CANONICAL_HOST
 AC_SUBST([CPPFLAGS])
 AC_SUBST([AR_FLAGS])
@@ -632,6 +636,21 @@ case "X-$RV_TRACK_MEM_USAGE" in
     AC_MSG_ERROR([Unrecognized track mem usage option: $RV_TRACK_MEM_USAGE.])
     ;;
 esac
+
+## ----------------------------------------------------------------------
+## Check if the install directory for the included HDF5 source
+## distribution has been modified
+##
+AC_MSG_CHECKING([HDF5 source distribution install directory])
+
+## Set default
+if test "X-$RV_HDF5_INSTALL_DIR" = X- ; then
+  RV_HDF5_INSTALL_DIR="${prefix}"
+fi
+
+## Allow this variable to be substituted in other files
+AC_SUBST([RV_HDF5_INSTALL_DIR])
+AC_MSG_RESULT([$RV_HDF5_INSTALL_DIR])
 
 ## ----------------------------------------------------------------------
 ## Check if the compiler should include symbols

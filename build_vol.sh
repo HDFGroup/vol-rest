@@ -17,11 +17,14 @@
 # included with the REST VOL plugin source code, and then use that built
 # HDF5 to build the REST VOL plugin itself.
 
-# Name of the directory for the included HDF5 source distribution, as well as
-# the name of the directory where it gets installed to. By default, the source
-# folder is called "hdf5" and is installed to a subdirectory also called "hdf5".
+# Default name of the directory for the included HDF5 source distribution
 HDF5_DIR="hdf5"
-HDF5_INSTALL_DIR="${HDF5_DIR}/hdf5"
+
+# Get the directory of the script itself
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Set the default install directory
+INSTALL_DIR=${SCRIPT_DIR}/rest_vol_build
 
 NPROCS=0
 
@@ -51,13 +54,17 @@ echo "* REST VOL build script      *"
 echo "******************************"
 echo
 
-optspec=":hstc:y:-"
+optspec=":hstc:y:p:-"
 while getopts "$optspec" optchar; do
     case "${optchar}" in
     h)
         echo "usage: $0 [OPTIONS]"
         echo
         echo "      -h      Print this help message."
+        echo
+        echo "      -p DIR  Similar to 'configure --prefix', specifies where"
+        echo "              the REST VOL should be installed to. Default is"
+        echo "              'source directory/rest_vol_build'."
         echo
         echo "      -c DIR  To specify the directory to search for libcurl"
         echo "              within, if cURL was not installed to a system"
@@ -77,6 +84,11 @@ while getopts "$optspec" optchar; do
         echo "              REST VOL plugin have been built once."
         echo
         exit 0
+        ;;
+    p)
+        INSTALL_DIR="$OPTARG"
+        echo "Prefix set to: ${INSTALL_DIR}"
+        echo
         ;;
     c)
         CURL_DIR="$OPTARG"
@@ -139,16 +151,16 @@ echo "* Building HDF5 *"
 echo "*****************"
 echo
 
-cd ${HDF5_DIR}
+cd ${SCRIPT_DIR}/${HDF5_DIR}
 
 ./autogen.sh
 
 # If we are building the tools with REST VOL support, link in the already built
 # REST VOL library, along with cURL and YAJL.
 if [ "${build_tools}" = true ]; then
-    ./configure CFLAGS="${COMP_OPTS} -L.. ${REST_VOL_LINK} ${CURL_LINK} ${YAJL_LINK}" || exit 1
+    ./configure --prefix=${INSTALL_DIR} CFLAGS="${COMP_OPTS} -L${INSTALL_DIR}/lib ${REST_VOL_LINK} ${CURL_LINK} ${YAJL_LINK}" || exit 1
 else
-    ./configure CFLAGS="${COMP_OPTS}" || exit 1
+    ./configure --prefix=${INSTALL_DIR} CFLAGS="${COMP_OPTS}" || exit 1
 fi
 
 make -j${NPROCS} && make install || exit 1
@@ -160,11 +172,11 @@ echo "* Building REST VOL plugin and test suite *"
 echo "*******************************************"
 echo
 
-cd ..
+cd ${SCRIPT_DIR}
 
 ./autogen.sh
 
-./configure CFLAGS="-I${HDF5_DIR}/src ${COMP_OPTS} ${CURL_LINK} ${YAJL_LINK}"
+./configure --prefix=${INSTALL_DIR} CFLAGS="-I${INSTALL_DIR}/include ${COMP_OPTS} ${CURL_LINK} ${YAJL_LINK}"
 
 make -j${NPROCS} && make install || exit 1
 
