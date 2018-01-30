@@ -220,24 +220,20 @@ done
 ##
 AC_MSG_CHECKING([build mode])
 AC_ARG_ENABLE([build-mode],
-              [AS_HELP_STRING([--enable-build-mode=(debug|production|clean)],
-                              [Sets the build mode. Debug turns on symbols, API
-                               tracing, asserts, and debug optimization,
-                               as well as several other minor configure options
-                               that aid in debugging.
+              [AS_HELP_STRING([--enable-build-mode=(debug|production)],
+                              [Sets the build mode. Debug turns on debug
+                               output printing.
                                Production turns high optimizations on.
-                               Clean turns nothing on and disables optimization
-                               (i.e.: a 'clean slate' configuration).
                                All these settings can be overridden by using
                                specific configure flags.
-                               [default=debug]
+                               [default=production]
                                ])],
               [BUILD_MODE=$enableval])
 
 ## Set the default
 ## Depends on branch, set via script at branch creation time
 if test "X-$BUILD_MODE" = X- ; then
-    BUILD_MODE=debug
+    BUILD_MODE=production
 fi
 
 ## Allow this variable to be substituted in
@@ -245,11 +241,8 @@ fi
 AC_SUBST([BUILD_MODE])
 
 case "X-$BUILD_MODE" in
-  X-clean)
-    AC_MSG_RESULT([clean])
-    ;;
   X-debug)
-    AC_DEFINE([DEBUG_BUILD], [1], [Define if this is a debug build.])
+    AC_DEFINE([RV_PLUGIN_DEBUG], , [Define to have the REST VOL print out debugging information.])
     H5_CFLAGS="$H5_CFLAGS $DEBUG_CFLAGS"
     H5_CPPFLAGS="$H5_CPPFLAGS $DEBUG_CPPFLAGS"
     H5_CXXFLAGS="$H5_CXXFLAGS $DEBUG_CXXFLAGS"
@@ -264,7 +257,7 @@ case "X-$BUILD_MODE" in
     AC_MSG_RESULT([production])
     ;;
   *)
-    AC_MSG_ERROR([Unrecognized build mode: $BUILD_MODE. Use debug, production, or clean.])
+    AC_MSG_ERROR([Unrecognized build mode: $BUILD_MODE. Use debug or production.])
 esac
 
 ## ----------------------------------------------------------------------
@@ -457,26 +450,26 @@ AC_CHECK_HEADERS([stdbool.h])
 ## Darwin
 AC_CHECK_HEADERS([mach/mach_time.h])
 ## Also need to detect Darwin for pubconf
-case $host_os in
-  darwin*)
-    AC_DEFINE([HAVE_DARWIN], [1], [Define if Darwin or Mac OS X])
-  ;;
-esac
+##case $host_os in
+##  darwin*)
+##    AC_DEFINE([HAVE_DARWIN], [1], [Define if Darwin or Mac OS X])
+##  ;;
+##esac
 
 ## Windows
-case "`uname`" in
-  CYGWIN*)
-    AC_CHECK_HEADERS([io.h sys/timeb.h])
-    UNAME_CYGWIN="yes"
-    ;;
-  MINGW*)
-    AC_CHECK_HEADERS([io.h winsock2.h sys/timeb.h])
-    AC_HAVE_LIBRARY([ws2_32])
-    ;;
-  *)
-    AC_CHECK_HEADERS([io.h winsock2.h sys/timeb.h])
-    ;;
-esac
+##case "`uname`" in
+##  CYGWIN*)
+##    AC_CHECK_HEADERS([io.h sys/timeb.h])
+##    UNAME_CYGWIN="yes"
+##    ;;
+##  MINGW*)
+##    AC_CHECK_HEADERS([io.h winsock2.h sys/timeb.h])
+##    AC_HAVE_LIBRARY([ws2_32])
+##    ;;
+##  *)
+##    AC_CHECK_HEADERS([io.h winsock2.h sys/timeb.h])
+##    ;;
+##esac
 
 ## ----------------------------------------------------------------------
 ## Some platforms require that all symbols are resolved when a library
@@ -580,6 +573,77 @@ AC_CHECK_FUNCS([snprintf])
 ##
 AC_C_CONST
 
+## ----------------------------------------------------------------------
+## Check if cURL debugging output should be enabled
+##
+AC_MSG_CHECKING([enable cURL debugging])
+AC_ARG_ENABLE([curl-debug],
+              [AS_HELP_STRING([--enable-curl-debug],
+                              [Enable cURL debugging output.
+                               [default=no]
+                               ])],
+              [RV_CURL_DEBUG=$enableval])
+
+## Set default
+if test "X-$RV_CURL_DEBUG" = X- ; then
+  RV_CURL_DEBUG=no
+fi
+
+## Allow this variable to be substituted in other files
+AC_SUBST([RV_CURL_DEBUG])
+
+case "X-$RV_CURL_DEBUG" in
+  X-yes)
+    AC_DEFINE([RV_CURL_DEBUG], , [Define to have cURL output debugging information.])
+    H5_CFLAGS="$H5_CFLAGS $RV_CURL_DEBUG_CFLAGS"
+    AC_MSG_RESULT([yes])
+    ;;
+  X-no)
+    H5_CFLAGS="$H5_CFLAGS $RV_NO_CURL_DEBUG_CFLAGS"
+    AC_MSG_RESULT([no])
+    ;;
+  *)
+    AC_MSG_ERROR([Unrecognized curl debug option: $RV_CURL_DEBUG.])
+    ;;
+esac
+
+## ----------------------------------------------------------------------
+## Check if REST VOL memory tracking should be enabled
+##
+AC_MSG_CHECKING([enable memory tracking])
+AC_ARG_ENABLE([mem-tracking],
+              [AS_HELP_STRING([--enable-mem-tracking],
+                              [Enable REST VOL memory tracking. This helps to
+                               find memory leaks and other memory errors within
+                               the plugin itself. If this option is enabled,
+                               the plugin will throw an error upon termination
+                               if memory is still allocated.
+                               [default=no]
+                               ])],
+              [RV_TRACK_MEM_USAGE=$enableval])
+
+## Set default
+if test "X-$RV_TRACK_MEM_USAGE" = X- ; then
+  RV_TRACK_MEM_USAGE=no
+fi
+
+## Allow this variable to be substituted in other files
+AC_SUBST([RV_TRACK_MEM_USAGE])
+
+case "X-$RV_TRACK_MEM_USAGE" in
+  X-yes)
+    AC_DEFINE([RV_TRACK_MEM_USAGE], , [Define to have the REST VOL track memory usage.])
+    H5_CFLAGS="$H5_CFLAGS $RV_TRACK_MEM_USAGE_CFLAGS"
+    AC_MSG_RESULT([yes])
+    ;;
+  X-no)
+    H5_CFLAGS="$H5_CFLAGS $RV_NO_TRACK_MEM_USAGE_CFLAGS"
+    AC_MSG_RESULT([no])
+    ;;
+  *)
+    AC_MSG_ERROR([Unrecognized track mem usage option: $RV_TRACK_MEM_USAGE.])
+    ;;
+esac
 
 ## ----------------------------------------------------------------------
 ## Check if the compiler should include symbols
