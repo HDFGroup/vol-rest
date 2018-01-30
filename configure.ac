@@ -245,15 +245,11 @@ case "X-$BUILD_MODE" in
     AC_DEFINE([RV_PLUGIN_DEBUG], , [Define to have the REST VOL print out debugging information.])
     H5_CFLAGS="$H5_CFLAGS $DEBUG_CFLAGS"
     H5_CPPFLAGS="$H5_CPPFLAGS $DEBUG_CPPFLAGS"
-    H5_CXXFLAGS="$H5_CXXFLAGS $DEBUG_CXXFLAGS"
-    H5_FCFLAGS="$H5_FCFLAGS $DEBUG_FCFLAGS"
     AC_MSG_RESULT([debug])
     ;;
   X-production)
     H5_CFLAGS="$H5_CFLAGS $PROD_CFLAGS"
     H5_CPPFLAGS="$H5_CPPFLAGS $PROD_CPPFLAGS"
-    H5_CXXFLAGS="$H5_CXXFLAGS $PROD_CXXFLAGS"
-    H5_FCFLAGS="$H5_FCFLAGS $PROD_FCFLAGS"
     AC_MSG_RESULT([production])
     ;;
   *)
@@ -265,10 +261,6 @@ esac
 ## we need to add this in so configure works as intended. We will need to
 ## reset this value at the end of configure, to preserve the user's settings.
 CFLAGS="${AM_CFLAGS} ${CFLAGS}"
-FCFLAGS="${AM_FCFLAGS} ${FCFLAGS}"
-JAVACFLAGS="${AM_JAVACFLAGS} ${JAVACFLAGS}"
-JAVAFLAGS="${AM_JAVAFLAGS} ${JAVAFLAGS}"
-CXXFLAGS="${AM_CXXFLAGS} ${CXXFLAGS}"
 CPPFLAGS="${AM_CPPFLAGS} ${CPPFLAGS}"
 LDFLAGS="${AM_LDFLAGS} ${LDFLAGS}"
 
@@ -595,11 +587,9 @@ AC_SUBST([RV_CURL_DEBUG])
 case "X-$RV_CURL_DEBUG" in
   X-yes)
     AC_DEFINE([RV_CURL_DEBUG], , [Define to have cURL output debugging information.])
-    H5_CFLAGS="$H5_CFLAGS $RV_CURL_DEBUG_CFLAGS"
     AC_MSG_RESULT([yes])
     ;;
   X-no)
-    H5_CFLAGS="$H5_CFLAGS $RV_NO_CURL_DEBUG_CFLAGS"
     AC_MSG_RESULT([no])
     ;;
   *)
@@ -633,11 +623,9 @@ AC_SUBST([RV_TRACK_MEM_USAGE])
 case "X-$RV_TRACK_MEM_USAGE" in
   X-yes)
     AC_DEFINE([RV_TRACK_MEM_USAGE], , [Define to have the REST VOL track memory usage.])
-    H5_CFLAGS="$H5_CFLAGS $RV_TRACK_MEM_USAGE_CFLAGS"
     AC_MSG_RESULT([yes])
     ;;
   X-no)
-    H5_CFLAGS="$H5_CFLAGS $RV_NO_TRACK_MEM_USAGE_CFLAGS"
     AC_MSG_RESULT([no])
     ;;
   *)
@@ -668,27 +656,20 @@ if test "X-$SYMBOLS" = X- ; then
   fi
 fi
 
-## Allow this variable to be substituted in
-## other files (src/libhdf5.settings.in, etc.)
+## Allow this variable to be substituted in other files
 AC_SUBST([SYMBOLS])
 
 case "X-$SYMBOLS" in
   X-yes)
     H5_CFLAGS="$H5_CFLAGS $SYMBOLS_CFLAGS"
-    H5_CXXFLAGS="$H5_CXXFLAGS $SYMBOLS_CXXFLAGS"
-    H5_FCFLAGS="$H5_FCFLAGS $SYMBOLS_FCFLAGS"
     AC_MSG_RESULT([yes])
     ;;
   X-no)
     H5_CFLAGS="$H5_CFLAGS $NO_SYMBOLS_CFLAGS"
-    H5_CXXFLAGS="$H5_CXXFLAGS $NO_SYMBOLS_CXXFLAGS"
-    H5_FCFLAGS="$H5_FCFLAGS $NO_SYMBOLS_FCFLAGS"
     AC_MSG_RESULT([no])
     ;;
   *)
     H5_CFLAGS="$H5_CFLAGS $SYMBOLS"
-    H5_CXXFLAGS="$H5_CXXFLAGS $SYMBOLS"
-    H5_FCFLAGS="$H5_FCFLAGS $SYMBOLS"
     SYMBOLS="custom ($SYMBOLS)"
     AC_MSG_RESULT([$SYMBOLS])
     ;;
@@ -717,8 +698,7 @@ if test "X-$ASSERTS" = X- ; then
   fi
 fi
 
-## Allow this variable to be substituted in
-## other files (src/libhdf5.settings.in, etc.)
+## Allow this variable to be substituted in other files
 AC_SUBST([ASSERTS])
 
 case "X-$ASSERTS" in
@@ -754,15 +734,12 @@ if test "X-$PROFILING" = X- ; then
     PROFILING=no
 fi
 
-## Allow this variable to be substituted in
-## other files (src/libhdf5.settings.in, etc.)
+## Allow this variable to be substituted in other files
 AC_SUBST([PROFILING])
 
 case "X-$PROFILING" in
   X-yes)
     H5_CFLAGS="$H5_CFLAGS $PROFILE_CFLAGS"
-    H5_CXXFLAGS="$H5_CXXFLAGS $PROFILE_CXXFLAGS"
-    H5_FCFLAGS="$H5_FCFLAGS $PROFILE_FCFLAGS"
     AC_MSG_RESULT([yes])
     ;;
   X-no)
@@ -770,8 +747,6 @@ case "X-$PROFILING" in
     ;;
   *)
     H5_CFLAGS="$H5_CFLAGS $PROFILING"
-    H5_CXXFLAGS="$H5_CXXFLAGS $PROFILING"
-    H5_FCFLAGS="$H5_FCFLAGS $PROFILING"
     PROFILING="custom ($PROFILING)"
     AC_MSG_RESULT([$PROFILING])
     ;;
@@ -816,33 +791,24 @@ if test "X-$OPTIMIZATION" = X- ; then
   esac
 fi
 
-## Allow this variable to be substituted in
-## other files (src/libhdf5.settings.in, etc.)
+## Allow this variable to be substituted in other files
 AC_SUBST([OPTIMIZATION])
 
 case "X-$OPTIMIZATION" in
   X-high)
     H5_CFLAGS="$H5_CFLAGS $HIGH_OPT_CFLAGS"
-    H5_CXXFLAGS="$H5_CXXFLAGS $HIGH_OPT_CXXFLAGS"
-    H5_FCFLAGS="$H5_FCFLAGS $HIGH_OPT_FCFLAGS"
     AC_MSG_RESULT([high])
     ;;
   X-debug)
     H5_CFLAGS="$H5_CFLAGS $DEBUG_OPT_CFLAGS"
-    H5_CXXFLAGS="$H5_CXXFLAGS $DEBUG_OPT_CXXFLAGS"
-    H5_FCFLAGS="$H5_FCFLAGS $DEBUG_OPT_FCFLAGS"
     AC_MSG_RESULT([debug])
     ;;
   X-none)
     H5_CFLAGS="$H5_CFLAGS $NO_OPT_CFLAGS"
-    H5_CXXFLAGS="$H5_CXXFLAGS $NO_OPT_CXXFLAGS"
-    H5_FCFLAGS="$H5_FCFLAGS $NO_OPT_FCFLAGS"
     AC_MSG_RESULT([none])
     ;;
   *)
     H5_CFLAGS="$H5_CFLAGS $OPTIMIZATION"
-    H5_CXXFLAGS="$H5_CXXFLAGS $OPTIMIZATION"
-    H5_FCFLAGS="$H5_FCFLAGS $OPTIMIZATION"
     OPTIMIZATION="custom ($OPTIMIZATION)"
     AC_MSG_RESULT([$OPTIMIZATION])
     ;;
@@ -868,11 +834,7 @@ AC_SUBST([ROOT]) ROOT="`$pwd`"
 ## ----------------------------------------------------------------------
 ## Restore user's CFLAGS.
 CFLAGS="$saved_user_CFLAGS"
-FCFLAGS="$saved_user_FCFLAGS"
-CXXFLAGS="$saved_user_CXXFLAGS"
 CPPFLAGS="$saved_user_CPPFLAGS"
-JAVACFLAGS="$saved_user_JAVACFLAGS"
-JAVAFLAGS="$saved_user_JAVAFLAGS"
 LDFLAGS="$saved_user_LDFLAGS"
 
 ## ----------------------------------------------------------------------
