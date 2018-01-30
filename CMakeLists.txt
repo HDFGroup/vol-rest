@@ -1,6 +1,9 @@
 cmake_minimum_required (VERSION 3.1.0)
 PROJECT (REST VOL)
 
+# Locate cURL and YAJL before building
+find_package(CURL)
+
 #-----------------------------------------------------------------------------
 # Instructions for use : Normal Build
 #
@@ -115,21 +118,6 @@ set (REST_VOL_LIBSH_TARGET        "${REST_VOL_LIB_CORENAME}-shared")
 set (HDF_RESOURCES_DIR       ${HDF5_SOURCE_DIR}/config/cmake)
 set (HDF_RESOURCES_EXT_DIR   ${HDF5_SOURCE_DIR}/config/cmake_ext_mod)
 set (HDF5_SRC_DIR            ${HDF5_SOURCE_DIR}/src)
-set (HDF5_TEST_SRC_DIR       ${HDF5_SOURCE_DIR}/test)
-set (HDF5_CPP_SRC_DIR        ${HDF5_SOURCE_DIR}/c++)
-set (HDF5_CPP_TST_DIR        ${HDF5_SOURCE_DIR}/c++/test)
-set (HDF5_HL_SRC_DIR         ${HDF5_SOURCE_DIR}/hl)
-set (HDF5_HL_CPP_SRC_DIR     ${HDF5_SOURCE_DIR}/hl/c++)
-set (HDF5_TOOLS_SRC_DIR      ${HDF5_SOURCE_DIR}/tools)
-set (HDF5_PERFORM_SRC_DIR    ${HDF5_SOURCE_DIR}/tools/perform)
-set (HDF5_F90_SRC_DIR        ${HDF5_SOURCE_DIR}/fortran)
-set (HDF5_JAVA_JNI_SRC_DIR         ${HDF5_SOURCE_DIR}/java/src/jni)
-set (HDF5_JAVA_HDF5_SRC_DIR        ${HDF5_SOURCE_DIR}/java/src/hdf)
-set (HDF5_JAVA_TEST_SRC_DIR        ${HDF5_SOURCE_DIR}/java/test)
-set (HDF5_JAVA_LIB_DIR             ${HDF5_SOURCE_DIR}/java/lib)
-set (HDF5_JAVA_LOGGING_JAR         ${HDF5_SOURCE_DIR}/java/lib/slf4j-api-1.7.5.jar)
-set (HDF5_JAVA_LOGGING_NOP_JAR     ${HDF5_SOURCE_DIR}/java/lib/ext/slf4j-nop-1.7.5.jar)
-set (HDF5_JAVA_LOGGING_SIMPLE_JAR  ${HDF5_SOURCE_DIR}/java/lib/ext/slf4j-simple-1.7.5.jar)
 
 if (NOT HDF5_INSTALL_BIN_DIR)
   set (HDF5_INSTALL_BIN_DIR bin)
@@ -186,83 +174,6 @@ string (REGEX REPLACE ".*LT_VERS_AGE[ \t]+=[ \t]+([0-9]*).*$"
     "\\1" H5_SOVERS_RELEASE ${_lt_vers_am_contents})
 MATH (EXPR H5_SOVERS_MAJOR ${H5_SOVERS_INTERFACE}-${H5_SOVERS_RELEASE})
 message (STATUS "SOVERSION: ${H5_SOVERS_MAJOR}.${H5_SOVERS_RELEASE}.${H5_SOVERS_MINOR}")
-string (REGEX MATCH ".*LT_TOOLS_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$" H5_TOOLS_SOVERS_EXISTS ${_lt_vers_am_contents})
-if(H5_TOOLS_SOVERS_EXISTS)
-  string (REGEX REPLACE ".*LT_TOOLS_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_TOOLS_SOVERS_INTERFACE ${_lt_vers_am_contents})
-  string (REGEX REPLACE ".*LT_TOOLS_VERS_REVISION[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_TOOLS_SOVERS_MINOR ${_lt_vers_am_contents})
-  string (REGEX REPLACE ".*LT_TOOLS_VERS_AGE[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_TOOLS_SOVERS_RELEASE ${_lt_vers_am_contents})
-  MATH (EXPR H5_TOOLS_SOVERS_MAJOR ${H5_TOOLS_SOVERS_INTERFACE}-${H5_TOOLS_SOVERS_RELEASE})
-  message (STATUS "SOVERSION_TOOLS: ${H5_TOOLS_SOVERS_MAJOR}.${H5_TOOLS_SOVERS_RELEASE}.${H5_TOOLS_SOVERS_MINOR}")
-endif()
-string (REGEX REPLACE ".*LT_CXX_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$" H5_CXX_SOVERS_EXISTS ${_lt_vers_am_contents})
-if(H5_CXX_SOVERS_EXISTS)
-  string (REGEX REPLACE ".*LT_CXX_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_CXX_SOVERS_INTERFACE ${_lt_vers_am_contents})
-  string (REGEX REPLACE ".*LT_CXX_VERS_REVISION[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_CXX_SOVERS_MINOR ${_lt_vers_am_contents})
-  string (REGEX REPLACE ".*LT_CXX_VERS_AGE[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_CXX_SOVERS_RELEASE ${_lt_vers_am_contents})
-  MATH (EXPR H5_CXX_SOVERS_MAJOR ${H5_CXX_SOVERS_INTERFACE}-${H5_CXX_SOVERS_RELEASE})
-  message (STATUS "SOVERSION_CXX: ${H5_CXX_SOVERS_MAJOR}.${H5_CXX_SOVERS_RELEASE}.${H5_CXX_SOVERS_MINOR}")
-endif()
-string (REGEX REPLACE ".*LT_F_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$" H5_F_SOVERS_EXISTS ${_lt_vers_am_contents})
-if(H5_F_SOVERS_EXISTS)
-  string (REGEX REPLACE ".*LT_F_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_F_SOVERS_INTERFACE ${_lt_vers_am_contents})
-  string (REGEX REPLACE ".*LT_F_VERS_REVISION[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_F_SOVERS_MINOR ${_lt_vers_am_contents})
-  string (REGEX REPLACE ".*LT_F_VERS_AGE[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_F_SOVERS_RELEASE ${_lt_vers_am_contents})
-  MATH (EXPR H5_F_SOVERS_MAJOR ${H5_F_SOVERS_INTERFACE}-${H5_F_SOVERS_RELEASE})
-  message (STATUS "SOVERSION_F: ${H5_F_SOVERS_MAJOR}.${H5_F_SOVERS_RELEASE}.${H5_F_SOVERS_MINOR}")
-endif()
-string (REGEX REPLACE ".*LT_HL_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$" H5_HL_SOVERS_EXISTS ${_lt_vers_am_contents})
-if(H5_HL_SOVERS_EXISTS)
-  string (REGEX REPLACE ".*LT_HL_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_HL_SOVERS_INTERFACE ${_lt_vers_am_contents})
-  string (REGEX REPLACE ".*LT_HL_VERS_REVISION[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_HL_SOVERS_MINOR ${_lt_vers_am_contents})
-  string (REGEX REPLACE ".*LT_HL_VERS_AGE[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_HL_SOVERS_RELEASE ${_lt_vers_am_contents})
-  MATH (EXPR H5_HL_SOVERS_MAJOR ${H5_HL_SOVERS_INTERFACE}-${H5_HL_SOVERS_RELEASE})
-  message (STATUS "SOVERSION_HL: ${H5_HL_SOVERS_MAJOR}.${H5_HL_SOVERS_RELEASE}.${H5_HL_SOVERS_MINOR}")
-endif()
-string (REGEX REPLACE ".*LT_HL_CXX_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$" H5_HL_CXX_SOVERS_EXISTS ${_lt_vers_am_contents})
-if(H5_HL_CXX_SOVERS_EXISTS)
-  string (REGEX REPLACE ".*LT_HL_CXX_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_HL_CXX_SOVERS_INTERFACE ${_lt_vers_am_contents})
-  string (REGEX REPLACE ".*LT_HL_CXX_VERS_REVISION[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_HL_CXX_SOVERS_MINOR ${_lt_vers_am_contents})
-  string (REGEX REPLACE ".*LT_HL_CXX_VERS_AGE[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_HL_CXX_SOVERS_RELEASE ${_lt_vers_am_contents})
-  MATH (EXPR H5_HL_CXX_SOVERS_MAJOR ${H5_HL_CXX_SOVERS_INTERFACE}-${H5_HL_CXX_SOVERS_RELEASE})
-  message (STATUS "SOVERSION_HL_CXX: ${H5_HL_CXX_SOVERS_MAJOR}.${H5_HL_CXX_SOVERS_RELEASE}.${H5_HL_CXX_SOVERS_MINOR}")
-endif()
-string (REGEX REPLACE ".*LT_HL_F_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$" H5_HL_F_SOVERS_EXISTS ${_lt_vers_am_contents})
-if(H5_HL_F_SOVERS_EXISTS)
-  string (REGEX REPLACE ".*LT_HL_F_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_HL_F_SOVERS_INTERFACE ${_lt_vers_am_contents})
-  string (REGEX REPLACE ".*LT_HL_F_VERS_REVISION[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_HL_F_SOVERS_MINOR ${_lt_vers_am_contents})
-  string (REGEX REPLACE ".*LT_HL_F_VERS_AGE[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_HL_F_SOVERS_RELEASE ${_lt_vers_am_contents})
-  MATH (EXPR H5_HL_F_SOVERS_MAJOR ${H5_HL_F_SOVERS_INTERFACE}-${H5_HL_F_SOVERS_RELEASE})
-  message (STATUS "SOVERSION_HL_F: ${H5_HL_F_SOVERS_MAJOR}.${H5_HL_F_SOVERS_RELEASE}.${H5_HL_F_SOVERS_MINOR}")
-endif()
-string (REGEX REPLACE ".*LT_JAVA_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$" H5_JAVA_SOVERS_EXISTS ${_lt_vers_am_contents})
-if(H5_JAVA_SOVERS_EXISTS)
-  string (REGEX REPLACE ".*LT_JAVA_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_JAVA_SOVERS_INTERFACE ${_lt_vers_am_contents})
-  string (REGEX REPLACE ".*LT_JAVA_VERS_REVISION[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_JAVA_SOVERS_MINOR ${_lt_vers_am_contents})
-  string (REGEX REPLACE ".*LT_JAVA_VERS_AGE[ \t]+=[ \t]+([0-9]*).*$"
-      "\\1" H5_JAVA_SOVERS_RELEASE ${_lt_vers_am_contents})
-  MATH (EXPR H5_JAVA_SOVERS_MAJOR ${H5_JAVA_SOVERS_INTERFACE}-${H5_JAVA_SOVERS_RELEASE})
-  message (STATUS "SOVERSION_JAVA: ${H5_JAVA_SOVERS_MAJOR}.${H5_JAVA_SOVERS_RELEASE}.${H5_JAVA_SOVERS_MINOR}")
-endif()
 
 #-----------------------------------------------------------------------------
 # Basic HDF5 stuff here
@@ -288,7 +199,6 @@ set (HDF5_PACKAGE_BUGREPORT "help@hdfgroup.org")
 # Include some macros for reusable code
 #-----------------------------------------------------------------------------
 include (${HDF_RESOURCES_EXT_DIR}/HDFMacros.cmake)
-include (${HDF_RESOURCES_EXT_DIR}/HDFLibMacros.cmake)
 include (${HDF_RESOURCES_DIR}/HDF5Macros.cmake)
 
 #-----------------------------------------------------------------------------
