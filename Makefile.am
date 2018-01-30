@@ -18,10 +18,6 @@
 # REST VOL Makefile(.in)
 #
 
-# Shell commands used in Makefiles
-RM=rm -f
-CP=cp
-
 INSTALL_DIR=@RV_HDF5_INSTALL_DIR@
 
 AM_CFLAGS=@AM_CFLAGS@ @RV_CFLAGS@
