@@ -18,9 +18,9 @@
 # REST VOL Makefile(.in)
 #
 
-INSTALL_DIR=@RV_HDF5_INSTALL_DIR@
+HDF5_INSTALL_DIR=@RV_HDF5_INSTALL_DIR@
 
-AM_CFLAGS=@AM_CFLAGS@ @RV_CFLAGS@
+AM_CFLAGS=@AM_CFLAGS@ @RV_CFLAGS@ -I$(HDF5_INSTALL_DIR)/include
 AM_CPPFLAGS=@AM_CPPFLAGS@ @RV_CPPFLAGS@
 AM_LDFLAGS=@AM_LDFLAGS@ @RV_LDFLAGS@
 
@@ -38,7 +38,7 @@ include_HEADERS=rest_vol_public.h
 # Defines for building the test suite
 test_PROGRAMS = test_rest_vol
 test_rest_vol_SOURCES = test_rest_vol.c
-test_rest_vol_LDADD = librestvol.la $(INSTALL_DIR)/lib/libhdf5.la
+test_rest_vol_LDADD = librestvol.la $(HDF5_INSTALL_DIR)/lib/libhdf5.la
 
 testdir=$(bindir)
 

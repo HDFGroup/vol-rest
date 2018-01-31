@@ -80,10 +80,6 @@ AC_SUBST([AM_CFLAGS])
 AC_SUBST([AM_CPPFLAGS])
 AC_SUBST([AM_LDFLAGS])
 
-## Determine where the HDF5 source distribution included with the REST VOL got
-## built and installed to.
-AC_SUBST([RV_HDF5_INSTALL_DIR])
-
 ## Make sure flags are initialized.
 AM_CFLAGS="${AM_CFLAGS}"
 AM_CPPFLAGS="${AM_CPPFLAGS}"
@@ -642,6 +638,11 @@ esac
 ## distribution has been modified
 ##
 AC_MSG_CHECKING([HDF5 source distribution install directory])
+AC_ARG_WITH([hdf5],
+            [AS_HELP_STRING([--with-hdf5[=DIR]],
+                            [To specify the location of a pre-built HDF5
+                             to use when building the REST VOL.])],
+            [RV_HDF5_INSTALL_DIR=$withval])
 
 ## Set default
 if test "X-$RV_HDF5_INSTALL_DIR" = X- ; then
