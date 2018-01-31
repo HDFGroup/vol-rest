@@ -2,7 +2,7 @@
 #
 # Copyright by The HDF Group.                                              
 # All rights reserved.                                                     
-#                                                                          
+#
 # This file is part of HDF5. The full HDF5 copyright notice, including     
 # terms governing use, modification, and redistribution, is contained in   
 # the files COPYING and Copyright.html.  COPYING can be found at the root  
@@ -161,7 +161,7 @@ fi
 # Try to determine a good number of cores to use for parallelizing both builds
 if [ "$NPROCS" -eq "0" ]; then
     NPROCS=`getconf _NPROCESSORS_ONLN 2> /dev/null`
-    
+
     # Handle FreeBSD
     if [ -z "$NPROCS" ]; then
         NPROCS=`getconf NPROCESSORS_ONLN 2> /dev/null`
@@ -175,11 +175,11 @@ if [ "$build_hdf5" = true ]; then
     echo "* Building HDF5 *"
     echo "*****************"
     echo
-    
+
     cd ${SCRIPT_DIR}/${HDF5_DIR}
-    
+
     ./autogen.sh
-    
+
     # If we are building the tools with REST VOL support, link in the already built
     # REST VOL library, along with cURL and YAJL.
     if [ "${build_tools}" = true ]; then
@@ -187,9 +187,9 @@ if [ "$build_hdf5" = true ]; then
     else
         ./configure --prefix=${HDF5_INSTALL_DIR} CFLAGS="${COMP_OPTS}" || exit 1
     fi
-    
+
     make -j${NPROCS} && make install || exit 1
-    
+
     # If building the tools with REST VOL support, don't rebuild the REST VOL
     if [ "${build_tools}" = true ]; then
         exit 0
