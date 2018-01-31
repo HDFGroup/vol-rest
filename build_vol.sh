@@ -47,20 +47,29 @@ REST_VOL_LINK="-lrestvol"
 # Extra compiler options passed to the various steps, such as -Wall
 COMP_OPTS="-Wall -pedantic -Wunused-macros"
 
+# Extra options passed to the REST VOLs configure script
+RV_OPTS=""
+
 
 echo
-echo "******************************"
-echo "* REST VOL build script      *"
-echo "******************************"
+echo "*************************"
+echo "* REST VOL build script *"
+echo "*************************"
 echo
 
-optspec=":hstc:y:p:-"
+optspec=":hbtdmc:y:p:-"
 while getopts "$optspec" optchar; do
     case "${optchar}" in
     h)
         echo "usage: $0 [OPTIONS]"
         echo
         echo "      -h      Print this help message."
+        echo
+        echo "      -d      Enable debugging output in the REST VOL."
+        echo
+        echo "      -b      Enable cURL debugging output in the REST VOL."
+        echo
+        echo "      -m      Enable memory tracking in the REST VOL."
         echo
         echo "      -p DIR  Similar to 'configure --prefix', specifies where"
         echo "              the REST VOL should be installed to. Default is"
@@ -74,9 +83,6 @@ while getopts "$optspec" optchar; do
         echo "              within, if YAJL was not installed to a system"
         echo "              directory."
         echo
-        echo "      -s      Build the REST VOL plugin as a shared library."
-        echo "              By default it is built statically."
-        echo
         echo "      -t      Build the tools with REST VOL support. Note"
         echo "              that due to a circular build dependency, this"
         echo "              option should not be chosen until after the"
@@ -84,6 +90,21 @@ while getopts "$optspec" optchar; do
         echo "              REST VOL plugin have been built once."
         echo
         exit 0
+        ;;
+    d)
+        RV_OPTS="${RV_OPTS} --enable-build-mode=debug"
+        echo "Enabled plugin debugging"
+        echo
+        ;;
+    m)
+        RV_OPTS="${RV_OPTS} --enable-mem-tracking"
+        echo "Enabled plugin memory tracking"
+        echo
+        ;;
+    b)
+        RV_OPTS="${RV_OPTS} --enable-curl-debug"
+        echo "Enabled cURL debugging"
+        echo
         ;;
     p)
         INSTALL_DIR="$OPTARG"
@@ -100,16 +121,10 @@ while getopts "$optspec" optchar; do
         echo "Libyajl directory set to: ${YAJL_DIR}"
         echo
         ;;
-    s)
-        echo "Building REST VOL as shared library"
-        echo
-        build_static=false
-        build_shared=true
-        ;;
     t)
+        build_tools=true
         echo "Building tools with REST VOL support"
         echo
-        build_tools=true
         ;;
     *)
         if [ "$OPTERR" != 1 ] || case $optspec in :*) ;; *) false; esac; then
@@ -165,6 +180,11 @@ fi
 
 make -j${NPROCS} && make install || exit 1
 
+# If building the tools with REST VOL support, don't rebuild the REST VOL
+if [ "${build_tools}" = true ]; then
+    exit 0
+fi
+
 
 # Once HDF5 has been built, build the REST VOL plugin against HDF5.
 echo "*******************************************"
@@ -176,7 +196,7 @@ cd ${SCRIPT_DIR}
 
 ./autogen.sh
 
-./configure --prefix=${INSTALL_DIR} CFLAGS="-I${INSTALL_DIR}/include ${COMP_OPTS} ${CURL_LINK} ${YAJL_LINK}"
+./configure --prefix=${INSTALL_DIR} ${RV_OPTS} CFLAGS="-I${INSTALL_DIR}/include ${COMP_OPTS} ${CURL_LINK} ${YAJL_LINK}"
 
 make -j${NPROCS} && make install || exit 1
 
