@@ -1160,7 +1160,7 @@ RV_realloc(void *mem, size_t size)
                 memcpy(&block_size, (char *) mem - sizeof(block_size), sizeof(block_size));
 
                 ret_value = RV_malloc(size);
-                memcpy(ret_value, mem, MIN(size, block_size));
+                memcpy(ret_value, mem, size < block_size ? size : block_size);
                 RV_free(mem);
             } /* end if */
             else
