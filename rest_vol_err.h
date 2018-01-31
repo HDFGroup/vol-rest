@@ -30,6 +30,8 @@ extern "C" {
 #include "H5Epublic.h"
 #include "H5Ipublic.h"
 
+#include "rest_vol_config.h"
+
 extern hid_t rv_err_stack_g;
 extern hid_t rv_err_class_g;
 extern hid_t obj_err_maj_g;

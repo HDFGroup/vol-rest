@@ -28,7 +28,6 @@ extern "C" {
 #endif
 
 #include "rest_vol_public.h"
-#include "rest_vol_config.h"
 
 #define HDF5_VOL_REST_VERSION 1 /* Version number of the REST VOL plugin */
 

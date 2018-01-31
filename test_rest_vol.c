@@ -27,6 +27,7 @@
 #include "hdf5.h"
 #include "rest_vol_public.h"
 #include "rest_vol_err.h"
+#include "rest_vol_config.h"
 
 /* The name of the file that all of the tests will operate on */
 #define FILENAME "/home/test_user1/new_file"

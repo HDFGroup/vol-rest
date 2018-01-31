@@ -36,13 +36,15 @@
 
 /* Includes for HDF5 */
 #include "H5public.h"
+#include "H5Fpublic.h"       /* File defines */
 #include "H5Ppublic.h"       /* Property Lists    */
 #include "H5Spublic.h"       /* Dataspaces        */
 #include "H5VLpublic.h"      /* VOL plugins       */
 
 /* Includes for the REST VOL itself */
 #include "rest_vol.h"        /* REST VOL plugin   */
-#include "rest_vol_public.h"
+#include "rest_vol_public.h" /* REST VOL's public header file */
+#include "rest_vol_config.h" /* Defines for enabling debugging functionality in the REST VOL */
 #include "rest_vol_err.h"    /* REST VOL error reporting macros */
 
 /* Macro to handle various HTTP response codes */
@@ -14378,13 +14380,17 @@ dataset_specific_type_to_string(H5VL_dataset_specific_t specific_type)
 static const char*
 file_flags_to_string(unsigned flags)
 {
-    switch (flags) {
-        case H5F_ACC_TRUNC:  return "H5F_ACC_TRUNC";
-        case H5F_ACC_EXCL:   return "H5F_ACC_EXCL";
-        case H5F_ACC_RDWR:   return "H5F_ACC_RDWR";
-        case H5F_ACC_RDONLY: return "H5F_ACC_RDONLY";
-        default:             return "(unknown)";
-    } /* end switch */
+    /* When included from a public header, these macros cannot be switched upon */
+    if (flags == H5F_ACC_TRUNC)
+        return "H5F_ACC_TRUNC";
+    else if (flags == H5F_ACC_EXCL)
+        return "H5F_ACC_EXCL";
+    else if (flags == H5F_ACC_RDWR)
+        return "H5F_ACC_RDWR";
+    else if (flags == H5F_ACC_RDONLY)
+        return "H5F_ACC_RDONLY";
+    else
+        return "(unknown)";
 } /* end file_flags_to_string() */
 
 
