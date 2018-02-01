@@ -19,12 +19,28 @@
 #
 
 HDF5_INSTALL_DIR=@RV_HDF5_INSTALL_DIR@
+CURL_INSTALL_DIR=@RV_CURL_INSTALL_DIR@
+YAJL_INSTALL_DIR=@RV_YAJL_INSTALL_DIR@
 
 AM_CFLAGS=@AM_CFLAGS@ @RV_CFLAGS@ -I$(HDF5_INSTALL_DIR)/include
 AM_CPPFLAGS=@AM_CPPFLAGS@ @RV_CPPFLAGS@
 AM_LDFLAGS=@AM_LDFLAGS@ @RV_LDFLAGS@
 
 ACLOCAL_AMFLAGS=-I m4
+
+# Add in the linker flags for cURL
+if !CURL_DEFAULT_DIR
+    AM_CFLAGS += -I$(CURL_INSTALL_DIR)/include -L$(CURL_INSTALL_DIR)/lib$(LIB_SUFFIX)
+endif
+
+AM_CFLAGS += -lcurl
+
+# Add in the linker flags for YAJL
+if !YAJL_DEFAULT_DIR
+    AM_CFLAGS += -I$(YAJL_INSTALL_DIR)/include -L$(YAJL_INSTALL_DIR)/lib$(LIB_SUFFIX)
+endif
+
+AM_CFLAGS += -lyajl
 
 # Our main target, the REST VOL plugin library
 lib_LTLIBRARIES=librestvol.la
@@ -39,6 +55,7 @@ include_HEADERS=rest_vol_public.h
 test_PROGRAMS = test_rest_vol
 test_rest_vol_SOURCES = test_rest_vol.c
 test_rest_vol_LDADD = librestvol.la $(HDF5_INSTALL_DIR)/lib/libhdf5.la
+test_rest_vol_CFLAGS = -I$(HDF5_INSTALL_DIR)/include
 
 testdir=$(bindir)
 

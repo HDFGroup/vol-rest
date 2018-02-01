@@ -77,12 +77,12 @@ while getopts "$optspec" optchar; do
         echo "              the REST VOL should be installed to. Default is"
         echo "              'source directory/rest_vol_build'."
         echo
-        echo "      -c DIR  To specify the directory to search for libcurl"
-        echo "              within, if cURL was not installed to a system"
+        echo "      -c DIR  To specify the top-level directory where cURL is"
+        echo "              installed, if cURL was not installed to a system"
         echo "              directory."
         echo
-        echo "      -y DIR  To specify the directory to search for libyajl"
-        echo "              within, if YAJL was not installed to a system"
+        echo "      -y DIR  To specify the top-level directory where YAJL is"
+        echo "              installed, if YAJL was not installed to a system"
         echo "              directory."
         echo
         echo "      -t      Build the tools with REST VOL support. Note"
@@ -122,11 +122,15 @@ while getopts "$optspec" optchar; do
         ;;
     c)
         CURL_DIR="$OPTARG"
+        CURL_LINK="-L${CURL_DIR}/lib ${CURL_LINK}"
+        RV_OPTS="${RV_OPTS} --with-curl=${CURL_DIR}"
         echo "Libcurl directory set to: ${CURL_DIR}"
         echo
         ;;
     y)
         YAJL_DIR="$OPTARG"
+        YAJL_LINK="-L${YAJL_DIR}/lib ${YAJL_LINK}"
+        RV_OPTS="${RV_OPTS} --with-yajl=${YAJL_DIR}"
         echo "Libyajl directory set to: ${YAJL_DIR}"
         echo
         ;;
@@ -144,18 +148,6 @@ while getopts "$optspec" optchar; do
         ;;
     esac
 done
-
-
-# If the libcurl and libyajl directories were specified on the command line,
-# add the individual linker search flags into the flags for linking cURL and
-# YAJL
-if [ ! -z ${CURL_DIR} ]; then
-    CURL_LINK="-L${CURL_DIR} ${CURL_LINK}"
-fi
-
-if [ ! -z ${YAJL_DIR} ]; then
-    YAJL_LINK="-L${YAJL_DIR} ${YAJL_LINK}"
-fi
 
 
 # Try to determine a good number of cores to use for parallelizing both builds
@@ -207,7 +199,7 @@ cd ${SCRIPT_DIR}
 
 ./autogen.sh
 
-./configure --prefix=${INSTALL_DIR} ${RV_OPTS} CFLAGS="${COMP_OPTS} ${CURL_LINK} ${YAJL_LINK}"
+./configure --prefix=${INSTALL_DIR} ${RV_OPTS} CFLAGS="${COMP_OPTS}"
 
 make -j${NPROCS} && make install || exit 1
 

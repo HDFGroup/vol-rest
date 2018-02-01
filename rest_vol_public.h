@@ -23,9 +23,6 @@
 #ifndef rest_vol_public_H
 #define rest_vol_public_H
 
-#include <curl/curl.h>
-#include <yajl/yajl_tree.h>
-
 #include "H5public.h"
 #include "H5Rpublic.h"
 

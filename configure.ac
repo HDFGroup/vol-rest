@@ -51,13 +51,27 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])]) # use silent rules where a
 AM_MAINTAINER_MODE([disable])
 
 ## ----------------------------------------------------------------------
-## Set prefix default (install directory) to a directory in the build area.
-## This allows multiple src-dir builds within one host.
+## Set prefix default (install directory) to a directory in the build
+## area. This allows multiple src-dir builds within one host.
 AC_PREFIX_DEFAULT([`pwd`/rest_vol_build])
 
 if test "${prefix}" = NONE; then
   prefix=$ac_default_prefix
 fi
+
+## -----------------------------------------------------------------------
+## Set lib dir suffix. By default, search for required libraries in 'lib'
+## on 32-bit machines and 'lib64' on 64-bit machines
+if test `getconf LONG_BIT` = 64; then
+  echo "Set suffix to 64";
+  LIB_SUFFIX="64"
+else
+  echo "Set suffix to 32";
+  LIB_SUFFIX="32"
+fi
+
+AC_SUBST([LIB_SUFFIX])
+
 
 AC_CANONICAL_HOST
 AC_SUBST([CPPFLAGS])
@@ -652,6 +666,50 @@ fi
 ## Allow this variable to be substituted in other files
 AC_SUBST([RV_HDF5_INSTALL_DIR])
 AC_MSG_RESULT([$RV_HDF5_INSTALL_DIR])
+
+## ----------------------------------------------------------------------
+## Check if the install directory for cURL should be modified
+##
+AC_MSG_CHECKING([cURL install directory])
+AC_ARG_WITH([curl],
+            [AS_HELP_STRING([--with-curl[=DIR]],
+                            [To specify the top-level directory where cURL is
+                             installed, if cURL was not installed to a system
+                             path.])],
+            [RV_CURL_INSTALL_DIR=$withval])
+
+## Set default
+if test "X-$RV_CURL_INSTALL_DIR" = X- ; then
+  RV_CURL_INSTALL_DIR=""
+fi
+
+AM_CONDITIONAL([CURL_DEFAULT_DIR], [test -z "$RV_CURL_INSTALL_DIR"])
+
+## Allow this variable to be substituted in other files
+AC_SUBST([RV_CURL_INSTALL_DIR])
+AC_MSG_RESULT([$RV_CURL_INSTALL_DIR])
+
+## ----------------------------------------------------------------------
+## Check if the install directory for YAJL should be modified
+##
+AC_MSG_CHECKING([YAJL install directory])
+AC_ARG_WITH([yajl],
+            [AS_HELP_STRING([--with-yajl[=DIR]],
+                            [To specify the top-level directory where YAJL is
+                             installed, if YAJL was not installed to a system
+                             path.])],
+            [RV_YAJL_INSTALL_DIR=$withval])
+
+## Set default
+if test "X-$RV_YAJL_INSTALL_DIR" = X- ; then
+  RV_YAJL_INSTALL_DIR=""
+fi
+
+AM_CONDITIONAL([YAJL_DEFAULT_DIR], [test -z "$RV_YAJL_INSTALL_DIR"])
+
+## Allow this variable to be substituted in other files
+AC_SUBST([RV_YAJL_INSTALL_DIR])
+AC_MSG_RESULT([$RV_YAJL_INSTALL_DIR])
 
 ## ----------------------------------------------------------------------
 ## Check if the compiler should include symbols

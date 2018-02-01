@@ -27,6 +27,9 @@
 extern "C" {
 #endif
 
+#include <curl/curl.h>
+#include <yajl/yajl_tree.h>
+
 #include "rest_vol_public.h"
 
 #define HDF5_VOL_REST_VERSION 1 /* Version number of the REST VOL plugin */
