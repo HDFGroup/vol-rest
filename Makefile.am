@@ -49,7 +49,7 @@ lib_LTLIBRARIES=librestvol.la
 librestvol_la_SOURCES=rest_vol.c rest_vol.h rest_vol_err.h
 
 # Public headers
-include_HEADERS=rest_vol_public.h
+include_HEADERS=rest_vol_public.h rest_vol_config.h
 
 # Defines for building the test suite
 test_PROGRAMS = test_rest_vol

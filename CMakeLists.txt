@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.1.0)
-PROJECT (REST VOL)
+PROJECT (REST_VOL C)
 
 # Locate cURL and YAJL before building
 find_package(CURL)
@@ -66,6 +66,8 @@ endif ()
 #-----------------------------------------------------------------------------
 set (HDF5_EXTERNALLY_CONFIGURED 1)
 
+set (HDF5_SOURCE_DIR "hdf5")
+
 # HDF5_EXPORTED_TARGETS :
 #   Set this to the name of the targets variable which controls exports
 #   If unset (because parent project does not support/use the
@@ -97,9 +99,7 @@ set (HDF5_INSTALL_DATA_DIR )
 set (HDF5_INSTALL_NO_DEVELOPMENT )
 
 # Add the HDF5 source as a sub-project
-add_subdirectory(hdf5)
-
-string(TIMESTAMP CONFIG_DATE "%Y-%m-%d")
+add_subdirectory(${HDF5_SOURCE_DIR})
 
 #-----------------------------------------------------------------------------
 # Set the core names of all the libraries
@@ -178,8 +178,8 @@ message (STATUS "SOVERSION: ${H5_SOVERS_MAJOR}.${H5_SOVERS_RELEASE}.${H5_SOVERS_
 #-----------------------------------------------------------------------------
 # Basic HDF5 stuff here
 #-----------------------------------------------------------------------------
-set (HDF5_PACKAGE "hdf5")
-set (HDF5_PACKAGE_NAME "HDF5")
+set (REST_VOL_PACKAGE "rest-vol")
+set (REST_VOL_PACKAGE_NAME "REST VOL")
 set (HDF5_PACKAGE_VERSION "${H5_VERS_MAJOR}.${H5_VERS_MINOR}.${H5_VERS_RELEASE}")
 set (HDF5_PACKAGE_VERSION_MAJOR "${H5_VERS_MAJOR}.${H5_VERS_MINOR}")
 set (HDF5_PACKAGE_VERSION_MINOR "${H5_VERS_RELEASE}")
@@ -192,8 +192,8 @@ set (HDF5_PACKAGE_SOVERSION "${H5_SOVERS_MAJOR}.${H5_SOVERS_RELEASE}.${H5_SOVERS
 
 set (HDF5_PACKAGE_STRING "${HDF5_PACKAGE_NAME} ${HDF5_PACKAGE_VERSION_STRING}")
 set (HDF5_PACKAGE_TARNAME "${HDF5_PACKAGE}${HDF_PACKAGE_EXT}")
-set (HDF5_PACKAGE_URL "http://www.hdfgroup.org")
-set (HDF5_PACKAGE_BUGREPORT "help@hdfgroup.org")
+set (REST_VOL_PACKAGE_URL "http://www.hdfgroup.org")
+set (REST_VOL_PACKAGE_BUGREPORT "help@hdfgroup.org")
 
 #-----------------------------------------------------------------------------
 # Include some macros for reusable code
@@ -204,31 +204,21 @@ include (${HDF_RESOURCES_DIR}/HDF5Macros.cmake)
 #-----------------------------------------------------------------------------
 # Setup output Directories
 #-----------------------------------------------------------------------------
-if (NOT HDF5_EXTERNALLY_CONFIGURED)
-  set (CMAKE_RUNTIME_OUTPUT_DIRECTORY
-      ${PROJECT_BINARY_DIR}/bin CACHE PATH "Single Directory for all Executables."
-  )
-  set (CMAKE_LIBRARY_OUTPUT_DIRECTORY
-      ${PROJECT_BINARY_DIR}/bin CACHE PATH "Single Directory for all Libraries"
-  )
-  set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY
-      ${PROJECT_BINARY_DIR}/bin CACHE PATH "Single Directory for all static libraries."
-  )
-  set (CMAKE_Fortran_MODULE_DIRECTORY
-      ${PROJECT_BINARY_DIR}/bin CACHE PATH "Single Directory for all fortran modules."
-  )
-  if (WIN32)
-    set (CMAKE_TEST_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${CMAKE_BUILD_TYPE})
-  else (WIN32)
-    set (CMAKE_TEST_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-  endif (WIN32)
-else (NOT HDF5_EXTERNALLY_CONFIGURED)
-  # if we are externally configured, but the project uses old cmake scripts
-  # this may not be set and utilities like H5detect will fail
-  if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
-    set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${EXECUTABLE_OUTPUT_PATH})
-  endif (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
-endif (NOT HDF5_EXTERNALLY_CONFIGURED)
+set (CMAKE_RUNTIME_OUTPUT_DIRECTORY
+    ${PROJECT_BINARY_DIR}/bin CACHE PATH "Single Directory for all Exectuables."
+)
+set (CMAKE_LIBRARY_OUTPUT_DIRECTORY
+    ${PROJECT_BINARY_DIR}/bin CACHE PATH "Single Directory for all Libraries"
+)
+set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY
+    ${PROJECT_BINARY_DIR}/bin CACHE PATH "Single Directory for all static libraries."
+)
+
+if (WIN32)
+  set (CMAKE_TEST_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${CMAKE_BUILD_TYPE})
+else (WIN32)
+  set (CMAKE_TEST_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+endif (WIN32)
 
 #-----------------------------------------------------------------------------
 # Targets built within this project are exported at Install time for use
@@ -251,7 +241,7 @@ set (EXTERNAL_LIBRARYDLL_LIST "")
 #-----------------------------------------------------------------------------
 # Run all the CMake configuration tests for our build environment
 #-----------------------------------------------------------------------------
-include (${HDF_RESOURCES_DIR}/ConfigureChecks.cmake)
+#include (${HDF_RESOURCES_DIR}/ConfigureChecks.cmake)
 
 set (CMAKE_INCLUDE_CURRENT_DIR_IN_INTERFACE ON)
 
@@ -350,10 +340,7 @@ option (HDF5_ENABLE_TRACE "Enable API tracing capability" OFF)
 mark_as_advanced (HDF5_ENABLE_TRACE)
 if (CMAKE_BUILD_TYPE MATCHES Debug)
   add_definitions (-DDEBUG)
-  # Enable tracing of the API
-  if (HDF5_ENABLE_TRACE)
-    add_definitions (-DH5_DEBUG_API )
-  endif (HDF5_ENABLE_TRACE)
+
   # Enable instrumenting of the library's internal operations
   option (HDF5_ENABLE_INSTRUMENT "Instrument The library" OFF)
   if (HDF5_ENABLE_INSTRUMENT)
@@ -362,9 +349,6 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
   mark_as_advanced (HDF5_ENABLE_INSTRUMENT)
 else (CMAKE_BUILD_TYPE MATCHES Debug)
   add_definitions (-DNDEBUG)
-  if (HDF5_ENABLE_TRACE)
-    add_definitions (-DH5_DEBUG_API )
-  endif (HDF5_ENABLE_TRACE)
 endif (CMAKE_BUILD_TYPE MATCHES Debug)
 
 include (${HDF_RESOURCES_DIR}/HDFCompilerFlags.cmake)
@@ -372,38 +356,13 @@ include (${HDF_RESOURCES_DIR}/HDFCompilerFlags.cmake)
 #-----------------------------------------------------------------------------
 # All libs/tests/examples need the main include directories
 #-----------------------------------------------------------------------------
-INCLUDE_DIRECTORIES (${HDF5_BINARY_DIR} ${HDF5_SRC_DIR} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-
-#-----------------------------------------------------------------------------
-# Include user macros
-#-----------------------------------------------------------------------------
-include (UserMacros.cmake)
+INCLUDE_DIRECTORIES (${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 
 # -----------------------------------------------------------------------
 # wrapper script variables
 #
 #set (CFLAGS "${C_DEFINES}")
 #set (CXXFLAGS "${CXX_DEFINES}")
-
-#-----------------------------------------------------------------------------
-# Add the HDF5 Library Target to the build
-#-----------------------------------------------------------------------------
-add_subdirectory (${HDF5_SOURCE_DIR}/src ${PROJECT_BINARY_DIR}/src)
-
-if (HDF5_ALLOW_EXTERNAL_SUPPORT MATCHES "SVN" OR HDF5_ALLOW_EXTERNAL_SUPPORT MATCHES "TGZ")
-  if (ZLIB_FOUND AND ZLIB_USE_EXTERNAL)
-    ADD_DEPENDENCIES (${HDF5_LIB_TARGET} ZLIB)
-    if (BUILD_SHARED_LIBS)
-      add_dependencies (${HDF5_LIBSH_TARGET} ZLIB)
-    endif (BUILD_SHARED_LIBS)
-  endif (ZLIB_FOUND AND ZLIB_USE_EXTERNAL)
-  if (SZIP_FOUND AND SZIP_USE_EXTERNAL)
-    ADD_DEPENDENCIES (${HDF5_LIB_TARGET} SZIP)
-    if (BUILD_SHARED_LIBS)
-      add_dependencies (${HDF5_LIBSH_TARGET} SZIP)
-    endif (BUILD_SHARED_LIBS)
-  endif (SZIP_FOUND AND SZIP_USE_EXTERNAL)
-endif (HDF5_ALLOW_EXTERNAL_SUPPORT MATCHES "SVN" OR HDF5_ALLOW_EXTERNAL_SUPPORT MATCHES "TGZ")
 
 #-----------------------------------------------------------------------------
 # Dashboard and Testing Settings
@@ -415,13 +374,6 @@ if (BUILD_TESTING)
       "Timeout in seconds for each test (default 1200=20minutes)"
   )
 
-  option (HDF5_TEST_VFD "Execute tests with different VFDs" OFF)
-  mark_as_advanced (HDF5_TEST_VFD)
-  if (HDF5_TEST_VFD)
-    option (HDF5_TEST_FHEAP_VFD "Execute tests with different VFDs" ON)
-    mark_as_advanced (HDF5_TEST_FHEAP_VFD)
-  endif (HDF5_TEST_VFD)
-
   option (HDF_TEST_EXPRESS "Control testing framework (0-3)" "0")
   mark_as_advanced (HDF_TEST_EXPRESS)
 
@@ -430,43 +382,21 @@ if (BUILD_TESTING)
 
   include (${HDF5_SOURCE_DIR}/CTestConfig.cmake)
   configure_file (${HDF_RESOURCES_DIR}/CTestCustom.cmake ${HDF5_BINARY_DIR}/CTestCustom.ctest @ONLY)
-
-  if (NOT HDF5_EXTERNALLY_CONFIGURED)
-    if (EXISTS "${HDF5_SOURCE_DIR}/test" AND IS_DIRECTORY "${HDF5_SOURCE_DIR}/test")
-      add_subdirectory (${HDF5_SOURCE_DIR}/tools/lib ${PROJECT_BINARY_DIR}/tools/lib)
-      add_subdirectory (${HDF5_SOURCE_DIR}/test      ${PROJECT_BINARY_DIR}/test)
-    endif (EXISTS "${HDF5_SOURCE_DIR}/test" AND IS_DIRECTORY "${HDF5_SOURCE_DIR}/test")
-    if (H5_HAVE_PARALLEL)
-      if (EXISTS "${HDF5_SOURCE_DIR}/testpar" AND IS_DIRECTORY "${HDF5_SOURCE_DIR}/testpar")
-        add_subdirectory (${HDF5_SOURCE_DIR}/testpar ${PROJECT_BINARY_DIR}/testpar)
-      endif (EXISTS "${HDF5_SOURCE_DIR}/testpar" AND IS_DIRECTORY "${HDF5_SOURCE_DIR}/testpar")
-    endif (H5_HAVE_PARALLEL)
-  endif (NOT HDF5_EXTERNALLY_CONFIGURED)
 endif (BUILD_TESTING)
 
 #-----------------------------------------------------------------------------
 # Option to build HDF5 Tools
 #-----------------------------------------------------------------------------
-if (EXISTS "${HDF5_SOURCE_DIR}/tools" AND IS_DIRECTORY "${HDF5_SOURCE_DIR}/tools")
-  option (HDF5_BUILD_TOOLS  "Build HDF5 Tools" ON)
-  if (HDF5_BUILD_TOOLS)
-    add_subdirectory (${HDF5_SOURCE_DIR}/tools ${PROJECT_BINARY_DIR}/tools)
-  endif (HDF5_BUILD_TOOLS)
-endif (EXISTS "${HDF5_SOURCE_DIR}/tools" AND IS_DIRECTORY "${HDF5_SOURCE_DIR}/tools")
-
-#-----------------------------------------------------------------------------
-# Option to build examples
-#-----------------------------------------------------------------------------
-if (EXISTS "${HDF5_SOURCE_DIR}/examples" AND IS_DIRECTORY "${HDF5_SOURCE_DIR}/examples")
-  option (HDF5_BUILD_EXAMPLES  "Build HDF5 Library Examples" ON)
-  if (HDF5_BUILD_EXAMPLES)
-    add_subdirectory (${HDF5_SOURCE_DIR}/examples ${PROJECT_BINARY_DIR}/examples)
-  endif (HDF5_BUILD_EXAMPLES)
-endif (EXISTS "${HDF5_SOURCE_DIR}/examples" AND IS_DIRECTORY "${HDF5_SOURCE_DIR}/examples")
+#if (EXISTS "${HDF5_SOURCE_DIR}/tools" AND IS_DIRECTORY "${HDF5_SOURCE_DIR}/tools")
+#  option (HDF5_BUILD_TOOLS  "Build HDF5 Tools" ON)
+#  if (HDF5_BUILD_TOOLS)
+#    add_subdirectory (${HDF5_SOURCE_DIR}/tools ${PROJECT_BINARY_DIR}/tools)
+#  endif (HDF5_BUILD_TOOLS)
+#endif (EXISTS "${HDF5_SOURCE_DIR}/tools" AND IS_DIRECTORY "${HDF5_SOURCE_DIR}/tools")
 
 #-----------------------------------------------------------------------------
 # Generate the rest_vol_config.h file containing user settings needed by compilation
 #-----------------------------------------------------------------------------
-configure_file (${}/rest_vol_config.h.in ${}/rest_vol_config.h @ONLY)
+configure_file (${CMAKE_SOURCE_DIR}/rest_vol_config.h.in ${CMAKE_SOURCE_DIR}/rest_vol_config.h @ONLY)
 
 include (CMakeInstallation.cmake)
