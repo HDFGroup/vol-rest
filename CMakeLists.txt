@@ -397,6 +397,6 @@ endif (BUILD_TESTING)
 #-----------------------------------------------------------------------------
 # Generate the rest_vol_config.h file containing user settings needed by compilation
 #-----------------------------------------------------------------------------
-configure_file (${CMAKE_SOURCE_DIR}/rest_vol_config.h.in ${CMAKE_SOURCE_DIR}/rest_vol_config.h @ONLY)
+configure_file (${CMAKE_SOURCE_DIR}/rv_cmake_config.h.in ${CMAKE_SOURCE_DIR}/rest_vol_config.h @ONLY)
 
 include (CMakeInstallation.cmake)

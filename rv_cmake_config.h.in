@@ -1,0 +1,183 @@
+/* cmake_config.h.in  Used by CMake to generate rest_vol_config.h during the configuration */
+
+#ifndef RV_CONFIG_H_
+#define RV_CONFIG_H_
+
+/* Define if using MinGW */
+#cmakedefine H5_HAVE_MINGW @H5_HAVE_MINGW@
+
+/* Define if on the Windows platform and default WIN32 API */
+#cmakedefine H5_HAVE_WIN32_API @H5_HAVE_WIN32_API@
+
+/* Define if using a Windows compiler (i.e. Visual Studio) */
+#cmakedefine H5_HAVE_VISUAL_STUDIO @H5_HAVE_VISUAL_STUDIO@
+
+/* Define if building universal (internal helper macro) */
+#cmakedefine H5_AC_APPLE_UNIVERSAL_BUILD @H5_AC_APPLE_UNIVERSAL_BUILD@
+
+/* Define the default vol plugin to compile */
+#cmakedefine H5_DEFAULT_VOL @H5_DEFAULT_VOL@
+
+/* Define if `dev_t' is a scalar */
+#cmakedefine H5_DEV_T_IS_SCALAR @H5_DEV_T_IS_SCALAR@
+
+/* Define if the compiler understands the __func__ keyword */
+#cmakedefine H5_HAVE_C99_FUNC @H5_HAVE_C99_FUNC@
+
+/* Define if Darwin or Mac OS X */
+#cmakedefine H5_HAVE_DARWIN @H5_HAVE_DARWIN@
+
+/* Define to 1 if you have the <dirent.h> header file. */
+#cmakedefine H5_HAVE_DIRENT_H @H5_HAVE_DIRENT_H@
+
+/* Define to 1 if you have the <dlfcn.h> header file. */
+#cmakedefine H5_HAVE_DLFCN_H @H5_HAVE_DLFCN_H@
+
+/* Define to 1 if you have the <features.h> header file. */
+#cmakedefine H5_HAVE_FEATURES_H @H5_HAVE_FEATURES_H@
+
+/* Define if the compiler understands the __FUNCTION__ keyword */
+#cmakedefine H5_HAVE_FUNCTION @H5_HAVE_FUNCTION@
+
+/* Define to 1 if you have the `m' library (-lm). */
+#cmakedefine H5_HAVE_LIBM @H5_HAVE_LIBM@
+
+/* Define to 1 if you have the `snprintf' function. */
+#cmakedefine H5_HAVE_SNPRINTF @H5_HAVE_SNPRINTF@
+
+/* Define to 1 if you have the <stdlib.h> header file. */
+#cmakedefine H5_HAVE_STDLIB_H @H5_HAVE_STDLIB_H@
+
+/* Define to 1 if you have the <string.h> header file. */
+#cmakedefine H5_HAVE_STRING_H @H5_HAVE_STRING_H@
+
+/* Define to 1 if you have the <sys/time.h> header file. */
+#cmakedefine H5_HAVE_SYS_TIME_H @H5_HAVE_SYS_TIME_H@
+
+/* Define to 1 if you have the <sys/types.h> header file. */
+#cmakedefine H5_HAVE_SYS_TYPES_H @H5_HAVE_SYS_TYPES_H@
+
+/* Name of package */
+#define H5_PACKAGE "@HDF5_PACKAGE@"
+
+/* Define to the address where bug reports for this package should be sent. */
+#define H5_PACKAGE_BUGREPORT "@HDF5_PACKAGE_BUGREPORT@"
+
+/* Define to the full name of this package. */
+#define H5_PACKAGE_NAME "@HDF5_PACKAGE_NAME@"
+
+/* Define to the full name and version of this package. */
+#define H5_PACKAGE_STRING "@HDF5_PACKAGE_STRING@"
+
+/* Define to the one symbol short name of this package. */
+#define H5_PACKAGE_TARNAME "@HDF5_PACKAGE_TARNAME@"
+
+/* Define to the home page for this package. */
+#define H5_PACKAGE_URL "@HDF5_PACKAGE_URL@"
+
+/* Define to the version of this package. */
+#define H5_PACKAGE_VERSION "@HDF5_PACKAGE_VERSION_STRING@"
+
+/* Width for printf() for type `long long' or `__int64', use `ll' */
+#cmakedefine H5_PRINTF_LL_WIDTH @H5_PRINTF_LL_WIDTH@
+
+/* The size of `char', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_CHAR @H5_SIZEOF_CHAR@
+
+/* The size of `double', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_DOUBLE @H5_SIZEOF_DOUBLE@
+
+/* The size of `float', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_FLOAT @H5_SIZEOF_FLOAT@
+
+/* The size of `int', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_INT @H5_SIZEOF_INT@
+
+/* The size of `int16_t', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_INT16_T @H5_SIZEOF_INT16_T@
+
+/* The size of `int32_t', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_INT32_T @H5_SIZEOF_INT32_T@
+
+/* The size of `int64_t', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_INT64_T @H5_SIZEOF_INT64_T@
+
+/* The size of `int8_t', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_INT8_T @H5_SIZEOF_INT8_T@
+
+#if !defined(__APPLE__)
+/* The size of `size_t', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_SIZE_T @H5_SIZEOF_SIZE_T@
+
+/* The size of `ssize_t', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_SSIZE_T @H5_SIZEOF_SSIZE_T@
+
+/* The size of `long', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_LONG @H5_SIZEOF_LONG@
+
+#else
+   # if defined(__LP64__) && __LP64__
+  #define H5_SIZEOF_LONG 8
+  #define H5_SIZEOF_SIZE_T 8
+  #define H5_SIZEOF_SSIZE_T 8
+  # else
+  #define H5_SIZEOF_LONG 4
+  #define H5_SIZEOF_SIZE_T 4
+  #define H5_SIZEOF_SSIZE_T 4
+  # endif
+
+#endif
+
+/* The size of `long double', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_LONG_DOUBLE @H5_SIZEOF_LONG_DOUBLE@
+
+/* Define size of long long and/or __int64 bit integer type only if the type
+   exists.  */
+#if !defined(__APPLE__)
+ #cmakedefine H5_SIZEOF_LONG_LONG @H5_SIZEOF_LONG_LONG@
+#else
+ #define H5_SIZEOF_LONG_LONG 8
+#endif
+
+/* The size of `off_t', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_OFF_T @H5_SIZEOF_OFF_T@
+
+/* The size of `ptrdiff_t', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_PTRDIFF_T @H5_SIZEOF_PTRDIFF_T@
+
+/* The size of `uint8_t', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_UINT8_T @H5_SIZEOF_UINT8_T@
+
+/* Define to 1 if you have the <stdbool.h> header file. */
+#cmakedefine H5_HAVE_STDBOOL_H @H5_HAVE_STDBOOL_H@
+
+/* The size of `bool', as computed by sizeof. */
+#cmakedefine H5_SIZEOF_BOOL @H5_SIZEOF_BOOL@
+
+/* Define to 1 if you have the ANSI C header files. */
+#cmakedefine H5_STDC_HEADERS @H5_STDC_HEADERS@
+
+/* Define if a memory checking tool will be used on the library, to cause
+   library to be very picky about memory operations and also disable the
+   internal free list manager code. */
+#cmakedefine H5_USING_MEMCHECKER @H5_USING_MEMCHECKER@
+
+/* Version number of package */
+#define H5_VERSION "@HDF5_PACKAGE_VERSION_STRING@"
+
+/* Define to empty if `const' does not conform to ANSI C. */
+#cmakedefine H5_const
+
+/* Define to `long int' if <sys/types.h> does not define. */
+#cmakedefine H5_off_t
+
+/* Define to `long' if <sys/types.h> does not define. */
+#cmakedefine H5_ptrdiff_t
+
+/* Define to `unsigned long' if <sys/types.h> does not define. */
+#cmakedefine H5_size_t
+
+/* Define to `long' if <sys/types.h> does not define. */
+#cmakedefine H5_ssize_t
+
+#endif
