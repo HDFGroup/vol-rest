@@ -15,32 +15,14 @@
 /* Define if building universal (internal helper macro) */
 #cmakedefine H5_AC_APPLE_UNIVERSAL_BUILD @H5_AC_APPLE_UNIVERSAL_BUILD@
 
-/* Define the default vol plugin to compile */
-#cmakedefine H5_DEFAULT_VOL @H5_DEFAULT_VOL@
-
-/* Define if `dev_t' is a scalar */
-#cmakedefine H5_DEV_T_IS_SCALAR @H5_DEV_T_IS_SCALAR@
-
 /* Define if the compiler understands the __func__ keyword */
 #cmakedefine H5_HAVE_C99_FUNC @H5_HAVE_C99_FUNC@
 
 /* Define if Darwin or Mac OS X */
 #cmakedefine H5_HAVE_DARWIN @H5_HAVE_DARWIN@
 
-/* Define to 1 if you have the <dirent.h> header file. */
-#cmakedefine H5_HAVE_DIRENT_H @H5_HAVE_DIRENT_H@
-
-/* Define to 1 if you have the <dlfcn.h> header file. */
-#cmakedefine H5_HAVE_DLFCN_H @H5_HAVE_DLFCN_H@
-
-/* Define to 1 if you have the <features.h> header file. */
-#cmakedefine H5_HAVE_FEATURES_H @H5_HAVE_FEATURES_H@
-
 /* Define if the compiler understands the __FUNCTION__ keyword */
 #cmakedefine H5_HAVE_FUNCTION @H5_HAVE_FUNCTION@
-
-/* Define to 1 if you have the `m' library (-lm). */
-#cmakedefine H5_HAVE_LIBM @H5_HAVE_LIBM@
 
 /* Define to 1 if you have the `snprintf' function. */
 #cmakedefine H5_HAVE_SNPRINTF @H5_HAVE_SNPRINTF@
@@ -58,13 +40,13 @@
 #cmakedefine H5_HAVE_SYS_TYPES_H @H5_HAVE_SYS_TYPES_H@
 
 /* Name of package */
-#define H5_PACKAGE "@HDF5_PACKAGE@"
+#define RV_PACKAGE "@REST_VOL_PACKAGE@"
 
 /* Define to the address where bug reports for this package should be sent. */
-#define H5_PACKAGE_BUGREPORT "@HDF5_PACKAGE_BUGREPORT@"
+#define RV_PACKAGE_BUGREPORT "@REST_VOL_PACKAGE_BUGREPORT@"
 
 /* Define to the full name of this package. */
-#define H5_PACKAGE_NAME "@HDF5_PACKAGE_NAME@"
+#define RV_PACKAGE_NAME "@REST_VOL_PACKAGE_NAME@"
 
 /* Define to the full name and version of this package. */
 #define H5_PACKAGE_STRING "@HDF5_PACKAGE_STRING@"
@@ -73,7 +55,7 @@
 #define H5_PACKAGE_TARNAME "@HDF5_PACKAGE_TARNAME@"
 
 /* Define to the home page for this package. */
-#define H5_PACKAGE_URL "@HDF5_PACKAGE_URL@"
+#define RV_PACKAGE_URL "@REST_VOL_PACKAGE_URL@"
 
 /* Define to the version of this package. */
 #define H5_PACKAGE_VERSION "@HDF5_PACKAGE_VERSION_STRING@"
@@ -92,18 +74,6 @@
 
 /* The size of `int', as computed by sizeof. */
 #cmakedefine H5_SIZEOF_INT @H5_SIZEOF_INT@
-
-/* The size of `int16_t', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_INT16_T @H5_SIZEOF_INT16_T@
-
-/* The size of `int32_t', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_INT32_T @H5_SIZEOF_INT32_T@
-
-/* The size of `int64_t', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_INT64_T @H5_SIZEOF_INT64_T@
-
-/* The size of `int8_t', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_INT8_T @H5_SIZEOF_INT8_T@
 
 #if !defined(__APPLE__)
 /* The size of `size_t', as computed by sizeof. */
@@ -157,13 +127,19 @@
 /* Define to 1 if you have the ANSI C header files. */
 #cmakedefine H5_STDC_HEADERS @H5_STDC_HEADERS@
 
-/* Define if a memory checking tool will be used on the library, to cause
-   library to be very picky about memory operations and also disable the
-   internal free list manager code. */
-#cmakedefine H5_USING_MEMCHECKER @H5_USING_MEMCHECKER@
+/* Define if plugin debug output should be enabled */
+#cmakedefine RV_PLUGIN_DEBUG @RV_PLUGIN_DEBUG@
+
+/* Define if cURL debug output should be enabled */
+#cmakedefine RV_CURL_DEBUG @RV_CURL_DEBUG@
+
+/* Define if memory tracking should be enabled to
+   track memory leaks and other memory errors within
+   the plugin. */
+#cmakedefine RV_TRACK_MEM_USAGE @RV_TRACK_MEM_USAGE@
 
 /* Version number of package */
-#define H5_VERSION "@HDF5_PACKAGE_VERSION_STRING@"
+#cmakedefine H5_VERSION "@HDF5_PACKAGE_VERSION_STRING@"
 
 /* Define to empty if `const' does not conform to ANSI C. */
 #cmakedefine H5_const

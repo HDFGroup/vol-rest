@@ -286,20 +286,28 @@ if (HDF5_ENABLE_COVERAGE)
 endif (HDF5_ENABLE_COVERAGE)
 
 #-----------------------------------------------------------------------------
-# Option to indicate using a memory checker
+# Option to indicate enabling plugin debugging output
 #-----------------------------------------------------------------------------
-option (HDF5_ENABLE_USING_MEMCHECKER "Indicate that a memory checker is used" OFF)
-if (HDF5_ENABLE_USING_MEMCHECKER)
-  set (H5_USING_MEMCHECKER 1)
-endif (HDF5_ENABLE_USING_MEMCHECKER)
+option (RV_DEBUG "Indicate that plugin debug output is used" OFF)
+if (RV_DEBUG)
+  set (RV_PLUGIN_DEBUG 1)
+endif (RV_DEBUG)
 
 #-----------------------------------------------------------------------------
-# Option to indicate internal memory allocation sanity checks are enabled
+# Option to indicate enabling plugin debugging output
 #-----------------------------------------------------------------------------
-option (HDF5_MEMORY_ALLOC_SANITY_CHECK "Indicate that internal memory allocation sanity checks are enabled" OFF)
-if (HDF5_MEMORY_ALLOC_SANITY_CHECK)
-  set (H5_MEMORY_ALLOC_SANITY_CHECK 1)
-endif (HDF5_MEMORY_ALLOC_SANITY_CHECK)
+option (CURL_DEBUG "Indicate that cURL debug output is used" OFF)
+if (CURL_DEBUG)
+  set (RV_CURL_DEBUG 1)
+endif (CURL_DEBUG)
+
+#-----------------------------------------------------------------------------
+# Option to indicate using a memory checker
+#-----------------------------------------------------------------------------
+option (RV_USING_MEM_TRACKER "Indicate that a memory checker is used" OFF)
+if (RV_USING_MEM_TRACKER)
+  set (RV_TRACK_MEM_USAGE 1)
+endif (RV_USING_MEM_TRACKER)
 
 #-----------------------------------------------------------------------------
 # When building utility executables that generate other (source) files :
