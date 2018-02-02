@@ -288,26 +288,26 @@ endif (HDF5_ENABLE_COVERAGE)
 #-----------------------------------------------------------------------------
 # Option to indicate enabling plugin debugging output
 #-----------------------------------------------------------------------------
-option (RV_DEBUG "Indicate that plugin debug output is used" OFF)
-if (RV_DEBUG)
+option (RV_ENABLE_DEBUG "Indicate that plugin debug output is used" OFF)
+if (RV_ENABLE_DEBUG)
   set (RV_PLUGIN_DEBUG 1)
-endif (RV_DEBUG)
+endif (RV_ENABLE_DEBUG)
 
 #-----------------------------------------------------------------------------
 # Option to indicate enabling plugin debugging output
 #-----------------------------------------------------------------------------
-option (CURL_DEBUG "Indicate that cURL debug output is used" OFF)
-if (CURL_DEBUG)
+option (RV_ENABLE_CURL_DEBUG "Indicate that cURL debug output is used" OFF)
+if (RV_ENABLE_CURL_DEBUG)
   set (RV_CURL_DEBUG 1)
-endif (CURL_DEBUG)
+endif (RV_ENABLE_CURL_DEBUG)
 
 #-----------------------------------------------------------------------------
 # Option to indicate using a memory checker
 #-----------------------------------------------------------------------------
-option (RV_USING_MEM_TRACKER "Indicate that a memory checker is used" OFF)
-if (RV_USING_MEM_TRACKER)
+option (RV_ENABLE_MEM_TRACKING "Indicate that a memory checker is used" OFF)
+if (RV_ENABLE_MEM_TRACKING)
   set (RV_TRACK_MEM_USAGE 1)
-endif (RV_USING_MEM_TRACKER)
+endif (RV_ENABLE_MEM_TRACKING)
 
 #-----------------------------------------------------------------------------
 # When building utility executables that generate other (source) files :
@@ -366,12 +366,6 @@ include (${HDF_RESOURCES_DIR}/HDFCompilerFlags.cmake)
 #-----------------------------------------------------------------------------
 INCLUDE_DIRECTORIES (${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 
-# -----------------------------------------------------------------------
-# wrapper script variables
-#
-#set (CFLAGS "${C_DEFINES}")
-#set (CXXFLAGS "${CXX_DEFINES}")
-
 #-----------------------------------------------------------------------------
 # Dashboard and Testing Settings
 #-----------------------------------------------------------------------------
@@ -391,16 +385,6 @@ if (BUILD_TESTING)
   include (${HDF5_SOURCE_DIR}/CTestConfig.cmake)
   configure_file (${HDF_RESOURCES_DIR}/CTestCustom.cmake ${HDF5_BINARY_DIR}/CTestCustom.ctest @ONLY)
 endif (BUILD_TESTING)
-
-#-----------------------------------------------------------------------------
-# Option to build HDF5 Tools
-#-----------------------------------------------------------------------------
-#if (EXISTS "${HDF5_SOURCE_DIR}/tools" AND IS_DIRECTORY "${HDF5_SOURCE_DIR}/tools")
-#  option (HDF5_BUILD_TOOLS  "Build HDF5 Tools" ON)
-#  if (HDF5_BUILD_TOOLS)
-#    add_subdirectory (${HDF5_SOURCE_DIR}/tools ${PROJECT_BINARY_DIR}/tools)
-#  endif (HDF5_BUILD_TOOLS)
-#endif (EXISTS "${HDF5_SOURCE_DIR}/tools" AND IS_DIRECTORY "${HDF5_SOURCE_DIR}/tools")
 
 #-----------------------------------------------------------------------------
 # Generate the rest_vol_config.h file containing user settings needed by compilation
