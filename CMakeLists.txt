@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.1.0)
-PROJECT ("REST VOL" C)
+PROJECT (REST_VOL C)
 
 # Locate cURL and YAJL before building
 find_package(CURL)
@@ -73,13 +73,13 @@ set (HDF5_SOURCE_DIR "hdf5")
 #   If unset (because parent project does not support/use the
 #   install (EXPORT target...) syntax), then targets are not configured
 #   for export during install.
-set (HDF5_EXPORTED_TARGETS )
+set (HDF5_EXPORTED_TARGETS "rest_vol-targets")
 
 # HDF5_LIB_DEPENDENCIES :
 #   If the build of HDF5 libs is being customized, then rules for the
 #   dependencies of the HDF5 libs may be 'incomplete', add additional
 #   dependencies to this variable so that external projects pick them up
-set (HDF5_LIB_DEPENDENCIES )
+#set (HDF5_LIB_DEPENDENCIES )
 
 # HDF5_EXTERNAL_LIB_PREFIX :
 #   If the parent project needs to install hdf libraries, but avoid
@@ -96,10 +96,14 @@ set (HDF5_INSTALL_DATA_DIR )
 
 # HDF5_INSTALL_NO_DEVELOPMENT :
 #   Set to true to skip installation of headers and CMake package files.
-set (HDF5_INSTALL_NO_DEVELOPMENT )
+set (HDF5_INSTALL_NO_DEVELOPMENT TRUE)
 
 # Add the HDF5 source as a sub-project
 add_subdirectory(${HDF5_SOURCE_DIR})
+
+if (NOT REST_VOL_EXPORTED_TARGETS)
+  set (REST_VOL_EXPORTED_TARGETS "rest_vol-targets")
+endif (NOT REST_VOL_EXPORTED_TARGETS)
 
 #-----------------------------------------------------------------------------
 # Set the core names of all the libraries
@@ -115,91 +119,134 @@ set (REST_VOL_LIBSH_TARGET        "${REST_VOL_LIB_CORENAME}-shared")
 #-----------------------------------------------------------------------------
 # Define some CMake variables for use later in the project
 #-----------------------------------------------------------------------------
-set (HDF_RESOURCES_DIR       ${HDF5_SOURCE_DIR}/config/cmake)
-set (HDF_RESOURCES_EXT_DIR   ${HDF5_SOURCE_DIR}/config/cmake_ext_mod)
-set (HDF5_SRC_DIR            ${HDF5_SOURCE_DIR}/src)
+set (REST_VOL_RESOURCES_DIR       ${REST_VOL_SOURCE_DIR}/config/cmake)
+set (REST_VOL_RESOURCES_EXT_DIR   ${REST_VOL_SOURCE_DIR}/config/cmake_ext_mod)
+set (REST_VOL_SRC_DIR             ${REST_VOL_SOURCE_DIR}/src)
 
-if (NOT HDF5_INSTALL_BIN_DIR)
-  set (HDF5_INSTALL_BIN_DIR bin)
-endif (NOT HDF5_INSTALL_BIN_DIR)
-if (NOT HDF5_INSTALL_LIB_DIR)
+if (NOT REST_VOL_INSTALL_BIN_DIR)
+  set (REST_VOL_INSTALL_BIN_DIR bin)
+endif (NOT REST_VOL_INSTALL_BIN_DIR)
+if (NOT REST_VOL_INSTALL_LIB_DIR)
   if (APPLE)
-    if (HDF5_BUILD_FRAMEWORKS)
-      set (HDF5_INSTALL_JAR_DIR ../Java)
-    else (HDF5_BUILD_FRAMEWORKS)
-      set (HDF5_INSTALL_JAR_DIR lib)
-    endif (HDF5_BUILD_FRAMEWORKS)
-    set (HDF5_INSTALL_FMWK_DIR ${CMAKE_INSTALL_FRAMEWORK_PREFIX})
+    set (REST_VOL_INSTALL_FMWK_DIR ${CMAKE_INSTALL_FRAMEWORK_PREFIX})
   else (APPLE)
-    set (HDF5_INSTALL_JAR_DIR lib)
+    set (REST_VOL_INSTALL_JAR_DIR lib)
   endif (APPLE)
-  set (HDF5_INSTALL_LIB_DIR lib)
-endif (NOT HDF5_INSTALL_LIB_DIR)
-if (NOT HDF5_INSTALL_INCLUDE_DIR)
-  set (HDF5_INSTALL_INCLUDE_DIR include)
-endif (NOT HDF5_INSTALL_INCLUDE_DIR)
-if (NOT HDF5_INSTALL_DATA_DIR)
+  set (REST_VOL_INSTALL_LIB_DIR lib)
+endif (NOT REST_VOL_INSTALL_LIB_DIR)
+if (NOT REST_VOL_INSTALL_INCLUDE_DIR)
+  set (REST_VOL_INSTALL_INCLUDE_DIR include)
+endif (NOT REST_VOL_INSTALL_INCLUDE_DIR)
+if (NOT REST_VOL_INSTALL_DATA_DIR)
   if (NOT WIN32)
     if (APPLE)
-      if (HDF5_BUILD_FRAMEWORKS)
-        set (HDF5_INSTALL_EXTRA_DIR ../SharedSupport)
-      else (HDF5_BUILD_FRAMEWORKS)
-        set (HDF5_INSTALL_EXTRA_DIR share)
-      endif (HDF5_BUILD_FRAMEWORKS)
-      set (HDF5_INSTALL_FWRK_DIR ${CMAKE_INSTALL_FRAMEWORK_PREFIX})
+      if (REST_VOL_BUILD_FRAMEWORKS)
+        set (REST_VOL_INSTALL_EXTRA_DIR ../SharedSupport)
+      else (REST_VOL_BUILD_FRAMEWORKS)
+        set (REST_VOL_INSTALL_EXTRA_DIR share)
+      endif (REST_VOL_BUILD_FRAMEWORKS)
+      set (REST_VOL_INSTALL_FWRK_DIR ${CMAKE_INSTALL_FRAMEWORK_PREFIX})
     endif (APPLE)
-    set (HDF5_INSTALL_DATA_DIR share)
-    set (HDF5_INSTALL_CMAKE_DIR share/cmake)
+    set (REST_VOL_INSTALL_DATA_DIR share)
+    set (REST_VOL_INSTALL_CMAKE_DIR share/cmake)
   else (NOT WIN32)
-    set (HDF5_INSTALL_DATA_DIR ".")
-    set (HDF5_INSTALL_CMAKE_DIR cmake)
+    set (REST_VOL_INSTALL_DATA_DIR ".")
+    set (REST_VOL_INSTALL_CMAKE_DIR cmake)
   endif (NOT WIN32)
-endif (NOT HDF5_INSTALL_DATA_DIR)
+endif (NOT REST_VOL_INSTALL_DATA_DIR)
 
 if(DEFINED ADDITIONAL_CMAKE_PREFIX_PATH AND EXISTS "${ADDITIONAL_CMAKE_PREFIX_PATH}")
   set (CMAKE_PREFIX_PATH ${ADDITIONAL_CMAKE_PREFIX_PATH} ${CMAKE_PREFIX_PATH})
 endif(DEFINED ADDITIONAL_CMAKE_PREFIX_PATH AND EXISTS "${ADDITIONAL_CMAKE_PREFIX_PATH}")
 
-#message (STATUS "VERSION: ${RV_RELEASE_VERSION}")
+#message (STATUS "VERSION: ${REST_VOL_RELEASE_VERSION}")
 
 #-----------------------------------------------------------------------------
-# parse the full soversion number from config/lt_vers.am and include in H5_SOVERS_INFO
+# parse the full soversion number from config/lt_vers.am and include in REST_VOL_SOVERS_INFO
 #-----------------------------------------------------------------------------
-file (READ ${HDF5_SOURCE_DIR}/config/lt_vers.am _lt_vers_am_contents)
+file (READ ${REST_VOL_SOURCE_DIR}/config/lt_vers.am _lt_vers_am_contents)
 string (REGEX REPLACE ".*LT_VERS_INTERFACE[ \t]+=[ \t]+([0-9]*).*$"
-    "\\1" H5_SOVERS_INTERFACE ${_lt_vers_am_contents})
+    "\\1" REST_VOL_SOVERS_INTERFACE ${_lt_vers_am_contents})
 string (REGEX REPLACE ".*LT_VERS_REVISION[ \t]+=[ \t]+([0-9]*).*$"
-    "\\1" H5_SOVERS_MINOR ${_lt_vers_am_contents})
+    "\\1" REST_VOL_SOVERS_MINOR ${_lt_vers_am_contents})
 string (REGEX REPLACE ".*LT_VERS_AGE[ \t]+=[ \t]+([0-9]*).*$"
-    "\\1" H5_SOVERS_RELEASE ${_lt_vers_am_contents})
-MATH (EXPR H5_SOVERS_MAJOR ${H5_SOVERS_INTERFACE}-${H5_SOVERS_RELEASE})
-message (STATUS "SOVERSION: ${H5_SOVERS_MAJOR}.${H5_SOVERS_RELEASE}.${H5_SOVERS_MINOR}")
+    "\\1" REST_VOL_SOVERS_RELEASE ${_lt_vers_am_contents})
+MATH (EXPR REST_VOL_SOVERS_MAJOR ${REST_VOL_SOVERS_INTERFACE}-${REST_VOL_SOVERS_RELEASE})
+message (STATUS "SOVERSION: ${REST_VOL_SOVERS_MAJOR}.${REST_VOL_SOVERS_RELEASE}.${REST_VOL_SOVERS_MINOR}")
 
 #-----------------------------------------------------------------------------
-# Basic HDF5 stuff here
+# Basic REST VOL stuff here
 #-----------------------------------------------------------------------------
 set (REST_VOL_PACKAGE "rest-vol")
 set (REST_VOL_PACKAGE_NAME "REST VOL")
-set (HDF5_PACKAGE_VERSION "${H5_VERS_MAJOR}.${H5_VERS_MINOR}.${H5_VERS_RELEASE}")
-set (HDF5_PACKAGE_VERSION_MAJOR "${H5_VERS_MAJOR}.${H5_VERS_MINOR}")
-set (HDF5_PACKAGE_VERSION_MINOR "${H5_VERS_RELEASE}")
-if (NOT "${H5_VERS_SUBRELEASE}" STREQUAL "")
-  set (HDF5_PACKAGE_VERSION_STRING "${HDF5_PACKAGE_VERSION}-${H5_VERS_SUBRELEASE}")
-else (NOT "${H5_VERS_SUBRELEASE}" STREQUAL "")
-  set (HDF5_PACKAGE_VERSION_STRING "${HDF5_PACKAGE_VERSION}")
-endif (NOT "${H5_VERS_SUBRELEASE}" STREQUAL "")
-set (HDF5_PACKAGE_SOVERSION "${H5_SOVERS_MAJOR}.${H5_SOVERS_RELEASE}.${H5_SOVERS_MINOR}")
+set (REST_VOL_PACKAGE_VERSION "${REST_VOL_VERS_MAJOR}.${REST_VOL_VERS_MINOR}.${REST_VOL_VERS_RELEASE}")
+set (REST_VOL_PACKAGE_VERSION_MAJOR "${REST_VOL_VERS_MAJOR}.${REST_VOL_VERS_MINOR}")
+set (REST_VOL_PACKAGE_VERSION_MINOR "${REST_VOL_VERS_RELEASE}")
+if (NOT "${REST_VOL_VERS_SUBRELEASE}" STREQUAL "")
+  set (REST_VOL_PACKAGE_VERSION_STRING "${REST_VOL_PACKAGE_VERSION}-${REST_VOL_VERS_SUBRELEASE}")
+else (NOT "${REST_VOL_VERS_SUBRELEASE}" STREQUAL "")
+  set (REST_VOL_PACKAGE_VERSION_STRING "${REST_VOL_PACKAGE_VERSION}")
+endif (NOT "${REST_VOL_VERS_SUBRELEASE}" STREQUAL "")
+set (REST_VOL_PACKAGE_SOVERSION "${REST_VOL_SOVERS_MAJOR}.${REST_VOL_SOVERS_RELEASE}.${REST_VOL_SOVERS_MINOR}")
 
-set (HDF5_PACKAGE_STRING "${HDF5_PACKAGE_NAME} ${HDF5_PACKAGE_VERSION_STRING}")
-set (HDF5_PACKAGE_TARNAME "${HDF5_PACKAGE}${HDF_PACKAGE_EXT}")
+set (REST_VOL_PACKAGE_STRING "${REST_VOL_PACKAGE_NAME} ${REST_VOL_PACKAGE_VERSION_STRING}")
+set (REST_VOL_PACKAGE_TARNAME "${REST_VOL_PACKAGE}${REST_VOL_PACKAGE_EXT}")
 set (REST_VOL_PACKAGE_URL "http://www.hdfgroup.org")
 set (REST_VOL_PACKAGE_BUGREPORT "help@hdfgroup.org")
 
 #-----------------------------------------------------------------------------
 # Include some macros for reusable code
 #-----------------------------------------------------------------------------
-include (${HDF_RESOURCES_EXT_DIR}/HDFMacros.cmake)
-include (${HDF_RESOURCES_DIR}/HDF5Macros.cmake)
+
+#-------------------------------------------------------------------------------
+macro (REST_VOL_SET_LIB_OPTIONS libtarget libname libtype)
+  set (LIB_OUT_NAME "${libname}")
+  # SOVERSION passed in ARGN when shared
+  if (${libtype} MATCHES "SHARED")
+    if (ARGN)
+      set (PACKAGE_SOVERSION ${ARGN})
+    else (ARGN)
+      set (PACKAGE_SOVERSION ${REST_VOL_PACKAGE_SOVERSION})
+    endif (ARGN)
+    if (WIN32)
+      set (LIBREST_VOL_VERSION ${REST_VOL_PACKAGE_VERSION_MAJOR})
+    else (WIN32)
+      set (LIBREST_VOL_VERSION ${REST_VOL_PACKAGE_VERSION})
+    endif (WIN32)
+    set_target_properties (${libtarget} PROPERTIES VERSION ${LIBREST_VOL_VERSION})
+    if (WIN32)
+        set (${LIB_OUT_NAME} "${LIB_OUT_NAME}-${PACKAGE_SOVERSION}")
+    else (WIN32)
+        set_target_properties (${libtarget} PROPERTIES SOVERSION ${PACKAGE_SOVERSION})
+    endif (WIN32)
+  endif (${libtype} MATCHES "SHARED")
+  REST_VOL_SET_LIB_OPTIONS (${libtarget} ${LIB_OUT_NAME} ${libtype})
+
+  #-- Apple Specific install_name for libraries
+  if (APPLE)
+    option (REST_VOL_BUILD_WITH_INSTALL_NAME "Build with library install_name set to the installation path" OFF)
+    if (REST_VOL_BUILD_WITH_INSTALL_NAME)
+      set_target_properties (${libtarget} PROPERTIES
+          LINK_FLAGS "-current_version ${REST_VOL_PACKAGE_VERSION} -compatibility_version ${REST_VOL_PACKAGE_VERSION}"
+          INSTALL_NAME_DIR "${CMAKE_INSTALL_PREFIX}/lib"
+          BUILD_WITH_INSTALL_RPATH ${REST_VOL_BUILD_WITH_INSTALL_NAME}
+      )
+    endif (REST_VOL_BUILD_WITH_INSTALL_NAME)
+    if (REST_VOL_BUILD_FRAMEWORKS)
+      if (${libtype} MATCHES "SHARED")
+        # adapt target to build frameworks instead of dylibs
+        set_target_properties(${libtarget} PROPERTIES
+            XCODE_ATTRIBUTE_INSTALL_PATH "@rpath"
+            FRAMEWORK TRUE
+            FRAMEWORK_VERSION ${REST_VOL_PACKAGE_VERSION_MAJOR}
+            MACOSX_FRAMEWORK_IDENTIFIER org.hdfgroup.${libtarget}
+            MACOSX_FRAMEWORK_SHORT_VERSION_STRING ${REST_VOL_PACKAGE_VERSION_MAJOR}
+            MACOSX_FRAMEWORK_BUNDLE_VERSION ${REST_VOL_PACKAGE_VERSION_MAJOR})
+      endif (${libtype} MATCHES "SHARED")
+    endif (REST_VOL_BUILD_FRAMEWORKS)
+  endif (APPLE)
+
+endmacro (REST_VOL_SET_LIB_OPTIONS)
 
 #-----------------------------------------------------------------------------
 # Setup output Directories
@@ -221,19 +268,11 @@ else (WIN32)
 endif (WIN32)
 
 #-----------------------------------------------------------------------------
-# Targets built within this project are exported at Install time for use
-# by other projects using FindHDF5.
-#-----------------------------------------------------------------------------
-if (NOT HDF5_EXPORTED_TARGETS)
-  set (HDF5_EXPORTED_TARGETS "hdf5-targets")
-endif (NOT HDF5_EXPORTED_TARGETS)
-
-#-----------------------------------------------------------------------------
 # To include a library in the list exported by the project AT BUILD TIME,
 # add it to this variable. This is NOT used by Make Install, but for projects
-# which include hdf5 as a sub-project within their build tree
+# which include the REST VOL as a sub-project within their build tree
 #-----------------------------------------------------------------------------
-set_global_variable (HDF5_LIBRARIES_TO_EXPORT "")
+set_global_variable (REST_VOL_LIBRARIES_TO_EXPORT "")
 set (EXTERNAL_HEADER_LIST "")
 set (EXTERNAL_LIBRARY_LIST "")
 set (EXTERNAL_LIBRARYDLL_LIST "")
@@ -241,27 +280,27 @@ set (EXTERNAL_LIBRARYDLL_LIST "")
 #-----------------------------------------------------------------------------
 # Run all the CMake configuration tests for our build environment
 #-----------------------------------------------------------------------------
-#include (${HDF_RESOURCES_DIR}/ConfigureChecks.cmake)
+#include (${REST_VOL_RESOURCES_DIR}/ConfigureChecks.cmake)
 
 set (CMAKE_INCLUDE_CURRENT_DIR_IN_INTERFACE ON)
 
 #-----------------------------------------------------------------------------
 # Mac OS X Options
 #-----------------------------------------------------------------------------
-if (HDF5_BUILD_FRAMEWORKS AND NOT BUILD_SHARED_LIBS)
+if (REST_VOL_BUILD_FRAMEWORKS AND NOT BUILD_SHARED_LIBS)
   set (BUILD_SHARED_LIBS ON CACHE BOOL "Build Shared Libraries")
-endif (HDF5_BUILD_FRAMEWORKS AND NOT BUILD_SHARED_LIBS)
+endif (REST_VOL_BUILD_FRAMEWORKS AND NOT BUILD_SHARED_LIBS)
 
 #-----------------------------------------------------------------------------
 # Option to Build Shared and Static libs, default is static
 #-----------------------------------------------------------------------------
 option (BUILD_SHARED_LIBS "Build Shared Libraries" ON)
-set (H5_ENABLE_SHARED_LIB NO)
+set (REST_VOL_ENABLE_SHARED_LIB NO)
 if (BUILD_SHARED_LIBS)
-  set (H5_ENABLE_SHARED_LIB YES)
+  set (REST_VOL_ENABLE_SHARED_LIB YES)
   set (LINK_SHARED_LIBS ${LINK_LIBS})
 endif (BUILD_SHARED_LIBS)
-set (H5_ENABLE_STATIC_LIB YES)
+set (REST_VOL_ENABLE_STATIC_LIB YES)
 set (CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 #-----------------------------------------------------------------------------
@@ -278,36 +317,36 @@ endif (BUILD_STATIC_EXECS)
 #-----------------------------------------------------------------------------
 # Option to use code coverage
 #-----------------------------------------------------------------------------
-option (HDF5_ENABLE_COVERAGE "Enable code coverage for Libraries and Programs" OFF)
-if (HDF5_ENABLE_COVERAGE)
+option (REST_VOL_ENABLE_COVERAGE "Enable code coverage for Libraries and Programs" OFF)
+if (REST_VOL_ENABLE_COVERAGE)
   set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -O0 -fprofile-arcs -ftest-coverage")
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0 -fprofile-arcs -ftest-coverage")
   set (LDFLAGS "${LDFLAGS} -fprofile-arcs -ftest-coverage")
-endif (HDF5_ENABLE_COVERAGE)
+endif (REST_VOL_ENABLE_COVERAGE)
 
 #-----------------------------------------------------------------------------
 # Option to indicate enabling plugin debugging output
 #-----------------------------------------------------------------------------
-option (RV_ENABLE_DEBUG "Indicate that plugin debug output is used" OFF)
-if (RV_ENABLE_DEBUG)
-  set (RV_PLUGIN_DEBUG 1)
-endif (RV_ENABLE_DEBUG)
+option (REST_VOL_ENABLE_DEBUG "Indicate that plugin debug output is used" OFF)
+if (REST_VOL_ENABLE_DEBUG)
+  set (REST_VOL_PLUGIN_DEBUG 1)
+endif (REST_VOL_ENABLE_DEBUG)
 
 #-----------------------------------------------------------------------------
 # Option to indicate enabling cURL debugging output
 #-----------------------------------------------------------------------------
-option (RV_ENABLE_CURL_DEBUG "Indicate that cURL debug output is used" OFF)
-if (RV_ENABLE_CURL_DEBUG)
-  set (RV_CURL_DEBUG 1)
-endif (RV_ENABLE_CURL_DEBUG)
+option (REST_VOL_ENABLE_CURL_DEBUG "Indicate that cURL debug output is used" OFF)
+if (REST_VOL_ENABLE_CURL_DEBUG)
+  set (REST_VOL_CURL_DEBUG 1)
+endif (REST_VOL_ENABLE_CURL_DEBUG)
 
 #-----------------------------------------------------------------------------
 # Option to indicate using a memory checker
 #-----------------------------------------------------------------------------
-option (RV_ENABLE_MEM_TRACKING "Indicate that a memory checker is used" OFF)
-if (RV_ENABLE_MEM_TRACKING)
-  set (RV_TRACK_MEM_USAGE 1)
-endif (RV_ENABLE_MEM_TRACKING)
+option (REST_VOL_ENABLE_MEM_TRACKING "Indicate that a memory checker is used" OFF)
+if (REST_VOL_ENABLE_MEM_TRACKING)
+  set (REST_VOL_TRACK_MEM_USAGE 1)
+endif (REST_VOL_ENABLE_MEM_TRACKING)
 
 #-----------------------------------------------------------------------------
 # When building utility executables that generate other (source) files :
@@ -344,22 +383,13 @@ endif (MAKE_SYSTEM)
 #-----------------------------------------------------------------------------
 # Add some definitions for Debug Builds
 #-----------------------------------------------------------------------------
-option (HDF5_ENABLE_TRACE "Enable API tracing capability" OFF)
-mark_as_advanced (HDF5_ENABLE_TRACE)
 if (CMAKE_BUILD_TYPE MATCHES Debug)
   add_definitions (-DDEBUG)
-
-  # Enable instrumenting of the library's internal operations
-  option (HDF5_ENABLE_INSTRUMENT "Instrument The library" OFF)
-  if (HDF5_ENABLE_INSTRUMENT)
-    set (H5_HAVE_INSTRUMENTED_LIBRARY 1)
-  endif (HDF5_ENABLE_INSTRUMENT)
-  mark_as_advanced (HDF5_ENABLE_INSTRUMENT)
 else (CMAKE_BUILD_TYPE MATCHES Debug)
   add_definitions (-DNDEBUG)
 endif (CMAKE_BUILD_TYPE MATCHES Debug)
 
-include (${HDF_RESOURCES_DIR}/HDFCompilerFlags.cmake)
+include (${REST_VOL_RESOURCES_DIR}/HDFCompilerFlags.cmake)
 
 #-----------------------------------------------------------------------------
 # All libs/tests/examples need the main include directories
@@ -369,26 +399,25 @@ INCLUDE_DIRECTORIES (${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 #-----------------------------------------------------------------------------
 # Dashboard and Testing Settings
 #-----------------------------------------------------------------------------
-option (BUILD_TESTING "Build HDF5 Unit Testing" ON)
+option (BUILD_TESTING "Build REST VOL Unit Testing" ON)
 if (BUILD_TESTING)
   set (DART_TESTING_TIMEOUT 1200
       CACHE INTEGER
       "Timeout in seconds for each test (default 1200=20minutes)"
   )
 
-  option (HDF_TEST_EXPRESS "Control testing framework (0-3)" "0")
-  mark_as_advanced (HDF_TEST_EXPRESS)
+  option (REST_VOL_TEST_EXPRESS "Control testing framework (0-3)" "0")
+  mark_as_advanced (REST_VOL_TEST_EXPRESS)
 
   enable_testing ()
   include (CTest)
 
-  include (${HDF5_SOURCE_DIR}/CTestConfig.cmake)
-  configure_file (${HDF_RESOURCES_DIR}/CTestCustom.cmake ${HDF5_BINARY_DIR}/CTestCustom.ctest @ONLY)
+  include (${REST_VOL_SOURCE_DIR}/CTestConfig.cmake)
 endif (BUILD_TESTING)
 
 #-----------------------------------------------------------------------------
 # Generate the rest_vol_config.h file containing user settings needed by compilation
 #-----------------------------------------------------------------------------
-configure_file (${CMAKE_SOURCE_DIR}/src/rv_cmake_config.h.in ${CMAKE_SOURCE_DIR}/src/rest_vol_config.h @ONLY)
+configure_file (${REST_VOL_RESOURCES_DIR}/rv_cmake_config.h.in ${REST_VOL_SRC_DIR}/rest_vol_config.h @ONLY)
 
 include (CMakeInstallation.cmake)

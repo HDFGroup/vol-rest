@@ -10,36 +10,36 @@ add_definitions(${RV_EXTRA_C_FLAGS})
 # Define test sources
 #-----------------------------------------------------------------------------
 set (TEST_LIB_SRCS
-    ${RV_TEST_SOURCE_DIR}/test_rest_vol.c
+    ${REST_VOL_TEST_SOURCE_DIR}/test_rest_vol.c
 )
 
-add_library (${RV_TEST_LIB_TARGET} STATIC ${TEST_LIB_SRCS})
-TARGET_C_PROPERTIES (${RV_TEST_LIB_TARGET} STATIC " " " ")
+add_library (${REST_VOL_TEST_LIB_TARGET} STATIC ${TEST_LIB_SRCS})
+TARGET_C_PROPERTIES (${REST_VOL_TEST_LIB_TARGET} STATIC " " " ")
 if (MSVC)
-  target_link_libraries (${RV_TEST_LIB_TARGET} "ws2_32.lib")
+  target_link_libraries (${REST_VOL_TEST_LIB_TARGET} "ws2_32.lib")
 endif (MSVC)
 if (MINGW)
-  target_link_libraries (${RV_TEST_LIB_TARGET} "wsock32.lib")
+  target_link_libraries (${REST_VOL_TEST_LIB_TARGET} "wsock32.lib")
 endif (MINGW)
-target_link_libraries (${RV_TEST_LIB_TARGET} ${RV_LIB_TARGET} ${HDF5_LIB_TARGET})
+target_link_libraries (${REST_VOL_TEST_LIB_TARGET} ${RV_LIB_TARGET} ${HDF5_LIB_TARGET})
 H5_SET_LIB_OPTIONS (${HDF5_TEST_LIB_TARGET} ${HDF5_TEST_LIB_NAME} STATIC)
-set_target_properties (${RV_TEST_LIB_TARGET} PROPERTIES
+set_target_properties (${REST_VOL_TEST_LIB_TARGET} PROPERTIES
     FOLDER libraries/test
     INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>"
 )
 
 if (BUILD_SHARED_LIBS)
-  add_library (${RV_TEST_LIBSH_TARGET} SHARED ${TEST_LIB_SRCS})
-  TARGET_C_PROPERTIES (${RV_TEST_LIBSH_TARGET} SHARED " " " ")
+  add_library (${REST_VOL_TEST_LIBSH_TARGET} SHARED ${TEST_LIB_SRCS})
+  TARGET_C_PROPERTIES (${REST_VOL_TEST_LIBSH_TARGET} SHARED " " " ")
   if (MSVC)
-    target_link_libraries (${RV_TEST_LIBSH_TARGET} "ws2_32.lib")
+    target_link_libraries (${REST_VOL_TEST_LIBSH_TARGET} "ws2_32.lib")
   endif (MSVC)
   if (MINGW)
-    target_link_libraries (${RV_TEST_LIBSH_TARGET} "wsock32.lib")
+    target_link_libraries (${REST_VOL_TEST_LIBSH_TARGET} "wsock32.lib")
   endif (MINGW)
-  target_link_libraries (${RV_TEST_LIBSH_TARGET} ${RV_LIB_TARGET} ${HDF5_LIBSH_TARGET})
+  target_link_libraries (${REST_VOL_TEST_LIBSH_TARGET} ${RV_LIB_TARGET} ${HDF5_LIBSH_TARGET})
   H5_SET_LIB_OPTIONS (${HDF5_TEST_LIBSH_TARGET} ${HDF5_TEST_LIB_NAME} SHARED ${HDF5_PACKAGE_SOVERSION})
-  set_target_properties (${RV_TEST_LIBSH_TARGET} PROPERTIES
+  set_target_properties (${REST_VOL_TEST_LIBSH_TARGET} PROPERTIES
       FOLDER libraries/test
       COMPILE_DEFINITIONS "RV_BUILT_AS_DYNAMIC_LIB"
       INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>"
@@ -48,13 +48,13 @@ if (BUILD_SHARED_LIBS)
 endif (BUILD_SHARED_LIBS)
 
 MACRO (ADD_RV_EXE file)
-  add_executable (${file} ${RV_TEST_SOURCE_DIR}/${file}.c)
+  add_executable (${file} ${REST_VOL_TEST_SOURCE_DIR}/${file}.c)
   TARGET_NAMING (${file} STATIC)
   TARGET_C_PROPERTIES (${file} STATIC " " " ")
   target_link_libraries (${file} ${RV_LIB_TARGET} ${HDF5_LIB_TARGET})
   set_target_properties (${file} PROPERTIES FOLDER test)
   if (BUILD_SHARED_LIBS)
-    add_executable (${file}-shared ${RV_TEST_SOURCE_DIR}/${file}.c)
+    add_executable (${file}-shared ${REST_VOL_TEST_SOURCE_DIR}/${file}.c)
     TARGET_NAMING (${file}-shared SHARED)
     TARGET_C_PROPERTIES (${file}-shared SHARED " " " ")
     target_link_libraries (${file}-shared ${RV_LIBSH_TARGET} ${HDF5_LIBSH_TARGET})
@@ -62,15 +62,15 @@ MACRO (ADD_RV_EXE file)
   endif (BUILD_SHARED_LIBS)
 ENDMACRO (ADD_RV_EXE file)
 
-set (RV_TESTS
+set (REST_VOL_TESTS
     test_rest_vol
 )
 
-foreach (test ${RV_TESTS})
+foreach (test ${REST_VOL_TESTS})
     ADD_RV_EXE(${test})
-endforeach (test ${RV_TESTS})
+endforeach (test ${REST_VOL_TESTS})
 
-foreach (test ${RV_TESTS})
+foreach (test ${REST_VOL_TESTS})
   if (${test} STREQUAL "big" AND CYGWIN)
     add_test (
         NAME RVTEST-${test}
@@ -83,10 +83,10 @@ foreach (test ${RV_TESTS})
       ENVIRONMENT "srcdir=${REST_VOL_TEST_BINARY_DIR}"
       WORKING_DIRECTORY ${REST_VOL_TEST_BINARY_DIR}
   )
-endforeach (test ${RV_TESTS})
+endforeach (test ${REST_VOL_TESTS})
 
 if (BUILD_SHARED_LIBS)
-  foreach (test ${RV_TESTS})
+  foreach (test ${REST_VOL_TESTS})
     if (${test} STREQUAL "big" AND CYGWIN)
       add_test (
           NAME RVTEST-shared-${test}
@@ -99,5 +99,5 @@ if (BUILD_SHARED_LIBS)
         ENVIRONMENT "srcdir=${REST_VOL_TEST_BINARY_DIR}"
         WORKING_DIRECTORY ${REST_VOL_TEST_BINARY_DIR}
     )
-  endforeach (test ${RV_TESTS})
+  endforeach (test ${REST_VOL_TESTS})
 endif (BUILD_SHARED_LIBS)
