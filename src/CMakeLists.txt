@@ -25,18 +25,18 @@ add_definitions(${RV_EXTRA_C_FLAGS})
 # List source files
 #-----------------------------------------------------------------------------
 set (RV_SRCS
-    ${REST_VOL_SRC_DIR}/rest_vol.c
+    ${RV_SRC_DIR}/rest_vol.c
 )
 
 set (RV_HDRS
-    ${REST_VOL_SRC_DIR}/rest_vol.h
-    ${REST_VOL_SRC_DIR}/rest_vol_public.h
-    ${REST_VOL_SRC_DIR}/rest_vol_err.h
+    ${RV_SRC_DIR}/rest_vol.h
+    ${RV_SRC_DIR}/rest_vol_public.h
+    ${RV_SRC_DIR}/rest_vol_err.h
 )
 IDE_GENERATED_PROPERTIES("RV" "${RV_HDRS}" "${RV_SRCS}")
 
 set (RV_PUBLIC_HEADERS
-    ${REST_VOL_SRC_DIR}/rest_vol_public.h
+    ${RV_SRC_DIR}/rest_vol_public.h
 )
 
 #-----------------------------------------------------------------------------
@@ -47,7 +47,7 @@ if (NOT RV_INSTALL_NO_DEVELOPMENT)
       FILES
           ${RV_PUBLIC_HEADERS}
       DESTINATION
-          ${REST_VOL_INSTALL_INCLUDE_DIR}
+          ${RV_INSTALL_INCLUDE_DIR}
       COMPONENT
           headers
   )
@@ -58,7 +58,7 @@ endif (NOT RV_INSTALL_NO_DEVELOPMENT)
 #-----------------------------------------------------------------------------
 if (RV_EXPORTED_TARGETS)
   if (BUILD_SHARED_LIBS)
-    INSTALL_TARGET_PDB (${REST_VOL_LIBSH_TARGET} ${REST_VOL_INSTALL_BIN_DIR} libraries)
+    INSTALL_TARGET_PDB (${RV_LIBSH_TARGET} ${RV_INSTALL_BIN_DIR} libraries)
   endif (BUILD_SHARED_LIBS)
 
   install (
@@ -66,9 +66,9 @@ if (RV_EXPORTED_TARGETS)
           ${install_targets}
       EXPORT
           ${RV_EXPORTED_TARGETS}
-      LIBRARY DESTINATION ${REST_VOL_INSTALL_LIB_DIR} COMPONENT libraries
-      ARCHIVE DESTINATION ${REST_VOL_INSTALL_LIB_DIR} COMPONENT libraries
-      RUNTIME DESTINATION ${REST_VOL_INSTALL_BIN_DIR} COMPONENT libraries
-      FRAMEWORK DESTINATION ${REST_VOL_INSTALL_FWRK_DIR} COMPONENT libraries
+      LIBRARY DESTINATION ${RV_INSTALL_LIB_DIR} COMPONENT libraries
+      ARCHIVE DESTINATION ${RV_INSTALL_LIB_DIR} COMPONENT libraries
+      RUNTIME DESTINATION ${RV_INSTALL_BIN_DIR} COMPONENT libraries
+      FRAMEWORK DESTINATION ${RV_INSTALL_FWRK_DIR} COMPONENT libraries
   )
 endif (RV_EXPORTED_TARGETS)

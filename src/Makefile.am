@@ -51,6 +51,10 @@ librestvol_la_SOURCES=rest_vol.c rest_vol.h rest_vol_err.h
 # Public headers
 include_HEADERS=rest_vol_public.h rest_vol_config.h
 
+# install librestvol.settings in lib directory
+settingsdir=$(libdir)
+settings_DATA=librestvol.settings
+
 # Automake needs to be taught how to build lib, progs, and tests targets.
 # These will be filled in automatically for the most part (e.g.,
 # lib_LIBRARIES are built for lib target), but EXTRA_LIB, EXTRA_PROG, and

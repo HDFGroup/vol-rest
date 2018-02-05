@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.1.0)
-PROJECT (REST_VOL C)
+PROJECT ("REST VOL" C)
 
 # Locate cURL and YAJL before building
 find_package(CURL)
@@ -294,7 +294,7 @@ if (RV_ENABLE_DEBUG)
 endif (RV_ENABLE_DEBUG)
 
 #-----------------------------------------------------------------------------
-# Option to indicate enabling plugin debugging output
+# Option to indicate enabling cURL debugging output
 #-----------------------------------------------------------------------------
 option (RV_ENABLE_CURL_DEBUG "Indicate that cURL debug output is used" OFF)
 if (RV_ENABLE_CURL_DEBUG)
@@ -389,6 +389,6 @@ endif (BUILD_TESTING)
 #-----------------------------------------------------------------------------
 # Generate the rest_vol_config.h file containing user settings needed by compilation
 #-----------------------------------------------------------------------------
-configure_file (${CMAKE_SOURCE_DIR}/rv_cmake_config.h.in ${CMAKE_SOURCE_DIR}/rest_vol_config.h @ONLY)
+configure_file (${CMAKE_SOURCE_DIR}/src/rv_cmake_config.h.in ${CMAKE_SOURCE_DIR}/src/rest_vol_config.h @ONLY)
 
 include (CMakeInstallation.cmake)
