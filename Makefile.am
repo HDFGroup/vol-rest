@@ -18,62 +18,36 @@
 # REST VOL Makefile(.in)
 #
 
-HDF5_INSTALL_DIR=@RV_HDF5_INSTALL_DIR@
-CURL_INSTALL_DIR=@RV_CURL_INSTALL_DIR@
-YAJL_INSTALL_DIR=@RV_YAJL_INSTALL_DIR@
+AM_CFLAGS = @AM_CFLAGS@ @H5_CFLAGS@
+AM_FCFLAGS = @AM_FCFLAGS@ @H5_FCFLAGS@
+AM_CXXFLAGS = @AM_CXXFLAGS@ @H5_CXXFLAGS@
+AM_CPPFLAGS = @AM_CPPFLAGS@ @H5_CPPFLAGS@
+AM_LDFLAGS = @AM_LDFLAGS@ @H5_LDFLAGS@
 
-AM_CFLAGS=@AM_CFLAGS@ @RV_CFLAGS@ -I$(HDF5_INSTALL_DIR)/include
-AM_CPPFLAGS=@AM_CPPFLAGS@ @RV_CPPFLAGS@
-AM_LDFLAGS=@AM_LDFLAGS@ @RV_LDFLAGS@
+ACLOCAL_AMFLAGS = -I m4
 
-ACLOCAL_AMFLAGS=-I m4
+# List all build rules defined by HDF5 Makefiles as "PHONY" targets here.
+# This tells the Makefiles that these targets are not files to be built but
+# commands that should be executed even if a file with the same name already
+# exists.
+.PHONY: build-lib lib tests
 
-# Add in the linker flags for cURL
-if !CURL_DEFAULT_DIR
-    AM_CFLAGS += -I$(CURL_INSTALL_DIR)/include -L$(CURL_INSTALL_DIR)/lib$(LIB_SUFFIX)
-endif
+SUBDIRS = src test
 
-AM_CFLAGS += -lcurl
+# Some files generated during configure that should be cleaned
+DISTCLEANFILES = config/stamp1 config/stamp2
 
-# Add in the linker flags for YAJL
-if !YAJL_DEFAULT_DIR
-    AM_CFLAGS += -I$(YAJL_INSTALL_DIR)/include -L$(YAJL_INSTALL_DIR)/lib$(LIB_SUFFIX)
-endif
+lib:
+	for d in $(SUBDIRS); do                               \
+	  if test $$d != .; then                              \
+	    (cd $$d && $(MAKE) $(AM_MAKEFLAGS) $@) || exit 1; \
+	  fi;                                                 \
+	done
 
-AM_CFLAGS += -lyajl
+install: install-recursive
+uninstall: uninstall-recursive
 
-# Our main target, the REST VOL plugin library
-lib_LTLIBRARIES=librestvol.la
-
-# REST VOL's source file and private headers
-librestvol_la_SOURCES=rest_vol.c rest_vol.h rest_vol_err.h
-
-# Public headers
-include_HEADERS=rest_vol_public.h rest_vol_config.h
-
-# Defines for building the test suite
-test_PROGRAMS = test_rest_vol
-test_rest_vol_SOURCES = test_rest_vol.c
-test_rest_vol_LDADD = librestvol.la $(HDF5_INSTALL_DIR)/lib/libhdf5.la
-test_rest_vol_CFLAGS = -I$(HDF5_INSTALL_DIR)/include
-
-testdir=$(bindir)
-
-# Automake needs to be taught how to build lib, progs, and tests targets.
-# These will be filled in automatically for the most part (e.g.,
-# lib_LIBRARIES are built for lib target), but EXTRA_LIB, EXTRA_PROG, and
-# EXTRA_TEST variables are supplied to allow the user to force targets to
-# be built at certain times.
-LIB = $(lib_LTLIBRARIES)
-PROGS = 
-TESTS = $(test_PROGRAMS)
-
-# lib/progs/tests targets recurse into subdirectories. build-* targets
-# build files in this directory.
-build-lib: $(LIB)
-build-progs: $(LIB) $(PROGS)
-build-tests: $(LIB) $(PROGS) $(TESTS)
-
-# Tell Automake to build tests when the user types `make all' (this is
-# not its default behavior).
-all-local: $(TESTS)
+install-all:
+	@$(MAKE) $(AM_MAKEFLAGS) install
+uninstall-all:
+	@$(MAKE) $(AM_MAKEFLAGS) uninstall
