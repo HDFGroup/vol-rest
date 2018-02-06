@@ -66,14 +66,15 @@ endif ()
 #-----------------------------------------------------------------------------
 set (HDF5_EXTERNALLY_CONFIGURED 1)
 
-set (HDF5_SOURCE_DIR "hdf5")
+set (HDF5_SOURCE_NAME "hdf5")
+set (HDF5_SOURCE_DIR ${CMAKE_SOURCE_DIR}/${HDF5_SOURCE_NAME})
 
 # HDF5_EXPORTED_TARGETS :
 #   Set this to the name of the targets variable which controls exports
 #   If unset (because parent project does not support/use the
 #   install (EXPORT target...) syntax), then targets are not configured
 #   for export during install.
-set (HDF5_EXPORTED_TARGETS "rest_vol-targets")
+set (HDF5_EXPORTED_TARGETS "rest-vol-targets")
 
 # HDF5_LIB_DEPENDENCIES :
 #   If the build of HDF5 libs is being customized, then rules for the
@@ -89,20 +90,26 @@ set (HDF5_EXTERNAL_LIB_PREFIX "rv")
 
 # HDF5_INSTALL_BIN_DIR, HDF5_INSTALL_LIB_DIR, HDF5_INSTALL_INCLUDE_DIR, HDF5_INSTALL_DATA_DIR :
 #   Customize the 'bin', 'lib', 'include', and 'share' installation directories.
-set (HDF5_INSTALL_BIN_DIR )
-set (HDF5_INSTALL_LIB_DIR )
-set (HDF5_INSTALL_INCLUDE_DIR )
-set (HDF5_INSTALL_DATA_DIR )
+#set (HDF5_INSTALL_BIN_DIR "${HDF5_SOURCE_DIR}/hdf5/bin")
+#set (HDF5_INSTALL_LIB_DIR "${HDF5_SOURCE_DIR}/hdf5/lib")
+#set (HDF5_INSTALL_INCLUDE_DIR "${HDF5_SOURCE_DIR}/hdf5/include")
+#set (HDF5_INSTALL_DATA_DIR "${HDF5_SOURCE_DIR}/hdf5/share")
 
 # HDF5_INSTALL_NO_DEVELOPMENT :
 #   Set to true to skip installation of headers and CMake package files.
-set (HDF5_INSTALL_NO_DEVELOPMENT TRUE)
+set (HDF5_INSTALL_NO_DEVELOPMENT FALSE)
+
+#-----------------------------------------------------------------------------
+# Make sure the HDF5 headers are available, as well as H5pubconf.h
+#-----------------------------------------------------------------------------
+include_directories(${HDF5_SOURCE_DIR}/src)
+include_directories(${CMAKE_BINARY_DIR}/${HDF5_SOURCE_NAME})
 
 # Add the HDF5 source as a sub-project
 add_subdirectory(${HDF5_SOURCE_DIR})
 
 if (NOT REST_VOL_EXPORTED_TARGETS)
-  set (REST_VOL_EXPORTED_TARGETS "rest_vol-targets")
+  set (REST_VOL_EXPORTED_TARGETS "rest-vol-targets")
 endif (NOT REST_VOL_EXPORTED_TARGETS)
 
 #-----------------------------------------------------------------------------
@@ -272,7 +279,7 @@ endif (WIN32)
 # add it to this variable. This is NOT used by Make Install, but for projects
 # which include the REST VOL as a sub-project within their build tree
 #-----------------------------------------------------------------------------
-set_global_variable (REST_VOL_LIBRARIES_TO_EXPORT "")
+set_global_variable (REST_VOL_LIBRARIES_TO_EXPORT ${REST_VOL_LIB_TARGET})
 set (EXTERNAL_HEADER_LIST "")
 set (EXTERNAL_LIBRARY_LIST "")
 set (EXTERNAL_LIBRARYDLL_LIST "")
@@ -406,9 +413,6 @@ if (BUILD_TESTING)
       "Timeout in seconds for each test (default 1200=20minutes)"
   )
 
-  option (REST_VOL_TEST_EXPRESS "Control testing framework (0-3)" "0")
-  mark_as_advanced (REST_VOL_TEST_EXPRESS)
-
   enable_testing ()
   include (CTest)
 
@@ -416,8 +420,11 @@ if (BUILD_TESTING)
 endif (BUILD_TESTING)
 
 #-----------------------------------------------------------------------------
-# Generate the rest_vol_config.h file containing user settings needed by compilation
+# Generate the rest_vol_config.h file containing user settings needed by
+# compilation
 #-----------------------------------------------------------------------------
 configure_file (${REST_VOL_RESOURCES_DIR}/rv_cmake_config.h.in ${REST_VOL_SRC_DIR}/rest_vol_config.h @ONLY)
+
+add_subdirectory(${REST_VOL_SOURCE_DIR}/src)
 
 include (CMakeInstallation.cmake)

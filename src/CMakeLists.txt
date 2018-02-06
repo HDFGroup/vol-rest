@@ -39,6 +39,34 @@ set (REST_VOL_PUBLIC_HEADERS
     ${REST_VOL_SRC_DIR}/rest_vol_public.h
 )
 
+add_library (${REST_VOL_LIB_TARGET} STATIC ${REST_VOL_SRCS} ${REST_VOL_HEADERS})
+TARGET_C_PROPERTIES (${REST_VOL_LIB_TARGET} STATIC " " " ")
+target_link_libraries (${REST_VOL_LIB_TARGET} ${LINK_LIBS})
+if (NOT WIN32)
+  target_link_libraries (${REST_VOL_LIB_TARGET} dl)
+endif (NOT WIN32)
+if (H5_HAVE_PARALLEL AND MPI_C_FOUND)
+  target_link_libraries (${REST_VOL_LIB_TARGET} ${MPI_C_LIBRARIES})
+endif (H5_HAVE_PARALLEL AND MPI_C_FOUND)
+set_global_variable (REST_VOL_LIBRARIES_TO_EXPORT ${REST_VOL_LIB_TARGET})
+#H5_SET_LIB_OPTIONS (${HDF5_LIB_TARGET} ${HDF5_LIB_NAME} STATIC)
+set_target_properties (${REST_VOL_LIB_TARGET} PROPERTIES
+    FOLDER libraries
+    INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>"
+)
+
+set (install_targets ${REST_VOL_LIB_TARGET})
+
+#-----------------------------------------------------------------------------
+# Make the REST VOL depend on H5pubconf.h existing
+#-----------------------------------------------------------------------------
+add_custom_target(
+    pubconf
+    DEPENDS ${CMAKE_BINARY_DIR}/${HDF5_SOURCE_NAME}/H5pubconf.h
+)
+
+add_dependencies(${REST_VOL_LIB_TARGET} pubconf)
+
 #-----------------------------------------------------------------------------
 # Add file(s) to CMake Install
 #-----------------------------------------------------------------------------
