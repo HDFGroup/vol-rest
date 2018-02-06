@@ -746,6 +746,72 @@ AC_SUBST([RV_YAJL_INSTALL_DIR])
 AC_MSG_RESULT([$RV_YAJL_INSTALL_DIR])
 
 ## ----------------------------------------------------------------------
+## Check if the REST VOL examples should be built
+##
+AC_MSG_CHECKING([enable examples])
+AC_ARG_ENABLE([examples],
+              [AS_HELP_STRING([--enable-examples=(yes|no|<custom>)],
+                              [Enable building of the REST VOL HDF5 examples.
+                               [default=yes]
+                               ])],
+              [BUILD_EXAMPLES=$enableval])
+
+## Set default
+if test "X-$BUILD_EXAMPLES" = X- ; then
+  BUILD_EXAMPLES=yes
+fi
+
+## Allow this variable to be substituted in other files
+AC_SUBST([BUILD_EXAMPLES])
+
+AM_CONDITIONAL([BUILD_EXAMPLES], [test "$BUILD_EXAMPLES" = yes])
+
+case "X-$BUILD_EXAMPLES" in
+  X-yes)
+    AC_MSG_RESULT([yes])
+    ;;
+  X-no)
+    AC_MSG_RESULT([no])
+    ;;
+  *)
+    AC_MSG_RESULT([$BUILD_EXAMPLES])
+    ;;
+esac
+
+## ----------------------------------------------------------------------
+## Check if the HDF5 tools should be built with REST VOL support
+##
+AC_MSG_CHECKING([enable tools])
+AC_ARG_ENABLE([tools],
+              [AS_HELP_STRING([--enable-tools=(yes|no|<custom>)],
+                              [Enable building of the HDF5 tools with REST VOL support.
+                               [default=no]
+                               ])],
+              [BUILD_TOOLS=$enableval])
+
+## Set default
+if test "X-$BUILD_TOOLS" = X- ; then
+  BUILD_TOOLS=no
+fi
+
+## Allow this variable to be substituted in other files
+AC_SUBST([BUILD_TOOLS])
+
+AM_CONDITIONAL([BUILD_TOOLS], [test "$BUILD_TOOLS" = yes])
+
+case "X-$BUILD_TOOLS" in
+  X-yes)
+    AC_MSG_RESULT([yes])
+    ;;
+  X-no)
+    AC_MSG_RESULT([no])
+    ;;
+  *)
+    AC_MSG_RESULT([$BUILD_TOOLS])
+    ;;
+esac
+
+## ----------------------------------------------------------------------
 ## Check if the compiler should include symbols
 ##
 AC_MSG_CHECKING([enable debugging symbols])

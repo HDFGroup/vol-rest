@@ -26,7 +26,6 @@
 
 
 #define H5FILE_NAME    "group.h5"
-#define FILE_NAME_MAX_LENGTH 256
 #define RANK    2
 
 static herr_t file_info(hid_t loc_id, const char *name, const H5L_info_t *linfo,
@@ -41,10 +40,6 @@ main(void)
     hid_t    grp;
     hid_t    dataset, dataspace;
     hid_t    plist;
-    hid_t    fapl;
-
-    const char *username;
-    char        filename[FILE_NAME_MAX_LENGTH];
 
     herr_t   status;
     hsize_t  dims[2];
@@ -52,19 +47,10 @@ main(void)
 
     int      idx_f, idx_g;
 
-    RVinit();
-
-    fapl = H5Pcreate(H5P_FILE_ACCESS);
-    H5Pset_fapl_rest_vol(fapl);
-
-    username = getenv("HSDS_USERNAME");
-
-    snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" H5FILE_NAME, username);
-
     /*
      * Create a file.
      */
-    file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
+    file = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
     /*
      * Create a group in the file.
@@ -114,7 +100,7 @@ main(void)
     /*
      * Now reopen the file and group in the file.
      */
-    file = H5Fopen(H5FILE_NAME, H5F_ACC_RDWR, fapl);
+    file = H5Fopen(H5FILE_NAME, H5F_ACC_RDWR, H5P_DEFAULT);
     grp  = H5Gopen2(file, "Data", H5P_DEFAULT);
 
     /*
@@ -175,10 +161,7 @@ main(void)
      */
 
     H5Gclose(grp);
-    H5Pclose(fapl);
     H5Fclose(file);
-
-    RVterm();
 
     return 0;
 }

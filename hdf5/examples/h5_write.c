@@ -21,7 +21,6 @@
 #include "hdf5.h"
 
 #define H5FILE_NAME        "SDS.h5"
-#define FILE_NAME_MAX_LENGTH 256
 #define DATASETNAME "IntArray"
 #define NX     5                      /* dataset dimensions */
 #define NY     6
@@ -32,19 +31,10 @@ main (void)
 {
     hid_t       file, dataset;         /* file and dataset handles */
     hid_t       datatype, dataspace;   /* handles */
-    hid_t       fapl;
     hsize_t     dimsf[2];              /* dataset dimensions */
     herr_t      status;
     int         data[NX][NY];          /* data to write */
     int         i, j;
-
-    const char *username;
-    char        filename[FILE_NAME_MAX_LENGTH];
-
-    RVinit();
-
-    fapl = H5Pcreate(H5P_FILE_ACCESS);
-    H5Pset_fapl_rest_vol(fapl);
 
     /*
      * Data  and output buffer initialization.
@@ -60,16 +50,12 @@ main (void)
      * 4 5 6 7 8 9
      */
 
-    username = getenv("HSDS_USERNAME");
-
-    snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" H5FILE_NAME, username);
-
     /*
      * Create a new file using H5F_ACC_TRUNC access,
      * default file creation properties, and default file
      * access properties.
      */
-    file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
+    file = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
     /*
      * Describe the size of the array and create the data space for fixed
@@ -104,10 +90,7 @@ main (void)
     H5Sclose(dataspace);
     H5Tclose(datatype);
     H5Dclose(dataset);
-    H5Pclose(fapl);
     H5Fclose(file);
-
-    RVterm();
 
     return 0;
 }

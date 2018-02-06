@@ -27,7 +27,6 @@
 #include "hdf5.h"
 
 #define H5FILE_NAME "Select.h5"
-#define FILE_NAME_MAX_LENGTH 256
 
 #define MSPACE1_RANK     1          /* Rank of the first dataset in memory */
 #define MSPACE1_DIM      50         /* Dataset size in memory */
@@ -49,14 +48,12 @@
 
 #define NPOINTS          4          /* Number of points that will be selected
                                        and overwritten */
-
 int
 main (void)
 {
 
    hid_t   file, dataset;           /* File and dataset identifiers */
    hid_t   mid1, mid2, mid, fid;    /* Dataspace identifiers */
-   hid_t   fapl;
    hid_t   plist;                   /* Dataset property list identifier */
 
    hsize_t dim1[] = {MSPACE1_DIM};  /* Dimension size of the first dataset
@@ -86,14 +83,6 @@ main (void)
    int    vector[MSPACE1_DIM];
    int    values[] = {53, 59, 61, 67};  /* New values to be written */
 
-   const char *username;
-   char        filename[FILE_NAME_MAX_LENGTH];
-
-   RVinit();
-
-   fapl = H5Pcreate(H5P_FILE_ACCESS);
-   H5Pset_fapl_rest_vol(fapl);
-
    /*
     * Buffers' initialization.
     */
@@ -101,14 +90,10 @@ main (void)
    for(i = 1; i < MSPACE1_DIM - 1; i++)
        vector[i] = i;
 
-   username = getenv("HSDS_USERNAME");
-
-   snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" H5FILE_NAME, username);
-
    /*
     * Create a file.
     */
-   file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
+   file = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
    /*
     * Create property list for a dataset and set up fill values.
@@ -226,7 +211,7 @@ main (void)
     /*
      * Open the file.
      */
-    file = H5Fopen(filename, H5F_ACC_RDONLY, fapl);
+    file = H5Fopen(H5FILE_NAME, H5F_ACC_RDONLY, H5P_DEFAULT);
 
     /*
      * Open the dataset.
@@ -340,16 +325,9 @@ main (void)
     ret = H5Pclose(plist);
 
     /*
-     * Close file access property list
-     */
-    ret = H5Pclose(fapl);
-
-    /*
      * Close the file.
      */
     ret = H5Fclose(file);
-
-    ret = RVterm();
 
     return 0;
 }

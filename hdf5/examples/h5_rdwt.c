@@ -20,28 +20,12 @@
 
 #include "hdf5.h"
 #define FILE "dset.h5"
-#define FILE_NAME_MAX_LENGTH 256
 
 int main() {
 
-   hid_t       file_id, dataset_id, fapl;  /* identifiers */
-   const char *username;
-   char        filename[FILE_NAME_MAX_LENGTH];
+   hid_t       file_id, dataset_id;  /* identifiers */
    herr_t      status;
    int         i, j, dset_data[4][6];
-
-   /* Initialize REST VOL plugin access */
-   RVinit();
-
-   /* Associate the REST VOL plugin with a FAPL and register
-    * it with the library
-    */
-   fapl = H5Pcreate(H5P_FILE_ACCESS);
-   H5Pset_fapl_rest_vol(fapl);
-
-   username = getenv("HSDS_USERNAME");
-
-   snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" FILE, username);
 
    /* Initialize the dataset. */
    for (i = 0; i < 4; i++)
@@ -49,7 +33,7 @@ int main() {
          dset_data[i][j] = i * 6 + j + 1;
 
    /* Open an existing file. */
-   file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl);
+   file_id = H5Fopen(FILE, H5F_ACC_RDWR, H5P_DEFAULT);
 
    /* Open an existing dataset. */
    dataset_id = H5Dopen2(file_id, "/dset", H5P_DEFAULT);
@@ -64,12 +48,6 @@ int main() {
    /* Close the dataset. */
    status = H5Dclose(dataset_id);
 
-   /* Close the File Access Property List */
-   status = H5Pclose(fapl);
-
    /* Close the file. */
    status = H5Fclose(file_id);
-
-   /* Terminate REST VOL plugin access */
-   status = RVterm();
 }

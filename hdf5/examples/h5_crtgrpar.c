@@ -20,26 +20,14 @@
 
 #include "hdf5.h"
 #define FILE "groups.h5"
-#define FILE_NAME_MAX_LENGTH 256
 
 int main() {
 
-   hid_t       file_id, fapl_id, group1_id, group2_id, group3_id;  /* identifiers */
-   const char *username;
-   char        filename[FILE_NAME_MAX_LENGTH];
+   hid_t       file_id, group1_id, group2_id, group3_id;  /* identifiers */
    herr_t      status;
 
-   RVinit();
-
-   fapl_id = H5Pcreate(H5P_FILE_ACCESS);
-   H5Pset_fapl_rest_vol(fapl_id);
-
-   username = getenv("HSDS_USERNAME");
-
-   snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" FILE, username);
-
    /* Create a new file using default properties. */
-   file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id);
+   file_id = H5Fcreate(FILE, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
    /* Create group "MyGroup" in the root group using absolute name. */
    group1_id = H5Gcreate2(file_id, "/MyGroup", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
@@ -55,10 +43,6 @@ int main() {
    status = H5Gclose(group2_id);
    status = H5Gclose(group3_id);
 
-   status = H5Pclose(fapl_id);
-
    /* Close the file. */
    status = H5Fclose(file_id);
-
-   RVterm();
 }

@@ -21,7 +21,6 @@
 #include "hdf5.h"
 
 #define FILE        "subset.h5"
-#define FILE_NAME_MAX_LENGTH 256
 #define DATASETNAME "IntArray" 
 #define RANK  2
 
@@ -30,7 +29,7 @@
 
 
 #define DIM0     8                          /* size of dataset */       
-#define DIM1     10
+#define DIM1     10 
 
 int
 main (void)
@@ -41,8 +40,7 @@ main (void)
     int         rdata[DIM0][DIM1];          /* buffer for read */
  
     hid_t       file_id, dataset_id;        /* handles */
-    hid_t       dataspace_id, memspace_id;
-    hid_t       fapl;
+    hid_t       dataspace_id, memspace_id; 
 
     herr_t      status;                             
    
@@ -52,9 +50,6 @@ main (void)
     hsize_t     block[2];
     int         i, j;
 
-    const char *username;
-    char        filename[FILE_NAME_MAX_LENGTH];
-
     
     /*****************************************************************
      * Create a new file with default creation and access properties.*
@@ -62,16 +57,7 @@ main (void)
      * and dataset.                                                  *
      *****************************************************************/
 
-    RVinit();
-
-    fapl = H5Pcreate(H5P_FILE_ACCESS);
-    H5Pset_fapl_rest_vol(fapl);
-
-    username = getenv("HSDS_USERNAME");
-
-    snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" FILE, username);
-
-    file_id = H5Fcreate (filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
+    file_id = H5Fcreate (FILE, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
     dims[0] = DIM0;
     dims[1] = DIM1;
@@ -108,7 +94,7 @@ main (void)
      * values to the dataset. 
      *****************************************************/
 
-    file_id = H5Fopen (FILE, H5F_ACC_RDWR, fapl);
+    file_id = H5Fopen (FILE, H5F_ACC_RDWR, H5P_DEFAULT);
     dataset_id = H5Dopen2 (file_id, DATASETNAME, H5P_DEFAULT);
 
     /* Specify size and shape of subset to write. */
@@ -162,7 +148,6 @@ main (void)
     status = H5Sclose (memspace_id);
     status = H5Sclose (dataspace_id);
     status = H5Dclose (dataset_id);
-    status = H5Pclose(fapl);
     status = H5Fclose (file_id);
-    status = RVterm();
+ 
 }

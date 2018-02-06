@@ -21,7 +21,6 @@
 #include "hdf5.h"
 
 #define H5FILE_NAME        "SDSextendible.h5"
-#define FILE_NAME_MAX_LENGTH 256
 #define DATASETNAME "ExtendibleArray"
 #define RANK         2
 #define RANKC        1
@@ -32,7 +31,6 @@ int
 main (void)
 {
     hid_t       file;                        /* handles */
-    hid_t       fapl;
     hid_t       dataset;
     hid_t       filespace;
     hid_t       memspace;
@@ -51,23 +49,12 @@ main (void)
     int         rank, rank_chunk;
     int		i, j;
 
-    const char *username;
-    char        filename[FILE_NAME_MAX_LENGTH];
 
-
-    RVinit();
-
-    fapl = H5Pcreate(H5P_FILE_ACCESS);
-    H5Pset_fapl_rest_vol(fapl);
-
-    username = getenv("HSDS_USERNAME");
-
-    snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" H5FILE_NAME, username);
 
     /*
      * Open the file and the dataset.
      */
-    file = H5Fopen(H5FILE_NAME, H5F_ACC_RDONLY, fapl);
+    file = H5Fopen(H5FILE_NAME, H5F_ACC_RDONLY, H5P_DEFAULT);
     dataset = H5Dopen2(file, DATASETNAME, H5P_DEFAULT);
 
     /*
@@ -221,10 +208,7 @@ main (void)
     H5Pclose(cparms);
     H5Dclose(dataset);
     H5Sclose(filespace);
-    H5Pclose(fapl);
     H5Fclose(file);
-
-    RVterm();
 
     return 0;
 }

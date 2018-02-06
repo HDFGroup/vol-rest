@@ -34,6 +34,14 @@ ACLOCAL_AMFLAGS = -I m4
 
 SUBDIRS = src test
 
+if BUILD_EXAMPLES
+  SUBDIRS += examples
+endif
+
+if BUILD_TOOLS
+  SUBDIRS += 
+endif
+
 # Some files generated during configure that should be cleaned
 DISTCLEANFILES = config/stamp1 config/stamp2
 

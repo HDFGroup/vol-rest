@@ -31,8 +31,6 @@
 
 #define H5FILE_NAME "Attributes.h5"
 
-#define FILE_NAME_MAX_LENGTH 256
-
 #define RANK  1   /* Rank and size of the dataset  */
 #define SIZE  7
 
@@ -50,7 +48,6 @@ main (void)
 {
 
    hid_t   file, dataset;       /* File and dataset identifiers */
-   hid_t   fapl;
 
    hid_t   fid;                 /* Dataspace identifier */
    hid_t   attr1, attr2, attr3; /* Attribute identifiers */
@@ -69,8 +66,6 @@ main (void)
    unsigned i, j;              /* Counters */
    char    string_out[80];     /* Buffer to read string attribute back */
    int     point_out;          /* Buffer to read scalar attribute back */
-   const char *username;
-   char        filename[FILE_NAME_MAX_LENGTH];
 
    /*
     * Data initialization.
@@ -85,19 +80,10 @@ main (void)
        matrix[i][j] = -1.;
    }
 
-   RVinit();
-
-   fapl = H5Pcreate(H5P_FILE_ACCESS);
-   H5Pset_fapl_rest_vol(fapl);
-
-   username = getenv("HSDS_USERNAME");
-
-   snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" H5FILE_NAME, username);
-
    /*
     * Create a file.
     */
-   file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
+   file = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
    /*
     * Create the dataspace for the dataset in the file.
@@ -186,7 +172,7 @@ main (void)
    /*
     * Reopen the file.
     */
-   file = H5Fopen(filename, H5F_ACC_RDONLY, fapl);
+   file = H5Fopen(H5FILE_NAME, H5F_ACC_RDONLY, H5P_DEFAULT);
 
    /*
     * Open the dataset.
@@ -229,10 +215,7 @@ main (void)
     * Close the dataset and the file.
     */
    H5Dclose(dataset);
-   H5Pclose(fapl);
    H5Fclose(file);
-
-   RVterm();
 
    return 0;
 }

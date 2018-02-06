@@ -22,7 +22,6 @@
 #include "hdf5.h"
 
 #define H5FILE_NAME          "SDScompound.h5"
-#define FILE_NAME_MAX_LENGTH 256
 #define DATASETNAME   "ArrayOfStructures"
 #define LENGTH        10
 #define RANK          1
@@ -53,12 +52,9 @@ main(void)
     float      s3[LENGTH];
 
     int        i;
-    hid_t      file, fapl, dataset, space; /* Handles */
+    hid_t      file, dataset, space; /* Handles */
     herr_t     status;
     hsize_t    dim[] = {LENGTH};   /* Dataspace dimensions */
-
-    const char *username;
-    char        filename[FILE_NAME_MAX_LENGTH];
 
 
     /*
@@ -70,24 +66,15 @@ main(void)
         s1[i].c = 1./(i+1);
     }
 
-    RVinit();
-
-    fapl = H5Pcreate(H5P_FILE_ACCESS);
-    H5Pset_fapl_rest_vol(fapl);
-
     /*
      * Create the data space.
      */
     space = H5Screate_simple(RANK, dim, NULL);
 
-    username = getenv("HSDS_USERNAME");
-
-    snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" H5FILE_NAME, username);
-
     /*
      * Create the file.
      */
-    file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
+    file = H5Fcreate(H5FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
     /*
      * Create the memory data type.
@@ -118,7 +105,7 @@ main(void)
     /*
      * Open the file and the dataset.
      */
-    file = H5Fopen(filename, H5F_ACC_RDONLY, fapl);
+    file = H5Fopen(H5FILE_NAME, H5F_ACC_RDONLY, H5P_DEFAULT);
 
     dataset = H5Dopen2(file, DATASETNAME, H5P_DEFAULT);
 
@@ -175,10 +162,7 @@ main(void)
     H5Tclose(s2_tid);
     H5Tclose(s3_tid);
     H5Dclose(dataset);
-    H5Pclose(fapl);
     H5Fclose(file);
-
-    RVterm();
 
     return 0;
 }

@@ -23,7 +23,6 @@
 #include "hdf5.h"
 
 #define H5FILE_NAME        "SDS.h5"
-#define FILE_NAME_MAX_LENGTH 256
 #define DATASETNAME "IntArray"
 #define NX_SUB  3           /* hyperslab dimensions */
 #define NY_SUB  4
@@ -39,7 +38,6 @@ main (void)
     hid_t       file, dataset;         /* handles */
     hid_t       datatype, dataspace;
     hid_t       memspace;
-    hid_t       fapl;
     H5T_class_t t_class;                 /* data type class */
     H5T_order_t order;                 /* data order */
     size_t      size;                  /*
@@ -58,18 +56,6 @@ main (void)
     hsize_t      offset_out[3];         /* hyperslab offset in memory */
     int          i, j, k, status_n, rank;
 
-    const char *username;
-    char        filename[FILE_NAME_MAX_LENGTH];
-
-    /* Initialize REST VOL plugin access */
-    RVinit();
-
-    /* Associate the REST VOL plugin with a FAPL and register
-     * it with the library
-     */
-    fapl = H5Pcreate(H5P_FILE_ACCESS);
-    H5Pset_fapl_rest_vol(fapl);
-
     for (j = 0; j < NX; j++) {
 	for (i = 0; i < NY; i++) {
 	    for (k = 0; k < NZ ; k++)
@@ -77,14 +63,10 @@ main (void)
 	}
     }
 
-    username = getenv("HSDS_USERNAME");
-
-    snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" H5FILE_NAME, username);
-
     /*
      * Open the file and the dataset.
      */
-    file = H5Fopen(filename, H5F_ACC_RDONLY, fapl);
+    file = H5Fopen(H5FILE_NAME, H5F_ACC_RDONLY, H5P_DEFAULT);
     dataset = H5Dopen2(file, DATASETNAME, H5P_DEFAULT);
 
     /*
@@ -163,10 +145,7 @@ main (void)
     H5Dclose(dataset);
     H5Sclose(dataspace);
     H5Sclose(memspace);
-    H5Pclose(fapl);
     H5Fclose(file);
-
-    RVterm();
 
     return 0;
 }
