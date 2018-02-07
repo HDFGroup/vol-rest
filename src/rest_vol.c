@@ -3460,7 +3460,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, hi
     } /* end if */
 
     /* Form the request body to commit the Datatype */
-    commit_request_nalloc = datatype_body_len + (link_body ? link_body_len + 2 : 0) + 3;
+    commit_request_nalloc = datatype_body_len + (link_body ? (size_t) link_body_len + 2 : 0) + 3;
     if (NULL == (commit_request_body = (char *) RV_malloc(commit_request_nalloc)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for datatype commit request body")
 
@@ -8309,8 +8309,8 @@ dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *
 static int
 cmp_attributes_by_creation_order(const void *attr1, const void *attr2)
 {
-    attr_table_entry *_attr1 = (attr_table_entry *) attr1;
-    attr_table_entry *_attr2 = (attr_table_entry *) attr2;
+    const attr_table_entry *_attr1 = (const attr_table_entry *) attr1;
+    const attr_table_entry *_attr2 = (const attr_table_entry *) attr2;
 
     return ((_attr1->crt_time > _attr2->crt_time) - (_attr1->crt_time < _attr2->crt_time));
 } /* end cmp_attributes_by_creation_order() */
@@ -8330,8 +8330,8 @@ cmp_attributes_by_creation_order(const void *attr1, const void *attr2)
 static int
 cmp_links_by_creation_order(const void *link1, const void *link2)
 {
-    link_table_entry *_link1 = (link_table_entry *) link1;
-    link_table_entry *_link2 = (link_table_entry *) link2;
+    const link_table_entry *_link1 = (const link_table_entry *) link1;
+    const link_table_entry *_link2 = (const link_table_entry *) link2;
 
     return ((_link1->crt_time > _link2->crt_time) - (_link1->crt_time < _link2->crt_time));
 } /* end cmp_links_by_creation_order() */
@@ -9048,7 +9048,7 @@ RV_get_object_info_callback(char *HTTP_response,
     if (YAJL_GET_INTEGER(key_obj) < 0)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned object attribute count was negative")
 
-    obj_info->num_attrs = YAJL_GET_INTEGER(key_obj);
+    obj_info->num_attrs = (hsize_t) YAJL_GET_INTEGER(key_obj);
 
 #ifdef RV_PLUGIN_DEBUG
     printf("-> Object had %llu attributes attached to it\n\n", obj_info->num_attrs);
@@ -12452,7 +12452,7 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t d
                           + (shape_body ? strlen(shape_body) + 2 : 0)
                           + (maxdims_body ? strlen(maxdims_body) + 2 : 0)
                           + (creation_properties_body ? creation_properties_body_len + 2 : 0)
-                          + (link_body ? link_body_len + 2 : 0)
+                          + (link_body ? (size_t) link_body_len + 2 : 0)
                           + 3;
 
     if (NULL == (out_string = (char *) RV_malloc(create_request_nalloc)))
@@ -13192,7 +13192,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
         case H5D_CONTIGUOUS:
         {
             const char * const contiguous_layout_str = ", \"layout\": {\"class\": \"H5D_CONTIGUOUS\"";
-            size_t             external_file_count;
+            int                external_file_count;
 
             /* Check whether the buffer needs to be grown */
             bytes_to_print = strlen(contiguous_layout_str);
@@ -13208,7 +13208,10 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             out_string_curr_pos += bytes_to_print;
 
             /* Determine if there are external files for the dataset */
-            if ((external_file_count = H5Pget_external_count(dcpl)) > 0) {
+            if ((external_file_count = H5Pget_external_count(dcpl)) < 0)
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTGET, FAIL, "can't retrieve external file count")
+
+            if (external_file_count > 0) {
                 size_t             i;
                 const char * const external_storage_str = ", externalStorage: [";
                 const char * const external_file_str    = "%s{"
@@ -13231,12 +13234,12 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                 out_string_curr_pos += bytes_to_print;
 
                 /* Append an entry for each of the external files */
-                for (i = 0; i < external_file_count; i++) {
+                for (i = 0; i < (size_t) external_file_count; i++) {
                     hsize_t file_size;
                     off_t   file_offset;
                     char    file_name[EXTERNAL_FILE_NAME_MAX_LENGTH];
 
-                    if (H5Pget_external(dcpl, i, (size_t) EXTERNAL_FILE_NAME_MAX_LENGTH, file_name, &file_offset, &file_size) < 0)
+                    if (H5Pget_external(dcpl, (unsigned) i, (size_t) EXTERNAL_FILE_NAME_MAX_LENGTH, file_name, &file_offset, &file_size) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get information for external file %zu from DCPL", i)
 
                     /* Ensure that the file name buffer is NULL-terminated */
