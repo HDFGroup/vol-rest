@@ -20,6 +20,7 @@
  */
 
 #include "hdf5.h"
+#include "rest_vol_public.h"
 
 #define H5FILE_NAME          "SDScompound.h5"
 #define FILE_NAME_MAX_LENGTH 256

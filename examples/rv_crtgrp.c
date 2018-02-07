@@ -19,6 +19,8 @@
  */
 
 #include "hdf5.h"
+#include "rest_vol_public.h"
+
 #define FILE "group.h5"
 #define FILE_NAME_MAX_LENGTH 256
 

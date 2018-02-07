@@ -21,6 +21,7 @@
  */
 
 #include "hdf5.h"
+#include "rest_vol_public.h"
 #include <string.h>
 
 #define SOURCE_FILE "extlink_source.h5"

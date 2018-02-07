@@ -19,6 +19,7 @@
  */
  
 #include "hdf5.h"
+#include "rest_vol_public.h"
 
 #define FILE        "subset.h5"
 #define FILE_NAME_MAX_LENGTH 256
