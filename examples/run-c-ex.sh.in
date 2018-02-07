@@ -78,36 +78,36 @@ fi
 # Run tests
 if [ $? -eq 0 ]
 then
-    if (RunTest h5_crtdat &&\
-        rm h5_crtdat &&\
-        RunTest h5_rdwt &&\
-        rm h5_rdwt &&\
-        RunTest h5_crtatt &&\
-        rm h5_crtatt &&\
-        RunTest h5_crtgrp &&\
-        rm h5_crtgrp &&\
-        RunTest h5_crtgrpar &&\
-        rm h5_crtgrpar &&\
-        RunTest h5_crtgrpd &&\
-        rm h5_crtgrpd &&\
-        RunTest h5_subset &&\
-        rm h5_subset &&\
-        RunTest h5_write &&\
-        rm h5_write &&\
-        RunTest h5_read &&\
-        rm h5_read &&\
-        RunTest h5_chunk_read &&\
-        rm h5_chunk_read &&\
-        RunTest h5_compound &&\
-        rm h5_compound &&\
-        RunTest h5_group &&\
-        rm h5_group &&\
-        RunTest h5_select &&\
-        rm h5_select &&\
-        RunTest h5_attribute &&\
-        rm h5_attribute &&\
-        RunTest h5_extlink &&\
-        rm h5_extlink); then
+    if (RunTest rv_crtdat &&\
+        rm rv_crtdat &&\
+        RunTest rv_rdwt &&\
+        rm rv_rdwt &&\
+        RunTest rv_crtatt &&\
+        rm rv_crtatt &&\
+        RunTest rv_crtgrp &&\
+        rm rv_crtgrp &&\
+        RunTest rv_crtgrpar &&\
+        rm rv_crtgrpar &&\
+        RunTest rv_crtgrpd &&\
+        rm rv_crtgrpd &&\
+        RunTest rv_subset &&\
+        rm rv_subset &&\
+        RunTest rv_write &&\
+        rm rv_write &&\
+        RunTest rv_read &&\
+        rm rv_read &&\
+        RunTest rv_chunk_read &&\
+        rm rv_chunk_read &&\
+        RunTest rv_compound &&\
+        rm rv_compound &&\
+        RunTest rv_group &&\
+        rm rv_group &&\
+        RunTest rv_select &&\
+        rm rv_select &&\
+        RunTest rv_attribute &&\
+        rm rv_attribute &&\
+        RunTest rv_extlink &&\
+        rm rv_extlink); then
         EXIT_VALUE=${EXIT_SUCCESS}
     else
         EXIT_VALUE=${EXIT_FAILURE}

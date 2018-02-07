@@ -211,7 +211,11 @@ III. Using the REST VOL plugin
     help to give a good idea of how to structure these function calls. In this
     particular case, each test should be thought of as a complete, separate
     program, with the RVinit() call coming before any HDF5 calls are made and
-    with the RVinit() call coming after all HDF5 calls have been made.
+    with the RVinit() call coming after all HDF5 calls have been made. In
+    addition, some of the example C programs included with HDF5 distributions
+    have been adapted to work with the REST VOL and are included under the
+    top-level 'examples' folder. Looking at these will also help guide the usage
+    of these three functions.
 
     Once the application has been instrumented with these function calls, the
     last step is to link against the REST VOL library, as well as its

@@ -54,21 +54,21 @@ INSTALL_TOP_FILES = README
 # Don't tell automake about them, because if it knew they were programs,
 # it would try to compile them instead of using the h5cc script.
 # Use the boilerplate in config/examples.am instead.
-EXAMPLE_PROG = h5_write h5_read h5_chunk_read h5_compound \
-           h5_crtgrpd h5_subset h5_rdwt h5_crtgrpar \
-           h5_crtatt h5_crtgrp h5_crtdat \
-           h5_group h5_select h5_attribute \
-           h5_extlink
+EXAMPLE_PROG = rv_write rv_read rv_chunk_read rv_compound \
+           rv_crtgrpd rv_subset rv_rdwt rv_crtgrpar \
+           rv_crtatt rv_crtgrp rv_crtdat \
+           rv_group rv_select rv_attribute \
+           rv_extlink
 TEST_SCRIPT=testh5cc.sh 
 TEST_EXAMPLES_SCRIPT=$(INSTALL_SCRIPT_FILES)
 
 # Install files
 # List all file that should be installed in examples directory
-INSTALL_FILES = h5_write.c h5_read.c h5_chunk_read.c   \
-          h5_crtgrpd.c h5_subset.c h5_rdwt.c h5_crtgrpar.c \
-          h5_crtatt.c h5_crtgrp.c h5_crtdat.c \
-          h5_compound.c h5_group.c h5_select.c h5_attribute.c \
-          h5_extlink.c
+INSTALL_FILES = rv_write.c rv_read.c rv_chunk_read.c   \
+          rv_crtgrpd.c rv_subset.c rv_rdwt.c rv_crtgrpar.c \
+          rv_crtatt.c rv_crtgrp.c rv_crtdat.c \
+          rv_compound.c rv_group.c rv_select.c rv_attribute.c \
+          rv_extlink.c
 
 
 
@@ -77,13 +77,13 @@ $(EXTRA_PROG): $(H5CC)
 	$(H5CC) $(H5CCFLAGS) $(CFLAGS) -o $@ $(srcdir)/$@.c;
 
 # Some examples depend on files created by other examples.
-h5_read.chkexe_: h5_write.chkexe_
-h5_chunk_read.chkexe_: h5_extend_write.chkexe_
-h5_crtgrpd.chkexe_: h5_crtgrpar.chkexe_
-# h5_rdwt and h5_crtatt both modify the same file created by
-# h5_crtdat. Serialize them.
-h5_rdwt.chkexe_: h5_crtdat.chkexe_
-h5_crtatt.chkexe_: h5_rdwt.chkexe_
+rv_read.chkexe_: rv_write.chkexe_
+rv_chunk_read.chkexe_: rv_extend_write.chkexe_
+rv_crtgrpd.chkexe_: rv_crtgrpar.chkexe_
+# rv_rdwt and rv_crtatt both modify the same file created by
+# rv_crtdat. Serialize them.
+rv_rdwt.chkexe_: rv_crtdat.chkexe_
+rv_crtatt.chkexe_: rv_rdwt.chkexe_
 
 # The external link examples demonstrate how to use paths; they need
 # directories to be created to do this.
@@ -106,21 +106,21 @@ EXAMPLETOPDIR=${DESTDIR}$(exec_prefix)/share/rest_vol_examples
 # an inelegant way of solving the problem.
 # All programs share the same build rule and a dependency on the main hdf5
 # library above.
-h5_chunk_read: $(srcdir)/h5_chunk_read.c
-h5_compound: $(srcdir)/h5_compound.c
-h5_crtgrpd: $(srcdir)/h5_crtgrpd.c
-h5_subset: $(srcdir)/h5_subset.c
-h5_rdwt: $(srcdir)/h5_rdwt.c
-h5_crtgrpar: $(srcdir)/h5_crtgrpar.c
-h5_crtatt: $(srcdir)/h5_crtatt.c
-h5_crtgrp: $(srcdir)/h5_crtgrp.c
-h5_crtdat: $(srcdir)/h5_crtdat.c
-h5_group: $(srcdir)/h5_group.c
-h5_write: $(srcdir)/h5_write.c
-h5_read: $(srcdir)/h5_read.c
-h5_select: $(srcdir)/h5_select.c
-h5_attribute: $(srcdir)/h5_attribute.c
-h5_extlink: $(srcdir)/h5_extlink.c $(EXTLINK_DIRS)
+rv_chunk_read: $(srcdir)/rv_chunk_read.c
+rv_compound: $(srcdir)/rv_compound.c
+rv_crtgrpd: $(srcdir)/rv_crtgrpd.c
+rv_subset: $(srcdir)/rv_subset.c
+rv_rdwt: $(srcdir)/rv_rdwt.c
+rv_crtgrpar: $(srcdir)/rv_crtgrpar.c
+rv_crtatt: $(srcdir)/rv_crtatt.c
+rv_crtgrp: $(srcdir)/rv_crtgrp.c
+rv_crtdat: $(srcdir)/rv_crtdat.c
+rv_group: $(srcdir)/rv_group.c
+rv_write: $(srcdir)/rv_write.c
+rv_read: $(srcdir)/rv_read.c
+rv_select: $(srcdir)/rv_select.c
+rv_attribute: $(srcdir)/rv_attribute.c
+rv_extlink: $(srcdir)/rv_extlink.c $(EXTLINK_DIRS)
 
 # Assume that all tests in this directory are examples, and tell
 # conclude.am when to build them.
