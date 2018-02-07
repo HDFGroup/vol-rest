@@ -13,52 +13,20 @@ set (TEST_LIB_SRCS
     ${REST_VOL_TEST_SOURCE_DIR}/test_rest_vol.c
 )
 
-add_library (${REST_VOL_TEST_LIB_TARGET} STATIC ${TEST_LIB_SRCS})
-TARGET_C_PROPERTIES (${REST_VOL_TEST_LIB_TARGET} STATIC " " " ")
-if (MSVC)
-  target_link_libraries (${REST_VOL_TEST_LIB_TARGET} "ws2_32.lib")
-endif (MSVC)
-if (MINGW)
-  target_link_libraries (${REST_VOL_TEST_LIB_TARGET} "wsock32.lib")
-endif (MINGW)
-target_link_libraries (${REST_VOL_TEST_LIB_TARGET} ${RV_LIB_TARGET} ${HDF5_LIB_TARGET})
-H5_SET_LIB_OPTIONS (${HDF5_TEST_LIB_TARGET} ${HDF5_TEST_LIB_NAME} STATIC)
-set_target_properties (${REST_VOL_TEST_LIB_TARGET} PROPERTIES
-    FOLDER libraries/test
-    INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>"
-)
-
-if (BUILD_SHARED_LIBS)
-  add_library (${REST_VOL_TEST_LIBSH_TARGET} SHARED ${TEST_LIB_SRCS})
-  TARGET_C_PROPERTIES (${REST_VOL_TEST_LIBSH_TARGET} SHARED " " " ")
-  if (MSVC)
-    target_link_libraries (${REST_VOL_TEST_LIBSH_TARGET} "ws2_32.lib")
-  endif (MSVC)
-  if (MINGW)
-    target_link_libraries (${REST_VOL_TEST_LIBSH_TARGET} "wsock32.lib")
-  endif (MINGW)
-  target_link_libraries (${REST_VOL_TEST_LIBSH_TARGET} ${RV_LIB_TARGET} ${HDF5_LIBSH_TARGET})
-  H5_SET_LIB_OPTIONS (${HDF5_TEST_LIBSH_TARGET} ${HDF5_TEST_LIB_NAME} SHARED ${HDF5_PACKAGE_SOVERSION})
-  set_target_properties (${REST_VOL_TEST_LIBSH_TARGET} PROPERTIES
-      FOLDER libraries/test
-      COMPILE_DEFINITIONS "RV_BUILT_AS_DYNAMIC_LIB"
-      INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>"
-      INTERFACE_COMPILE_DEFINITIONS RV_BUILT_AS_DYNAMIC_LIB=1
-  )
-endif (BUILD_SHARED_LIBS)
-
 MACRO (ADD_RV_EXE file)
   add_executable (${file} ${REST_VOL_TEST_SOURCE_DIR}/${file}.c)
   TARGET_NAMING (${file} STATIC)
   TARGET_C_PROPERTIES (${file} STATIC " " " ")
-  target_link_libraries (${file} ${RV_LIB_TARGET} ${HDF5_LIB_TARGET})
+  target_link_libraries (${file} ${REST_VOL_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
   set_target_properties (${file} PROPERTIES FOLDER test)
+  add_dependencies(${file} ${REST_VOL_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
   if (BUILD_SHARED_LIBS)
     add_executable (${file}-shared ${REST_VOL_TEST_SOURCE_DIR}/${file}.c)
     TARGET_NAMING (${file}-shared SHARED)
     TARGET_C_PROPERTIES (${file}-shared SHARED " " " ")
-    target_link_libraries (${file}-shared ${RV_LIBSH_TARGET} ${HDF5_LIBSH_TARGET})
+    target_link_libraries (${file}-shared ${RV_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
     set_target_properties (${file}-shared PROPERTIES FOLDER test)
+    add_dependencies(${file}-shared ${REST_VOL_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
   endif (BUILD_SHARED_LIBS)
 ENDMACRO (ADD_RV_EXE file)
 

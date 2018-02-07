@@ -123,12 +123,15 @@ endif (NOT REST_VOL_EXPORTED_TARGETS)
 # Set the core names of all the libraries
 #-----------------------------------------------------------------------------
 set (REST_VOL_LIB_CORENAME        "restvol")
+set (REST_VOL_TEST_LIB_CORENAME   "restvol_test")
 
 #-----------------------------------------------------------------------------
 # Set the target names of all the libraries
 #-----------------------------------------------------------------------------
 set (REST_VOL_LIB_TARGET          "${REST_VOL_LIB_CORENAME}-static")
 set (REST_VOL_LIBSH_TARGET        "${REST_VOL_LIB_CORENAME}-shared")
+set (REST_VOL_TEST_LIB_TARGET     "${REST_VOL_TEST_LIB_CORENAME}-static")
+set (REST_VOL_TEST_LIBSH_TARGET     "${REST_VOL_TEST_LIB_CORENAME}-shared")
 
 #-----------------------------------------------------------------------------
 # Define some CMake variables for use later in the project
@@ -136,6 +139,12 @@ set (REST_VOL_LIBSH_TARGET        "${REST_VOL_LIB_CORENAME}-shared")
 set (REST_VOL_RESOURCES_DIR       ${REST_VOL_SOURCE_DIR}/config/cmake)
 set (REST_VOL_RESOURCES_EXT_DIR   ${REST_VOL_SOURCE_DIR}/config/cmake_ext_mod)
 set (REST_VOL_SRC_DIR             ${REST_VOL_SOURCE_DIR}/src)
+set (REST_VOL_TEST_SRC_DIR        ${REST_VOL_SOURCE_DIR}/test)
+
+#-----------------------------------------------------------------------------
+# Make sure the REST VOL headers are available
+#-----------------------------------------------------------------------------
+include_directories(${REST_VOL_SRC_DIR})
 
 if (NOT REST_VOL_INSTALL_BIN_DIR)
   set (REST_VOL_INSTALL_BIN_DIR bin)
@@ -339,6 +348,11 @@ if (REST_VOL_ENABLE_COVERAGE)
 endif (REST_VOL_ENABLE_COVERAGE)
 
 #-----------------------------------------------------------------------------
+# Option to build the examples
+#-----------------------------------------------------------------------------
+option (REST_VOL_ENABLE_EXAMPLES "Indicate that building examples should be enabled" ON)
+
+#-----------------------------------------------------------------------------
 # Option to indicate enabling plugin debugging output
 #-----------------------------------------------------------------------------
 option (REST_VOL_ENABLE_DEBUG "Indicate that plugin debug output is used" OFF)
@@ -422,6 +436,8 @@ if (BUILD_TESTING)
 
   enable_testing ()
   include (CTest)
+  
+  add_subdirectory(${REST_VOL_SOURCE_DIR}/test ${PROJECT_BINARY_DIR}/test)
 
   include (${REST_VOL_SOURCE_DIR}/CTestConfig.cmake)
 endif (BUILD_TESTING)
@@ -438,13 +454,10 @@ configure_file (${REST_VOL_RESOURCES_DIR}/rv_cmake_config.h.in ${REST_VOL_SRC_DI
 add_subdirectory(${REST_VOL_SOURCE_DIR}/src ${PROJECT_BINARY_DIR}/src)
 
 #-----------------------------------------------------------------------------
-# Add the REST VOL test suite Target to the build
-#-----------------------------------------------------------------------------
-add_subdirectory(${REST_VOL_SOURCE_DIR}/test ${PROJECT_BINARY_DIR}/test)
-
-#-----------------------------------------------------------------------------
 # Add the REST VOL examples Target to the build
 #-----------------------------------------------------------------------------
-add_subdirectory(${REST_VOL_SOURCE_DIR}/examples ${PROJECT_BINARY_DIR}/examples)
+if (REST_VOL_ENABLE_EXAMPLES)
+  add_subdirectory(${REST_VOL_SOURCE_DIR}/examples ${PROJECT_BINARY_DIR}/examples)
+endif (REST_VOL_ENABLE_EXAMPLES)
 
 include (CMakeInstallation.cmake)
