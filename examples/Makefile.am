@@ -42,6 +42,10 @@ AM_LDFLAGS=@AM_LDFLAGS@ @RV_LDFLAGS@
 
 ACLOCAL_AMFLAGS=-I m4
 
+# .chkexe files are used to mark tests that have run successfully.
+# .chklog files are output from those tests.
+CHECK_CLEANFILES=*.chkexe *.chklog
+
 INSTALL_SCRIPT_FILES = run-c-ex.sh
 INSTALL_TOP_SCRIPT_FILES = run-all-ex.sh
 INSTALL_TOP_FILES = README
@@ -118,10 +122,6 @@ h5_select: $(srcdir)/h5_select.c
 h5_attribute: $(srcdir)/h5_attribute.c
 h5_extlink: $(srcdir)/h5_extlink.c $(EXTLINK_DIRS)
 
-if BUILD_SHARED_SZIP_CONDITIONAL
-LD_LIBRARY_PATH=$(LL_PATH)
-endif
-
 # Assume that all tests in this directory are examples, and tell
 # conclude.am when to build them.
 EXTRA_PROG = $(EXAMPLE_PROG) $(EXAMPLE_PROG_PARA)
@@ -132,10 +132,11 @@ CHECK_CLEANFILES+=*.h5
 CLEANFILES=$(EXAMPLE_PROG) $(EXAMPLE_PROG_PARA)
 
 # How to create EXAMPLEDIR if it doesn't already exist
-$(EXAMPLEDIR):
-	-$(top_srcdir)/bin/mkdirs $@
 $(EXAMPLETOPDIR):
-	-$(top_srcdir)/bin/mkdirs $@
+	mkdir $(EXAMPLETOPDIR)
+$(EXAMPLEDIR):
+	mkdir $(EXAMPLETOPDIR)
+	mkdir $(EXAMPLEDIR)
 
 # Install and uninstall rules.  We install the source files, not the
 # example programs themselves.

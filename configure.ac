@@ -91,10 +91,8 @@ fi
 ## Set lib dir suffix. By default, search for required libraries in 'lib'
 ## on 32-bit machines and 'lib64' on 64-bit machines
 if test `getconf LONG_BIT` = 64; then
-  echo "Set suffix to 64";
   LIB_SUFFIX="64"
 else
-  echo "Set suffix to 32";
   LIB_SUFFIX="32"
 fi
 
@@ -817,7 +815,7 @@ esac
 AC_MSG_CHECKING([enable tools])
 AC_ARG_ENABLE([tools],
               [AS_HELP_STRING([--enable-tools=(yes|no|<custom>)],
-                              [Enable building of the HDF5 tools with REST VOL support.
+                              [Enable building of the HDF5 tools with REST VOL support. (highly experimental)
                                [default=no]
                                ])],
               [BUILD_TOOLS=$enableval])
@@ -1033,8 +1031,8 @@ AC_CACHE_SAVE
 ## and installed with the libraries (used to generate librestvol.settings).
 ##
 
-## REST VOL version from the first line of the README.txt file.
-RV_VERSION="`cut -d' ' -f3 $srcdir/README.txt | head -1`"
+## REST VOL version from the README.txt file.
+RV_VERSION="`cut -d' ' -f6 $srcdir/README.txt | head -1`"
 AC_SUBST([RV_VERSION])
 
 ## Configuration date
@@ -1171,7 +1169,9 @@ AC_CONFIG_FILES([src/librestvol.settings
                  Makefile
                  src/Makefile
                  test/Makefile
-                 examples/Makefile])
+                 examples/Makefile
+                 examples/run-c-ex.sh
+                 examples/testh5cc.sh])
 
 AC_OUTPUT
 

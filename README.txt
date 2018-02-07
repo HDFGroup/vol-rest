@@ -1,3 +1,5 @@
+HDF5 REST VOL plugin version 1.0.0 currently under development
+
 /********************************************\
 |                                            |
 |            HDF5 REST VOL plugin            |
