@@ -113,7 +113,7 @@ include_directories(${HDF5_SOURCE_DIR}/src)
 include_directories(${CMAKE_BINARY_DIR}/${HDF5_SOURCE_NAME})
 
 # Add the HDF5 source as a sub-project
-add_subdirectory(${HDF5_SOURCE_DIR})
+add_subdirectory(${HDF5_SOURCE_DIR} ${PROJECT_BINARY_DIR}/hdf5)
 
 if (NOT REST_VOL_EXPORTED_TARGETS)
   set (REST_VOL_EXPORTED_TARGETS "rest-vol-targets")
@@ -432,6 +432,19 @@ endif (BUILD_TESTING)
 #-----------------------------------------------------------------------------
 configure_file (${REST_VOL_RESOURCES_DIR}/rv_cmake_config.h.in ${REST_VOL_SRC_DIR}/rest_vol_config.h @ONLY)
 
-add_subdirectory(${REST_VOL_SOURCE_DIR}/src)
+#-----------------------------------------------------------------------------
+# Add the REST VOL Target to the build
+#-----------------------------------------------------------------------------
+add_subdirectory(${REST_VOL_SOURCE_DIR}/src ${PROJECT_BINARY_DIR}/src)
+
+#-----------------------------------------------------------------------------
+# Add the REST VOL test suite Target to the build
+#-----------------------------------------------------------------------------
+add_subdirectory(${REST_VOL_SOURCE_DIR}/test ${PROJECT_BINARY_DIR}/test)
+
+#-----------------------------------------------------------------------------
+# Add the REST VOL examples Target to the build
+#-----------------------------------------------------------------------------
+add_subdirectory(${REST_VOL_SOURCE_DIR}/examples ${PROJECT_BINARY_DIR}/examples)
 
 include (CMakeInstallation.cmake)

@@ -746,6 +746,39 @@ AC_SUBST([RV_YAJL_INSTALL_DIR])
 AC_MSG_RESULT([$RV_YAJL_INSTALL_DIR])
 
 ## ----------------------------------------------------------------------
+## Check if the REST VOL tests should be built
+##
+AC_MSG_CHECKING([enable tests])
+AC_ARG_ENABLE([tests],
+              [AS_HELP_STRING([--enable-tests=(yes|no|<custom>)],
+                              [Enable building of the REST VOL HDF5 tests.
+                               [default=yes]
+                               ])],
+              [BUILD_TESTS=$enableval])
+
+## Set default
+if test "X-$BUILD_TESTS" = X- ; then
+  BUILD_TESTS=yes
+fi
+
+## Allow this variable to be substituted in other files
+AC_SUBST([BUILD_TESTS])
+
+AM_CONDITIONAL([BUILD_TESTS], [test "$BUILD_TESTS" = yes])
+
+case "X-$BUILD_TESTS" in
+  X-yes)
+    AC_MSG_RESULT([yes])
+    ;;
+  X-no)
+    AC_MSG_RESULT([no])
+    ;;
+  *)
+    AC_MSG_RESULT([$BUILD_TESTS])
+    ;;
+esac
+
+## ----------------------------------------------------------------------
 ## Check if the REST VOL examples should be built
 ##
 AC_MSG_CHECKING([enable examples])
@@ -1137,7 +1170,8 @@ AM_CONDITIONAL([HAVE_SHARED_CONDITIONAL], [test "X$enable_shared" = "Xyes"])
 AC_CONFIG_FILES([src/librestvol.settings
                  Makefile
                  src/Makefile
-                 test/Makefile])
+                 test/Makefile
+                 examples/Makefile])
 
 AC_OUTPUT
 

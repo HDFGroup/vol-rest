@@ -32,7 +32,11 @@ ACLOCAL_AMFLAGS = -I m4
 # exists.
 .PHONY: build-lib lib tests
 
-SUBDIRS = src test
+SUBDIRS = src
+
+if BUILD_TESTS
+  SUBDIRS += test
+endif
 
 if BUILD_EXAMPLES
   SUBDIRS += examples
