@@ -4,40 +4,40 @@
 #define RV_CONFIG_H_
 
 /* Define if using MinGW */
-#cmakedefine H5_HAVE_MINGW @H5_HAVE_MINGW@
+#cmakedefine H5_HAVE_MINGW @RV_HAVE_MINGW@
 
 /* Define if on the Windows platform and default WIN32 API */
-#cmakedefine H5_HAVE_WIN32_API @H5_HAVE_WIN32_API@
+#cmakedefine RV_HAVE_WIN32_API @RV_HAVE_WIN32_API@
 
 /* Define if using a Windows compiler (i.e. Visual Studio) */
-#cmakedefine H5_HAVE_VISUAL_STUDIO @H5_HAVE_VISUAL_STUDIO@
+#cmakedefine RV_HAVE_VISUAL_STUDIO @RV_HAVE_VISUAL_STUDIO@
 
 /* Define if building universal (internal helper macro) */
-#cmakedefine H5_AC_APPLE_UNIVERSAL_BUILD @H5_AC_APPLE_UNIVERSAL_BUILD@
+#cmakedefine RV_AC_APPLE_UNIVERSAL_BUILD @RV_AC_APPLE_UNIVERSAL_BUILD@
 
 /* Define if the compiler understands the __func__ keyword */
-#cmakedefine H5_HAVE_C99_FUNC @H5_HAVE_C99_FUNC@
+#cmakedefine RV_HAVE_C99_FUNC @RV_HAVE_C99_FUNC@
 
 /* Define if Darwin or Mac OS X */
-#cmakedefine H5_HAVE_DARWIN @H5_HAVE_DARWIN@
+#cmakedefine RV_HAVE_DARWIN @RV_HAVE_DARWIN@
 
 /* Define if the compiler understands the __FUNCTION__ keyword */
-#cmakedefine H5_HAVE_FUNCTION @H5_HAVE_FUNCTION@
+#cmakedefine RV_HAVE_FUNCTION @RV_HAVE_FUNCTION@
 
 /* Define to 1 if you have the `snprintf' function. */
-#cmakedefine H5_HAVE_SNPRINTF @H5_HAVE_SNPRINTF@
+#cmakedefine RV_HAVE_SNPRINTF @RV_HAVE_SNPRINTF@
 
 /* Define to 1 if you have the <stdlib.h> header file. */
-#cmakedefine H5_HAVE_STDLIB_H @H5_HAVE_STDLIB_H@
+#cmakedefine RV_HAVE_STDLIB_H @RV_HAVE_STDLIB_H@
 
 /* Define to 1 if you have the <string.h> header file. */
-#cmakedefine H5_HAVE_STRING_H @H5_HAVE_STRING_H@
+#cmakedefine RV_HAVE_STRING_H @RV_HAVE_STRING_H@
 
 /* Define to 1 if you have the <sys/time.h> header file. */
-#cmakedefine H5_HAVE_SYS_TIME_H @H5_HAVE_SYS_TIME_H@
+#cmakedefine RV_HAVE_SYS_TIME_H @RV_HAVE_SYS_TIME_H@
 
 /* Define to 1 if you have the <sys/types.h> header file. */
-#cmakedefine H5_HAVE_SYS_TYPES_H @H5_HAVE_SYS_TYPES_H@
+#cmakedefine RV_HAVE_SYS_TYPES_H @RV_HAVE_SYS_TYPES_H@
 
 /* Name of package */
 #define RV_PACKAGE "@REST_VOL_PACKAGE@"
@@ -49,74 +49,16 @@
 #define RV_PACKAGE_NAME "@REST_VOL_PACKAGE_NAME@"
 
 /* Define to the full name and version of this package. */
-#define H5_PACKAGE_STRING "@HDF5_PACKAGE_STRING@"
+#define RV_PACKAGE_STRING "@REST_VOL_PACKAGE_STRING@"
 
 /* Define to the one symbol short name of this package. */
-#define H5_PACKAGE_TARNAME "@HDF5_PACKAGE_TARNAME@"
+#define RV_PACKAGE_TARNAME "@REST_VOL_PACKAGE_TARNAME@"
 
 /* Define to the home page for this package. */
 #define RV_PACKAGE_URL "@REST_VOL_PACKAGE_URL@"
 
 /* Define to the version of this package. */
-#define H5_PACKAGE_VERSION "@HDF5_PACKAGE_VERSION_STRING@"
-
-/* Width for printf() for type `long long' or `__int64', use `ll' */
-#cmakedefine H5_PRINTF_LL_WIDTH @H5_PRINTF_LL_WIDTH@
-
-/* The size of `char', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_CHAR @H5_SIZEOF_CHAR@
-
-/* The size of `double', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_DOUBLE @H5_SIZEOF_DOUBLE@
-
-/* The size of `float', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_FLOAT @H5_SIZEOF_FLOAT@
-
-/* The size of `int', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_INT @H5_SIZEOF_INT@
-
-#if !defined(__APPLE__)
-/* The size of `size_t', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_SIZE_T @H5_SIZEOF_SIZE_T@
-
-/* The size of `ssize_t', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_SSIZE_T @H5_SIZEOF_SSIZE_T@
-
-/* The size of `long', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_LONG @H5_SIZEOF_LONG@
-
-#else
-   # if defined(__LP64__) && __LP64__
-  #define H5_SIZEOF_LONG 8
-  #define H5_SIZEOF_SIZE_T 8
-  #define H5_SIZEOF_SSIZE_T 8
-  # else
-  #define H5_SIZEOF_LONG 4
-  #define H5_SIZEOF_SIZE_T 4
-  #define H5_SIZEOF_SSIZE_T 4
-  # endif
-
-#endif
-
-/* The size of `long double', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_LONG_DOUBLE @H5_SIZEOF_LONG_DOUBLE@
-
-/* Define size of long long and/or __int64 bit integer type only if the type
-   exists.  */
-#if !defined(__APPLE__)
- #cmakedefine H5_SIZEOF_LONG_LONG @H5_SIZEOF_LONG_LONG@
-#else
- #define H5_SIZEOF_LONG_LONG 8
-#endif
-
-/* The size of `off_t', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_OFF_T @H5_SIZEOF_OFF_T@
-
-/* The size of `ptrdiff_t', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_PTRDIFF_T @H5_SIZEOF_PTRDIFF_T@
-
-/* The size of `uint8_t', as computed by sizeof. */
-#cmakedefine H5_SIZEOF_UINT8_T @H5_SIZEOF_UINT8_T@
+#define RV_PACKAGE_VERSION "@REST_VOL_PACKAGE_VERSION_STRING@"
 
 /* Define to 1 if you have the <stdbool.h> header file. */
 #cmakedefine H5_HAVE_STDBOOL_H @H5_HAVE_STDBOOL_H@
@@ -139,21 +81,6 @@
 #cmakedefine RV_TRACK_MEM_USAGE @RV_TRACK_MEM_USAGE@
 
 /* Version number of package */
-#cmakedefine H5_VERSION "@HDF5_PACKAGE_VERSION_STRING@"
-
-/* Define to empty if `const' does not conform to ANSI C. */
-#cmakedefine H5_const
-
-/* Define to `long int' if <sys/types.h> does not define. */
-#cmakedefine H5_off_t
-
-/* Define to `long' if <sys/types.h> does not define. */
-#cmakedefine H5_ptrdiff_t
-
-/* Define to `unsigned long' if <sys/types.h> does not define. */
-#cmakedefine H5_size_t
-
-/* Define to `long' if <sys/types.h> does not define. */
-#cmakedefine H5_ssize_t
+#cmakedefine RV_VERSION "@REST_VOL_PACKAGE_VERSION_STRING@"
 
 #endif

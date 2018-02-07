@@ -1,8 +1,15 @@
 cmake_minimum_required (VERSION 3.1.0)
 PROJECT (REST_VOL C)
 
-# Locate cURL and YAJL before building
+#-----------------------------------------------------------------------------
+# Find cURL and YAJL before building
+#-----------------------------------------------------------------------------
 find_package(CURL)
+
+#-----------------------------------------------------------------------------
+# Add cURL and YAJL to the list of libraries that the REST VOL will link with
+#-----------------------------------------------------------------------------
+set (LINK_LIBS ${LINK_LIBS} ${} ${})
 
 #-----------------------------------------------------------------------------
 # Instructions for use : Normal Build

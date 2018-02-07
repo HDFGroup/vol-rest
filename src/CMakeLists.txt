@@ -1,9 +1,6 @@
 cmake_minimum_required (VERSION 3.1.0)
 PROJECT (REST_VOL_SRC C)
 
-# Locate cURL and YAJL before building
-find_package(CURL)
-
 macro (IDE_GENERATED_PROPERTIES SOURCE_PATH HEADERS SOURCES)
   #set(source_group_path "Source/AIM/${NAME}")
   string (REPLACE "/" "\\\\" source_group_path ${SOURCE_PATH})
@@ -39,15 +36,12 @@ set (REST_VOL_PUBLIC_HEADERS
     ${REST_VOL_SRC_DIR}/rest_vol_public.h
 )
 
-add_library (${REST_VOL_LIB_TARGET} STATIC ${REST_VOL_SRCS} ${REST_VOL_HEADERS})
+add_library (${REST_VOL_LIB_TARGET} STATIC ${REST_VOL_SRCS} ${REST_VOL_HDRS})
 TARGET_C_PROPERTIES (${REST_VOL_LIB_TARGET} STATIC " " " ")
 target_link_libraries (${REST_VOL_LIB_TARGET} ${LINK_LIBS})
 if (NOT WIN32)
   target_link_libraries (${REST_VOL_LIB_TARGET} dl)
 endif (NOT WIN32)
-if (H5_HAVE_PARALLEL AND MPI_C_FOUND)
-  target_link_libraries (${REST_VOL_LIB_TARGET} ${MPI_C_LIBRARIES})
-endif (H5_HAVE_PARALLEL AND MPI_C_FOUND)
 set_global_variable (REST_VOL_LIBRARIES_TO_EXPORT ${REST_VOL_LIB_TARGET})
 #H5_SET_LIB_OPTIONS (${HDF5_LIB_TARGET} ${HDF5_LIB_NAME} STATIC)
 set_target_properties (${REST_VOL_LIB_TARGET} PROPERTIES
@@ -56,6 +50,26 @@ set_target_properties (${REST_VOL_LIB_TARGET} PROPERTIES
 )
 
 set (install_targets ${REST_VOL_LIB_TARGET})
+
+if (BUILD_SHARED_LIBS)
+  file (MAKE_DIRECTORY "${REST_VOL_BINARY_DIR}/shared")
+  add_library (${REST_VOL_LIBSH_TARGET} SHARED ${REST_VOL_SRCS} ${REST_VOL_HDRS})
+  TARGET_C_PROPERTIES (${REST_VOL_LIBSH_TARGET} SHARED " " " ")
+  target_link_libraries (${REST_VOL_LIBSH_TARGET} ${LINK_SHARED_LIBS})
+  if (NOT WIN32)
+    target_link_libraries (${REST_VOL_LIBSH_TARGET} dl)
+  endif (NOT WIN32)
+  set_global_variable (REST_VOL_LIBRARIES_TO_EXPORT "${REST_VOL_LIBRARIES_TO_EXPORT};${REST_VOL_LIBSH_TARGET}")
+# H5_SET_LIB_OPTIONS (${HDF5_LIBSH_TARGET} ${HDF5_LIB_NAME} SHARED ${HDF5_PACKAGE_SOVERSION})
+  set_target_properties (${REST_VOL_LIBSH_TARGET} PROPERTIES
+      FOLDER libraries
+      COMPILE_DEFINITIONS "REST_VOL_BUILT_AS_DYNAMIC_LIB"
+      INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>"
+      INTERFACE_COMPILE_DEFINITIONS REST_VOL_BUILT_AS_DYNAMIC_LIB=1
+  )
+
+  set (install_targets ${install_targets} ${REST_VOL_LIBSH_TARGET})
+endif (BUILD_SHARED_LIBS)
 
 #-----------------------------------------------------------------------------
 # Make the REST VOL depend on H5pubconf.h existing
