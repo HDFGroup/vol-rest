@@ -98,6 +98,11 @@ fi
 
 AC_SUBST([LIB_SUFFIX])
 
+## -----------------------------------------------------------------------
+## Check to make sure cURL and YAJL are available
+AC_SEARCH_LIBS(curl_easy_setopt, curl, [], [AC_ERROR([A working libcurl is required])])
+AC_SEARCH_LIBS(yajl_tree_get, yajl, [], [AC_ERROR([A working libyajl is required])])
+
 
 AC_CANONICAL_HOST
 AC_SUBST([CPPFLAGS])
