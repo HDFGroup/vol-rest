@@ -73,6 +73,7 @@ endif (YAJL_FOUND)
 # Make sure the REST VOL headers are available
 #-----------------------------------------------------------------------------
 include_directories(${REST_VOL_SRC_DIR})
+include_directories(${REST_VOL_BINARY_DIR})
 
 #-----------------------------------------------------------------------------
 # Setup the install directories
@@ -201,6 +202,18 @@ if(DEFINED ADDITIONAL_CMAKE_PREFIX_PATH AND EXISTS "${ADDITIONAL_CMAKE_PREFIX_PA
 endif(DEFINED ADDITIONAL_CMAKE_PREFIX_PATH AND EXISTS "${ADDITIONAL_CMAKE_PREFIX_PATH}")
 
 #-----------------------------------------------------------------------------
+# parse the full version number from README.txt and include in REST_VOL_VERS_INFO
+#-----------------------------------------------------------------------------
+file (READ ${REST_VOL_SOURCE_DIR}/README.txt _readme_contents)
+string (REGEX REPLACE ".*([0-9][0-9]*).[0-9][0-9]*.[0-9][0-9]*.*$"
+    "\\1" REST_VOL_VERS_MAJOR ${_readme_contents})
+string (REGEX REPLACE ".*[0-9][0-9]*.([0-9][0-9]*).[0-9][0-9]*.*$"
+    "\\1" REST_VOL_VERS_MINOR ${_readme_contents})
+string (REGEX REPLACE ".*[0-9][0-9]*.[0-9][0-9]*.([0-9][0-9]*).*$"
+    "\\1" REST_VOL_VERS_RELEASE ${_readme_contents})
+message (STATUS "VERSION: ${REST_VOL_VERS_MAJOR}.${REST_VOL_VERS_MINOR}.${REST_VOL_VERS_RELEASE}")
+
+#-----------------------------------------------------------------------------
 # parse the full soversion number from config/lt_vers.am and include in REST_VOL_SOVERS_INFO
 #-----------------------------------------------------------------------------
 file (READ ${REST_VOL_SOURCE_DIR}/config/lt_vers.am _lt_vers_am_contents)
@@ -211,13 +224,12 @@ string (REGEX REPLACE ".*LT_VERS_REVISION[ \t]+=[ \t]+([0-9]*).*$"
 string (REGEX REPLACE ".*LT_VERS_AGE[ \t]+=[ \t]+([0-9]*).*$"
     "\\1" REST_VOL_SOVERS_RELEASE ${_lt_vers_am_contents})
 MATH (EXPR REST_VOL_SOVERS_MAJOR ${REST_VOL_SOVERS_INTERFACE}-${REST_VOL_SOVERS_RELEASE})
-message (STATUS "SOVERSION: ${REST_VOL_SOVERS_MAJOR}.${REST_VOL_SOVERS_RELEASE}.${REST_VOL_SOVERS_MINOR}")
 
 #-----------------------------------------------------------------------------
 # Basic REST VOL stuff here
 #-----------------------------------------------------------------------------
 set (REST_VOL_PACKAGE "rest-vol")
-set (REST_VOL_PACKAGE_NAME "REST VOL")
+set (REST_VOL_PACKAGE_NAME "REST_VOL")
 set (REST_VOL_PACKAGE_VERSION "${REST_VOL_VERS_MAJOR}.${REST_VOL_VERS_MINOR}.${REST_VOL_VERS_RELEASE}")
 set (REST_VOL_PACKAGE_VERSION_MAJOR "${REST_VOL_VERS_MAJOR}.${REST_VOL_VERS_MINOR}")
 set (REST_VOL_PACKAGE_VERSION_MINOR "${REST_VOL_VERS_RELEASE}")
@@ -452,7 +464,7 @@ if (BUILD_TESTING)
 
   enable_testing ()
   include (CTest)
-  
+
   add_subdirectory(${REST_VOL_SOURCE_DIR}/test ${PROJECT_BINARY_DIR}/test)
 
   include (${REST_VOL_SOURCE_DIR}/CTestConfig.cmake)
@@ -462,7 +474,7 @@ endif (BUILD_TESTING)
 # Generate the rest_vol_config.h file containing user settings needed by
 # compilation
 #-----------------------------------------------------------------------------
-configure_file (${REST_VOL_RESOURCES_DIR}/rv_cmake_config.h.in ${REST_VOL_SRC_DIR}/rest_vol_config.h @ONLY)
+configure_file (${REST_VOL_RESOURCES_DIR}/rv_cmake_config.h.in ${REST_VOL_BINARY_DIR}/rest_vol_config.h @ONLY)
 
 #-----------------------------------------------------------------------------
 # Add the REST VOL Target to the build

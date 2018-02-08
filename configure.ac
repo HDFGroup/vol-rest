@@ -1170,8 +1170,7 @@ AC_CONFIG_FILES([src/librestvol.settings
                  src/Makefile
                  test/Makefile
                  examples/Makefile
-                 examples/run-c-ex.sh
-                 examples/testh5cc.sh])
+                 examples/run-c-ex.sh])
 
 AC_OUTPUT
 

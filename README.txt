@@ -203,7 +203,7 @@ III. Using the REST VOL plugin
     REST VOL is properly initialized at the start of the application's execution
     and terminated at the end of the application's execution. The latter
     is used to set up a File Access Property List which will control how HDF5
-    deals with the file that is create or opened. See
+    deals with the file that is created or opened. See
     https://support.hdfgroup.org/HDF5/Tutor/property.html#fa for more details
     on File Access Property Lists.
 
@@ -221,6 +221,10 @@ III. Using the REST VOL plugin
     last step is to link against the REST VOL library, as well as its
     dependencies, cURL and YAJL. Generally, this simply involves adding
     '-lrestvol -lcurl -lyajl' to the build command for the application, 
+
+    If the REST VOL was built using autotools, the "bin" directory after
+    building should contain the 'h5cc' script, which is useful in resolving
+    the includes and linking dependencies when compiling HDF5 applications. 
 
 
 IV. Currently unsupported features
