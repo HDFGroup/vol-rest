@@ -19,6 +19,8 @@
  * and read back fields' subsets.
  */
 
+#include <stdlib.h>
+
 #include "hdf5.h"
 #include "rest_vol_public.h"
 

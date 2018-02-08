@@ -24,6 +24,8 @@
  *  memory dataset preserving the shape of the selection.
  */
 
+#include <stdlib.h>
+
 #include "hdf5.h"
 #include "rest_vol_public.h"
 

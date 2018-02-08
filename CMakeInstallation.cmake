@@ -27,7 +27,7 @@ endif (NOT REST_VOL_INSTALL_NO_DEVELOPMENT)
 # Add Target(s) to CMake Install for import into other projects
 #-----------------------------------------------------------------------------
 install (
-    EXPORT ${REST_VOL_EXPORTED_TARGETS}
+    EXPORT ${REST_VOL_INSTALL_TARGET}
     DESTINATION ${REST_VOL_INSTALL_CMAKE_DIR}
     FILE ${REST_VOL_PACKAGE}${REST_VOL_PACKAGE_EXT}-targets.cmake
     COMPONENT configinstall

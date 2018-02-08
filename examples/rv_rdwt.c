@@ -18,6 +18,8 @@
  *  dataset.  It is used in the HDF5 Tutorial.
  */
 
+#include <stdlib.h>
+
 #include "hdf5.h"
 #include "rest_vol_public.h"
 

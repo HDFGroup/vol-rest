@@ -20,9 +20,11 @@
  * committed Datatype) in another file.
  */
 
+#include <stdlib.h>
+#include <string.h>
+
 #include "hdf5.h"
 #include "rest_vol_public.h"
-#include <string.h>
 
 #define SOURCE_FILE "extlink_source.h5"
 #define TARGET_FILE "extlink_target.h5"

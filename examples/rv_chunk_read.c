@@ -18,6 +18,8 @@
  *   We will read from the file created by h5_extend_write.c
  */
 
+#include <stdlib.h>
+
 #include "hdf5.h"
 #include "rest_vol_public.h"
 

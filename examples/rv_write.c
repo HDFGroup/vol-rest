@@ -18,6 +18,8 @@
  *  Data conversion is performed during write operation.
  */
 
+#include <stdlib.h>
+
 #include "hdf5.h"
 #include "rest_vol_public.h"
 

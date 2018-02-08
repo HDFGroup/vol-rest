@@ -20,6 +20,8 @@
  *   Information about dataset in the SDS.h5 file is obtained.
  */
 
+#include <stdlib.h>
+
 #include "hdf5.h"
 #include "rest_vol_public.h"
 

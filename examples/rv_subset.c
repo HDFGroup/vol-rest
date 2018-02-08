@@ -17,6 +17,8 @@
  *  This example illustrates how to read/write a subset of data (a slab) 
  *  from/to a dataset in an HDF5 file.  It is used in the HDF5 Tutorial.
  */
+
+#include <stdlib.h>
  
 #include "hdf5.h"
 #include "rest_vol_public.h"

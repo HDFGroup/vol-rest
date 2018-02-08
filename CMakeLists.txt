@@ -2,16 +2,6 @@ cmake_minimum_required (VERSION 3.1.0)
 PROJECT (REST_VOL C)
 
 #-----------------------------------------------------------------------------
-# Find cURL and YAJL before building
-#-----------------------------------------------------------------------------
-find_package(CURL)
-
-#-----------------------------------------------------------------------------
-# Add cURL and YAJL to the list of libraries that the REST VOL will link with
-#-----------------------------------------------------------------------------
-set (LINK_LIBS ${LINK_LIBS} ${} ${})
-
-#-----------------------------------------------------------------------------
 # Instructions for use : Normal Build
 #
 # For standard build of the HDF5 REST VOL plugin.
@@ -37,6 +27,97 @@ if ("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
       "        $ cmake [OPTIONS] ..\n"
       )
 endif ()
+
+#-----------------------------------------------------------------------------
+# Set the core names of all the libraries
+#-----------------------------------------------------------------------------
+set (REST_VOL_LIB_CORENAME        "restvol")
+set (REST_VOL_TEST_LIB_CORENAME   "restvol_test")
+
+#-----------------------------------------------------------------------------
+# Set the target names of all the libraries
+#-----------------------------------------------------------------------------
+set (REST_VOL_LIB_TARGET          "${REST_VOL_LIB_CORENAME}-static")
+set (REST_VOL_LIBSH_TARGET        "${REST_VOL_LIB_CORENAME}-shared")
+set (REST_VOL_TEST_LIB_TARGET     "${REST_VOL_TEST_LIB_CORENAME}-static")
+set (REST_VOL_TEST_LIBSH_TARGET     "${REST_VOL_TEST_LIB_CORENAME}-shared")
+
+#-----------------------------------------------------------------------------
+# Define some CMake variables for use later in the project
+#-----------------------------------------------------------------------------
+set (REST_VOL_RESOURCES_DIR       ${REST_VOL_SOURCE_DIR}/config/cmake)
+set (REST_VOL_RESOURCES_EXT_DIR   ${REST_VOL_SOURCE_DIR}/config/cmake_ext_mod)
+set (REST_VOL_RESOURCES_MOD_DIR   ${REST_VOL_SOURCE_DIR}/config/cmake/modules)
+set (REST_VOL_SRC_DIR             ${REST_VOL_SOURCE_DIR}/src)
+set (REST_VOL_TEST_SRC_DIR        ${REST_VOL_SOURCE_DIR}/test)
+
+#-----------------------------------------------------------------------------
+# Find cURL and YAJL before building
+#-----------------------------------------------------------------------------
+find_package (CURL REQUIRED)
+if (CURL_FOUND)
+  include_directories(${CURL_INCLUDE_DIRS})
+  set (LINK_LIBS ${LINK_LIBS} ${CURL_LIBRARIES})
+endif (CURL_FOUND)
+
+# Include custom module for finding YAJL
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${REST_VOL_RESOURCES_MOD_DIR}")
+
+find_package (YAJL REQUIRED)
+if (YAJL_FOUND)
+  include_directories(${YAJL_INCLUDE_DIRS})
+  set (LINK_LIBS ${LINK_LIBS} ${YAJL_LIBRARIES})
+endif (YAJL_FOUND)
+
+#-----------------------------------------------------------------------------
+# Make sure the REST VOL headers are available
+#-----------------------------------------------------------------------------
+include_directories(${REST_VOL_SRC_DIR})
+
+#-----------------------------------------------------------------------------
+# Setup the install directories
+#-----------------------------------------------------------------------------
+if (NOT REST_VOL_INSTALL_BIN_DIR)
+  set (REST_VOL_INSTALL_BIN_DIR bin)
+endif (NOT REST_VOL_INSTALL_BIN_DIR)
+if (NOT REST_VOL_INSTALL_LIB_DIR)
+  if (APPLE)
+    set (REST_VOL_INSTALL_FMWK_DIR ${CMAKE_INSTALL_FRAMEWORK_PREFIX})
+  else (APPLE)
+    set (REST_VOL_INSTALL_JAR_DIR lib)
+  endif (APPLE)
+  set (REST_VOL_INSTALL_LIB_DIR lib)
+endif (NOT REST_VOL_INSTALL_LIB_DIR)
+if (NOT REST_VOL_INSTALL_INCLUDE_DIR)
+  set (REST_VOL_INSTALL_INCLUDE_DIR include)
+endif (NOT REST_VOL_INSTALL_INCLUDE_DIR)
+if (NOT REST_VOL_INSTALL_DATA_DIR)
+  if (NOT WIN32)
+    if (APPLE)
+      if (REST_VOL_BUILD_FRAMEWORKS)
+        set (REST_VOL_INSTALL_EXTRA_DIR ../SharedSupport)
+      else (REST_VOL_BUILD_FRAMEWORKS)
+        set (REST_VOL_INSTALL_EXTRA_DIR share)
+      endif (REST_VOL_BUILD_FRAMEWORKS)
+      set (REST_VOL_INSTALL_FWRK_DIR ${CMAKE_INSTALL_FRAMEWORK_PREFIX})
+    endif (APPLE)
+    set (REST_VOL_INSTALL_DATA_DIR share)
+    set (REST_VOL_INSTALL_CMAKE_DIR share/cmake)
+  else (NOT WIN32)
+    set (REST_VOL_INSTALL_DATA_DIR ".")
+    set (REST_VOL_INSTALL_CMAKE_DIR cmake)
+  endif (NOT WIN32)
+endif (NOT REST_VOL_INSTALL_DATA_DIR)
+
+#-----------------------------------------------------------------------------
+# Add a custom target for install exports
+#-----------------------------------------------------------------------------
+set (REST_VOL_INSTALL_TARGET "InstallTarget")
+add_custom_target(${REST_VOL_INSTALL_TARGET})
+
+if (NOT REST_VOL_EXPORTED_TARGETS)
+  set (REST_VOL_EXPORTED_TARGETS ${REST_VOL_INSTALL_TARGET})
+endif (NOT REST_VOL_EXPORTED_TARGETS)
 
 #-----------------------------------------------------------------------------
 # Instructions for use : Sub-Project Build
@@ -81,7 +162,7 @@ set (HDF5_SOURCE_DIR ${CMAKE_SOURCE_DIR}/${HDF5_SOURCE_NAME})
 #   If unset (because parent project does not support/use the
 #   install (EXPORT target...) syntax), then targets are not configured
 #   for export during install.
-set (HDF5_EXPORTED_TARGETS "rest-vol-targets")
+set (HDF5_EXPORTED_TARGETS "${REST_VOL_INSTALL_TARGET}")
 
 # HDF5_LIB_DEPENDENCIES :
 #   If the build of HDF5 libs is being customized, then rules for the
@@ -115,74 +196,9 @@ include_directories(${CMAKE_BINARY_DIR}/${HDF5_SOURCE_NAME})
 # Add the HDF5 source as a sub-project
 add_subdirectory(${HDF5_SOURCE_DIR} ${PROJECT_BINARY_DIR}/hdf5)
 
-if (NOT REST_VOL_EXPORTED_TARGETS)
-  set (REST_VOL_EXPORTED_TARGETS "rest-vol-targets")
-endif (NOT REST_VOL_EXPORTED_TARGETS)
-
-#-----------------------------------------------------------------------------
-# Set the core names of all the libraries
-#-----------------------------------------------------------------------------
-set (REST_VOL_LIB_CORENAME        "restvol")
-set (REST_VOL_TEST_LIB_CORENAME   "restvol_test")
-
-#-----------------------------------------------------------------------------
-# Set the target names of all the libraries
-#-----------------------------------------------------------------------------
-set (REST_VOL_LIB_TARGET          "${REST_VOL_LIB_CORENAME}-static")
-set (REST_VOL_LIBSH_TARGET        "${REST_VOL_LIB_CORENAME}-shared")
-set (REST_VOL_TEST_LIB_TARGET     "${REST_VOL_TEST_LIB_CORENAME}-static")
-set (REST_VOL_TEST_LIBSH_TARGET     "${REST_VOL_TEST_LIB_CORENAME}-shared")
-
-#-----------------------------------------------------------------------------
-# Define some CMake variables for use later in the project
-#-----------------------------------------------------------------------------
-set (REST_VOL_RESOURCES_DIR       ${REST_VOL_SOURCE_DIR}/config/cmake)
-set (REST_VOL_RESOURCES_EXT_DIR   ${REST_VOL_SOURCE_DIR}/config/cmake_ext_mod)
-set (REST_VOL_SRC_DIR             ${REST_VOL_SOURCE_DIR}/src)
-set (REST_VOL_TEST_SRC_DIR        ${REST_VOL_SOURCE_DIR}/test)
-
-#-----------------------------------------------------------------------------
-# Make sure the REST VOL headers are available
-#-----------------------------------------------------------------------------
-include_directories(${REST_VOL_SRC_DIR})
-
-if (NOT REST_VOL_INSTALL_BIN_DIR)
-  set (REST_VOL_INSTALL_BIN_DIR bin)
-endif (NOT REST_VOL_INSTALL_BIN_DIR)
-if (NOT REST_VOL_INSTALL_LIB_DIR)
-  if (APPLE)
-    set (REST_VOL_INSTALL_FMWK_DIR ${CMAKE_INSTALL_FRAMEWORK_PREFIX})
-  else (APPLE)
-    set (REST_VOL_INSTALL_JAR_DIR lib)
-  endif (APPLE)
-  set (REST_VOL_INSTALL_LIB_DIR lib)
-endif (NOT REST_VOL_INSTALL_LIB_DIR)
-if (NOT REST_VOL_INSTALL_INCLUDE_DIR)
-  set (REST_VOL_INSTALL_INCLUDE_DIR include)
-endif (NOT REST_VOL_INSTALL_INCLUDE_DIR)
-if (NOT REST_VOL_INSTALL_DATA_DIR)
-  if (NOT WIN32)
-    if (APPLE)
-      if (REST_VOL_BUILD_FRAMEWORKS)
-        set (REST_VOL_INSTALL_EXTRA_DIR ../SharedSupport)
-      else (REST_VOL_BUILD_FRAMEWORKS)
-        set (REST_VOL_INSTALL_EXTRA_DIR share)
-      endif (REST_VOL_BUILD_FRAMEWORKS)
-      set (REST_VOL_INSTALL_FWRK_DIR ${CMAKE_INSTALL_FRAMEWORK_PREFIX})
-    endif (APPLE)
-    set (REST_VOL_INSTALL_DATA_DIR share)
-    set (REST_VOL_INSTALL_CMAKE_DIR share/cmake)
-  else (NOT WIN32)
-    set (REST_VOL_INSTALL_DATA_DIR ".")
-    set (REST_VOL_INSTALL_CMAKE_DIR cmake)
-  endif (NOT WIN32)
-endif (NOT REST_VOL_INSTALL_DATA_DIR)
-
 if(DEFINED ADDITIONAL_CMAKE_PREFIX_PATH AND EXISTS "${ADDITIONAL_CMAKE_PREFIX_PATH}")
   set (CMAKE_PREFIX_PATH ${ADDITIONAL_CMAKE_PREFIX_PATH} ${CMAKE_PREFIX_PATH})
 endif(DEFINED ADDITIONAL_CMAKE_PREFIX_PATH AND EXISTS "${ADDITIONAL_CMAKE_PREFIX_PATH}")
-
-#message (STATUS "VERSION: ${REST_VOL_RELEASE_VERSION}")
 
 #-----------------------------------------------------------------------------
 # parse the full soversion number from config/lt_vers.am and include in REST_VOL_SOVERS_INFO
@@ -459,5 +475,7 @@ add_subdirectory(${REST_VOL_SOURCE_DIR}/src ${PROJECT_BINARY_DIR}/src)
 if (REST_VOL_ENABLE_EXAMPLES)
   add_subdirectory(${REST_VOL_SOURCE_DIR}/examples ${PROJECT_BINARY_DIR}/examples)
 endif (REST_VOL_ENABLE_EXAMPLES)
+
+export (EXPORT ${REST_VOL_INSTALL_TARGET})
 
 include (CMakeInstallation.cmake)

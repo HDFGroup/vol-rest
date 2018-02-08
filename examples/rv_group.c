@@ -21,6 +21,7 @@
  * in the root group and in the created group.
  */
 
+#include <stdlib.h>
 
 #include "hdf5.h"
 #include "rest_vol_public.h"

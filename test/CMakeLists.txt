@@ -4,7 +4,7 @@ PROJECT (REST_VOL_TEST C)
 #-----------------------------------------------------------------------------
 # Apply definitions to compiler in this directory
 #-----------------------------------------------------------------------------
-add_definitions(${RV_EXTRA_C_FLAGS})
+add_definitions(${REST_VOL_EXTRA_C_FLAGS})
 
 #-----------------------------------------------------------------------------
 # Define test sources
@@ -13,7 +13,7 @@ set (TEST_LIB_SRCS
     ${REST_VOL_TEST_SOURCE_DIR}/test_rest_vol.c
 )
 
-MACRO (ADD_RV_EXE file)
+MACRO (ADD_REST_VOL_EXE file)
   add_executable (${file} ${REST_VOL_TEST_SOURCE_DIR}/${file}.c)
   TARGET_NAMING (${file} STATIC)
   TARGET_C_PROPERTIES (${file} STATIC " " " ")
@@ -24,18 +24,18 @@ MACRO (ADD_RV_EXE file)
     add_executable (${file}-shared ${REST_VOL_TEST_SOURCE_DIR}/${file}.c)
     TARGET_NAMING (${file}-shared SHARED)
     TARGET_C_PROPERTIES (${file}-shared SHARED " " " ")
-    target_link_libraries (${file}-shared ${RV_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
+    target_link_libraries (${file}-shared ${REST_VOL_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
     set_target_properties (${file}-shared PROPERTIES FOLDER test)
     add_dependencies(${file}-shared ${REST_VOL_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
   endif (BUILD_SHARED_LIBS)
-ENDMACRO (ADD_RV_EXE file)
+ENDMACRO (ADD_REST_VOL_EXE file)
 
 set (REST_VOL_TESTS
     test_rest_vol
 )
 
 foreach (test ${REST_VOL_TESTS})
-    ADD_RV_EXE(${test})
+    ADD_REST_VOL_EXE(${test})
 endforeach (test ${REST_VOL_TESTS})
 
 foreach (test ${REST_VOL_TESTS})
