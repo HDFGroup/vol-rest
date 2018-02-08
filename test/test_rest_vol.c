@@ -3681,7 +3681,7 @@ test_get_attribute_name(void)
 
     H5E_BEGIN_TRY {
         if (H5Aget_name_by_idx(file_id, ATTRIBUTE_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC,
-                0, name_buf, name_buf_size + 1, H5P_DEFAULT) >= 0) {
+                0, name_buf, (size_t) name_buf_size + 1, H5P_DEFAULT) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded!\n");
             goto error;
