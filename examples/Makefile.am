@@ -99,6 +99,7 @@ CHECK_CLEANFILES+=$(EXTLINK_DIRS)
 # Note: no '/' after DESTDIR.  Explanation in commence.am
 EXAMPLEDIR=${DESTDIR}$(exec_prefix)/share/rest_vol_examples/c
 EXAMPLETOPDIR=${DESTDIR}$(exec_prefix)/share/rest_vol_examples
+EXAMPLEBASEDIR=${DESTDIR}$(exec_prefix)/share
 
 # List dependencies for each program.  Normally, automake would take
 # care of this for us, but if we tell automake about the programs it
@@ -132,9 +133,13 @@ CHECK_CLEANFILES+=*.h5
 CLEANFILES=$(EXAMPLE_PROG) $(EXAMPLE_PROG_PARA)
 
 # How to create EXAMPLEDIR if it doesn't already exist
+$(EXAMPLEBASEDIR):
+	mkdir $(EXAMPLEBASEDIR)
 $(EXAMPLETOPDIR):
+	mkdir $(EXAMPLEBASEDIR)
 	mkdir $(EXAMPLETOPDIR)
 $(EXAMPLEDIR):
+	mkdir $(EXAMPLEBASEDIR)
 	mkdir $(EXAMPLETOPDIR)
 	mkdir $(EXAMPLEDIR)
 
