@@ -296,7 +296,209 @@ For clarity, no error-checking is performed.
 
 ## III.B. Building HDF5 REST VOL applications
 
+Assuming an application has been written following the above instructions, the application
+must be built prior to running. In general, the application should be built as normal for
+any other HDF5 application.
+
+To link in the require libraries, the compiler will likely require the additional linker
+flags:
+
+`-lrestvol -lcurl -lyajl`
+
+However, these may vary depending on platform, compiler and installation location of the
+REST VOL plugin.
+
+If the REST VOL plugin was built using Autotools, it is highly recommended that compilation
+of HDF5 REST VOL applications be done using the supplied `h5cc` script, as it will manage
+linking with the HDF5 library. `h5cc` may be found in the `/bin` directory of the
+installation. The above notice about additional libraries applies to usage of `h5cc`.
+For example:
+
+`h5cc -lrestvol -curl -lyajl my_restvol_application.c -o my_executable`
 
 
 
+## III.C. HDF5 REST VOL applications and HSDS
+
+Running applications that use the REST VOL plugin require... 
+
+TODO: mention HSDS
+
+### III.C.i. HSDS Setup
+
+TODO: HSDS setup details
+
+### III.C.ii. Example programs
+
+The file `test/test_rest_vol.c`, in addition to being the source for the REST VOL plugin
+test suite, serves double purpose with each test function being an example application
+in miniature, focused on a particular behavior.
+
+In addition to this file, some of the example C programs included with HDF5 distributions
+have been adapted to work with the REST VOL plugin and are included under the top-level
+`examples` directory in the REST VOL source root directory.
+
+Before running any of the examples, an HSDS server must be set up, with the relevant
+environment variables set (see section III.C.i. for more information).
+
+--------------------------------------------------------------------------------
+
+# IV. Feature Support
+
+Not all aspects of HDF5 are implemented by or are applicable to the REST VOL plugin.
+
+
+
+## IV.A. Unsupported HDF5 API calls
+
+Due to a combination of lack of server support and the complexity in implementing them,
+or due to a particular call not making sense from the server's perspective, the following
+HDF5 API calls are currently unsupported:
+
++ H5A interface
+
+    + H5Aopen_by_idx
+    + H5Aget_info_by_idx
+    + H5Aget_name_by_idx
+    + H5Aget_storage_size
+    + H5Adelete_by_idx
+    + H5Arename
+    + H5Arename_by_name
+
++ H5D interface
+
+    + H5Dget_offset
+    + H5Dget_space_status
+    + H5Dget_storage_size
+    + H5Dset_extent
+
++ H5F interface
+
+    + H5Fget_obj_count
+    + H5Fget_obj_ids
+    + H5Fflush
+    + H5Fis_accessible
+    + H5Fmount
+    + H5Funmount
+    + H5Fclear_elink_file_cache
+    + H5Fget_file_image
+    + H5Fget_free_sections
+    + H5Fget_freespace
+    + H5Fget_mdc_config
+    + H5Fget_mdc_hit_rate
+    + H5Fget_mdc_size
+    + H5Fget_filesize
+    + H5Fget_vfd_handle
+    + H5Freset_mdc_hit_rate_stats
+    + H5Fset_mdc_config
+
++ H5G interface
+
+    + H5Gget_info_by_idx
+
++ H5L interface
+
+    + H5Lget_info_by_idx
+    + H5Lget_name_by_idx
+    + H5Lget_val_by_idx
+    + H5Ldelete_by_idx
+    + H5Lcopy
+    + H5Lmove
+
++ H5O interface
+
+    + H5Oopen_by_idx
+    + H5Oopen_by_addr
+    + H5Oget_info_by_idx
+    + H5Oincr_refcount
+    + H5Odecr_refcount
+    + H5Oexists_by_name
+    + H5Ovisit
+    + H5Ovisit_by_name
+    + H5Ocopy
+
++ H5R interface
+
+    + H5Rget_name
+    + H5Rget_region/Region references
+
+
+
+## IV.B. Unsupported HDF5 Features
+
+The following other features are currently unsupported:
+
++ Dataset Fill Values
++ Dataset Filters
++ Virtual Dataset layouts
++ External Storage for contiguous dataset layouts
+
++ Non-predefined integer and floating-point datatypes
++ Variable-length, Opaque, Bitfield and Time datatypes
++ Character sets other than H5T_CSET_ASCII for string datatypes
++ String padding values other than H5T_STR_NULLPAD for fixed-length strings
++ String padding values other than H5T_STR_NULLTERM for variable-length strings
+  (Note that variable-length string datatypes are currently unsupported by the
+  REST VOL plugin, but a dataset can still be created with a variable-length
+  string type)
+
++ Non-regular hyperslab selections
++ Non-contiguous hyperslab selections
+
++ User-defined links
++ External links
+
++ H5Pset_create_intermediate_group property (the plugin will not currently
+  create intermediate groups in a path if they do not exist)
+
+
+
+## IV.C. Problematic HDF5 Features
+
+Due to underlying implementation details, the following circumstances are
+known to be problematic for the REST VOL plugin and will likely cause issues
+for the application if not avoided or taken into account:
+
++ Cyclic links in the file (the plugin currently cannot detect cyclic links),
+  which will generally end in infinite recursion and application stack issues
+
++ Trying to open an object in the file by using a pathname where one or more
+  components of the path on the way to the object in question are soft links.
+  For example, trying to open a dataset by the pathname
+  `/group/subgroup/soft_link_to_dataset`
+  should work. However, trying to open a dataset using a pathname like
+  `/group/soft_link_to_group/soft_link_to_dataset` will generally fail.
+
++ Due to a simple `basename` function implementation which follows the GNU
+  behavior, using a trailing `/` on path names will likely confuse the plugin
+  and cause incorrect behavior.
+
++ The use of point selections for dataset writes will generally incur an additional
+  memory overhead of approximately 4/3 the size of the original buffer used for
+  the `H5Dwrite()` call. This is due to the fact that a temporary copy of the buffer
+  must be made and then base64-encoded for the server transfer and base64-encoding
+  generally imposes a 33% overhead.
+
++ Due to the HDF5 public API call `H5Pset_external` using the `off_t` type, it is
+  possible that compilation of the REST VOL plugin on non-POSIX-compliant systems
+  may fail.
+
+--------------------------------------------------------------------------------
+
+# V. More Information
+
++ RESTful HDF5 - A description of the HDF5 REST API
+    + https://support.hdfgroup.org/pubs/papers/RESTful_HDF5.pdf
+
++ HDF5-JSON - A specification of and tools for representing HDF5 in JSON
+    + http://hdf5-json.readthedocs.io/en/latest/
+
++ HDF Server (h5serv) - A python-based implementation of the HDF5 REST API which
+  can send and receive HDF5 data through the use of HTTP requests
+    + https://github.com/HDFGroup/h5serv
+    + https://support.hdfgroup.org/projects/hdfserver/
+    + https://s3.amazonaws.com/hdfgroup/docs/HDFServer_SciPy2015.pdf
+
++ HSDS/HDF in the Cloud
+    + https://www.slideshare.net/HDFEOS/hdf-cloud-services
 
