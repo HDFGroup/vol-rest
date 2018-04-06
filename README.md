@@ -529,5 +529,6 @@ for the application if not avoided or taken into account:
     + https://s3.amazonaws.com/hdfgroup/docs/HDFServer_SciPy2015.pdf
 
 + HSDS/HDF in the Cloud
+    + https://www.hdfgroup.org/solutions/hdf-cloud
     + https://www.slideshare.net/HDFEOS/hdf-cloud-services
 
