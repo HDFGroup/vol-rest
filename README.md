@@ -93,7 +93,7 @@ TODO: HSDS description
 
 The latest and most up-to-date REST VOL plugin code can be viewed at:
 
-`https://bitbucket.hdfgroup.org/users/jhenderson/repos/rest-vol/browse`
+https://bitbucket.hdfgroup.org/users/jhenderson/repos/rest-vol/browse
 
 and can directly be obtained from:
 
