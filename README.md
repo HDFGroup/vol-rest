@@ -112,9 +112,11 @@ system support.
 
     Run `build_vol_autotools.sh`. See section II.B.ii.a for configuration options.
 
+
 + CMake
 
     NOTE: CMake support is currently not functional and should not be used
+
     Run `build_vol_cmake.sh` (Linux or OS X) or `build_vol_cmake.bat` (Windows).
     See section II.B.ii.a for configuration options.
 
@@ -272,17 +274,20 @@ to those for an equivalent HDF5 application:
 
     Called upon application startup, before any file is accessed.
 
+
 + H5Pset_fapl_rest_vol() - Set File Access Property List.
   
     Called to prepare a FAPL to open a file through the REST VOL plugin. See
     `https://support.hdfgroup.org/HDF5/Tutor/property.html#fa` for more information
     about File Access Property Lists.
 
+
 TODO: Set File Access Property List with what?
 
 + RVterm() - Cleanly shutdown the REST VOL plugin
 
     Called on application shutdown, after all files have been closed.
+
 
 ### III.A.i. Skeleton Example
 
