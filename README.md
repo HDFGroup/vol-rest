@@ -109,9 +109,11 @@ Use one of the supplied Autotools or CMake build scripts, depending on preferenc
 system support.
 
 + Autotools
+
     Run `build_vol_autotools.sh`. See section II.B.ii.a for configuration options.
 
 + CMake
+
     NOTE: CMake support is currently not functional and should not be used
     Run `build_vol_cmake.sh` (Linux or OS X) or `build_vol_cmake.bat` (Windows).
     See section II.B.ii.a for configuration options.
@@ -162,7 +164,7 @@ TODO: how to build manually.
 Autotools
 ---------
 
-    TODO: more detail
+TODO: more detail
 
     $ autogen.sh
     $ configure [options]
@@ -173,7 +175,7 @@ Autotools
 CMake
 -----
 
-    TODO: building with CMake
+TODO: building with CMake
 
 ### II.B.iii.a. Options for `configure`
 
@@ -267,16 +269,20 @@ An HDF5 REST VOL plugin application requires three new function calls in additio
 to those for an equivalent HDF5 application:
 
 + RVinit() - Initializes the REST VOL plugin
-  Called upon application startup, before any file is accessed.
 
-  TODO: Set File Access Property List with what?
+    Called upon application startup, before any file is accessed.
+
 + H5Pset_fapl_rest_vol() - Set File Access Property List.
-  Called to prepare a FAPL to open a file through the REST VOL plugin. See
-  `https://support.hdfgroup.org/HDF5/Tutor/property.html#fa` for more information
-  about File Access Property Lists.
+  
+    Called to prepare a FAPL to open a file through the REST VOL plugin. See
+    `https://support.hdfgroup.org/HDF5/Tutor/property.html#fa` for more information
+    about File Access Property Lists.
+
+TODO: Set File Access Property List with what?
 
 + RVterm() - Cleanly shutdown the REST VOL plugin
-  Called on application shutdown, after all files have been closed.
+
+    Called on application shutdown, after all files have been closed.
 
 ### III.A.i. Skeleton Example
 
@@ -335,7 +341,7 @@ For example:
 
 ## III.C. HDF5 REST VOL plugin applications and HSDS
 
-Running applications that use the REST VOL plugin require... 
+Running applications that use the REST VOL plugin requires... 
 
 TODO: mention HSDS
 
