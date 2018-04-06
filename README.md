@@ -124,9 +124,9 @@ The following configuration options are available to all of the build scripts:
 
     -d      Enables debugging information printouts within the REST VOL plugin.
 
-    -C      Enables debug information printouts from cURL within the REST VOL plugin.
+    -C      Enables debugging information printouts from cURL within the REST VOL plugin.
 
-    -m      Enables memory usage tracking within the REST VOL plugin. This options is
+    -m      Enables memory usage tracking within the REST VOL plugin. This option is
             mostly useful in helping to diagnose any possible memory leaks or other
             memory errors within the plugin.
 
@@ -328,15 +328,18 @@ TODO: mention HSDS
 
 TODO: HSDS setup details
 
-### III.C.ii. Example programs
+### III.C.ii. Example applications
 
 The file `test/test_rest_vol.c`, in addition to being the source for the REST VOL plugin
 test suite, serves double purpose with each test function being an example application
-in miniature, focused on a particular behavior.
+in miniature, focused on a particular behavior. This application tests a moderate amount
+of HDF5's public API functionality with the REST VOL plugin and should be a good indicator
+of whether the REST VOL plugin is working correctly in conjunction with a running HSDS
+instance.
 
-In addition to this file, some of the example C programs included with HDF5 distributions
-have been adapted to work with the REST VOL plugin and are included under the top-level
-`examples` directory in the REST VOL source root directory.
+In addition to this file, some of the example C applications included with HDF5
+distributions have been adapted to work with the REST VOL plugin and are included
+under the top-level `examples` directory in the REST VOL source root directory.
 
 Before running any of the examples, an HSDS server must be set up, with the relevant
 environment variables set (see section III.C.i. for more information).
