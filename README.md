@@ -109,12 +109,12 @@ Use one of the supplied Autotools or CMake build scripts, depending on preferenc
 system support.
 
 + Autotools
-  Run `build_vol_autotools.sh`. See section II.B.ii.a for configuration options.
+    + Run `build_vol_autotools.sh`. See section II.B.ii.a for configuration options.
 
 + CMake
-  *** NOTE: CMake support is currently not functional and should not be used ***
-  Run `build_vol_cmake.sh` (Linux or OS X) or `build_vol_cmake.bat` (Windows).
-  See section II.B.ii.a for configuration options.
+    + NOTE: CMake support is currently not functional and should not be used
+    + Run `build_vol_cmake.sh` (Linux or OS X) or `build_vol_cmake.bat` (Windows).
+    + See section II.B.ii.a for configuration options.
 
 By default, all of these build scripts will compile and link with the provided
 HDF5 source distribution. However, if you wish to use a manually built version of
