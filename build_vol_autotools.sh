@@ -170,7 +170,7 @@ if [ "$build_hdf5" = true ]; then
 
     cd ${SCRIPT_DIR}/${HDF5_DIR}
 
-    ./autogen.sh
+    ./autogen.sh || exit 1
 
     # If we are building the tools with REST VOL support, link in the already built
     # REST VOL library, along with cURL and YAJL.
@@ -197,9 +197,9 @@ echo
 
 cd ${SCRIPT_DIR}
 
-./autogen.sh
+./autogen.sh || exit 1
 
-./configure --prefix=${INSTALL_DIR} ${RV_OPTS} CFLAGS="${COMP_OPTS}"
+./configure --prefix=${INSTALL_DIR} ${RV_OPTS} CFLAGS="${COMP_OPTS}" || exit 1
 
 make -j${NPROCS} && make install || exit 1
 
