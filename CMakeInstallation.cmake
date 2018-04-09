@@ -10,7 +10,7 @@ if (WIN32)
     file(TO_CMAKE_PATH "$ENV{WIX}" CPACK_WIX_ROOT)
   endif()
   find_program (WIX_EXECUTABLE candle  PATHS "${CPACK_WIX_ROOT}/bin")
-endif (WIN32)
+endif ()
 
 #-----------------------------------------------------------------------------
 # Add file(s) to CMake Install
@@ -21,7 +21,7 @@ if (NOT REST_VOL_INSTALL_NO_DEVELOPMENT)
       DESTINATION ${REST_VOL_INSTALL_INCLUDE_DIR}
       COMPONENT headers
   )
-endif (NOT REST_VOL_INSTALL_NO_DEVELOPMENT)
+endif ()
 
 #-----------------------------------------------------------------------------
 # Add Target(s) to CMake Install for import into other projects
@@ -119,9 +119,9 @@ install (
 #-----------------------------------------------------------------------------
 if (H5_WORDS_BIGENDIAN)
   set (BYTESEX big-endian)
-else (H5_WORDS_BIGENDIAN)
+else ()
   set (BYTESEX little-endian)
-endif (H5_WORDS_BIGENDIAN)
+endif ()
 configure_file (
     ${REST_VOL_RESOURCES_DIR}/librestvol.settings.cmake.in
     ${REST_VOL_BINARY_DIR}/librestvol.settings @ONLY
@@ -177,39 +177,39 @@ if (EXISTS "${REST_VOL_SOURCE_DIR}/release_docs" AND IS_DIRECTORY "${REST_VOL_SO
           ${release_files}
           ${REST_VOL_SOURCE_DIR}/release_docs/INSTALL_Windows.txt
       )
-    endif (WIN32)
+    endif ()
     if (CYGWIN)
       set (release_files
           ${release_files}
           ${REST_VOL_SOURCE_DIR}/release_docs/INSTALL_Cygwin.txt
       )
-    endif (CYGWIN)
+    endif ()
     if (REST_VOL_ENABLE_PARALLEL)
       set (release_files
           ${release_files}
           ${REST_VOL_SOURCE_DIR}/release_docs/INSTALL_parallel
       )
-    endif (REST_VOL_ENABLE_PARALLEL)
-  endif (REST_VOL_PACK_INSTALL_DOCS)
+    endif ()
+  endif ()
   install (
       FILES ${release_files}
       DESTINATION ${REST_VOL_INSTALL_DATA_DIR}
       COMPONENT hdfdocuments
   )
-endif (EXISTS "${REST_VOL_SOURCE_DIR}/release_docs" AND IS_DIRECTORY "${REST_VOL_SOURCE_DIR}/release_docs")
+endif ()
 
 if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   if (CMAKE_HOST_UNIX)
     set (CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}/HDF_Group/${REST_VOL_PACKAGE_NAME}/${REST_VOL_PACKAGE_VERSION}"
       CACHE PATH "Install path prefix, prepended onto install directories." FORCE)
-  else (CMAKE_HOST_UNIX)
+  else ()
     GetDefaultWindowsPrefixBase(CMAKE_GENERIC_PROGRAM_FILES)
     set (CMAKE_INSTALL_PREFIX
       "${CMAKE_GENERIC_PROGRAM_FILES}/HDF_Group/${REST_VOL_PACKAGE_NAME}/${REST_VOL_PACKAGE_VERSION}"
       CACHE PATH "Install path prefix, prepended onto install directories." FORCE)
     set (CMAKE_GENERIC_PROGRAM_FILES)
-  endif (CMAKE_HOST_UNIX)
-endif (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  endif ()
+endif ()
 
 #-----------------------------------------------------------------------------
 # Set the cpack variables
@@ -219,9 +219,9 @@ if (NOT REST_VOL_NO_PACKAGES)
   set (CPACK_PACKAGE_NAME "${REST_VOL_PACKAGE_NAME}")
   if (CDASH_LOCAL)
     set (CPACK_PACKAGE_VERSION "${REST_VOL_PACKAGE_VERSION}")
-  else (CDASH_LOCAL)
+  else ()
     set (CPACK_PACKAGE_VERSION "${REST_VOL_PACKAGE_VERSION_STRING}")
-  endif (CDASH_LOCAL)
+  endif ()
   set (CPACK_PACKAGE_VERSION_MAJOR "${REST_VOL_PACKAGE_VERSION_MAJOR}")
   set (CPACK_PACKAGE_VERSION_MINOR "${REST_VOL_PACKAGE_VERSION_MINOR}")
   set (CPACK_PACKAGE_VERSION_PATCH "")
@@ -229,13 +229,13 @@ if (NOT REST_VOL_NO_PACKAGES)
     set (CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/release_docs/RELEASE.txt")
     set (CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/release_docs/COPYING")
     set (CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/release_docs/RELEASE.txt")
-  endif (EXISTS "${REST_VOL_SOURCE_DIR}/release_docs")
+  endif ()
   set (CPACK_PACKAGE_RELOCATABLE TRUE)
   if (OVERRIDE_INSTALL_VERSION)
     set (CPACK_PACKAGE_INSTALL_DIRECTORY "${CPACK_PACKAGE_VENDOR}/${CPACK_PACKAGE_NAME}/${OVERRIDE_INSTALL_VERSION}")
   else (OVERRIDE_INSTALL_VERSION)
     set (CPACK_PACKAGE_INSTALL_DIRECTORY "${CPACK_PACKAGE_VENDOR}/${CPACK_PACKAGE_NAME}/${CPACK_PACKAGE_VERSION}")
-  endif (OVERRIDE_INSTALL_VERSION)
+  endif ()
   set (CPACK_PACKAGE_ICON "${REST_VOL_RESOURCES_EXT_DIR}/hdf.bmp")
 
   set (CPACK_GENERATOR "TGZ")
@@ -244,7 +244,7 @@ if (NOT REST_VOL_NO_PACKAGES)
 
     if (NSIS_EXECUTABLE)
       list (APPEND CPACK_GENERATOR "NSIS")
-    endif (NSIS_EXECUTABLE)
+    endif ()
     # Installers for 32- vs. 64-bit CMake:
     #  - Root install directory (displayed to end user at installer-run time)
     #  - "NSIS package/display name" (text used in the installer GUI)
@@ -253,10 +253,10 @@ if (NOT REST_VOL_NO_PACKAGES)
     if (CMAKE_CL_64)
       set (CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES64")
       set (CPACK_PACKAGE_INSTALL_REGISTRY_KEY "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION} (Win64)")
-    else (CMAKE_CL_64)
+    else ()
       set (CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES")
       set (CPACK_PACKAGE_INSTALL_REGISTRY_KEY "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}")
-    endif (CMAKE_CL_64)
+    endif ()
     # set the install/unistall icon used for the installer itself
     # There is a bug in NSI that does not handle full unix paths properly.
     set (CPACK_NSIS_MUI_ICON "${REST_VOL_RESOURCES_EXT_DIR}\\\\hdf.ico")
@@ -266,15 +266,15 @@ if (NOT REST_VOL_NO_PACKAGES)
     set (CPACK_NSIS_DISPLAY_NAME "${CPACK_NSIS_PACKAGE_NAME}")
     if (OVERRIDE_INSTALL_VERSION)
       set (CPACK_PACKAGE_INSTALL_DIRECTORY "${CPACK_PACKAGE_VENDOR}\\\\${CPACK_PACKAGE_NAME}\\\\${OVERRIDE_INSTALL_VERSION}")
-    else (OVERRIDE_INSTALL_VERSION)
+    else ()
       set (CPACK_PACKAGE_INSTALL_DIRECTORY "${CPACK_PACKAGE_VENDOR}\\\\${CPACK_PACKAGE_NAME}\\\\${CPACK_PACKAGE_VERSION}")
-    endif (OVERRIDE_INSTALL_VERSION)
+    endif ()
     set (CPACK_NSIS_CONTACT "${REST_VOL_PACKAGE_BUGREPORT}")
     set (CPACK_NSIS_MODIFY_PATH ON)
 
     if (WIX_EXECUTABLE)
       list (APPEND CPACK_GENERATOR "WIX")
-    endif (WIX_EXECUTABLE)
+    endif ()
 #WiX variables
     set (CPACK_WIX_UNINSTALL "1")
 # .. variable:: CPACK_WIX_LICENSE_RTF
@@ -315,7 +315,7 @@ if (NOT REST_VOL_NO_PACKAGES)
     set(CPACK_WIX_PROPERTY_ARPCOMMENTS "HDF5 (Hierarchical Data Format 5) REST VOL plugin")
     set(CPACK_WIX_PROPERTY_ARPURLINFOABOUT "${REST_VOL_PACKAGE_URL}")
     set(CPACK_WIX_PROPERTY_ARPHELPLINK "${REST_VOL_PACKAGE_BUGREPORT}")
-  elseif (APPLE)
+  elseif ()
     list (APPEND CPACK_GENERATOR "DragNDrop")
     set (CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE ON)
     set (CPACK_PACKAGING_INSTALL_PREFIX "/${CPACK_PACKAGE_INSTALL_DIRECTORY}")
@@ -348,8 +348,8 @@ if (NOT REST_VOL_NO_PACKAGES)
           FILES ${REST_VOL_BINARY_DIR}/CMakeFiles/PkgInfo
           DESTINATION ..
       )
-    endif (REST_VOL_PACK_MACOSX_FRAMEWORK AND REST_VOL_BUILD_FRAMEWORKS)
-  else (WIN32)
+    endif ()
+  else ()
     list (APPEND CPACK_GENERATOR "STGZ")
     set (CPACK_PACKAGING_INSTALL_PREFIX "/${CPACK_PACKAGE_INSTALL_DIRECTORY}")
     set (CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE ON)
@@ -373,12 +373,12 @@ if (NOT REST_VOL_NO_PACKAGES)
     #-----------------------------------------------------------------------------
 #    configure_file ("${REST_VOL_RESOURCES_DIR}/hdf5.spec.in" "${CMAKE_CURRENT_BINARY_DIR}/${REST_VOL_PACKAGE_NAME}.spec" @ONLY IMMEDIATE)
 #    set (CPACK_RPM_USER_BINARY_SPECFILE "${CMAKE_CURRENT_BINARY_DIR}/${REST_VOL_PACKAGE_NAME}.spec")
-  endif (WIN32)
+  endif ()
 
   # By default, do not warn when built on machines using only VS Express:
   if (NOT DEFINED CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_NO_WARNINGS)
     set (CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_NO_WARNINGS ON)
-  endif (NOT DEFINED CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_NO_WARNINGS)
+  endif ()
   include (InstallRequiredSystemLibraries)
 
   set (CPACK_INSTALL_CMAKE_PROJECTS "${REST_VOL_BINARY_DIR};REST VOL;ALL;/")
@@ -451,6 +451,5 @@ if (NOT REST_VOL_NO_PACKAGES)
         GROUP Development
         INSTALL_TYPES Full Developer
     )
-  endif (REST_VOL_BUILD_TOOLS)
-
-endif (NOT REST_VOL_NO_PACKAGES)
+  endif ()
+endif ()
