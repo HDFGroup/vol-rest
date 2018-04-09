@@ -486,6 +486,36 @@ done:
 } /* H5VLobject_register */
 
 
+/*-------------------------------------------------------------------------
+ * Function:    H5VLobject
+ *
+ * Purpose:     Public utility function to return the VOL object pointer
+ *              associated with an hid_t.
+ *
+ * Return:      Success:        object pointer
+ *              Failure:        NULL
+ *
+ * Programmer:  Jordan Henderson
+ *              January, 2018
+ *
+ *-------------------------------------------------------------------------
+ */
+void *
+H5VLobject(hid_t id)
+{
+    void *ret_value = NULL;
+
+    FUNC_ENTER_API(NULL)
+    H5TRACE1("*x", "i", id);
+
+    if (NULL == (ret_value = H5VL_object(id)))
+        HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, NULL, "invalid identifier")
+
+done:
+    FUNC_LEAVE_API(ret_value)
+} /* H5VLobject */
+
+
 /*---------------------------------------------------------------------------
  * Function:    H5VLget_object
  *
