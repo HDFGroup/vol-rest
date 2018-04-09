@@ -204,7 +204,7 @@ endif(DEFINED ADDITIONAL_CMAKE_PREFIX_PATH AND EXISTS "${ADDITIONAL_CMAKE_PREFIX
 #-----------------------------------------------------------------------------
 # parse the full version number from README.txt and include in REST_VOL_VERS_INFO
 #-----------------------------------------------------------------------------
-file (READ ${REST_VOL_SOURCE_DIR}/README.txt _readme_contents)
+file (READ ${REST_VOL_SOURCE_DIR}/README.md _readme_contents)
 string (REGEX REPLACE ".*([0-9][0-9]*).[0-9][0-9]*.[0-9][0-9]*.*$"
     "\\1" REST_VOL_VERS_MAJOR ${_readme_contents})
 string (REGEX REPLACE ".*[0-9][0-9]*.([0-9][0-9]*).[0-9][0-9]*.*$"
