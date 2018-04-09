@@ -134,14 +134,14 @@ CLEANFILES=$(EXAMPLE_PROG) $(EXAMPLE_PROG_PARA)
 
 # How to create EXAMPLEDIR if it doesn't already exist
 $(EXAMPLEBASEDIR):
-	mkdir $(EXAMPLEBASEDIR)
+	mkdir -p $(EXAMPLEBASEDIR)
 $(EXAMPLETOPDIR):
-	mkdir $(EXAMPLEBASEDIR)
-	mkdir $(EXAMPLETOPDIR)
+	mkdir -p $(EXAMPLEBASEDIR)
+	mkdir -p $(EXAMPLETOPDIR)
 $(EXAMPLEDIR):
-	mkdir $(EXAMPLEBASEDIR)
-	mkdir $(EXAMPLETOPDIR)
-	mkdir $(EXAMPLEDIR)
+	mkdir -p $(EXAMPLEBASEDIR)
+	mkdir -p $(EXAMPLETOPDIR)
+	mkdir -p $(EXAMPLEDIR)
 
 # Install and uninstall rules.  We install the source files, not the
 # example programs themselves.
