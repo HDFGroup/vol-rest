@@ -6,6 +6,8 @@ PROJECT (REST_VOL_TEST C)
 #-----------------------------------------------------------------------------
 add_definitions(${REST_VOL_EXTRA_C_FLAGS})
 
+set (REST_VOL_TEST_TARGET "test_rest_vol")
+
 #-----------------------------------------------------------------------------
 # Define test sources
 #-----------------------------------------------------------------------------
@@ -67,3 +69,17 @@ if (BUILD_SHARED_LIBS)
     )
   endforeach (test ${REST_VOL_TESTS})
 endif (BUILD_SHARED_LIBS)
+
+#-----------------------------------------------------------------------------
+# Add Target(s) to CMake Install for import into other projects
+#-----------------------------------------------------------------------------
+if (REST_VOL_EXPORTED_TARGETS)
+  install (
+      TARGETS
+          ${REST_VOL_TEST_TARGET}
+      EXPORT
+          ${REST_VOL_EXPORTED_TARGETS}
+      DESTINATION
+          ${REST_VOL_INSTALL_BIN_DIR} COMPONENT testing
+  )
+endif ()

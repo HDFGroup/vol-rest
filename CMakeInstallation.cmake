@@ -115,7 +115,7 @@ install (
 )
 
 #-----------------------------------------------------------------------------
-# Configure the libhdf5.settings file for the lib info
+# Configure the librestvol.settings file for the lib info
 #-----------------------------------------------------------------------------
 if (H5_WORDS_BIGENDIAN)
   set (BYTESEX big-endian)
@@ -156,6 +156,12 @@ install (
 install (
     FILES
         ${REST_VOL_SOURCE_DIR}/COPYING
+    DESTINATION ${REST_VOL_INSTALL_DATA_DIR}
+    COMPONENT rvdocuments
+)
+install (
+    FILES
+        ${REST_VOL_SOURCE_DIR}/README.md
     DESTINATION ${REST_VOL_INSTALL_DATA_DIR}
     COMPONENT rvdocuments
 )
