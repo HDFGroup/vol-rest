@@ -78,7 +78,7 @@ endif ()
 #-----------------------------------------------------------------------------
 add_custom_target(
     pubconf
-    DEPENDS ${CMAKE_BINARY_DIR}/${HDF5_SOURCE_NAME}/H5pubconf.h
+    DEPENDS ${CMAKE_BINARY_DIR}/${HDF5_DIR_NAME}/H5pubconf.h
 )
 
 add_dependencies(${REST_VOL_LIB_TARGET} pubconf)

@@ -56,6 +56,9 @@ set (REST_VOL_RESOURCES_MOD_DIR   ${REST_VOL_SOURCE_DIR}/config/cmake/modules)
 set (REST_VOL_SRC_DIR             ${REST_VOL_SOURCE_DIR}/src)
 set (REST_VOL_TEST_SRC_DIR        ${REST_VOL_SOURCE_DIR}/test)
 set (REST_VOL_EXAMPLES_DIR        ${REST_VOL_SOURCE_DIR}/examples)
+set (HDF5_DIR_NAME                "hdf5")
+set (HDF5_DIR                     ${REST_VOL_SOURCE_DIR}/${HDF5_DIR_NAME})
+set (HDF5_BINARY_DIR              ${REST_VOL_BINARY_DIR}/${HDF5_DIR_NAME})
 
 #-----------------------------------------------------------------------------
 # Make sure the REST VOL headers are available
@@ -381,6 +384,8 @@ configure_file (${REST_VOL_RESOURCES_DIR}/rv_cmake_config.h.in ${REST_VOL_BINARY
 set (REST_VOL_INCLUDE_DIRECTORIES
     ${REST_VOL_SRC_DIR}
     ${REST_VOL_BINARY_DIR}
+    ${HDF5_DIR}
+    ${HDF5_BINARY_DIR}
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
 )
 INCLUDE_DIRECTORIES (${REST_VOL_INCLUDE_DIRECTORIES})
@@ -428,6 +433,11 @@ else (CMAKE_BUILD_TYPE MATCHES Debug)
 endif ()
 
 include (${REST_VOL_RESOURCES_DIR}/HDFCompilerFlags.cmake)
+
+#-----------------------------------------------------------------------------
+# Build HDF5
+#-----------------------------------------------------------------------------
+add_subdirectory(${HDF5_DIR} ${PROJECT_BINARY_DIR}/${HDF5_DIR_NAME})
 
 #-----------------------------------------------------------------------------
 # Build the REST VOL
