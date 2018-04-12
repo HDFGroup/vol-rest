@@ -1,5 +1,5 @@
 #-----------------------------------------------------------------------------
-# HDF5 Config file for compiling against hdf5 build/install directory
+# REST VOL Config file for compiling against REST VOL build/install directory
 #-----------------------------------------------------------------------------
 @PACKAGE_INIT@
 
