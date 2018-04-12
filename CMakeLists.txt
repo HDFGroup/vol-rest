@@ -32,6 +32,8 @@ if ("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
       )
 endif ()
 
+string(TIMESTAMP CONFIG_DATE "%Y-%m-%d")
+
 
 #-----------------------------------------------------------------------------
 # Set the core names of all the libraries
