@@ -1036,8 +1036,8 @@ AC_CACHE_SAVE
 ## and installed with the libraries (used to generate librestvol.settings).
 ##
 
-## REST VOL version from the README.txt file.
-RV_VERSION="`cut -d' ' -f6 $srcdir/README.txt | head -1`"
+## REST VOL version from the README.md file.
+RV_VERSION="`cut -d' ' -f6 $(pwd)/README.md | head -3 | tail -1`"
 AC_SUBST([RV_VERSION])
 
 ## Configuration date
