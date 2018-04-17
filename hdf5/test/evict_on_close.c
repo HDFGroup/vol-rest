@@ -32,6 +32,7 @@
 #include "H5Fpkg.h"
 #include "H5Gpkg.h"
 #include "H5Ipkg.h"
+#include "H5VLprivate.h"        /* Virtual Object Layer                     */
 
 /* Evict on close is not supported under parallel at this time.
  * In the meantime, we just run a simple check that EoC can't be

@@ -566,7 +566,7 @@ H5Topen2(hid_t loc_id, const char *name, hid_t tapl_id)
 
 done:
     if (H5I_INVALID_HID == ret_value)
-        if (vol_dt && H5VL_datatype_close (vol_dt, obj->vol_info->vol_cls, dxpl_id, H5_REQUEST_NULL) < 0)
+        if (vol_dt && H5VL_datatype_close(vol_dt, obj->vol_info->vol_cls, dxpl_id, H5_REQUEST_NULL) < 0)
             HDONE_ERROR(H5E_SYM, H5E_CLOSEERROR, H5I_INVALID_HID, "unable to release datatype")
     FUNC_LEAVE_API(ret_value)
 } /* end H5Topen2() */
@@ -859,7 +859,7 @@ H5T_construct_datatype(H5VL_object_t *dt_obj)
         HGOTO_ERROR(H5E_DATATYPE, H5E_CANTINIT, NULL, "unable to get datatype serialized size")
 
     /* allocate buffer to store binary description of the datatype */
-    if (NULL == (buf = (void *)H5MM_calloc ((size_t)nalloc)))
+    if (NULL == (buf = (void *)H5MM_calloc((size_t)nalloc)))
         HGOTO_ERROR(H5E_RESOURCE, H5E_NOSPACE, NULL, "can't allocate space for datatype")
 
     /* get binary description of the datatype */

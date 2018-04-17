@@ -5063,6 +5063,20 @@ H5T_convert_committed_datatype(H5T_t *dt, H5F_t *f)
         if(H5G_name_free(&dt->path) < 0)
             HGOTO_ERROR(H5E_DATATYPE, H5E_CANTOPENOBJ, FAIL, "unable to reset path")
 
+        /* If the datatype is committed through the VOL, close it */
+        if (NULL != dt->vol_obj) {
+            H5VL_object_t *vol_dt = dt->vol_obj;
+
+            /* Close the datatype through the VOL*/
+            if ((ret_value = H5VL_datatype_close(vol_dt->vol_obj, vol_dt->vol_info->vol_cls, H5AC_ind_read_dxpl_id, H5_REQUEST_NULL)) < 0)
+                HGOTO_ERROR(H5E_DATATYPE, H5E_CLOSEERROR, FAIL, "unable to close datatype");
+
+            /* Free the datatype and set the VOL object pointer to NULL */
+            if (H5VL_free_object(vol_dt) < 0)
+                HGOTO_ERROR(H5E_ATTR, H5E_CANTDEC, FAIL, "unable to free VOL object");
+            dt->vol_obj = NULL;
+        }
+
         dt->shared->state = H5T_STATE_TRANSIENT;
     }
 

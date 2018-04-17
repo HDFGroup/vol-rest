@@ -811,7 +811,7 @@ H5G_iterate(H5G_loc_t *loc, const char *group_name,
      */
     if (NULL == (grp = H5G__open_name(loc, group_name, lapl_id, dxpl_id)))
         HGOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, FAIL, "unable to open group")
-    if ((gid = H5I_register(H5I_GROUP, grp, TRUE)) < 0)
+    if ((gid = H5VL_native_register(H5I_GROUP, grp, TRUE)) < 0)
         HGOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "unable to register group")
 
     /* Set up user data for callback */

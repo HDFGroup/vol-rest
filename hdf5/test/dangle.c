@@ -533,7 +533,7 @@ test_dangle_force(void)
     hid_t sid;  /* Dataspace ID */
     hid_t aid, aid2;  /* Attribute IDs */
     hid_t tid, tid2;  /* Named datatype IDs */
-    ssize_t count;  /* Count of open objects */
+    ssize_t n_objs;  /* Number of open objects */
     hid_t *objs = NULL;    /* Pointer to list of open objects */
     size_t u;   /* Local index variable */
 
@@ -592,31 +592,32 @@ test_dangle_force(void)
         FAIL_STACK_ERROR
     if(H5Iinc_ref(gid2) < 0)
         FAIL_STACK_ERROR
-    if(H5Iinc_ref(aid2) < 0)
+    if(H5Iinc_ref(tid2) < 0)
         FAIL_STACK_ERROR
 
     /* Get the number of open objects */
-    if((count = H5Fget_obj_count((hid_t)H5F_OBJ_ALL, H5F_OBJ_ALL)) < 0)
+    if((n_objs = H5Fget_obj_count((hid_t)H5F_OBJ_ALL, H5F_OBJ_ALL)) < 0)
         FAIL_STACK_ERROR
-    if(0 == count)
+    if(0 == n_objs)
         TEST_ERROR;
 
     /* Allocate the array of object IDs */
-    objs = (hid_t*)HDmalloc(sizeof(hid_t) * (size_t)count);
+    if(NULL == (objs = (hid_t *)HDcalloc((size_t)n_objs, sizeof(hid_t))))
+        TEST_ERROR;
 
     /* Get the list of open IDs */
-    if(H5Fget_obj_ids((hid_t)H5F_OBJ_ALL, H5F_OBJ_ALL, (size_t)count, objs) < 0)
+    if(H5Fget_obj_ids((hid_t)H5F_OBJ_ALL, H5F_OBJ_ALL, (size_t)n_objs, objs) < 0)
         FAIL_STACK_ERROR
 
     /* Close all open IDs */
-    for(u = 0; u < (size_t)count; u++)
+    for(u = 0; u < (size_t)n_objs; u++)
         while(H5Iget_type(objs[u]) != H5I_BADID && H5Iget_ref(objs[u]) > 0)
             H5Idec_ref(objs[u]);
 
-    /* Get the number of open objects */
-    if((count = H5Fget_obj_count((hid_t)H5F_OBJ_ALL, H5F_OBJ_ALL)) < 0)
+    /* Get the number of open objects. Should be zero now. */
+    if((n_objs = H5Fget_obj_count((hid_t)H5F_OBJ_ALL, H5F_OBJ_ALL)) < 0)
         FAIL_STACK_ERROR
-    if(0 != count)
+    if(0 != n_objs)
         TEST_ERROR;
 
     /* Clean up temporary file */

@@ -1863,7 +1863,7 @@ test_pack_ooo(void)
         } /* end for */
 
         /* Verify that the compound is not packed */
-        if(NULL == (dt = (H5T_t *) H5VL_object_verify(cmpd, H5I_DATATYPE))) PACK_OOO_ERROR
+        if(NULL == (dt = (H5T_t *) H5I_object_verify(cmpd, H5I_DATATYPE))) PACK_OOO_ERROR
         if(dt->shared->u.compnd.packed) PACK_OOO_ERROR
 
         /* Close the main compound */
@@ -1889,7 +1889,7 @@ test_pack_ooo(void)
         } /* end for */
 
         /* Verify that the compound is not packed */
-        if(NULL == (dt = (H5T_t *) H5VL_object_verify(cmpd, H5I_DATATYPE))) PACK_OOO_ERROR
+        if(NULL == (dt = (H5T_t *) H5I_object_verify(cmpd, H5I_DATATYPE))) PACK_OOO_ERROR
         if(dt->shared->u.compnd.packed != !extra_space) PACK_OOO_ERROR
 
         /* Close */
@@ -1916,7 +1916,7 @@ test_pack_ooo(void)
         } /* end for */
 
         /* Verify that the compound is not packed */
-        if(NULL == (dt = (H5T_t *) H5VL_object_verify(cmpd, H5I_DATATYPE))) PACK_OOO_ERROR
+        if(NULL == (dt = (H5T_t *) H5I_object_verify(cmpd, H5I_DATATYPE))) PACK_OOO_ERROR
         if(dt->shared->u.compnd.packed) PACK_OOO_ERROR
 
         /* Close the main compound */
@@ -1942,7 +1942,7 @@ test_pack_ooo(void)
         } /* end for */
 
         /* Verify that the compound is packed */
-        if(NULL == (dt = (H5T_t *) H5VL_object_verify(cmpd, H5I_DATATYPE))) PACK_OOO_ERROR
+        if(NULL == (dt = (H5T_t *) H5I_object_verify(cmpd, H5I_DATATYPE))) PACK_OOO_ERROR
         if(dt->shared->u.compnd.packed != !extra_space) PACK_OOO_ERROR
 
         /* Close */
@@ -1969,7 +1969,7 @@ test_pack_ooo(void)
         } /* end for */
 
         /* Verify that the compound is not packed */
-        if(NULL == (dt = (H5T_t *) H5VL_object_verify(cmpd, H5I_DATATYPE))) PACK_OOO_ERROR
+        if(NULL == (dt = (H5T_t *) H5I_object_verify(cmpd, H5I_DATATYPE))) PACK_OOO_ERROR
         if(dt->shared->u.compnd.packed) PACK_OOO_ERROR
 
         /* Close the main compound */
@@ -1995,7 +1995,7 @@ test_pack_ooo(void)
         } /* end for */
 
         /* Verify that the compound is packed */
-        if(NULL == (dt = (H5T_t *) H5VL_object_verify(cmpd, H5I_DATATYPE))) PACK_OOO_ERROR
+        if(NULL == (dt = (H5T_t *) H5I_object_verify(cmpd, H5I_DATATYPE))) PACK_OOO_ERROR
         if(dt->shared->u.compnd.packed != !extra_space) PACK_OOO_ERROR
 
         /* Close */
@@ -2054,7 +2054,7 @@ test_ooo_order(char *filename)
     if(H5Tinsert(dtype, "D", (size_t)16, H5T_STD_I32LE) < 0) TEST_ERROR
 
     /* Verify that the compound is not packed */
-    if(NULL == (dt = (H5T_t *) H5VL_object_verify(dtype, H5I_DATATYPE)))
+    if(NULL == (dt = (H5T_t *) H5I_object_verify(dtype, H5I_DATATYPE)))
         TEST_ERROR
     if(dt->shared->u.compnd.packed) TEST_ERROR
 
@@ -2077,7 +2077,7 @@ test_ooo_order(char *filename)
     if((dtype_tmp = H5Topen2(file, "dtype", H5P_DEFAULT)) < 0) TEST_ERROR
 
     /* Verify that the compound is not packed */
-    if(NULL == (dt = (H5T_t *) H5VL_object_verify(dtype_tmp, H5I_DATATYPE)))
+    if(NULL == (dt = (H5T_t *) H5I_object_verify(dtype_tmp, H5I_DATATYPE)))
         TEST_ERROR
     if(dt->shared->u.compnd.packed) TEST_ERROR
 
@@ -2091,7 +2091,7 @@ test_ooo_order(char *filename)
     if((dtype = H5Tcopy(dtype_tmp)) < 0) TEST_ERROR
 
     /* Verify that the compound is not packed */
-    if(NULL == (dt = (H5T_t *) H5VL_object_verify(dtype, H5I_DATATYPE)))
+    if(NULL == (dt = (H5T_t *) H5I_object_verify(dtype, H5I_DATATYPE)))
         TEST_ERROR
     if(dt->shared->u.compnd.packed) TEST_ERROR
 
@@ -2105,7 +2105,7 @@ test_ooo_order(char *filename)
     if(H5Tinsert(dtype, "E", (size_t)4, H5T_STD_I32LE) < 0) TEST_ERROR
 
     /* Verify that the compound is packed */
-    if(NULL == (dt = (H5T_t *) H5VL_object_verify(dtype, H5I_DATATYPE)))
+    if(NULL == (dt = (H5T_t *) H5I_object_verify(dtype, H5I_DATATYPE)))
         TEST_ERROR
     if(!dt->shared->u.compnd.packed) TEST_ERROR
 
@@ -2128,7 +2128,7 @@ test_ooo_order(char *filename)
 
     /* Open the type, and verify status */
     if((dtype_tmp = H5Topen2(file, "dtype2", H5P_DEFAULT)) < 0) TEST_ERROR
-    if(NULL == (dt = (H5T_t *) H5VL_object_verify(dtype_tmp, H5I_DATATYPE)))
+    if(NULL == (dt = (H5T_t *) H5I_object_verify(dtype_tmp, H5I_DATATYPE)))
         TEST_ERROR
     if(!dt->shared->u.compnd.packed) TEST_ERROR
     if(H5Tget_member_offset(dtype_tmp, 0) != 8) TEST_ERROR
@@ -2139,7 +2139,7 @@ test_ooo_order(char *filename)
 
     /* Copy the datatype, and verify status */
     if((dtype = H5Tcopy(dtype_tmp)) < 0) TEST_ERROR
-    if(NULL == (dt = (H5T_t *) H5VL_object_verify(dtype, H5I_DATATYPE)))
+    if(NULL == (dt = (H5T_t *) H5I_object_verify(dtype, H5I_DATATYPE)))
         TEST_ERROR
     if(!dt->shared->u.compnd.packed) TEST_ERROR
     if(H5Tget_member_offset(dtype, 0) != 8) TEST_ERROR
@@ -2150,7 +2150,7 @@ test_ooo_order(char *filename)
 
     /* Expand the type, and verify that it became unpacked */
     if(H5Tset_size(dtype, (size_t)21) < 0) TEST_ERROR
-    if(NULL == (dt = (H5T_t *) H5VL_object_verify(dtype, H5I_DATATYPE)))
+    if(NULL == (dt = (H5T_t *) H5I_object_verify(dtype, H5I_DATATYPE)))
         TEST_ERROR
     if(dt->shared->u.compnd.packed) TEST_ERROR
     if(H5Tget_member_offset(dtype, 0) != 8) TEST_ERROR
@@ -2161,7 +2161,7 @@ test_ooo_order(char *filename)
 
     /* Shrink the type, and verify that it became packed */
     if(H5Tset_size(dtype, (size_t)20) < 0) TEST_ERROR
-    if(NULL == (dt = (H5T_t *) H5VL_object_verify(dtype, H5I_DATATYPE)))
+    if(NULL == (dt = (H5T_t *) H5I_object_verify(dtype, H5I_DATATYPE)))
         TEST_ERROR
     if(!dt->shared->u.compnd.packed) TEST_ERROR
     if(H5Tget_member_offset(dtype, 0) != 8) TEST_ERROR

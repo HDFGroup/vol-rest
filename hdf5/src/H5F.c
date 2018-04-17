@@ -322,7 +322,7 @@ H5F__get_all_count_cb(void H5_ATTR_UNUSED *obj_ptr, hid_t H5_ATTR_UNUSED obj_id,
 ssize_t
 H5Fget_obj_count(hid_t file_id, unsigned types)
 {
-    ssize_t  ret_value;         /* Return value */
+    ssize_t  ret_value = 0;         /* Return value */
 
     FUNC_ENTER_API((-1))
     H5TRACE2("Zs", "iIu", file_id, types);
@@ -433,7 +433,7 @@ H5Fget_obj_ids(hid_t file_id, unsigned types, size_t max_objs, hid_t *oid_list)
 {
     /* XXX: Note the type mismatch - you can ask for more objects than can be returned */
 
-    ssize_t     ret_value;          /* Return value */
+    ssize_t     ret_value = 0;          /* Return value */
 
     FUNC_ENTER_API((-1))
     H5TRACE4("Zs", "iIuz*i", file_id, types, max_objs, oid_list);
@@ -1824,7 +1824,7 @@ H5Fget_mdc_image_info(hid_t file_id, haddr_t *image_addr, hsize_t *image_len)
     H5TRACE3("e", "i*a*h", file_id, image_addr, image_len);
 
     /* Check args */
-    if (NULL == (file = (H5F_t *)H5I_object_verify(file_id, H5I_FILE)))
+    if (NULL == (file = (H5F_t *)H5VL_object_verify(file_id, H5I_FILE)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file ID")
     if (NULL == image_addr || NULL == image_len)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "NULL image addr or image len")
@@ -1862,7 +1862,7 @@ H5Fget_eoa(hid_t file_id, haddr_t *eoa)
     H5TRACE2("e", "i*a", file_id, eoa);
 
     /* Check args */
-    if(NULL == (file = (H5F_t *)H5I_object_verify(file_id, H5I_FILE)))
+    if(NULL == (file = (H5F_t *)H5VL_object_verify(file_id, H5I_FILE)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "hid_t identifier is not a file ID")
 
     /* This public routine will work only for drivers with this feature enabled.*/
@@ -1901,7 +1901,7 @@ H5Fincrement_filesize(hid_t file_id, hsize_t increment)
     H5TRACE2("e", "ih", file_id, increment);
 
     /* Check args */
-    if(NULL == (file = (H5F_t *)H5I_object_verify(file_id, H5I_FILE)))
+    if(NULL == (file = (H5F_t *)H5VL_object_verify(file_id, H5I_FILE)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "hid_t identifier is not a file ID")
 
     /* This public routine will work only for drivers with this feature enabled.*/
