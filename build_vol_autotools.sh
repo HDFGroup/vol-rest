@@ -28,6 +28,8 @@ HDF5_DIR="hdf5"
 HDF5_INSTALL_DIR="${INSTALL_DIR}"
 build_hdf5=true
 
+# Determine the number of processors to use when
+# building in parallel with Autotools make
 NPROCS=0
 
 # Default is to not build tools due to circular dependency on VOL being
@@ -95,7 +97,7 @@ while getopts "$optspec" optchar; do
         ;;
     H)
         build_hdf5=false
-        HDF5_INSTALL_DIR=$OPTARG
+        HDF5_INSTALL_DIR="$OPTARG"
         RV_OPTS="${RV_OPTS} --with-hdf5=${HDF5_INSTALL_DIR}"
         echo "Set HDF5 install directory to: ${HDF5_INSTALL_DIR}"
         echo
@@ -194,6 +196,8 @@ echo "*******************************************"
 echo "* Building REST VOL plugin and test suite *"
 echo "*******************************************"
 echo
+
+mkdir -p ${INSTALL_DIR}
 
 cd ${SCRIPT_DIR}
 

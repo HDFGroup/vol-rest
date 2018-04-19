@@ -22,12 +22,20 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Set the default install directory
 INSTALL_DIR=${SCRIPT_DIR}/rest_vol_build
 
+# Set the default build directory
+BUILD_DIR=${SCRIPT_DIR}/rest_vol_cmake_build_files
+
+# By default, tell CMake to generate Unix Makefiles
+GENERATOR="Unix Makefiles"
+
 # Default name of the directory for the included HDF5 source distribution,
 # as well as the default directory where it gets installed
 HDF5_DIR="hdf5"
 HDF5_INSTALL_DIR="${INSTALL_DIR}"
 build_hdf5=true
 
+# Determine the number of processors to use when
+# building in parallel with Autotools make
 NPROCS=0
 
 # Default is to not build tools due to circular dependency on VOL being
@@ -46,8 +54,8 @@ REST_VOL_LINK="-lrestvol"
 # Extra compiler options passed to the various steps, such as -Wall
 COMP_OPTS="-Wall -pedantic -Wunused-macros"
 
-# Extra options passed to the REST VOLs configure script
-RV_OPTS=""
+# Extra options passed to the REST VOLs CMake script
+CMAKE_OPTS=""
 
 
 echo
@@ -95,23 +103,23 @@ while getopts "$optspec" optchar; do
         ;;
     H)
         build_hdf5=false
-        HDF5_INSTALL_DIR=$OPTARG
-        RV_OPTS="${RV_OPTS} --with-hdf5=${HDF5_INSTALL_DIR}"
+        HDF5_INSTALL_DIR="$OPTARG"
+        CMAKE_OPTS="${CMAKE_OPTS} -DHDF5_DIR=${HDF5_INSTALL_DIR}"
         echo "Set HDF5 install directory to: ${HDF5_INSTALL_DIR}"
         echo
         ;;
     d)
-        RV_OPTS="${RV_OPTS} --enable-build-mode=debug"
+        CMAKE_OPTS="${CMAKE_OPTS} -DREST_VOL_ENABLE_DEBUG=1"
         echo "Enabled plugin debugging"
         echo
         ;;
     m)
-        RV_OPTS="${RV_OPTS} --enable-mem-tracking"
+        CMAKE_OPTS="${CMAKE_OPTS} -DREST_VOL_ENABLE_MEM_TRACKING=1"
         echo "Enabled plugin memory tracking"
         echo
         ;;
     C)
-        RV_OPTS="${RV_OPTS} --enable-curl-debug"
+        CMAKE_OPTS="${CMAKE_OPTS} -DREST_VOL_ENABLE_CURL_DEBUG"
         echo "Enabled cURL debugging"
         echo
         ;;
@@ -162,31 +170,31 @@ fi
 
 
 # If the user hasn't already, first build HDF5
-if [ "$build_hdf5" = true ]; then
-    echo "*****************"
-    echo "* Building HDF5 *"
-    echo "*****************"
-    echo
-
-    cd ${SCRIPT_DIR}/${HDF5_DIR}
-
-    ./autogen.sh
-
-    # If we are building the tools with REST VOL support, link in the already built
-    # REST VOL library, along with cURL and YAJL.
-    if [ "${build_tools}" = true ]; then
-        ./configure --prefix=${HDF5_INSTALL_DIR} CFLAGS="${COMP_OPTS} -L${INSTALL_DIR}/lib ${REST_VOL_LINK} ${CURL_LINK} ${YAJL_LINK}" || exit 1
-    else
-        ./configure --prefix=${HDF5_INSTALL_DIR} CFLAGS="${COMP_OPTS}" || exit 1
-    fi
-
-    make -j${NPROCS} && make install || exit 1
-
-    # If building the tools with REST VOL support, don't rebuild the REST VOL
-    if [ "${build_tools}" = true ]; then
-        exit 0
-    fi
-fi
+#if [ "$build_hdf5" = true ]; then
+#    echo "*****************"
+#    echo "* Building HDF5 *"
+#    echo "*****************"
+#    echo
+#
+#    cd ${SCRIPT_DIR}/${HDF5_DIR}
+#
+#    ./autogen.sh
+#
+#    # If we are building the tools with REST VOL support, link in the already built
+#    # REST VOL library, along with cURL and YAJL.
+#    if [ "${build_tools}" = true ]; then
+#        ./configure --prefix=${HDF5_INSTALL_DIR} CFLAGS="${COMP_OPTS} -L${INSTALL_DIR}/lib ${REST_VOL_LINK} ${CURL_LINK} ${YAJL_LINK}" || exit 1
+#    else
+#        ./configure --prefix=${HDF5_INSTALL_DIR} CFLAGS="${COMP_OPTS}" || exit 1
+#    fi
+#
+#    make -j${NPROCS} && make install || exit 1
+#
+#    # If building the tools with REST VOL support, don't rebuild the REST VOL
+#    if [ "${build_tools}" = true ]; then
+#        exit 0
+#    fi
+#fi
 
 
 # Once HDF5 has been built, build the REST VOL plugin against HDF5.
@@ -195,12 +203,17 @@ echo "* Building REST VOL plugin and test suite *"
 echo "*******************************************"
 echo
 
-cd ${SCRIPT_DIR}
+mkdir -p ${BUILD_DIR}
+mkdir -p ${INSTALL_DIR}
 
-./autogen.sh
+# Clean out the old CMake cache
+rm -f ${BUILD_DIR}/CMakeCache.txt
 
-./configure --prefix=${INSTALL_DIR} ${RV_OPTS} CFLAGS="${COMP_OPTS}"
+cd "${BUILD_DIR}"
 
+cmake -G "${GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" ${CMAKE_OPTS} "${SCRIPT_DIR}"
+
+# Build with autotools make by default
 make -j${NPROCS} && make install || exit 1
 
 exit 0
