@@ -73,9 +73,9 @@ usage()
     echo "      -H DIR  To specify a directory where HDF5 has already"
     echo "              been built."
     echo
-    echo "      -p DIR  Similar to 'configure --prefix', specifies where"
-    echo "              the REST VOL should be installed to. Default is"
-    echo "              'source directory/rest_vol_build'."
+    echo "      -p DIR  Similar to 'configure --prefix=DIR', specifies"
+    echo "              where the REST VOL should be installed to. Default"
+    echo "              is 'source directory/rest_vol_build'."
     echo
     echo "      -c DIR  To specify the top-level directory where cURL is"
     echo "              installed, if cURL was not installed to a system"

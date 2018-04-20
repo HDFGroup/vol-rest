@@ -79,9 +79,15 @@ usage()
     echo "      -H DIR  To specify a directory where HDF5 has already"
     echo "              been built."
     echo
-    echo "      -p DIR  Similar to 'configure --prefix', specifies where"
-    echo "              the REST VOL should be installed to. Default is"
-    echo "              'source directory/rest_vol_build'."
+    echo "      -b DIR  Specifies the directory that CMake should use as"
+    echo "              the build tree location. Default is"
+    echo "              'source directory/rest_vol_cmake_build_files'."
+    echo "              Note that the REST VOL does not support in-source"
+    echo "              CMake builds."
+    echo
+    echo "      -p DIR  Similar to '-DCMAKE_INSTALL_PREFIX=DIR', specifies"
+    echo "              where the REST VOL should be installed to. Default"
+    echo "              is 'source directory/rest_vol_build'."
     echo
     echo "      -c DIR  To specify the top-level directory where cURL is"
     echo "              installed, if cURL was not installed to a system"
@@ -99,7 +105,7 @@ usage()
     echo
 }
 
-optspec=":hCtdmH:c:y:p:-"
+optspec=":hCtdmH:c:y:b:p:-"
 while getopts "$optspec" optchar; do
     case "${optchar}" in
     h)
@@ -126,6 +132,11 @@ while getopts "$optspec" optchar; do
     C)
         CMAKE_OPTS="${CMAKE_OPTS} -DREST_VOL_ENABLE_CURL_DEBUG"
         echo "Enabled cURL debugging"
+        echo
+        ;;
+    b)
+        BUILD_DIR="$OPTARG"
+        echo "Build directory set to: ${BUILD_DIR}"
         echo
         ;;
     p)
