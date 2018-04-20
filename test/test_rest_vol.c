@@ -699,11 +699,8 @@ static int test_create_soft_link_existing_relative(void);
 static int test_create_soft_link_existing_absolute(void);
 static int test_create_soft_link_dangling_relative(void);
 static int test_create_soft_link_dangling_absolute(void);
-#ifndef NO_EXTERNAL_LINKS
-/* TODO: */
 static int test_create_external_link(void);
 static int test_create_dangling_external_link(void);
-#endif
 static int test_create_user_defined_link(void);
 static int test_delete_link(void);
 static int test_copy_link(void);
@@ -869,11 +866,8 @@ static int (*link_tests[])(void) = {
         test_create_soft_link_existing_absolute,
         test_create_soft_link_dangling_relative,
         test_create_soft_link_dangling_absolute,
-#ifndef NO_EXTERNAL_LINKS
-        /* TODO: */
         test_create_external_link,
         test_create_dangling_external_link,
-#endif
         test_create_user_defined_link,
         test_delete_link,
         test_copy_link,
@@ -10642,8 +10636,7 @@ error:
 
     return 1;
 }
-/* TODO: */
-#ifndef NO_EXTERNAL_LINKS
+
 static int
 test_create_external_link(void)
 {
@@ -10653,6 +10646,12 @@ test_create_external_link(void)
     hid_t  root_id = -1;
 
     TESTING("create external link to existing object")
+
+    /* TODO: */
+#ifdef NO_EXTERNAL_LINKS
+    SKIPPED();
+    return 0;
+#endif
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -10766,6 +10765,12 @@ test_create_dangling_external_link(void)
     hid_t   dset_dspace = -1;
 
     TESTING("create dangling external link")
+
+    /* TODO: */
+#ifdef NO_EXTERNAL_LINKS
+    SKIPPED();
+    return 0;
+#endif
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -10911,7 +10916,6 @@ error:
 
     return 1;
 }
-#endif
 
 static int
 test_create_user_defined_link(void)
