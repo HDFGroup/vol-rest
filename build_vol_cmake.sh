@@ -20,10 +20,10 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Set the default install directory
-INSTALL_DIR=${SCRIPT_DIR}/rest_vol_build
+INSTALL_DIR="${SCRIPT_DIR}/rest_vol_build"
 
 # Set the default build directory
-BUILD_DIR=${SCRIPT_DIR}/rest_vol_cmake_build_files
+BUILD_DIR="${SCRIPT_DIR}/rest_vol_cmake_build_files"
 
 # By default, tell CMake to generate Unix Makefiles
 GENERATOR="Unix Makefiles"
@@ -120,17 +120,17 @@ while getopts "$optspec" optchar; do
         echo
         ;;
     d)
-        CMAKE_OPTS="${CMAKE_OPTS} -DREST_VOL_ENABLE_DEBUG=1"
+        CMAKE_OPTS="-DREST_VOL_ENABLE_DEBUG=ON ${CMAKE_OPTS}"
         echo "Enabled plugin debugging"
         echo
         ;;
     m)
-        CMAKE_OPTS="${CMAKE_OPTS} -DREST_VOL_ENABLE_MEM_TRACKING=1"
+        CMAKE_OPTS="-DREST_VOL_ENABLE_MEM_TRACKING=ON ${CMAKE_OPTS}"
         echo "Enabled plugin memory tracking"
         echo
         ;;
     C)
-        CMAKE_OPTS="${CMAKE_OPTS} -DREST_VOL_ENABLE_CURL_DEBUG"
+        CMAKE_OPTS="-DREST_VOL_ENABLE_CURL_DEBUG=ON ${CMAKE_OPTS}"
         echo "Enabled cURL debugging"
         echo
         ;;
@@ -221,15 +221,15 @@ echo "* Building REST VOL plugin and test suite *"
 echo "*******************************************"
 echo
 
-mkdir -p ${BUILD_DIR}
-mkdir -p ${INSTALL_DIR}
+mkdir -p "${BUILD_DIR}"
+mkdir -p "${INSTALL_DIR}"
 
 # Clean out the old CMake cache
-rm -f ${BUILD_DIR}/CMakeCache.txt
+rm -f "${BUILD_DIR}/CMakeCache.txt"
 
 cd "${BUILD_DIR}"
 
-cmake -G "${GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" ${CMAKE_OPTS} "${SCRIPT_DIR}"
+cmake -G "${GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${CMAKE_OPTS}" "${SCRIPT_DIR}"
 
 # Build with autotools make by default
 make -j${NPROCS} && make install || exit 1

@@ -1,4 +1,4 @@
-/* cmake_config.h.in  Used by CMake to generate rest_vol_config.h during the configuration */
+/* rv_cmake_config.h.in  Used by CMake to generate rest_vol_config.h during the configuration */
 
 #ifndef RV_CONFIG_H_
 #define RV_CONFIG_H_
@@ -70,15 +70,15 @@
 #cmakedefine H5_STDC_HEADERS @H5_STDC_HEADERS@
 
 /* Define if plugin debug output should be enabled */
-#cmakedefine RV_PLUGIN_DEBUG @RV_PLUGIN_DEBUG@
+#cmakedefine RV_PLUGIN_DEBUG
 
 /* Define if cURL debug output should be enabled */
-#cmakedefine RV_CURL_DEBUG @RV_CURL_DEBUG@
+#cmakedefine RV_CURL_DEBUG
 
 /* Define if memory tracking should be enabled to
    track memory leaks and other memory errors within
    the plugin. */
-#cmakedefine RV_TRACK_MEM_USAGE @RV_TRACK_MEM_USAGE@
+#cmakedefine RV_TRACK_MEM_USAGE
 
 /* Version number of package */
 #cmakedefine RV_VERSION "@REST_VOL_PACKAGE_VERSION_STRING@"

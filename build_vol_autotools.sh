@@ -20,7 +20,7 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Set the default install directory
-INSTALL_DIR=${SCRIPT_DIR}/rest_vol_build
+INSTALL_DIR="${SCRIPT_DIR}/rest_vol_build"
 
 # Default name of the directory for the included HDF5 source distribution,
 # as well as the default directory where it gets installed
@@ -177,16 +177,16 @@ if [ "$build_hdf5" = true ]; then
     echo "*****************"
     echo
 
-    cd ${SCRIPT_DIR}/${HDF5_DIR}
+    cd "${SCRIPT_DIR}/${HDF5_DIR}"
 
     ./autogen.sh || exit 1
 
     # If we are building the tools with REST VOL support, link in the already built
     # REST VOL library, along with cURL and YAJL.
     if [ "${build_tools}" = true ]; then
-        ./configure --prefix=${HDF5_INSTALL_DIR} CFLAGS="${COMP_OPTS} -L${INSTALL_DIR}/lib ${REST_VOL_LINK} ${CURL_LINK} ${YAJL_LINK}" || exit 1
+        ./configure --prefix="${HDF5_INSTALL_DIR}" CFLAGS="${COMP_OPTS} -L${INSTALL_DIR}/lib ${REST_VOL_LINK} ${CURL_LINK} ${YAJL_LINK}" || exit 1
     else
-        ./configure --prefix=${HDF5_INSTALL_DIR} CFLAGS="${COMP_OPTS}" || exit 1
+        ./configure --prefix="${HDF5_INSTALL_DIR}" CFLAGS="${COMP_OPTS}" || exit 1
     fi
 
     make -j${NPROCS} && make install || exit 1
@@ -204,13 +204,13 @@ echo "* Building REST VOL plugin and test suite *"
 echo "*******************************************"
 echo
 
-mkdir -p ${INSTALL_DIR}
+mkdir -p "${INSTALL_DIR}"
 
-cd ${SCRIPT_DIR}
+cd "${SCRIPT_DIR}"
 
 ./autogen.sh || exit 1
 
-./configure --prefix=${INSTALL_DIR} ${RV_OPTS} CFLAGS="${COMP_OPTS}" || exit 1
+./configure --prefix="${INSTALL_DIR}" "${RV_OPTS}" CFLAGS="${COMP_OPTS}" || exit 1
 
 make -j${NPROCS} && make install || exit 1
 

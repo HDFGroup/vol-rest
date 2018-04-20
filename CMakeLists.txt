@@ -339,7 +339,7 @@ option (REST_VOL_ENABLE_EXAMPLES "Indicate that building examples should be enab
 #-----------------------------------------------------------------------------
 option (REST_VOL_ENABLE_DEBUG "Indicate that plugin debug output is used" OFF)
 if (REST_VOL_ENABLE_DEBUG)
-  set (REST_VOL_PLUGIN_DEBUG 1)
+  set (RV_PLUGIN_DEBUG 1)
 endif ()
 
 #-----------------------------------------------------------------------------
@@ -347,7 +347,7 @@ endif ()
 #-----------------------------------------------------------------------------
 option (REST_VOL_ENABLE_CURL_DEBUG "Indicate that cURL debug output is used" OFF)
 if (REST_VOL_ENABLE_CURL_DEBUG)
-  set (REST_VOL_CURL_DEBUG 1)
+  set (RV_CURL_DEBUG 1)
 endif ()
 
 #-----------------------------------------------------------------------------
@@ -355,7 +355,7 @@ endif ()
 #-----------------------------------------------------------------------------
 option (REST_VOL_ENABLE_MEM_TRACKING "Indicate that a memory checker is used" OFF)
 if (REST_VOL_ENABLE_MEM_TRACKING)
-  set (REST_VOL_TRACK_MEM_USAGE 1)
+  set (RV_TRACK_MEM_USAGE 1)
 endif ()
 
 #-----------------------------------------------------------------------------
