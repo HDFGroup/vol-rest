@@ -58,41 +58,46 @@ echo "* REST VOL build script *"
 echo "*************************"
 echo
 
+usage()
+{
+    echo "usage: $0 [OPTIONS]"
+    echo
+    echo "      -h      Print this help message."
+    echo
+    echo "      -d      Enable debugging output in the REST VOL."
+    echo
+    echo "      -C      Enable cURL debugging output in the REST VOL."
+    echo
+    echo "      -m      Enable memory tracking in the REST VOL."
+    echo
+    echo "      -H DIR  To specify a directory where HDF5 has already"
+    echo "              been built."
+    echo
+    echo "      -p DIR  Similar to 'configure --prefix', specifies where"
+    echo "              the REST VOL should be installed to. Default is"
+    echo "              'source directory/rest_vol_build'."
+    echo
+    echo "      -c DIR  To specify the top-level directory where cURL is"
+    echo "              installed, if cURL was not installed to a system"
+    echo "              directory."
+    echo
+    echo "      -y DIR  To specify the top-level directory where YAJL is"
+    echo "              installed, if YAJL was not installed to a system"
+    echo "              directory."
+    echo
+    echo "      -t      Build the tools with REST VOL support. Note"
+    echo "              that due to a circular build dependency, this"
+    echo "              option should not be chosen until after the"
+    echo "              included HDF5 source distribution and the"
+    echo "              REST VOL plugin have been built once."
+    echo
+}
+
 optspec=":hCtdmH:c:y:p:-"
 while getopts "$optspec" optchar; do
     case "${optchar}" in
     h)
-        echo "usage: $0 [OPTIONS]"
-        echo
-        echo "      -h      Print this help message."
-        echo
-        echo "      -d      Enable debugging output in the REST VOL."
-        echo
-        echo "      -C      Enable cURL debugging output in the REST VOL."
-        echo
-        echo "      -m      Enable memory tracking in the REST VOL."
-        echo
-        echo "      -H DIR  To specify a directory where HDF5 has already"
-        echo "              been built."
-        echo
-        echo "      -p DIR  Similar to 'configure --prefix', specifies where"
-        echo "              the REST VOL should be installed to. Default is"
-        echo "              'source directory/rest_vol_build'."
-        echo
-        echo "      -c DIR  To specify the top-level directory where cURL is"
-        echo "              installed, if cURL was not installed to a system"
-        echo "              directory."
-        echo
-        echo "      -y DIR  To specify the top-level directory where YAJL is"
-        echo "              installed, if YAJL was not installed to a system"
-        echo "              directory."
-        echo
-        echo "      -t      Build the tools with REST VOL support. Note"
-        echo "              that due to a circular build dependency, this"
-        echo "              option should not be chosen until after the"
-        echo "              included HDF5 source distribution and the"
-        echo "              REST VOL plugin have been built once."
-        echo
+        usage
         exit 0
         ;;
     H)
@@ -144,7 +149,9 @@ while getopts "$optspec" optchar; do
     *)
         if [ "$OPTERR" != 1 ] || case $optspec in :*) ;; *) false; esac; then
             echo "ERROR: non-option argument: '-${OPTARG}'" >&2
-            echo "Quitting"
+            echo
+            usage
+            echo
             exit 1
         fi
         ;;
