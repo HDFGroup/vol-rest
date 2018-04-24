@@ -9358,6 +9358,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                                            *
      ******************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, fill_value_keys, yajl_t_any))) {
+        /* TODO: */
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset fill values are unsupported")
     } /* end if */
 
@@ -9371,6 +9372,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                             *
      ***************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, filters_keys, yajl_t_array))) {
+        /* TODO: */
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset filters are unsupported")
     } /* end if */
 
