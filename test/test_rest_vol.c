@@ -32,9 +32,6 @@
 /* TODO: Until support can be added for dealing with cyclic links, disable the test */
 #define NO_CYCLIC_LINKS
 
-/* TODO: Until a critical bug with external links can be fixed in HDF5, disable the tests */
-#define NO_EXTERNAL_LINKS
-
 /* The name of the file that all of the tests will operate on */
 #define FILENAME "/home/test_user1/new_file"
 
@@ -10647,12 +10644,6 @@ test_create_external_link(void)
 
     TESTING("create external link to existing object")
 
-    /* TODO: */
-#ifdef NO_EXTERNAL_LINKS
-    SKIPPED();
-    return 0;
-#endif
-
     if (RVinit() < 0)
         TEST_ERROR
 
@@ -10765,12 +10756,6 @@ test_create_dangling_external_link(void)
     hid_t   dset_dspace = -1;
 
     TESTING("create dangling external link")
-
-    /* TODO: */
-#ifdef NO_EXTERNAL_LINKS
-    SKIPPED();
-    return 0;
-#endif
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -11082,8 +11067,6 @@ test_delete_link(void)
         goto error;
     }
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", group_id, LINK_DELETE_TEST_EXTERNAL_LINK_NAME,
             H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
@@ -11097,7 +11080,6 @@ test_delete_link(void)
         printf("    couldn't create second external link\n");
         goto error;
     }
-#endif
 
     /* Verify the links have been created */
     if ((link_exists = H5Lexists(group_id, LINK_DELETE_TEST_DSET_NAME1, H5P_DEFAULT)) < 0) {
@@ -11148,8 +11130,6 @@ test_delete_link(void)
         goto error;
     }
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if ((link_exists = H5Lexists(group_id, LINK_DELETE_TEST_EXTERNAL_LINK_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't determine if first external link exists\n");
@@ -11173,7 +11153,6 @@ test_delete_link(void)
         printf("    second external link did not exist\n");
         goto error;
     }
-#endif
 
 #ifdef RV_PLUGIN_DEBUG
     puts("Deleting links with H5Ldelete\n");
@@ -11191,14 +11170,11 @@ test_delete_link(void)
         goto error;
     }
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if (H5Ldelete(group_id, LINK_DELETE_TEST_EXTERNAL_LINK_NAME, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't delete external link using H5Ldelete\n");
         goto error;
     }
-#endif
 
 #ifdef RV_PLUGIN_DEBUG
     puts("Deleting links with H5Ldelete_by_idx\n");
@@ -11277,8 +11253,6 @@ test_delete_link(void)
         goto error;
     }
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if ((link_exists = H5Lexists(group_id, LINK_DELETE_TEST_EXTERNAL_LINK_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't determine if first external link exists\n");
@@ -11302,7 +11276,6 @@ test_delete_link(void)
         printf("    second external link did not exist!\n");
         goto error;
     }
-#endif
 
     if (H5Sclose(dset_dspace) < 0)
         TEST_ERROR
@@ -11813,14 +11786,11 @@ test_get_link_info(void)
         goto error;
     }
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", group_id, GET_LINK_INFO_TEST_EXT_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create external link\n");
         goto error;
     }
-#endif
 
     /* Verify the links have been created */
     if ((link_exists = H5Lexists(group_id, GET_LINK_INFO_TEST_DSET_NAME, H5P_DEFAULT)) < 0) {
@@ -11847,8 +11817,6 @@ test_get_link_info(void)
         goto error;
     }
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if ((link_exists = H5Lexists(group_id, GET_LINK_INFO_TEST_EXT_LINK_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't determine if external link exists\n");
@@ -11860,7 +11828,6 @@ test_get_link_info(void)
         printf("    external link did not exist\n");
         goto error;
     }
-#endif
 
 #ifdef RV_PLUGIN_DEBUG
     puts("Retrieving hard link info with H5Lget_info\n");
@@ -11905,8 +11872,6 @@ test_get_link_info(void)
 
     memset(&link_info, 0, sizeof(link_info));
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if (H5Lget_info(group_id, GET_LINK_INFO_TEST_EXT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't get external link info\n");
@@ -11918,7 +11883,6 @@ test_get_link_info(void)
         printf("    incorrect link type returned\n");
         goto error;
     }
-#endif
 
     H5E_BEGIN_TRY {
 #ifdef RV_PLUGIN_DEBUG
@@ -12216,14 +12180,11 @@ test_get_link_val(void)
         goto error;
     }
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create external link\n");
         goto error;
     }
-#endif
 
     /* Verify the links have been created */
     if ((link_exists = H5Lexists(group_id, GET_LINK_VAL_TEST_SOFT_LINK_NAME, H5P_DEFAULT)) < 0) {
@@ -12238,8 +12199,6 @@ test_get_link_val(void)
         goto error;
     }
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if ((link_exists = H5Lexists(group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't determine if external link exists\n");
@@ -12251,7 +12210,6 @@ test_get_link_val(void)
         printf("    external link did not exist\n");
         goto error;
     }
-#endif
 
     memset(&link_info, 0, sizeof(link_info));
 
@@ -12289,8 +12247,6 @@ test_get_link_val(void)
 
     memset(&link_info, 0, sizeof(link_info));
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if (H5Lget_info(group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't get external link info\n");
@@ -12312,14 +12268,11 @@ test_get_link_val(void)
             TEST_ERROR
         link_val_buf = tmp_realloc;
     }
-#endif
 
 #ifdef RV_PLUGIN_DEBUG
     puts("Retrieving value of external link with H5Lget_val\n");
 #endif
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if (H5Lget_val(group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, link_val_buf, link_val_buf_size, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't get external link val\n");
@@ -12343,7 +12296,6 @@ test_get_link_val(void)
         printf("    external link value did not match\n");
         goto error;
     }
-#endif
 
     H5E_BEGIN_TRY {
         memset(&link_info, 0, sizeof(link_info));
@@ -12390,8 +12342,6 @@ test_get_link_val(void)
 
         memset(&link_info, 0, sizeof(link_info));
 
-#ifndef NO_EXTERNAL_LINKS
-        /* TODO: */
         if (H5Lget_info(group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
             H5_FAILED();
             printf("    couldn't get external link info\n");
@@ -12413,7 +12363,6 @@ test_get_link_val(void)
                 TEST_ERROR
             link_val_buf = tmp_realloc;
         }
-#endif
 
 #ifdef RV_PLUGIN_DEBUG
     puts("Retrieving value of external link with H5Lget_val_by_idx\n");
@@ -12544,14 +12493,11 @@ test_link_iterate(void)
         goto error;
     }
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", group_id, LINK_ITER_TEST_EXT_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create external link\n");
         goto error;
     }
-#endif
 
     /* Verify the links have been created */
     if ((link_exists = H5Lexists(group_id, LINK_ITER_TEST_HARD_LINK_NAME, H5P_DEFAULT)) < 0) {
@@ -12578,8 +12524,6 @@ test_link_iterate(void)
         goto error;
     }
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if ((link_exists = H5Lexists(group_id, LINK_ITER_TEST_EXT_LINK_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't determine if link exists\n");
@@ -12591,7 +12535,6 @@ test_link_iterate(void)
         printf("    link 3 did not exist\n");
         goto error;
     }
-#endif
 
 #ifdef RV_PLUGIN_DEBUG
     puts("Iterating over links by link name in increasing order with H5Literate\n");
@@ -12682,8 +12625,6 @@ test_link_iterate(void)
     puts("Testing H5Literate's index-saving capability in increasing iteration order\n");
 #endif
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     /* Test the H5Literate index-saving capabilities */
     if (H5Literate(group_id, H5_INDEX_CRT_ORDER, H5_ITER_INC, &saved_idx, link_iter_callback2, &halted) < 0) {
         H5_FAILED();
@@ -12702,7 +12643,6 @@ test_link_iterate(void)
         printf("    couldn't finish iterating\n");
         goto error;
     }
-#endif
 
     saved_idx = LINK_ITER_TEST_NUM_LINKS - 1;
     halted = 0;
@@ -12711,8 +12651,6 @@ test_link_iterate(void)
     puts("Testing H5Literate's index-saving capability in decreasing iteration order\n");
 #endif
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if (H5Literate(group_id, H5_INDEX_CRT_ORDER, H5_ITER_DEC, &saved_idx, link_iter_callback2, &halted) < 0) {
         H5_FAILED();
         printf("    H5Literate index-saving capability test failed\n");
@@ -12730,7 +12668,6 @@ test_link_iterate(void)
         printf("    couldn't finish iterating\n");
         goto error;
     }
-#endif
 
     if (H5Sclose(dset_dspace) < 0)
         TEST_ERROR
@@ -13008,14 +12945,11 @@ test_link_visit(void)
         goto error;
     }
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", subgroup2, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME3, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create external link\n");
         goto error;
     }
-#endif
 
     if (H5Lcreate_hard(subgroup2, LINK_VISIT_TEST_NO_CYCLE_DSET_NAME, subgroup2, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME4,
             H5P_DEFAULT, H5P_DEFAULT) < 0) {
@@ -13049,8 +12983,6 @@ test_link_visit(void)
         goto error;
     }
 
-#ifndef NO_EXTERNAL_LINKS
-    /* TODO: */
     if ((link_exists = H5Lexists(subgroup2, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME3, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't determine if third link exists\n");
@@ -13062,7 +12994,6 @@ test_link_visit(void)
         printf("    link 3 did not exist\n");
         goto error;
     }
-#endif
 
     if ((link_exists = H5Lexists(subgroup2, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME4, H5P_DEFAULT)) < 0) {
         H5_FAILED();
