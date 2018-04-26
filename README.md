@@ -458,7 +458,6 @@ HDF5 API calls are currently unsupported:
 The following other features are currently unsupported:
 
 + Dataset Fill Values
-+ Dataset Filters
 + Virtual Dataset layouts
 + External Storage for contiguous dataset layouts
 

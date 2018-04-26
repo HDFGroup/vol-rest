@@ -279,6 +279,7 @@
 #define DATASET_CREATION_PROPERTIES_TEST_FILL_TIMES_BASE_NAME      "fill_times_test"
 #define DATASET_CREATION_PROPERTIES_TEST_CRT_ORDER_BASE_NAME       "creation_order_test"
 #define DATASET_CREATION_PROPERTIES_TEST_LAYOUTS_BASE_NAME         "layout_test"
+#define DATASET_CREATION_PROPERTIES_TEST_FILTERS_DSET_NAME         "filters_test"
 #define DATASET_CREATION_PROPERTIES_TEST_GROUP_NAME                "creation_properties_test"
 #define DATASET_CREATION_PROPERTIES_TEST_CHUNK_DIM_RANK            DATASET_CREATION_PROPERTIES_TEST_SHAPE_RANK
 #define DATASET_CREATION_PROPERTIES_TEST_MAX_COMPACT               12
@@ -6866,9 +6867,45 @@ test_create_dataset_creation_properties(void)
 
     }
 
-    /* TODO: Test filters */
     {
+#ifdef RV_PLUGIN_DEBUG
+        puts("Testing dataset filters\n");
+#endif
 
+        if ((dcpl_id = H5Pcreate(H5P_DATASET_CREATE)) < 0)
+            TEST_ERROR
+
+        /* Set all of the available filters on the DCPL */
+        if (H5Pset_deflate(dcpl_id, 7) < 0)
+            TEST_ERROR
+        if (H5Pset_shuffle(dcpl_id) < 0)
+            TEST_ERROR
+        if (H5Pset_fletcher32(dcpl_id) < 0)
+            TEST_ERROR
+        if (H5Pset_nbit(dcpl_id) < 0)
+            TEST_ERROR
+        if (H5Pset_scaleoffset(dcpl_id, H5Z_SO_FLOAT_ESCALE, 2) < 0)
+            TEST_ERROR
+
+        if ((dset_id = H5Dcreate2(group_id, DATASET_CREATION_PROPERTIES_TEST_FILTERS_DSET_NAME, dset_dtype, fspace_id, H5P_DEFAULT, dcpl_id, H5P_DEFAULT)) < 0) {
+            H5_FAILED();
+            printf("    couldn't create dataset\n");
+            goto error;
+        }
+
+        if (H5Dclose(dset_id) < 0)
+            TEST_ERROR
+
+        if ((dset_id = H5Dopen2(group_id, DATASET_CREATION_PROPERTIES_TEST_FILTERS_DSET_NAME, H5P_DEFAULT)) < 0) {
+            H5_FAILED();
+            printf("    couldn't open dataset\n");
+            goto error;
+        }
+
+        if (H5Dclose(dset_id) < 0)
+            TEST_ERROR
+        if (H5Pclose(dcpl_id) < 0)
+            TEST_ERROR
     }
 
     /* Test the storage layout property */
@@ -6878,7 +6915,7 @@ test_create_dataset_creation_properties(void)
         };
 
 #ifdef RV_PLUGIN_DEBUG
-    puts("Testing the storage layout property\n");
+        puts("Testing the storage layout property\n");
 #endif
 
         if ((dcpl_id = H5Pcreate(H5P_DATASET_CREATE)) < 0)

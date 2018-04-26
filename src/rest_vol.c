@@ -295,19 +295,19 @@ do {                                                                            
  */
 #define BASE64_ENCODE_DEFAULT_BUFFER_SIZE             33554432 /* 32MB */
 
-/* Maximum length (in charactes) of the string representation of an HDF5
+/* Maximum length (in characters) of the string representation of an HDF5
  * predefined integer or floating-point type, such as H5T_STD_I8LE or
  * H5T_IEEE_F32BE
  */
 #define PREDEFINED_DATATYPE_NAME_MAX_LENGTH           20
 
-/* Defines for the user of filters */
-#define LZF_FILTER_ID                    32000 /* The HDF5 Library could potentially add 'H5Z_FILTER_LZF' in the future */
+/* Defines for the use of filters */
+#define LZF_FILTER_ID                    32000 /* Avoid calling this 'H5Z_FILTER_LZF'; The HDF5 Library could potentially add 'H5Z_FILTER_LZF' in the future */
 #define H5Z_SCALEOFFSET_PARM_SCALETYPE   0     /* ScaleOffset filter "User" parameter for scale type */
 #define H5Z_SCALEOFFSET_PARM_SCALEFACTOR 1     /* ScaleOffset filter "User" parameter for scale factor */
 
 /*
- * The vol identification number.
+ * The VOL plugin identification number.
  */
 static hid_t REST_g = -1;
 
@@ -470,6 +470,8 @@ const char *attribute_phase_change_keys[] = { "attributePhaseChange", (const cha
 const char *fill_time_keys[]              = { "fillTime", (const char *) 0 };
 const char *fill_value_keys[]             = { "fillValue", (const char *) 0 };
 const char *filters_keys[]                = { "filters", (const char *) 0 };
+const char *filter_class_keys[]           = { "class", (const char *) 0 };
+const char *filter_ID_keys[]              = { "id", (const char *) 0 };
 const char *layout_keys[]                 = { "layout", (const char *) 0 };
 const char *track_times_keys[]            = { "trackTimes", (const char *) 0 };
 const char *max_compact_keys[]            = { "maxCompact", (const char *) 0 };
@@ -9167,7 +9169,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
     herr_t    ret_value = SUCCEED;
 
 #ifdef RV_PLUGIN_DEBUG
-    printf("-> Retrieving dataset's creation properties from server's HTTP response\n");
+    printf("-> Retrieving dataset's creation properties from server's HTTP response\n\n");
 #endif
 
     if (!HTTP_response)
@@ -9358,8 +9360,8 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                                            *
      ******************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, fill_value_keys, yajl_t_any))) {
-        /* TODO: */
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset fill values are unsupported")
+        /* TODO: Until fill value support is implemented, just push an error to the stack but continue ahead */
+        FUNC_DONE_ERROR(H5E_DATASET, H5E_UNSUPPORTED, SUCCEED, "warning: dataset fill values are unsupported")
     } /* end if */
 
 
@@ -9372,8 +9374,231 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                             *
      ***************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, filters_keys, yajl_t_array))) {
-        /* TODO: */
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset filters are unsupported")
+        /* Grab the relevant information from each filter and set them on the DCPL in turn. */
+        for (size_t i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
+            yajl_val   filter_obj = YAJL_GET_ARRAY(key_obj)->values[i];
+            yajl_val   filter_field;
+            char      *filter_class;
+            long long  filter_ID;
+
+            if (NULL == (filter_field = yajl_tree_get(filter_obj, filter_class_keys, yajl_t_string)))
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of filter class failed")
+
+            if (NULL == (filter_class = YAJL_GET_STRING(filter_field)))
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "filter class string was NULL")
+
+            if (NULL == (filter_field = yajl_tree_get(filter_obj, filter_ID_keys, yajl_t_number)))
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of filter ID failed")
+
+            if (!YAJL_IS_INTEGER(filter_field))
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "returned filter ID is not an integer")
+
+            filter_ID = YAJL_GET_INTEGER(filter_field);
+
+            switch (filter_ID) {
+                case H5Z_FILTER_DEFLATE:
+                {
+                    const char *deflate_level_keys[] = { "level", (const char *) 0 };
+                    long long   deflate_level;
+
+#ifdef RV_PLUGIN_DEBUG
+                    printf("-> Discovered filter class H5Z_FILTER_DEFLATE in JSON response; setting deflate filter on DCPL\n");
+#endif
+
+                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function */
+                    if (strcmp(filter_class, "H5Z_FILTER_DEFLATE"))
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "warning: filter class '%s' does not match H5Z_FILTER_DEFLATE; DCPL should not be trusted", filter_class)
+
+                    /* Grab the level of compression */
+                    if (NULL == (filter_field = yajl_tree_get(filter_obj, deflate_level_keys, yajl_t_number)))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of deflate filter compression level value failed")
+
+                    if (!YAJL_IS_INTEGER(filter_field))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "returned deflate filter compression level is not an integer")
+
+                    deflate_level = YAJL_GET_INTEGER(filter_field);
+                    if (deflate_level < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "deflate filter compression level invalid (level < 0)")
+
+                    if (H5Pset_deflate(*DCPL, (unsigned) deflate_level) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set deflate filter on DCPL")
+
+                    break;
+                }
+
+                case H5Z_FILTER_SHUFFLE:
+                {
+#ifdef RV_PLUGIN_DEBUG
+                    printf("-> Discovered filter class H5Z_FILTER_SHUFFLE in JSON response; setting shuffle filter on DCPL\n");
+#endif
+
+                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function */
+                    if (strcmp(filter_class, "H5Z_FILTER_SHUFFLE"))
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "warning: filter class '%s' does not match H5Z_FILTER_SHUFFLE; DCPL should not be trusted", filter_class)
+
+                    if (H5Pset_shuffle(*DCPL) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set shuffle filter on DCPL")
+
+                    break;
+                }
+
+                case H5Z_FILTER_FLETCHER32:
+                {
+#ifdef RV_PLUGIN_DEBUG
+                    printf("-> Discovered filter class H5Z_FILTER_FLETCHER32 in JSON response; setting fletcher32 filter on DCPL\n");
+#endif
+
+                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function */
+                    if (strcmp(filter_class, "H5Z_FILTER_FLETCHER32"))
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "warning: filter class '%s' does not match H5Z_FILTER_FLETCHER32; DCPL should not be trusted", filter_class)
+
+                    if (H5Pset_fletcher32(*DCPL) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set fletcher32 filter on DCPL")
+
+                    break;
+                }
+
+                case H5Z_FILTER_SZIP:
+                {
+                    const char *szip_option_mask_keys[] = { "coding", (const char *) 0 };
+                    const char *szip_ppb_keys[]         = { "pixelsPerBlock", (const char *) 0 };
+                    char       *szip_option_mask;
+                    long long   szip_ppb;
+
+#ifdef RV_PLUGIN_DEBUG
+                    printf("-> Discovered filter class H5Z_FILTER_SZIP in JSON response; setting SZIP filter on DCPL\n");
+#endif
+
+                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function */
+                    if (strcmp(filter_class, "H5Z_FILTER_SZIP"))
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "warning: filter class '%s' does not match H5Z_FILTER_SZIP; DCPL should not be trusted", filter_class)
+
+                    /* Retrieve the value of the SZIP option mask */
+                    if (NULL == (filter_field = yajl_tree_get(filter_obj, szip_option_mask_keys, yajl_t_string)))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of SZIP option mask failed")
+
+                    if (NULL == (szip_option_mask = YAJL_GET_STRING(filter_field)))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "SZIP option mask string was NULL")
+
+                    if (strcmp(szip_option_mask, "H5_SZIP_EC_OPTION_MASK") && strcmp(szip_option_mask, "H5_SZIP_NN_OPTION_MASK")) {
+                        /* Push an error to the stack, but don't fail this function */
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "invalid SZIP option mask value '%s'", szip_option_mask)
+                        continue;
+                    }
+
+                    /* Retrieve the value of the SZIP "pixels per block" option */
+                    if (NULL == (filter_field = yajl_tree_get(filter_obj, szip_ppb_keys, yajl_t_number)))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of SZIP pixels per block option failed")
+
+                    if (!YAJL_IS_INTEGER(filter_field))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "returned SZIP pixels per block option value is not an integer")
+
+                    szip_ppb = YAJL_GET_INTEGER(filter_field);
+                    if (szip_ppb < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid SZIP pixels per block option value (PPB < 0)")
+
+                    if (H5Pset_szip(*DCPL, (!strcmp(szip_option_mask, "H5_SZIP_EC_OPTION_MASK") ? H5_SZIP_EC_OPTION_MASK : H5_SZIP_NN_OPTION_MASK),
+                            (unsigned) szip_ppb) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set SZIP filter on DCPL")
+
+                    break;
+                }
+
+                case H5Z_FILTER_NBIT:
+                {
+#ifdef RV_PLUGIN_DEBUG
+                    printf("-> Discovered filter class H5Z_FILTER_NBIT in JSON response; setting N-Bit filter on DCPL\n");
+#endif
+
+                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function */
+                    if (strcmp(filter_class, "H5Z_FILTER_NBIT"))
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "warning: filter class '%s' does not match H5Z_FILTER_NBIT; DCPL should not be trusted", filter_class)
+
+                    if (H5Pset_nbit(*DCPL) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set N-Bit filter on DCPL")
+
+                    break;
+                }
+
+                case H5Z_FILTER_SCALEOFFSET:
+                {
+                    H5Z_SO_scale_type_t  scale_type;
+                    const char          *scale_type_keys[]   = { "scaleType", (const char *) 0 };
+                    const char          *scale_offset_keys[] = { "scaleOffset", (const char *) 0 };
+                    long long            scale_offset;
+                    char                *scale_type_str;
+
+#ifdef RV_PLUGIN_DEBUG
+                    printf("-> Discovered filter class H5Z_FILTER_SCALEOFFSET in JSON response; setting scale-offset filter on DCPL\n");
+#endif
+
+                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function */
+                    if (strcmp(filter_class, "H5Z_FILTER_SCALEOFFSET"))
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "warning: filter class '%s' does not match H5Z_FILTER_SCALEOFFSET; DCPL should not be trusted", filter_class)
+
+                    /* Retrieve the scale type */
+                    if (NULL == (filter_field = yajl_tree_get(filter_obj, scale_type_keys, yajl_t_string)))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of scale type failed")
+
+                    if (NULL == (scale_type_str = YAJL_GET_STRING(filter_field)))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "scale type string was NULL")
+
+                    if (!strcmp(scale_type_str, "H5Z_SO_FLOAT_DSCALE"))
+                        scale_type = H5Z_SO_FLOAT_DSCALE;
+                    else if (!strcmp(scale_type_str, "H5Z_SO_FLOAT_ESCALE"))
+                        scale_type = H5Z_SO_FLOAT_ESCALE;
+                    else if (!strcmp(scale_type_str, "H5Z_SO_INT"))
+                        scale_type = H5Z_SO_INT;
+                    else {
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid scale type '%s'", scale_type_str)
+                        continue;
+                    }
+
+                    /* Retrieve the scale offset value */
+                    if (NULL == (filter_field = yajl_tree_get(filter_obj, scale_offset_keys, yajl_t_number)))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of scale offset value failed")
+
+                    if (!YAJL_IS_INTEGER(filter_field))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "returned scale offset value is not an integer")
+
+                    scale_offset = YAJL_GET_INTEGER(filter_field);
+
+                    if (H5Pset_scaleoffset(*DCPL, scale_type, (int) scale_offset) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set scale-offset filter on DCPL")
+
+                    break;
+                }
+
+                case LZF_FILTER_ID:
+                {
+#ifdef RV_PLUGIN_DEBUG
+                    printf("-> Discovered filter class H5Z_FILTER_LZF in JSON response; setting LZF filter on DCPL\n");
+#endif
+
+                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function */
+                    if (strcmp(filter_class, "H5Z_FILTER_LZF"))
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "warning: filter class '%s' does not match H5Z_FILTER_LZF; DCPL should not be trusted", filter_class)
+
+                    /* Note that it may be more appropriate to set the LZF filter as mandatory here, but for now optional is used */
+                    if (H5Pset_filter(*DCPL, LZF_FILTER_ID, H5Z_FLAG_OPTIONAL, 0, NULL) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set LZF filter on DCPL")
+
+                    break;
+                }
+
+                /* TODO: support for other/user-defined filters */
+
+                default:
+                    /* Push error to stack; but don't fail this function */
+                    FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "warning: invalid filter with class '%s' and ID '%lld' on DCPL", filter_class, filter_ID);
+            }
+
+#ifdef RV_PLUGIN_DEBUG
+            printf("-> Filter %zu:\n", i);
+            printf("->   Class: %s\n", filter_class);
+            printf("->   ID: %lld\n", filter_ID);
+#endif
+        } /* end for */
     } /* end if */
 
 
@@ -12825,15 +13050,8 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             out_string_curr_pos += filters_string_len;
 
             for (i = 0; i < (size_t) nfilters; i++) {
-                if (i > 0) {
-                    buf_ptrdiff = out_string_curr_pos - out_string;
-                    if (buf_ptrdiff < 0)
-                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
-
-                    CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
-
-                    strcat(out_string_curr_pos++, ",");
-                } /* end if */
+                /* Reset the value of cd_nelmts to make sure all of the filter's CD values are retrieved correctly */
+                cd_nelmts = FILTER_MAX_CD_VALUES;
 
                 switch ((filter_id = H5Pget_filter2(dcpl, (unsigned) i, &flags, &cd_nelmts, cd_values, filter_namelen, filter_name, &filter_config))) {
                     case H5Z_FILTER_DEFLATE:
@@ -13148,6 +13366,25 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                         break;
                     } /* User-defined filter */
                 } /* end switch */
+
+                /* TODO: When the addition of an optional filter fails, it should use the continue statement
+                 * to allow this loop to continue instead of throwing an error stack and failing the whole
+                 * function. However, when this happens, a trailing comma may be left behind if the optional
+                 * filter was the last one to be added. The resulting JSON may look like:
+                 *
+                 * [{filter},{filter},{filter},]
+                 *
+                 * and this currently will cause the server to return a 500 error.
+                 */
+                if (i < nfilters - 1) {
+                    buf_ptrdiff = out_string_curr_pos - out_string;
+                    if (buf_ptrdiff < 0)
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!")
+
+                    CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
+
+                    strcat(out_string_curr_pos++, ",");
+                } /* end if */
             } /* end for */
 
             /* Make sure to add a closing ']' to close the 'filters' section */
