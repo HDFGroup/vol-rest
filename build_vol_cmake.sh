@@ -72,30 +72,9 @@ usage()
     echo
     echo "      -d      Enable debugging output in the REST VOL."
     echo
-    echo "      -C      Enable cURL debugging output in the REST VOL."
+    echo "      -c      Enable cURL debugging output in the REST VOL."
     echo
     echo "      -m      Enable memory tracking in the REST VOL."
-    echo
-    echo "      -H DIR  To specify a directory where HDF5 has already"
-    echo "              been built."
-    echo
-    echo "      -b DIR  Specifies the directory that CMake should use as"
-    echo "              the build tree location. Default is"
-    echo "              'source directory/rest_vol_cmake_build_files'."
-    echo "              Note that the REST VOL does not support in-source"
-    echo "              CMake builds."
-    echo
-    echo "      -p DIR  Similar to '-DCMAKE_INSTALL_PREFIX=DIR', specifies"
-    echo "              where the REST VOL should be installed to. Default"
-    echo "              is 'source directory/rest_vol_build'."
-    echo
-    echo "      -c DIR  To specify the top-level directory where cURL is"
-    echo "              installed, if cURL was not installed to a system"
-    echo "              directory."
-    echo
-    echo "      -y DIR  To specify the top-level directory where YAJL is"
-    echo "              installed, if YAJL was not installed to a system"
-    echo "              directory."
     echo
     echo "      -t      Build the tools with REST VOL support. Note"
     echo "              that due to a circular build dependency, this"
@@ -103,14 +82,65 @@ usage()
     echo "              included HDF5 source distribution and the"
     echo "              REST VOL plugin have been built once."
     echo
+    echo "      -P DIR  Similar to '-DCMAKE_INSTALL_PREFIX=DIR', specifies"
+    echo "              where the REST VOL should be installed to. Default"
+    echo "              is 'source directory/rest_vol_build'."
+    echo
+    echo "      -H DIR  To specify a directory where HDF5 has already"
+    echo "              been built."
+    echo
+    echo "      -B DIR  Specifies the directory that CMake should use as"
+    echo "              the build tree location. Default is"
+    echo "              'source directory/rest_vol_cmake_build_files'."
+    echo "              Note that the REST VOL does not support in-source"
+    echo "              CMake builds."
+    echo
+    echo "      -C DIR  To specify the top-level directory where cURL is"
+    echo "              installed, if cURL was not installed to a system"
+    echo "              directory."
+    echo
+    echo "      -Y DIR  To specify the top-level directory where YAJL is"
+    echo "              installed, if YAJL was not installed to a system"
+    echo "              directory."
+    echo
 }
 
-optspec=":hCtdmH:c:y:b:p:-"
+optspec=":hctdmH:C:Y:B:P:-"
 while getopts "$optspec" optchar; do
     case "${optchar}" in
     h)
         usage
         exit 0
+        ;;
+    d)
+        CMAKE_OPTS="-DREST_VOL_ENABLE_DEBUG=ON ${CMAKE_OPTS}"
+        echo "Enabled plugin debugging"
+        echo
+        ;;
+    c)
+        CMAKE_OPTS="-DREST_VOL_ENABLE_CURL_DEBUG=ON ${CMAKE_OPTS}"
+        echo "Enabled cURL debugging"
+        echo
+        ;;
+    m)
+        CMAKE_OPTS="-DREST_VOL_ENABLE_MEM_TRACKING=ON ${CMAKE_OPTS}"
+        echo "Enabled plugin memory tracking"
+        echo
+        ;;
+    t)
+        build_tools=true
+        echo "Building tools with REST VOL support"
+        echo
+        ;;
+    B)
+        BUILD_DIR="$OPTARG"
+        echo "Build directory set to: ${BUILD_DIR}"
+        echo
+        ;;
+    P)
+        INSTALL_DIR="$OPTARG"
+        echo "Prefix set to: ${INSTALL_DIR}"
+        echo
         ;;
     H)
         build_hdf5=false
@@ -119,48 +149,18 @@ while getopts "$optspec" optchar; do
         echo "Set HDF5 install directory to: ${HDF5_INSTALL_DIR}"
         echo
         ;;
-    d)
-        CMAKE_OPTS="-DREST_VOL_ENABLE_DEBUG=ON ${CMAKE_OPTS}"
-        echo "Enabled plugin debugging"
-        echo
-        ;;
-    m)
-        CMAKE_OPTS="-DREST_VOL_ENABLE_MEM_TRACKING=ON ${CMAKE_OPTS}"
-        echo "Enabled plugin memory tracking"
-        echo
-        ;;
     C)
-        CMAKE_OPTS="-DREST_VOL_ENABLE_CURL_DEBUG=ON ${CMAKE_OPTS}"
-        echo "Enabled cURL debugging"
-        echo
-        ;;
-    b)
-        BUILD_DIR="$OPTARG"
-        echo "Build directory set to: ${BUILD_DIR}"
-        echo
-        ;;
-    p)
-        INSTALL_DIR="$OPTARG"
-        echo "Prefix set to: ${INSTALL_DIR}"
-        echo
-        ;;
-    c)
         CURL_DIR="$OPTARG"
         CURL_LINK="-L${CURL_DIR}/lib ${CURL_LINK}"
         RV_OPTS="${RV_OPTS} --with-curl=${CURL_DIR}"
         echo "Libcurl directory set to: ${CURL_DIR}"
         echo
         ;;
-    y)
+    Y)
         YAJL_DIR="$OPTARG"
         YAJL_LINK="-L${YAJL_DIR}/lib ${YAJL_LINK}"
         RV_OPTS="${RV_OPTS} --with-yajl=${YAJL_DIR}"
         echo "Libyajl directory set to: ${YAJL_DIR}"
-        echo
-        ;;
-    t)
-        build_tools=true
-        echo "Building tools with REST VOL support"
         echo
         ;;
     *)

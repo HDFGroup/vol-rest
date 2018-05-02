@@ -115,10 +115,9 @@ system support.
 
 + CMake
 
-    NOTE: CMake support is currently not functional and should not be used
-
     Run `build_vol_cmake.sh` (Linux or OS X) or `build_vol_cmake.bat` (Windows).
     See section II.B.ii.a for configuration options.
+
 
 By default, all of these build scripts will compile and link with the provided
 HDF5 source distribution. However, if you wish to use a manually built version of
@@ -136,28 +135,35 @@ The following configuration options are available to all of the build scripts:
 
     -d      Enables debugging information printouts within the REST VOL plugin.
 
-    -C      Enables debugging information printouts from cURL within the REST VOL plugin.
+    -c      Enables debugging information printouts from cURL within the REST VOL plugin.
 
     -m      Enables memory usage tracking within the REST VOL plugin. This option is
             mostly useful in helping to diagnose any possible memory leaks or other
             memory errors within the plugin.
 
+    -t      Build the HDF5 tools with REST VOL plugin support.
+            WARNING: This option is experimental and should not currently be used.
+
+    -P DIR  Specifies where the REST VOL plugin should be installed. The default
+            installation prefix is `rest_vol_build` inside the REST VOL plugin source
+            root directory.
+
     -H DIR  Prevents building of the provided HDF5 source. Instead, uses the compiled
             library found at directory `DIR`, where `DIR` is the path used as the
             installation prefix when building HDF5 manually.
 
-    -p DIR  Specifies where the REST VOL plugin should be installed. The default
-            installation prefix is `rest_vol_build` inside the REST VOL plugin source
-            root directory.
-
-    -c DIR  Specifies the top-level directory where cURL is installed. Used if cURL is
+    -C DIR  Specifies the top-level directory where cURL is installed. Used if cURL is
             not installed to a system path or used to override 
-            
-    -y DIR  Specifies the top-level directory where YAJL is installed. Used if YAJL is
+
+    -Y DIR  Specifies the top-level directory where YAJL is installed. Used if YAJL is
             not installed to a system path or used to override
 
-    -t      Build the HDF5 tools with REST VOL plugin support.
-            WARNING: This option is experimental and should not currently be used.
+Additionally, the CMake build scripts have the following configuration option:
+
+    -B DIR  Specifies the directory that CMake should use as the build tree location.
+            The default build tree location is `rest_vol_cmake_build_files` inside the
+            REST VOL plugin source root directory. Note that the REST VOL does not
+            support in-source CMake builds.
 
 ### II.B.iii. Manual Build
 
@@ -203,6 +209,16 @@ The options in the supplied Autotools build script are mapped to the correspondi
                     mostly useful in helping to diagnose any possible memory leaks or
                     other memory errors within the plugin.
 
+    --enable-tests
+                    Enables/Disables building of the REST VOL plugin tests.
+
+    --enable-examples
+                    Enables/Disables building of the REST VOL HDF5 examples.
+
+    --enable-tools
+                    Enables/Disables building of the HDF5 tools with REST VOL plugin
+                    support. (Currently experimental and should not be used)
+
     --with-hdf5=DIR Used to specify the directory where an HDF5 distribution that uses
                     the VOL layer has already been built. This is to help the REST VOL
                     plugin locate the HDF5 header files that it needs to include.
@@ -223,19 +239,17 @@ TODO: options for CMake
 ### II.B.iv. Build Results
 
 If the build is successful, files are written into an installation directory. By default,
-these files are placed in `rest_vol_build` in the REST VOL plugin source root directory. This
-default can be overridden with `build_vol_autotools.sh -p DIR` or `configure --prefix=<DIR>`
-(for Autotools) or
-
-TODO: CMake prefix option.
+these files are placed in `rest_vol_build` in the REST VOL plugin source root directory.
+For Autotools, this default can be overridden with `build_vol_autotools.sh -P DIR`
+(when using the build script) or `configure --prefix=<DIR>` (when building manually).
+For CMake, the equivalent for overriding this default is `build_vol_cmake.sh/.bat -P DIR`
+(when using the build script) or `-DCMAKE_INSTALL_PREFIX=DIR` (when building manually).
 
 If the REST VOL plugin was built using one of the included build scripts, all of the usual files
 from an HDF5 source build should appear in the respective `bin`, `include`, `lib` and `share`
 directories in the install directory. Notable among these is `bin/h5cc` (when built with
-Autotools), a special-purpose compiler that streamlines the process of building HDF5
-applications.
-
-TODO: h5cc is not a compiler, it is a wrapper script.
+Autotools), a special-purpose compiler wrapper script that streamlines the process of building
+HDF5 applications.
 
 
 
