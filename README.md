@@ -234,7 +234,39 @@ The options in the supplied Autotools build script are mapped to the correspondi
 
 ### II.B.iii.b. Options for CMake
 
-TODO: options for CMake
+When building the REST VOL plugin manually using CMake, the following options are available.
+
+Some of the options in the supplied CMake build script are mapped to the corresponding options here:
+
+    CMAKE_INSTALL_PREFIX (Default: `rest_vol_build` in REST VOL plugin source root
+                          directory)
+                    Specifies the directory where CMake will install the resulting
+                    files to.
+
+    BUILD_SHARED_LIBS (Default: ON)
+                    Enables/Disables building of the REST VOL as a shared library.
+
+    BUILD_STATIC_EXECS (Default: OFF)
+                    Enables/Disables building of REST VOL executables as static
+                    executables.
+
+    REST_VOL_ENABLE_DEBUG (Default: OFF)
+                    Enables/Disables debugging printouts within the REST VOL plugin.
+
+    REST_VOL_ENABLE_CURL_DEBUG (Default: OFF)
+                    Enables/Disables debugging information printouts from cURL within
+                    the REST VOL plugin.
+
+    REST_VOL_ENABLE_MEM_TRACKING (Default: OFF)
+                    Enables/Disables memory tracking withing the REST VOL plugin. This
+                    options is mostly useful in helping to diagnose any possible memory
+                    leaks or other memory errors within the plugin.
+
+    REST_VOL_ENABLE_EXAMPLES (Default: ON)
+                    Enables/Disables building of the REST VOL HDF5 examples.
+
+    BUILD_TESTING (Default: ON)
+                    Enables/Disables building of the REST VOL tests.
 
 ### II.B.iv. Build Results
 
@@ -289,14 +321,12 @@ to those for an equivalent HDF5 application:
     Called upon application startup, before any file is accessed.
 
 
-+ H5Pset_fapl_rest_vol() - Set File Access Property List.
++ H5Pset_fapl_rest_vol() - Set REST VOL plugin access on File Access Property List.
   
     Called to prepare a FAPL to open a file through the REST VOL plugin. See
     `https://support.hdfgroup.org/HDF5/Tutor/property.html#fa` for more information
     about File Access Property Lists.
 
-
-TODO: Set File Access Property List with what?
 
 + RVterm() - Cleanly shutdown the REST VOL plugin
 
