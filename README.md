@@ -65,7 +65,7 @@ plugin and accompanying HDF5 library.
 
 ## II.A. Prerequisites
 
-TODO: short description
+Before building and using the HDF5 REST VOL plugin, a few requirements must be met.
 
 ### II.A.i. External Libraries
 
@@ -302,10 +302,15 @@ HDF5 applications.
 
 The REST VOL plugin tests require HSDS setup and access -- see section III.C.i.
 
-After building the REST VOL plugin, it is highly advised that you run `make check` to
-verify that the HDF5 library and REST VOL plugin are functioning correctly.
+After building the REST VOL plugin and setting up HSDS access according to the above
+reference, it is highly advised that you run `make check` (for Autotools builds) or
+`ctest .` (for CMake builds) to verify that the HDF5 library and REST VOL plugin
+are functioning correctly.
 
-TODO: incorporate section on 'test_rest_vol'
+Each of these commands will run the `test_rest_vol` executable, which is built by
+each of the REST VOL plugin's build systems and contains a set of tests to cover a
+moderate amount of the HDF5 public API. Alternatively, this executable can simply
+be run directly.
 
 --------------------------------------------------------------------------------
 
