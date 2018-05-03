@@ -124,8 +124,10 @@ HDF5 source distribution. However, if you wish to use a manually built version o
 the HDF5 library, include the flag `-H <dir>` where `dir` is the path to the HDF5
 install prefix. Refer to the documentation in `hdf5/release_docs` (where `hdf5` is
 the HDF5 distribution root directory) for more information on building HDF5 manually.
+Note that if you wish to use a manually built version of the HDF5 library, it must be
+a version which contains the VOL abstraction layer; otherwise, the REST VOL plugin will
+not function correctly.
 
-TODO: Only VOL-enabled HDF5 versions will work
 
 ### II.B.ii.a. Build Script Options
 
@@ -167,15 +169,19 @@ Additionally, the CMake build scripts have the following configuration option:
 
 ### II.B.iii. Manual Build
 
-TODO: how to build manually.
+In general, the process for building the REST VOL plugin involves either obtaining a VOL-enabled
+HDF5 distribution or building one from source. Then, the REST VOL plugin is built using that
+HDF5 distribution by including the appropriate header files and linking against the HDF5 library.
+
+Once you have a VOL-enabled HDF5 distribution available, follow the instructions below for your
+respective build system in order to build the REST VOL plugin against the HDF5 distribution.
+
 
 Autotools
 ---------
 
-TODO: more detail
-
     $ autogen.sh
-    $ configure [options]
+    $ configure --with-hdf5[=DIR] [options]
     $ make
     $ make check (requires HSDS setup -- see section III.C.i.)
     $ make install
@@ -183,7 +189,14 @@ TODO: more detail
 CMake
 -----
 
-TODO: building with CMake
+    $ mkdir builddir
+    $ cd builddir
+    $ cmake -G "CMake Generator (Unix Makefiles, etc.)" -DHDF5_DIR=built_hdf5_dir [options] rest_vol_src_dir
+    $ build command (e.g. `make && make install` for CMake Generator "Unix Makefiles")
+
+and optionally:
+
+    $ cpack
 
 ### II.B.iii.a. Options for `configure`
 
@@ -397,6 +410,17 @@ TODO: mention HSDS
 ### III.C.i. HSDS Setup
 
 TODO: HSDS setup details
+
+
+For the REST VOL plugin to correctly interact with an HSDS server instance, there are three
+environment variables the plugin uses which must be first set. These are:
+
+    + HSDS_USERNAME - 
+
+    + HSDS_PASSWORD - 
+
+    + HSDS_ENDPOINT - 
+
 
 ### III.C.ii. Example applications
 
