@@ -30,9 +30,7 @@ GENERATOR="Unix Makefiles"
 
 # Default name of the directory for the included HDF5 source distribution,
 # as well as the default directory where it gets installed
-HDF5_DIR="hdf5"
 HDF5_INSTALL_DIR="${INSTALL_DIR}"
-build_hdf5=true
 
 # Determine the number of processors to use when
 # building in parallel with Autotools make
@@ -143,23 +141,22 @@ while getopts "$optspec" optchar; do
         echo
         ;;
     H)
-        build_hdf5=false
         HDF5_INSTALL_DIR="$OPTARG"
-        CMAKE_OPTS="${CMAKE_OPTS} -DHDF5_DIR=${HDF5_INSTALL_DIR}"
+        CMAKE_OPTS="-DPREBUILT_HDF5_DIR=${HDF5_INSTALL_DIR} ${CMAKE_OPTS}"
         echo "Set HDF5 install directory to: ${HDF5_INSTALL_DIR}"
         echo
         ;;
     C)
         CURL_DIR="$OPTARG"
         CURL_LINK="-L${CURL_DIR}/lib ${CURL_LINK}"
-        RV_OPTS="${RV_OPTS} --with-curl=${CURL_DIR}"
+        CMAKE_OPTS="--with-curl=${CURL_DIR} ${CMAKE_OPTS}"
         echo "Libcurl directory set to: ${CURL_DIR}"
         echo
         ;;
     Y)
         YAJL_DIR="$OPTARG"
         YAJL_LINK="-L${YAJL_DIR}/lib ${YAJL_LINK}"
-        RV_OPTS="${RV_OPTS} --with-yajl=${YAJL_DIR}"
+        CMAKE_OPTS="--with-yajl=${YAJL_DIR} ${CMAKE_OPTS}"
         echo "Libyajl directory set to: ${YAJL_DIR}"
         echo
         ;;
@@ -186,35 +183,6 @@ if [ "$NPROCS" -eq "0" ]; then
     fi
 fi
 
-
-# If the user hasn't already, first build HDF5
-#if [ "$build_hdf5" = true ]; then
-#    echo "*****************"
-#    echo "* Building HDF5 *"
-#    echo "*****************"
-#    echo
-#
-#    cd ${SCRIPT_DIR}/${HDF5_DIR}
-#
-#    ./autogen.sh
-#
-#    # If we are building the tools with REST VOL support, link in the already built
-#    # REST VOL library, along with cURL and YAJL.
-#    if [ "${build_tools}" = true ]; then
-#        ./configure --prefix=${HDF5_INSTALL_DIR} CFLAGS="${COMP_OPTS} -L${INSTALL_DIR}/lib ${REST_VOL_LINK} ${CURL_LINK} ${YAJL_LINK}" || exit 1
-#    else
-#        ./configure --prefix=${HDF5_INSTALL_DIR} CFLAGS="${COMP_OPTS}" || exit 1
-#    fi
-#
-#    make -j${NPROCS} && make install || exit 1
-#
-#    # If building the tools with REST VOL support, don't rebuild the REST VOL
-#    if [ "${build_tools}" = true ]; then
-#        exit 0
-#    fi
-#fi
-
-
 # Once HDF5 has been built, build the REST VOL plugin against HDF5.
 echo "*******************************************"
 echo "* Building REST VOL plugin and test suite *"
@@ -232,6 +200,8 @@ cd "${BUILD_DIR}"
 cmake -G "${GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${CMAKE_OPTS}" "${SCRIPT_DIR}"
 
 # Build with autotools make by default
-make -j${NPROCS} && make install || exit 1
+if [ "${GENERATOR}" = "Unix Makefiles" ]; then
+  make -j${NPROCS} && make install || exit 1
+fi
 
 exit 0

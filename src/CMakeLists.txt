@@ -86,10 +86,17 @@ endif ()
 #-----------------------------------------------------------------------------
 # Make the REST VOL depend on H5pubconf.h existing
 #-----------------------------------------------------------------------------
-add_custom_target(
+if (PREBUILT_HDF5_DIR)
+  add_custom_target(
+    pubconf
+    DEPENDS ${PREBUILT_HDF5_DIR}/include/H5pubconf.h
+  )
+else ()
+  add_custom_target(
     pubconf
     DEPENDS ${CMAKE_BINARY_DIR}/${HDF5_DIR_NAME}/H5pubconf.h
-)
+  )
+endif ()
 
 add_dependencies(${REST_VOL_LIB_TARGET} pubconf)
 

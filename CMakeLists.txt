@@ -63,10 +63,10 @@ set (HDF5_DIR                     ${REST_VOL_SOURCE_DIR}/${HDF5_DIR_NAME})
 set (HDF5_BINARY_DIR              ${REST_VOL_BINARY_DIR}/${HDF5_DIR_NAME})
 
 #-----------------------------------------------------------------------------
-# Make sure the REST VOL headers are available
+# Define a CMake variable which the user can override to use
+# a pre-built HDF5 distribution for building the REST VOL plugin
 #-----------------------------------------------------------------------------
-include_directories(${REST_VOL_SRC_DIR})
-include_directories(${REST_VOL_BINARY_DIR})
+set (PREBUILT_HDF5_DIR CACHE STRING "Directory of pre-built HDF5 distribution")
 
 
 #-----------------------------------------------------------------------------
@@ -399,10 +399,25 @@ configure_file (${REST_VOL_RESOURCES_DIR}/rv_cmake_config.h.in ${REST_VOL_BINARY
 set (REST_VOL_INCLUDE_DIRECTORIES
     ${REST_VOL_SRC_DIR}
     ${REST_VOL_BINARY_DIR}
-    ${HDF5_DIR}
-    ${HDF5_BINARY_DIR}
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
 )
+
+#-----------------------------------------------------------------------------
+# Include the HDF5 distribution directory
+#-----------------------------------------------------------------------------
+if (PREBUILT_HDF5_DIR)
+  set (REST_VOL_INCLUDE_DIRECTORIES
+      ${REST_VOL_INCLUDE_DIRECTORIES}
+      ${PREBUILT_HDF5_DIR}/include
+  )
+else ()
+  set (REST_VOL_INCLUDE_DIRECTORIES
+      ${REST_VOL_INCLUDE_DIRECTORIES}    
+      ${HDF5_DIR}
+      ${HDF5_BINARY_DIR}
+  )
+endif ()
+
 INCLUDE_DIRECTORIES (${REST_VOL_INCLUDE_DIRECTORIES})
 
 
@@ -450,9 +465,12 @@ endif ()
 include (${REST_VOL_RESOURCES_DIR}/HDFCompilerFlags.cmake)
 
 #-----------------------------------------------------------------------------
-# Build HDF5
+# Build HDF5, unless the user has specified to use
+# a pre-built HDF5 distribution
 #-----------------------------------------------------------------------------
-add_subdirectory(${HDF5_DIR} ${PROJECT_BINARY_DIR}/${HDF5_DIR_NAME})
+if (NOT PREBUILT_HDF5_DIR)
+  add_subdirectory(${HDF5_DIR} ${PROJECT_BINARY_DIR}/${HDF5_DIR_NAME})
+endif ()
 
 #-----------------------------------------------------------------------------
 # Build the REST VOL

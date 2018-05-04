@@ -191,7 +191,7 @@ CMake
 
     $ mkdir builddir
     $ cd builddir
-    $ cmake -G "CMake Generator (Unix Makefiles, etc.)" -DHDF5_DIR=built_hdf5_dir [options] rest_vol_src_dir
+    $ cmake -G "CMake Generator (Unix Makefiles, etc.)" -DPREBUILT_HDF5_DIR=built_hdf5_dir [options] rest_vol_src_dir
     $ build command (e.g. `make && make install` for CMake Generator "Unix Makefiles")
 
 and optionally:
@@ -207,6 +207,9 @@ The options in the supplied Autotools build script are mapped to the correspondi
 
     -h, --help      Prints out a help message indicating script usage and available
                     options.
+
+    --prefix=DIR    Specifies the location for the resulting files. The default location
+                    is `rest_vol_build` in the same directory as configure.
 
     --enable-build-mode=(production|debug)
                     Sets the build mode to be used.
@@ -242,8 +245,6 @@ The options in the supplied Autotools build script are mapped to the correspondi
     --with-yajl=DIR Used to specify the top-level directory where YAJL is installed, if
                     YAJL is not installed to a system path.
 
-    --prefix=DIR    Specifies the location for the resulting files. The default location
-                    is `rest_vol_build` in the same directory as configure.
 
 ### II.B.iii.b. Options for CMake
 
@@ -255,6 +256,17 @@ Some of the options in the supplied CMake build script are mapped to the corresp
                           directory)
                     Specifies the directory where CMake will install the resulting
                     files to.
+
+    PREBUILT_HDF5_DIR (Default: empty)
+                    Specifies a directory which contains a pre-built HDF5
+                    distribution which uses the VOL abstraction layer. By default,
+                    the REST VOL plugin's CMake build will attempt to build the
+                    included HDF5 source distribution, then use that to build the
+                    plugin itself. However, if a VOL-enabled HDF5 distribution
+                    is already available, this option can be set to point to the
+                    directory of the HDF5 distribution. In this case, CMake will
+                    use that HDF5 distribution to build the REST VOL plugin and
+                    will not attempt to build HDF5 again.
 
     BUILD_SHARED_LIBS (Default: ON)
                     Enables/Disables building of the REST VOL as a shared library.
