@@ -210,7 +210,7 @@ cd "${SCRIPT_DIR}"
 
 ./autogen.sh || exit 1
 
-./configure --prefix="${INSTALL_DIR}" "${RV_OPTS}" CFLAGS="${COMP_OPTS}" || exit 1
+./configure --prefix="${INSTALL_DIR}" ${RV_OPTS} CFLAGS="${COMP_OPTS}" || exit 1
 
 make -j${NPROCS} && make install || exit 1
 
