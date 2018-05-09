@@ -58,7 +58,7 @@ EXAMPLE_PROG = rv_write rv_read rv_chunk_read rv_compound \
            rv_crtgrpd rv_subset rv_rdwt rv_crtgrpar \
            rv_crtatt rv_crtgrp rv_crtdat \
            rv_group rv_select rv_attribute \
-           rv_extlink
+           rv_extlink hl/rv_ds1
 TEST_SCRIPT=testh5cc.sh 
 TEST_EXAMPLES_SCRIPT=$(INSTALL_SCRIPT_FILES)
 
@@ -68,7 +68,7 @@ INSTALL_FILES = rv_write.c rv_read.c rv_chunk_read.c   \
           rv_crtgrpd.c rv_subset.c rv_rdwt.c rv_crtgrpar.c \
           rv_crtatt.c rv_crtgrp.c rv_crtdat.c \
           rv_compound.c rv_group.c rv_select.c rv_attribute.c \
-          rv_extlink.c
+          rv_extlink.c hl/rv_ds1.c
 
 
 
@@ -97,6 +97,7 @@ CHECK_CLEANFILES+=$(EXTLINK_DIRS)
 
 # Example directory
 # Note: no '/' after DESTDIR.  Explanation in commence.am
+EXAMPLEHLDIR=${DESTDIR}$(exec_prefix)/share/rest_vol_examples/c/hl
 EXAMPLEDIR=${DESTDIR}$(exec_prefix)/share/rest_vol_examples/c
 EXAMPLETOPDIR=${DESTDIR}$(exec_prefix)/share/rest_vol_examples
 EXAMPLEBASEDIR=${DESTDIR}$(exec_prefix)/share
@@ -122,6 +123,7 @@ rv_read: $(srcdir)/rv_read.c
 rv_select: $(srcdir)/rv_select.c
 rv_attribute: $(srcdir)/rv_attribute.c
 rv_extlink: $(srcdir)/rv_extlink.c $(EXTLINK_DIRS)
+hl/rv_ds1: $(srcdir)/hl/rv_ds1.c
 
 # Assume that all tests in this directory are examples, and tell
 # conclude.am when to build them.
@@ -142,6 +144,7 @@ $(EXAMPLEDIR):
 	mkdir -p $(EXAMPLEBASEDIR)
 	mkdir -p $(EXAMPLETOPDIR)
 	mkdir -p $(EXAMPLEDIR)
+	mkdir -p $(EXAMPLEHLDIR)
 
 # Install and uninstall rules.  We install the source files, not the
 # example programs themselves.
@@ -153,7 +156,7 @@ uninstall-local:
 install-examples: $(EXAMPLEDIR) $(INSTALL_FILES) 
 	@for f in X $(INSTALL_FILES); do                                     \
 	  if test $$f != X; then                                             \
-	    (set -x; $(INSTALL) $(srcdir)/$$f $(EXAMPLEDIR)/. || exit 1);    \
+	    (set -x; $(INSTALL) $(srcdir)/$$f $(EXAMPLEDIR)/$$f || exit 1);    \
             chmod a-x $(EXAMPLEDIR)/$$f;                                     \
 	  fi;                                                                \
 	done

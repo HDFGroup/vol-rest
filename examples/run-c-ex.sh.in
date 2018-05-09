@@ -107,7 +107,9 @@ then
         RunTest rv_attribute &&\
         rm rv_attribute &&\
         RunTest rv_extlink &&\
-        rm rv_extlink); then
+        rm rv_extlink &&\
+        RunTest hl/rv_ds1 && \
+        rm hl/rv_ds1); then
         EXIT_VALUE=${EXIT_SUCCESS}
     else
         EXIT_VALUE=${EXIT_FAILURE}
