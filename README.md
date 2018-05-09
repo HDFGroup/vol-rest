@@ -74,7 +74,7 @@ To build the REST VOL plugin, the following libraries are required:
 + cURL - networking support
     + https://curl.haxx.se/
 
-+ YAJL - JSON parsing and construction
++ YAJL (ver. 2.0.4 or greater) - JSON parsing and construction
     + https://lloyd.github.io/yajl/
 
 Compiled libraries must either exist in the system's library paths or must be
