@@ -29,9 +29,6 @@
 #include "rest_vol_err.h"
 #include "rest_vol_config.h"
 
-/* TODO: Until support can be added for dealing with cyclic links, disable the test */
-#define NO_CYCLIC_LINKS
-
 /* The name of the file that all of the tests will operate on */
 #define FILENAME "/home/test_user1/new_file"
 
@@ -504,7 +501,6 @@
 #define LINK_VISIT_TEST_NO_CYCLE_LINK_NAME3      "ext_link1"
 #define LINK_VISIT_TEST_NO_CYCLE_LINK_NAME4      "hard_link2"
 
-#ifndef NO_CYCLIC_LINKS
 #define LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME  "link_visit_test_cycles"
 #define LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME2 "link_visit_subgroup1"
 #define LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME3 "link_visit_subgroup2"
@@ -512,7 +508,6 @@
 #define LINK_VISIT_TEST_CYCLE_LINK_NAME2     "soft_link1"
 #define LINK_VISIT_TEST_CYCLE_LINK_NAME3     "ext_link1"
 #define LINK_VISIT_TEST_CYCLE_LINK_NAME4     "hard_link2"
-#endif
 
 #define LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME   "link_visit_test_0_links"
 #define LINK_VISIT_TEST_0_LINKS_SUBGROUP_NAME2  "link_visit_test_0_links_subgroup1"
@@ -709,9 +704,7 @@ static int test_get_link_val(void);
 static int test_link_iterate(void);
 static int test_link_iterate_0_links(void);
 static int test_link_visit(void);
-#ifndef NO_CYCLIC_LINKS
 static int test_link_visit_cycles(void);
-#endif
 static int test_link_visit_0_links(void);
 static int test_unused_link_API_calls(void);
 
@@ -750,9 +743,7 @@ static herr_t link_iter_callback2(hid_t group_id, const char *name, const H5L_in
 static herr_t link_iter_callback3(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
 
 static herr_t link_visit_callback1(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
-#ifndef NO_CYCLIC_LINKS
 static herr_t link_visit_callback2(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
-#endif
 static herr_t link_visit_callback3(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
 
 static herr_t object_visit_callback(hid_t o_id, const char *name, const H5O_info_t *object_info, void *op_data);
@@ -876,9 +867,7 @@ static int (*link_tests[])(void) = {
         test_link_iterate,
         test_link_iterate_0_links,
         test_link_visit,
-#ifndef NO_CYCLIC_LINKS
         test_link_visit_cycles,
-#endif
         test_link_visit_0_links,
         test_unused_link_API_calls,
         NULL
@@ -13168,8 +13157,6 @@ error:
     return 1;
 }
 
-#ifndef NO_CYCLIC_LINKS
-/* TODO: */
 static int
 test_link_visit_cycles(void)
 {
@@ -13410,7 +13397,6 @@ error:
 
     return 1;
 }
-#endif
 
 static int
 test_link_visit_0_links(void)
@@ -16567,7 +16553,6 @@ error:
     return -1;
 }
 
-#ifndef NO_CYCLIC_LINKS
 static herr_t
 link_visit_callback2(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)
 {
@@ -16624,7 +16609,6 @@ link_visit_callback2(hid_t group_id, const char *name, const H5L_info_t *info, v
 error:
     return -1;
 }
-#endif
 
 static herr_t
 link_visit_callback3(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)

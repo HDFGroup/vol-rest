@@ -36,16 +36,20 @@
 
 /* Includes for HDF5 */
 #include "H5public.h"
-#include "H5Fpublic.h"       /* File defines */
-#include "H5Ppublic.h"       /* Property Lists    */
-#include "H5Spublic.h"       /* Dataspaces        */
-#include "H5VLpublic.h"      /* VOL plugins       */
+#include "H5Fpublic.h"           /* File defines */
+#include "H5Ppublic.h"           /* Property Lists    */
+#include "H5Spublic.h"           /* Dataspaces        */
+#include "H5VLpublic.h"          /* VOL plugins       */
 
 /* Includes for the REST VOL itself */
-#include "rest_vol.h"        /* REST VOL plugin   */
-#include "rest_vol_public.h" /* REST VOL's public header file */
-#include "rest_vol_config.h" /* Defines for enabling debugging functionality in the REST VOL */
-#include "rest_vol_err.h"    /* REST VOL error reporting macros */
+#include "rest_vol.h"            /* REST VOL plugin   */
+#include "rest_vol_public.h"     /* REST VOL's public header file */
+#include "rest_vol_config.h"     /* Defines for enabling debugging functionality in the REST VOL */
+#include "rest_vol_err.h"        /* REST VOL error reporting macros */
+
+/* Includes for hash table to determine object uniqueness */
+#include "rest_vol_hash_table.h"
+#include "rest_vol_hash_string.h"
 
 /* Macro to handle various HTTP response codes */
 #define HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value)                                                     \
@@ -597,6 +601,9 @@ static herr_t dataset_read_scatter_op(const void **src_buf, size_t *src_buf_byte
 /* Qsort callback to sort links by creation order */
 static int cmp_links_by_creation_order(const void *link1, const void *link2);
 
+/* Comparison function to compare two keys in an rv_hash_table_t */
+static int rv_compare_string_keys(void *value1, void *value2);
+
 /* Helper function to parse an HTTP response according to the parse callback function */
 static herr_t RV_parse_response(char *HTTP_response, void *callback_data_in, void *callback_data_out, herr_t (*parse_callback)(char *, void *, void *));
 
@@ -649,7 +656,8 @@ static herr_t RV_build_attr_table(char *HTTP_response, hbool_t sort, int(*sort_f
 static herr_t RV_traverse_attr_table(attr_table_entry *attr_table, size_t num_entries, iter_data *iter_data);
 
 /* Helper functions to work with a table of links for link iteration */
-static herr_t RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int (*sort_func)(const void *, const void *), link_table_entry **link_table, size_t *num_entries);
+static herr_t RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(const void *, const void *),
+                                  link_table_entry **link_table, size_t *num_entries, rv_hash_table_t *visited_link_table);
 static void   RV_free_link_table(link_table_entry *link_table, size_t num_entries);
 static herr_t RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_data *iter_data, const char *cur_link_rel_path);
 
@@ -8340,6 +8348,30 @@ cmp_links_by_creation_order(const void *link1, const void *link2)
 
 
 /*-------------------------------------------------------------------------
+ * Function:    rv_compare_string_keys
+ *
+ * Purpose:     Comparison function to compare two string keys in an
+ *              rv_hash_table_t. This function is mostly used when
+ *              attempting to determine object uniqueness by some
+ *              information from the server, such as an object ID.
+ *
+ * Return:      Non-zero if the two string keys are equal/Zero if the two
+ *              string keys are not equal
+ *
+ * Programmer:  Jordan Henderson
+ *              May, 2018
+ */
+static int
+rv_compare_string_keys(void *value1, void *value2)
+{
+    const char *val1 = (const char *) value1;
+    const char *val2 = (const char *) value2;
+
+    return !strcmp(val1, val2);
+} /* end rv_compare_string_keys() */
+
+
+/*-------------------------------------------------------------------------
  * Function:    RV_parse_response
  *
  * Purpose:     Helper function to simply ingest a string buffer containing
@@ -8853,6 +8885,7 @@ static herr_t
 RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
     link_table_entry *link_table = NULL;
+    rv_hash_table_t  *visited_link_table = NULL;
     iter_data        *link_iter_data = (iter_data *) callback_data_in;
     size_t            link_table_num_entries;
     herr_t            ret_value = SUCCEED;
@@ -8866,14 +8899,22 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
     if (!link_iter_data)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link iteration data pointer was NULL")
 
+    /* If this is a call to H5Lvisit, setup a hash table to keep track of visited links
+     * so that cyclic links can be dealt with appropriately.
+     */
+    if (link_iter_data->is_recursive) {
+        if (NULL == (visited_link_table = rv_hash_table_new(rv_hash_string, rv_compare_string_keys)))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate hash table for determining cyclic links")
+    } /* end if */
+
     /* Build a table of all of the links in the given group */
     if (H5_INDEX_CRT_ORDER == link_iter_data->index_type) {
         /* This code assumes that links are returned in alphabetical order by default. If the user has requested them
          * by creation order, sort them this way while building the link table. If, in the future, links are not returned
          * in alphabetical order by default, this code should be changed to reflect this.
          */
-        if (RV_build_link_table(HTTP_response, link_iter_data->is_recursive, TRUE, cmp_links_by_creation_order,
-                &link_table, &link_table_num_entries) < 0)
+        if (RV_build_link_table(HTTP_response, link_iter_data->is_recursive, cmp_links_by_creation_order,
+                &link_table, &link_table_num_entries, visited_link_table) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table")
 
 #ifdef RV_PLUGIN_DEBUG
@@ -8881,8 +8922,8 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
 #endif
     } /* end if */
     else {
-        if (RV_build_link_table(HTTP_response, link_iter_data->is_recursive, FALSE, NULL,
-                &link_table, &link_table_num_entries) < 0)
+        if (RV_build_link_table(HTTP_response, link_iter_data->is_recursive, NULL,
+                &link_table, &link_table_num_entries, visited_link_table) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table")
     } /* end else */
 
@@ -8894,6 +8935,12 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
 done:
     if (link_table)
         RV_free_link_table(link_table, link_table_num_entries);
+
+    /* Free the visited link hash table if necessary */
+    if (visited_link_table) {
+        rv_hash_table_free(visited_link_table);
+        visited_link_table = NULL;
+    } /* end if */
 
     return ret_value;
 } /* end RV_link_iter_callback() */
@@ -13934,8 +13981,8 @@ done:
  *              January, 2018
  */
 static herr_t
-RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int (*sort_func)(const void *, const void *),
-    link_table_entry **link_table, size_t *num_entries)
+RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(const void *, const void *),
+    link_table_entry **link_table, size_t *num_entries, rv_hash_table_t *visited_link_table)
 {
     link_table_entry *table = NULL;
     yajl_val          parse_tree = NULL, key_obj;
@@ -13954,6 +14001,8 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link table pointer was NULL")
     if (!num_entries)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link table num. entries pointer was NULL")
+    if (is_recursive && !visited_link_table)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "visited link hash table was NULL")
 
 #ifdef RV_PLUGIN_DEBUG
     printf("-> Building table of links %s\n\n", is_recursive ? "recursively" : "non-recursively");
@@ -14049,8 +14098,11 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
         if (RV_parse_response(link_section_start, NULL, &table[i].link_info, RV_get_link_info_callback) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "couldn't get link info")
 
-        /* If this is a call to H5Lvisit and the current link points to a group, recurse into the group
-         * and build a link table for it as well.
+        /*
+         * If this is a call to H5Lvisit and the current link points to a group, hash the link object ID and
+         * check to see if the key exists in the visited link hash table. If it does, this is a cyclic
+         * link, so do not include it in the list of links. Otherwise, add it to the visited link hash
+         * table and recursively process the group, building a link table for it as well.
          */
         table[i].subgroup.subgroup_link_table = NULL;
         if (is_recursive && (H5L_TYPE_HARD == table[i].link_info.type)) {
@@ -14073,43 +14125,56 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
                 if (NULL == (link_id = YAJL_GET_STRING(link_field_obj)))
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link ID was NULL")
 
-                /* Make a GET request to the server to retrieve all of the links in the subgroup */
+                /* Check if this link has been visited already before processing it */
+                if (RV_HASH_TABLE_NULL == rv_hash_table_lookup(visited_link_table, link_id)) {
+                    /* Add the key to the hash table to prevent future cyclic links from being visited */
+                    if (!rv_hash_table_insert(visited_link_table, link_id, link_id))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "unable to allocate space for key in visited link hash table")
 
-                /* URL-encode the name of the link to ensure that the resulting URL for the link
-                 * iteration operation doesn't contain any illegal characters
-                 */
-                if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(YAJL_GET_STRING(link_field_obj)), 0)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
+                    /* Make a GET request to the server to retrieve all of the links in the subgroup */
 
-                if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
-                                        "%s/groups/%s/links",
-                                        base_URL,
-                                        url_encoded_link_name)
-                    ) < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+                    /* URL-encode the name of the link to ensure that the resulting URL for the link
+                     * iteration operation doesn't contain any illegal characters
+                     */
+                    if (NULL == (url_encoded_link_name = curl_easy_escape(curl, RV_basename(YAJL_GET_STRING(link_field_obj)), 0)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name")
 
-                if (url_len >= URL_MAX_LENGTH)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
+                    if ((url_len = snprintf(request_url,
+                                            URL_MAX_LENGTH,
+                                            "%s/groups/%s/links",
+                                            base_URL,
+                                            url_encoded_link_name)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-                if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
+
+                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
 
 #ifdef RV_PLUGIN_DEBUG
-                printf("-> Retrieving all links in subgroup using URL: %s\n\n", request_url);
+                    printf("-> Retrieving all links in subgroup using URL: %s\n\n", request_url);
 
-                printf("   /**********************************\\\n");
-                printf("-> | Making GET request to the server |\n");
-                printf("   \\**********************************/\n\n");
+                    printf("   /**********************************\\\n");
+                    printf("-> | Making GET request to the server |\n");
+                    printf("   \\**********************************/\n\n");
 #endif
 
-                CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
+                    CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
 
-                if (RV_build_link_table(response_buffer.buffer, is_recursive, sort, sort_func,
-                        &table[i].subgroup.subgroup_link_table, &table[i].subgroup.num_entries) < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table for subgroup '%s'", table[i].link_name)
+                    if (RV_build_link_table(response_buffer.buffer, is_recursive, sort_func,
+                            &table[i].subgroup.subgroup_link_table, &table[i].subgroup.num_entries, visited_link_table) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table for subgroup '%s'", table[i].link_name)
 
-                curl_free(url_encoded_link_name);
-                url_encoded_link_name = NULL;
+                    curl_free(url_encoded_link_name);
+                    url_encoded_link_name = NULL;
+                } /* end if */
+#ifdef RV_PLUGIN_DEBUG
+                else {
+                    printf("-> Cyclic link detected; not following into subgroup\n\n");
+                } /* end else */
+#endif
             } /* end if */
         } /* end if */
 
@@ -14121,7 +14186,7 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, hbool_t sort, int
     printf("-> Link table built\n\n");
 #endif
 
-    if (sort) qsort(table, num_links, sizeof(*table), sort_func);
+    if (sort_func) qsort(table, num_links, sizeof(*table), sort_func);
 
 done:
     if (ret_value >= 0) {

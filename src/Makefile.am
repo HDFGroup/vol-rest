@@ -46,7 +46,7 @@ AM_CFLAGS += -lyajl
 lib_LTLIBRARIES=librestvol.la
 
 # REST VOL's source file and private headers
-librestvol_la_SOURCES=rest_vol.c rest_vol.h rest_vol_err.h
+librestvol_la_SOURCES=rest_vol.c rest_vol.h rest_vol_err.h rest_vol_hash_table.c rest_vol_hash_table.h rest_vol_hash_string.h
 
 # Public headers
 include_HEADERS=rest_vol_public.h rest_vol_config.h
