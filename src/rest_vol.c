@@ -9421,8 +9421,10 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                             *
      ***************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, filters_keys, yajl_t_array))) {
+        size_t i;
+
         /* Grab the relevant information from each filter and set them on the DCPL in turn. */
-        for (size_t i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
+        for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
             yajl_val   filter_obj = YAJL_GET_ARRAY(key_obj)->values[i];
             yajl_val   filter_field;
             char      *filter_class;
