@@ -460,8 +460,9 @@ const char *attributes_keys[]         = { "attributes", (const char *) 0 };
 const char *attr_name_keys[]          = { "name", (const char *) 0 };
 const char *attr_creation_time_keys[] = { "created", (const char *) 0 };
 
-/* Keys to retrieve the attribute count of an object */
+/* Keys to retrieve relevant information for H5Oget_info */
 const char *attribute_count_keys[] = { "attributeCount", (const char *) 0 };
+const char *hrefs_keys[] = { "hrefs" , (const char *) 0 };
 
 /* Keys to retrieve the number of links in a group */
 const char *group_link_count_keys[] = { "linkCount", (const char *) 0 };
@@ -9057,8 +9058,10 @@ done:
  *              an HTTP response for info about an object and copy that
  *              info into the callback_data_out parameter, which should be
  *              a H5O_info_t *. This callback is used to help H5Oget_info;
- *              currently the number of attributes on an object is the
- *              only relevant information returned.
+ *              currently only the file number, object address and number
+ *              of attributes fields are filled out in the H5O_info_t
+ *              struct. All other fields are cleared and should not be
+ *              relied upon.
  *
  * Return:      Non-negative on success/Negative on failure
  *
@@ -9071,6 +9074,8 @@ RV_get_object_info_callback(char *HTTP_response,
 {
     H5O_info_t *obj_info = (H5O_info_t *) callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;
+    size_t      i;
+    char       *object_id, *domain_path = NULL;
     herr_t      ret_value = SUCCEED;
 
 #ifdef RV_PLUGIN_DEBUG
@@ -9086,6 +9091,65 @@ RV_get_object_info_callback(char *HTTP_response,
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed")
+
+    /*
+     * Fill out the fileno and addr fields with somewhat faked data, as these fields are used
+     * in other places to verify that two objects are different. The domain path is hashed
+     * and converted to an unsigned long for the fileno field and the object's UUID string
+     * is hashed to an haddr_t for the addr field.
+     */
+
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, hrefs_keys, yajl_t_array)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "retrieval of object HREFs failed")
+
+    /* Find the "home" href that corresponds to the object's domain path */
+    for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
+        yajl_val  href_obj = YAJL_GET_ARRAY(key_obj)->values[i];
+        size_t    j, path_value_idx;
+
+        if (!YAJL_IS_OBJECT(href_obj))
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "HREFs array value is not an object")
+
+        for (j = 0; j < YAJL_GET_OBJECT(href_obj)->len; j++) {
+            char *key_val;
+
+            if (NULL == (key_val = YAJL_GET_STRING(YAJL_GET_OBJECT(href_obj)->values[j])))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "HREF object key value was NULL")
+
+            /* If this object's "rel" key does not have the value "home", skip this object */
+            if (!strcmp(YAJL_GET_OBJECT(href_obj)->keys[j], "rel") && strcmp(key_val, "home")) {
+                domain_path = NULL;
+                break;
+            } /* end if */
+
+            if (!strcmp(YAJL_GET_OBJECT(href_obj)->keys[j], "href"))
+                domain_path = key_val;
+        } /* end for */
+
+        if (domain_path)
+            break;
+    } /* end for */
+
+    if (!domain_path)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "unable to determine a value for object info file number field")
+
+    obj_info->fileno = (unsigned long) rv_hash_string(domain_path);
+
+#ifdef RV_PLUGIN_DEBUG
+    printf("-> Object's file number: %lu\n", (unsigned long) obj_info->fileno);
+#endif
+
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, object_id_keys, yajl_t_string)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "retrieval of object ID failed")
+
+    if (NULL == (object_id = YAJL_GET_STRING(key_obj)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "object ID string was NULL")
+
+    obj_info->addr = (haddr_t) rv_hash_string(object_id);
+
+#ifdef RV_PLUGIN_DEBUG
+    printf("-> Object's address: %lu\n", (unsigned long) obj_info->addr);
+#endif
 
     /* Retrieve the object's attribute count */
     if (NULL == (key_obj = yajl_tree_get(parse_tree, attribute_count_keys, yajl_t_number)))
@@ -9834,12 +9898,15 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
 
     if (!parent_obj)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object pointer was NULL")
-    if (H5I_FILE != parent_obj->obj_type && H5I_GROUP != parent_obj->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file or group")
     if (!obj_path)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "target path was NULL")
     if (!target_object_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "target object type pointer was NULL")
+    if (   H5I_FILE != parent_obj->obj_type
+        && H5I_GROUP != parent_obj->obj_type
+        && H5I_DATATYPE != parent_obj->obj_type
+        && H5I_DATASET != parent_obj->obj_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file, group, datatype or dataset")
 
 #ifdef RV_PLUGIN_DEBUG
     printf("-> Finding object by path '%s' from parent object of type %s with URI %s\n\n",
@@ -9851,15 +9918,15 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
 
     /* Do a bit of pre-processing for optimizing */
     if (!strcmp(obj_path, ".")) {
-        /* If the path "." is being searched for, referring to the current group, retrieve the
-         * information about the current group and supply it to the optional callback.
+        /* If the path "." is being searched for, referring to the current object, retrieve
+         * the information about the current object and supply it to the optional callback.
          */
 
 #ifdef RV_PLUGIN_DEBUG
         printf("-> Path provided was '.', short-circuiting to GET request and callback function\n\n");
 #endif
 
-        *target_object_type = H5I_GROUP;
+        *target_object_type = parent_obj->obj_type;
         is_relative_path = TRUE;
     } /* end if */
     else if (!strcmp(obj_path, "/")) {
@@ -10086,46 +10153,73 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
 
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
-
                 } /* end else */
 
                 break;
 
             case H5I_DATATYPE:
-                if (NULL == (url_encoded_path_name = RV_url_encode_path(obj_path)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path")
+                /* Handle the special case for the paths "." and "/" */
+                if (!strcmp(obj_path, ".") || !strcmp(obj_path, "/")) {
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                                            "%s/datatypes/%s",
+                                            base_URL,
+                                            parent_obj->URI)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-                if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
-                                        "%s/datatypes/?%s%s%sh5path=%s",
-                                        base_URL,
-                                        is_relative_path ? "grpid=" : "",
-                                        is_relative_path ? parent_obj->URI : "",
-                                        is_relative_path ? "&" : "",
-                                        url_encoded_path_name)
-                    ) < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
+                } /* end if */
+                else {
+                    if (NULL == (url_encoded_path_name = RV_url_encode_path(obj_path)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path")
 
-                if (url_len >= URL_MAX_LENGTH)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                                            "%s/datatypes/?%s%s%sh5path=%s",
+                                            base_URL,
+                                            is_relative_path ? "grpid=" : "",
+                                            is_relative_path ? parent_obj->URI : "",
+                                            is_relative_path ? "&" : "",
+                                            url_encoded_path_name)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
+                } /* end else */
 
                 break;
 
             case H5I_DATASET:
-                if (NULL == (url_encoded_path_name = RV_url_encode_path(obj_path)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path")
+                /* Handle the special case for the paths "." and "/" */
+                if (!strcmp(obj_path, ".") || !strcmp(obj_path, "/")) {
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                                            "%s/datasets/%s",
+                                            base_URL,
+                                            parent_obj->URI)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
 
-                if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
-                         "%s/datasets/?%s%s%sh5path=%s",
-                         base_URL,
-                         is_relative_path ? "grpid=" : "",
-                         is_relative_path ? parent_obj->URI : "",
-                         is_relative_path ? "&" : "",
-                         url_encoded_path_name)
-                    ) < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
+                } /* end if */
+                else {
+                    if (NULL == (url_encoded_path_name = RV_url_encode_path(obj_path)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path")
 
-                if (url_len >= URL_MAX_LENGTH)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                                            "%s/datasets/?%s%s%sh5path=%s",
+                                            base_URL,
+                                            is_relative_path ? "grpid=" : "",
+                                            is_relative_path ? parent_obj->URI : "",
+                                            is_relative_path ? "&" : "",
+                                            url_encoded_path_name)
+                        ) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size")
+                } /* end else */
 
                 break;
 
