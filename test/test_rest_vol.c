@@ -29,8 +29,14 @@
 #include "rest_vol_err.h"
 #include "rest_vol_config.h"
 
+#define TEST_DIR_PREFIX "/home"
+#define TEST_FILE_NAME "test_file"
+
+char *username;
+
 /* The name of the file that all of the tests will operate on */
-#define FILENAME "/home/test_user1/new_file"
+#define FILENAME_MAX_LENGTH 1024
+char filename[FILENAME_MAX_LENGTH];
 
 #define ARRAY_LENGTH(array) sizeof(array) / sizeof(array[0])
 
@@ -91,12 +97,12 @@
 
 #define FILE_INTENT_TEST_DATASETNAME "/test_dset"
 #define FILE_INTENT_TEST_DSET_RANK   2
-#define FILE_INTENT_TEST_FILENAME    "/home/test_user1/intent_test_file"
+#define FILE_INTENT_TEST_FILENAME    "intent_test_file"
 
-#define NONEXISTENT_FILENAME "/home/test_user1/nonexistent_file"
+#define NONEXISTENT_FILENAME "nonexistent_file"
 
-#define FILE_PROPERTY_LIST_TEST_FNAME1 "/home/test_user1/property_list_test_file1"
-#define FILE_PROPERTY_LIST_TEST_FNAME2 "/home/test_user1/property_list_test_file2"
+#define FILE_PROPERTY_LIST_TEST_FNAME1 "property_list_test_file1"
+#define FILE_PROPERTY_LIST_TEST_FNAME2 "property_list_test_file2"
 
 
 /*****************************************************
@@ -432,7 +438,7 @@
 #define SOFT_LINK_DANGLING_ABSOLUTE_TEST_LINK_NAME       "soft_link_dangling_absolute_path"
 
 #define EXTERNAL_LINK_TEST_SUBGROUP_NAME "external_link_test"
-#define EXTERNAL_LINK_TEST_FILE_NAME     "/home/test_user1/ext_link_file"
+#define EXTERNAL_LINK_TEST_FILE_NAME     "ext_link_file"
 #define EXTERNAL_LINK_TEST_LINK_NAME     "ext_link"
 
 #define EXTERNAL_LINK_TEST_DANGLING_DSET_SPACE_RANK 2
@@ -980,7 +986,7 @@ test_create_file(void)
     if (H5Pset_fapl_rest_vol(fapl) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fcreate(FILENAME, H5F_ACC_TRUNC, H5P_DEFAULT, fapl)) < 0) {
+    if ((file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl)) < 0) {
         H5_FAILED();
         printf("    couldn't create file\n");
         goto error;
@@ -1091,7 +1097,7 @@ test_get_file_info(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -1132,8 +1138,11 @@ static int
 test_nonexistent_file(void)
 {
     hid_t file_id = -1, fapl_id = -1;
+    char  test_filename[FILENAME_MAX_LENGTH];
 
     TESTING("failure for opening non-existent file")
+
+    snprintf(test_filename, FILENAME_MAX_LENGTH, "%s/%s/%s", TEST_DIR_PREFIX, username, NONEXISTENT_FILENAME);
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -1148,7 +1157,7 @@ test_nonexistent_file(void)
 #endif
 
     H5E_BEGIN_TRY {
-        if ((file_id = H5Fopen(NONEXISTENT_FILENAME, H5F_ACC_RDWR, fapl_id)) >= 0) {
+        if ((file_id = H5Fopen(test_filename, H5F_ACC_RDWR, fapl_id)) >= 0) {
             H5_FAILED();
             printf("    non-existent file was opened!\n");
             goto error;
@@ -1187,8 +1196,11 @@ test_get_file_intent(void)
     hid_t    dset_id = -1;
     hid_t    dset_dtype = -1;
     hid_t    space_id = -1;
+    char     test_filename[FILENAME_MAX_LENGTH];
 
     TESTING("retrieve file intent")
+
+    snprintf(test_filename, FILENAME_MAX_LENGTH, "%s/%s/%s", TEST_DIR_PREFIX, username, FILE_INTENT_TEST_FILENAME);
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -1199,7 +1211,7 @@ test_get_file_intent(void)
         TEST_ERROR
 
     /* Test that file intent works correctly for file create */
-    if ((file_id = H5Fcreate(FILE_INTENT_TEST_FILENAME, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id)) < 0) {
+    if ((file_id = H5Fcreate(test_filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't create file\n");
         goto error;
@@ -1222,7 +1234,7 @@ test_get_file_intent(void)
         TEST_ERROR
 
     /* Test that file intent works correctly for file open */
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDONLY, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDONLY, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -1267,7 +1279,7 @@ test_get_file_intent(void)
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -1331,7 +1343,7 @@ test_get_file_name(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -1399,7 +1411,7 @@ test_file_reopen(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -1454,7 +1466,7 @@ test_unused_file_API_calls(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -1472,7 +1484,7 @@ test_unused_file_API_calls(void)
         hid_t                obj_id;
         void                *file_handle;
 
-        if (H5Fis_accessible(FILENAME, fapl_id) >= 0)
+        if (H5Fis_accessible(filename, fapl_id) >= 0)
             TEST_ERROR
         if (H5Fflush(file_id, H5F_SCOPE_GLOBAL) >= 0)
             TEST_ERROR
@@ -1535,8 +1547,12 @@ test_file_property_lists(void)
     hid_t file_id1 = -1, file_id2 = -1, fapl_id = -1;
     hid_t fcpl_id1 = -1, fcpl_id2 = -1;
     hid_t fapl_id1 = -1, fapl_id2 = -1;
+    char  test_filename1[FILENAME_MAX_LENGTH], test_filename2[FILENAME_MAX_LENGTH];
 
     TESTING("file property list operations")
+
+    snprintf(test_filename1, FILENAME_MAX_LENGTH, "%s/%s/%s", TEST_DIR_PREFIX, username, FILE_PROPERTY_LIST_TEST_FNAME1);
+    snprintf(test_filename2, FILENAME_MAX_LENGTH, "%s/%s/%s", TEST_DIR_PREFIX, username, FILE_PROPERTY_LIST_TEST_FNAME2);
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -1553,13 +1569,13 @@ test_file_property_lists(void)
     }
 
 
-    if ((file_id1 = H5Fcreate(FILE_PROPERTY_LIST_TEST_FNAME1, H5F_ACC_TRUNC, fcpl_id1, fapl_id)) < 0) {
+    if ((file_id1 = H5Fcreate(test_filename1, H5F_ACC_TRUNC, fcpl_id1, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't create file\n");
         goto error;
     }
 
-    if ((file_id2 = H5Fcreate(FILE_PROPERTY_LIST_TEST_FNAME2, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id)) < 0) {
+    if ((file_id2 = H5Fcreate(test_filename2, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't create file\n");
         goto error;
@@ -1618,13 +1634,13 @@ test_file_property_lists(void)
     if (H5Fclose(file_id2) < 0)
         TEST_ERROR
 
-    if ((file_id1 = H5Fopen(FILE_PROPERTY_LIST_TEST_FNAME1, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id1 = H5Fopen(test_filename1, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
     }
 
-    if ((file_id2 = H5Fopen(FILE_PROPERTY_LIST_TEST_FNAME2, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id2 = H5Fopen(test_filename2, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -1766,7 +1782,7 @@ test_create_group_under_root(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -1824,7 +1840,7 @@ test_create_group_under_existing_group(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -1892,7 +1908,7 @@ test_create_anonymous_group(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -1967,7 +1983,7 @@ test_get_group_info(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -2041,7 +2057,7 @@ test_nonexistent_group(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -2118,7 +2134,7 @@ test_group_property_lists(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -2309,7 +2325,7 @@ test_create_attribute_on_root(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -2529,7 +2545,7 @@ test_create_attribute_on_dataset(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -2759,7 +2775,7 @@ test_create_attribute_on_datatype(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -2992,7 +3008,7 @@ test_create_attribute_with_null_space(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -3104,7 +3120,7 @@ test_create_attribute_with_scalar_space(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -3219,7 +3235,7 @@ test_get_attribute_info(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -3349,7 +3365,7 @@ test_get_attribute_space_and_type(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -3571,7 +3587,7 @@ test_get_attribute_name(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -3739,7 +3755,7 @@ test_create_attribute_with_space_in_name(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -3839,7 +3855,7 @@ test_delete_attribute(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -4020,7 +4036,7 @@ test_write_attribute(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -4136,7 +4152,7 @@ test_read_attribute(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -4286,7 +4302,7 @@ test_rename_attribute(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0){
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -4406,7 +4422,7 @@ test_get_number_attributes(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -4559,7 +4575,7 @@ test_attribute_iterate(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -4847,7 +4863,7 @@ test_attribute_iterate_0_attributes(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -4944,7 +4960,7 @@ test_unused_attribute_API_calls(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -5038,7 +5054,7 @@ test_attribute_property_lists(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -5282,7 +5298,7 @@ test_create_dataset_under_root(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -5360,7 +5376,7 @@ test_create_anonymous_dataset(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -5455,7 +5471,7 @@ test_create_dataset_under_existing_group(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -5538,7 +5554,7 @@ static int test_create_dataset_null_space(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -5636,11 +5652,11 @@ static int test_create_dataset_scalar_space(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
-                }
+    }
 
     if ((container_group = H5Gopen2(file_id, DATASET_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
@@ -5742,7 +5758,7 @@ test_create_dataset_predefined_types(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -5848,7 +5864,7 @@ test_create_dataset_string_types(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -5990,7 +6006,7 @@ test_create_dataset_compound_types(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -6156,7 +6172,7 @@ test_create_dataset_enum_types(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -6322,7 +6338,7 @@ test_create_dataset_array_types(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -6532,7 +6548,7 @@ test_create_dataset_shapes(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -6650,7 +6666,7 @@ test_create_dataset_creation_properties(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -7065,7 +7081,7 @@ test_write_dataset_small_all(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -7188,7 +7204,7 @@ test_write_dataset_small_hyperslab(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -7305,7 +7321,7 @@ test_write_dataset_small_point_selection(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -7417,7 +7433,7 @@ test_write_dataset_large_all(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -7539,7 +7555,7 @@ test_write_dataset_large_hyperslab(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -7667,7 +7683,7 @@ test_read_dataset_small_all(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -7767,7 +7783,7 @@ test_read_dataset_small_hyperslab(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -7883,7 +7899,7 @@ test_read_dataset_small_point_selection(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -7996,7 +8012,7 @@ test_read_dataset_large_all(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -8096,7 +8112,7 @@ test_read_dataset_large_hyperslab(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -8207,7 +8223,7 @@ test_read_dataset_large_point_selection(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -8333,7 +8349,7 @@ test_write_dataset_data_verification(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -8700,7 +8716,7 @@ test_dataset_set_extent(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -8797,7 +8813,7 @@ test_unused_dataset_API_calls(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -8897,7 +8913,7 @@ test_dataset_property_lists(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -9264,7 +9280,7 @@ test_create_committed_datatype(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -9336,7 +9352,7 @@ test_create_anonymous_committed_datatype(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -9422,7 +9438,7 @@ test_create_dataset_with_committed_type(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -9453,7 +9469,7 @@ test_create_dataset_with_committed_type(void)
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -9551,7 +9567,7 @@ test_create_attribute_with_committed_type(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -9665,7 +9681,7 @@ test_delete_committed_type(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -9783,7 +9799,7 @@ test_datatype_property_lists(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -9948,7 +9964,7 @@ test_create_hard_link(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -10038,7 +10054,7 @@ test_create_hard_link_same_loc(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -10179,7 +10195,7 @@ test_create_soft_link_existing_relative(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -10303,7 +10319,7 @@ test_create_soft_link_existing_absolute(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -10408,7 +10424,7 @@ test_create_soft_link_dangling_relative(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -10545,7 +10561,7 @@ test_create_soft_link_dangling_absolute(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -10667,8 +10683,11 @@ test_create_external_link(void)
     hid_t  file_id = -1, fapl_id = -1;
     hid_t  container_group = -1, group_id = -1;
     hid_t  root_id = -1;
+    char   ext_link_filename[FILENAME_MAX_LENGTH];
 
     TESTING("create external link to existing object")
+
+    snprintf(ext_link_filename, FILENAME_MAX_LENGTH, "%s/%s/%s", TEST_DIR_PREFIX, username, EXTERNAL_LINK_TEST_FILE_NAME);
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -10678,7 +10697,7 @@ test_create_external_link(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fcreate(EXTERNAL_LINK_TEST_FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id)) < 0) {
+    if ((file_id = H5Fcreate(ext_link_filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't create file for external link to reference\n");
         goto error;
@@ -10687,7 +10706,7 @@ test_create_external_link(void)
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -10709,7 +10728,7 @@ test_create_external_link(void)
     puts("Creating an external link to root group of other file\n");
 #endif
 
-    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", group_id,
+    if (H5Lcreate_external(ext_link_filename, "/", group_id,
             EXTERNAL_LINK_TEST_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create external link\n");
@@ -10780,8 +10799,11 @@ test_create_dangling_external_link(void)
     hid_t   dset_id = -1;
     hid_t   dset_dtype = -1;
     hid_t   dset_dspace = -1;
+    char    ext_link_filename[FILENAME_MAX_LENGTH];
 
     TESTING("create dangling external link")
+
+    snprintf(ext_link_filename, FILENAME_MAX_LENGTH, "%s/%s/%s", TEST_DIR_PREFIX, username, EXTERNAL_LINK_TEST_FILE_NAME);
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -10791,13 +10813,13 @@ test_create_dangling_external_link(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((ext_file_id = H5Fcreate(EXTERNAL_LINK_TEST_FILE_NAME, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id)) < 0) {
+    if ((ext_file_id = H5Fcreate(ext_link_filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't create file for external link to reference\n");
         goto error;
     }
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -10820,7 +10842,7 @@ test_create_dangling_external_link(void)
     puts("Creating a dangling external link to a dataset in other file\n");
 #endif
 
-    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/" EXTERNAL_LINK_TEST_DANGLING_DSET_NAME, group_id,
+    if (H5Lcreate_external(ext_link_filename, "/" EXTERNAL_LINK_TEST_DANGLING_DSET_NAME, group_id,
             EXTERNAL_LINK_TEST_DANGLING_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create dangling external link\n");
@@ -10947,7 +10969,7 @@ test_create_user_defined_link(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -11027,8 +11049,11 @@ test_delete_link(void)
     hid_t   dset_id = -1, dset_id2 = -1;
     hid_t   dset_dtype = -1;
     hid_t   dset_dspace = -1;
+    char    ext_link_filename[FILENAME_MAX_LENGTH];
 
     TESTING("delete link")
+    
+    snprintf(ext_link_filename, FILENAME_MAX_LENGTH, "%s/%s/%s", TEST_DIR_PREFIX, username, EXTERNAL_LINK_TEST_FILE_NAME);
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -11038,7 +11063,7 @@ test_delete_link(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -11093,14 +11118,14 @@ test_delete_link(void)
         goto error;
     }
 
-    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", group_id, LINK_DELETE_TEST_EXTERNAL_LINK_NAME,
+    if (H5Lcreate_external(ext_link_filename, "/", group_id, LINK_DELETE_TEST_EXTERNAL_LINK_NAME,
             H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create first external link\n");
         goto error;
     }
 
-    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", group_id, LINK_DELETE_TEST_EXTERNAL_LINK_NAME2,
+    if (H5Lcreate_external(ext_link_filename, "/", group_id, LINK_DELETE_TEST_EXTERNAL_LINK_NAME2,
             H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create second external link\n");
@@ -11364,7 +11389,7 @@ test_copy_link(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -11554,7 +11579,7 @@ test_move_link(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -11760,8 +11785,11 @@ test_get_link_info(void)
     hid_t      dset_id = -1;
     hid_t      dset_dtype = -1;
     hid_t      dset_dspace = -1;
+    char       ext_link_filename[FILENAME_MAX_LENGTH];
 
     TESTING("get link info")
+
+    snprintf(ext_link_filename, FILENAME_MAX_LENGTH, "%s/%s/%s", TEST_DIR_PREFIX, username, EXTERNAL_LINK_TEST_FILE_NAME);
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -11771,7 +11799,7 @@ test_get_link_info(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -11812,7 +11840,7 @@ test_get_link_info(void)
         goto error;
     }
 
-    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", group_id, GET_LINK_INFO_TEST_EXT_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+    if (H5Lcreate_external(ext_link_filename, "/", group_id, GET_LINK_INFO_TEST_EXT_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create external link\n");
         goto error;
@@ -12034,7 +12062,7 @@ test_get_link_name(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -12163,7 +12191,7 @@ static int
 test_get_link_val(void)
 {
     H5L_info_t  link_info;
-    const char *ext_link_filename;
+    const char *ext_link_filepath;
     const char *ext_link_val;
     unsigned    ext_link_flags;
     htri_t      link_exists;
@@ -12171,8 +12199,11 @@ test_get_link_val(void)
     char       *link_val_buf = NULL;
     hid_t       file_id = -1, fapl_id = -1;
     hid_t       container_group = -1, group_id = -1;
+    char        ext_link_filename[FILENAME_MAX_LENGTH];
 
     TESTING("get link value")
+
+    snprintf(ext_link_filename, FILENAME_MAX_LENGTH, "%s/%s/%s", TEST_DIR_PREFIX, username, EXTERNAL_LINK_TEST_FILE_NAME);
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -12182,7 +12213,7 @@ test_get_link_val(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -12206,7 +12237,7 @@ test_get_link_val(void)
         goto error;
     }
 
-    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+    if (H5Lcreate_external(ext_link_filename, "/", group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create external link\n");
         goto error;
@@ -12305,13 +12336,13 @@ test_get_link_val(void)
         goto error;
     }
 
-    if (H5Lunpack_elink_val(link_val_buf, link_val_buf_size, &ext_link_flags, &ext_link_filename, &ext_link_val) < 0) {
+    if (H5Lunpack_elink_val(link_val_buf, link_val_buf_size, &ext_link_flags, &ext_link_filepath, &ext_link_val) < 0) {
         H5_FAILED();
         printf("    couldn't unpack external link value buffer\n");
         goto error;
     }
 
-    if (strcmp(ext_link_filename, EXTERNAL_LINK_TEST_FILE_NAME)) {
+    if (strcmp(ext_link_filepath, ext_link_filename)) {
         H5_FAILED();
         printf("    external link target file did not match\n");
         goto error;
@@ -12407,7 +12438,7 @@ test_get_link_val(void)
             goto error;
         }
 
-        if (strcmp(ext_link_filename, EXTERNAL_LINK_TEST_FILE_NAME)) {
+        if (strcmp(ext_link_filename, ext_link_filename)) {
             H5_FAILED();
             printf("    external link target file did not match\n");
             goto error;
@@ -12467,8 +12498,11 @@ test_link_iterate(void)
     hid_t   dset_dtype = -1;
     hid_t   dset_dspace = -1;
     int     halted = 0;
+    char    ext_link_filename[FILENAME_MAX_LENGTH];
 
     TESTING("link iteration")
+
+    snprintf(ext_link_filename, FILENAME_MAX_LENGTH, "%s/%s/%s", TEST_DIR_PREFIX, username, EXTERNAL_LINK_TEST_FILE_NAME);
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -12478,7 +12512,7 @@ test_link_iterate(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -12519,7 +12553,7 @@ test_link_iterate(void)
         goto error;
     }
 
-    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", group_id, LINK_ITER_TEST_EXT_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+    if (H5Lcreate_external(ext_link_filename, "/", group_id, LINK_ITER_TEST_EXT_LINK_NAME, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create external link\n");
         goto error;
@@ -12747,7 +12781,7 @@ test_link_iterate_0_links(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -12889,8 +12923,11 @@ test_link_visit(void)
     hid_t   dset_id = -1;
     hid_t   dset_dtype = -1;
     hid_t   fspace_id = -1;
+    char    ext_link_filename[FILENAME_MAX_LENGTH];
 
     TESTING("link visit without cycles")
+
+    snprintf(ext_link_filename, FILENAME_MAX_LENGTH, "%s/%s/%s", TEST_DIR_PREFIX, username, EXTERNAL_LINK_TEST_FILE_NAME);
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -12900,7 +12937,7 @@ test_link_visit(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -12971,7 +13008,7 @@ test_link_visit(void)
         goto error;
     }
 
-    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", subgroup2, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME3, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+    if (H5Lcreate_external(ext_link_filename, "/", subgroup2, LINK_VISIT_TEST_NO_CYCLE_LINK_NAME3, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create external link\n");
         goto error;
@@ -13164,8 +13201,11 @@ test_link_visit_cycles(void)
     hid_t  file_id = -1, fapl_id = -1;
     hid_t  container_group = -1, group_id = -1;
     hid_t  subgroup1 = -1, subgroup2 = -1;
+    char   ext_link_filename[FILENAME_MAX_LENGTH];
 
     TESTING("link visit with cycles")
+
+    snprintf(ext_link_filename, FILENAME_MAX_LENGTH, "%s/%s/%s", TEST_DIR_PREFIX, username, EXTERNAL_LINK_TEST_FILE_NAME);
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -13175,7 +13215,7 @@ test_link_visit_cycles(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -13219,7 +13259,7 @@ test_link_visit_cycles(void)
         goto error;
     }
 
-    if (H5Lcreate_external(EXTERNAL_LINK_TEST_FILE_NAME, "/", subgroup2, LINK_VISIT_TEST_CYCLE_LINK_NAME3, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+    if (H5Lcreate_external(ext_link_filename, "/", subgroup2, LINK_VISIT_TEST_CYCLE_LINK_NAME3, H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create external link\n");
         goto error;
@@ -13415,7 +13455,7 @@ test_link_visit_0_links(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -13605,7 +13645,7 @@ test_open_dataset_generically(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -13729,7 +13769,7 @@ test_open_group_generically(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -13836,7 +13876,7 @@ test_open_datatype_generically(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -13954,7 +13994,7 @@ test_object_exists(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -14084,7 +14124,7 @@ test_incr_decr_refcount(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -14142,7 +14182,7 @@ test_h5o_copy(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -14240,7 +14280,7 @@ test_h5o_close(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -14363,7 +14403,7 @@ test_object_visit(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -14437,7 +14477,7 @@ test_create_obj_ref(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -14514,7 +14554,7 @@ test_get_ref_type(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -14732,7 +14772,7 @@ test_write_dataset_w_obj_refs(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -14938,7 +14978,7 @@ test_read_dataset_w_obj_refs(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -15194,7 +15234,7 @@ test_write_dataset_w_obj_refs_empty_data(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -15324,7 +15364,7 @@ test_unused_object_API_calls(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -15393,7 +15433,7 @@ test_open_link_without_leading_slash(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -15429,7 +15469,7 @@ test_open_link_without_leading_slash(void)
     if (H5Fclose(file_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -15511,7 +15551,7 @@ test_object_creation_by_absolute_path(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -15690,7 +15730,7 @@ test_absolute_vs_relative_path(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -15990,7 +16030,7 @@ test_url_encoding(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -16146,7 +16186,7 @@ test_symbols_in_compound_field_name(void)
     if (H5Pset_fapl_rest_vol(fapl_id) < 0)
         TEST_ERROR
 
-    if ((file_id = H5Fopen(FILENAME, H5F_ACC_RDWR, fapl_id)) < 0) {
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
         H5_FAILED();
         printf("    couldn't open file\n");
         goto error;
@@ -17265,13 +17305,25 @@ int
 main( int argc, char** argv )
 {
     size_t i;
-    int    nerrors;
+    int    nerrors = 0;
+
+    if (NULL == (username = getenv("HSDS_USERNAME"))) {
+        printf("HSDS_USERNAME is not set! Tests cannot proceed.\n\n");
+        goto error;
+    }
+
+    if (!getenv("HSDS_ENDPOINT")) {
+        printf("HSDS_ENDPOINT is not set! Tests cannot proceed.\n\n");
+        goto error;
+    }
+
+    snprintf(filename, FILENAME_MAX_LENGTH, "%s/%s/%s", TEST_DIR_PREFIX, username, TEST_FILE_NAME);
 
     printf("Test parameters:\n\n");
     printf("  - URL: %s\n", getenv("HSDS_ENDPOINT") ? getenv("HSDS_ENDPOINT") : "(null)");
     printf("  - Username: %s\n", getenv("HSDS_USERNAME") ? getenv("HSDS_USERNAME") : "(null)");
     printf("  - Password: %s\n", getenv("HSDS_PASSWORD") ? getenv("HSDS_PASSWORD") : "(null)");
-    printf("  - Test File name: %s\n", FILENAME);
+    printf("  - Test File name: %s\n", filename);
     printf("\n\n");
 
     srand((unsigned) time(NULL));
@@ -17291,7 +17343,7 @@ main( int argc, char** argv )
     return 0;
 
 error:
-    printf("*** %d TEST%s FAILED ***\n", nerrors, nerrors > 1 ? "S" : "");
+    printf("*** %d TEST%s FAILED ***\n", nerrors, (!nerrors || nerrors > 1) ? "S" : "");
 
     return 1;
 }
