@@ -20,9 +20,10 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 /* Hash table implementation */
 
-#include <rest_vol_hash_table.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "util/rest_vol_hash_table.h"
 
 struct rv_hash_table_entry {
 	rv_hash_table_key_t key;

@@ -48,8 +48,8 @@
 #include "rest_vol_err.h"        /* REST VOL error reporting macros */
 
 /* Includes for hash table to determine object uniqueness */
-#include "rest_vol_hash_table.h"
-#include "rest_vol_hash_string.h"
+#include "util/rest_vol_hash_string.h"
+#include "util/rest_vol_hash_table.h"
 
 /* Macro to handle various HTTP response codes */
 #define HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value)                                                     \
@@ -9105,7 +9105,7 @@ RV_get_object_info_callback(char *HTTP_response,
     /* Find the "home" href that corresponds to the object's domain path */
     for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
         yajl_val  href_obj = YAJL_GET_ARRAY(key_obj)->values[i];
-        size_t    j, path_value_idx;
+        size_t    j;
 
         if (!YAJL_IS_OBJECT(href_obj))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "HREFs array value is not an object")

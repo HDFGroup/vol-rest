@@ -23,16 +23,19 @@ add_definitions(${REST_VOL_EXTRA_C_FLAGS})
 #-----------------------------------------------------------------------------
 set (REST_VOL_SRCS
     ${REST_VOL_SRC_DIR}/rest_vol.c
-    ${REST_VOL_SRC_DIR}/rest_vol_hash_table.c
 )
 
 set (REST_VOL_HDRS
     ${REST_VOL_SRC_DIR}/rest_vol.h
     ${REST_VOL_SRC_DIR}/rest_vol_public.h
     ${REST_VOL_SRC_DIR}/rest_vol_err.h
-    ${REST_VOL_SRC_DIR}/rest_vol_hash_table.h
-    ${REST_VOL_SRC_DIR}/rest_vol_hash_string.h
 )
+
+#-----------------------------------------------------------------------------
+# Add in source files from the "util" diectory
+#-----------------------------------------------------------------------------
+add_subdirectory(util ${PROJECT_BINARY_DIR}/src/util)
+
 IDE_GENERATED_PROPERTIES("REST_VOL" "${REST_VOL_HDRS}" "${REST_VOL_SRCS}")
 
 set (REST_VOL_PUBLIC_HEADERS
