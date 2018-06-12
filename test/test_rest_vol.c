@@ -16919,7 +16919,9 @@ generate_random_datatype(H5T_class_t parent_class)
              * strings and only H5T_STR_NULLPAD is supported for string padding for
              * fixed-length strings, but these may change in the future.
              */
+#if 0
             if (0 == (rand() % 2)) {
+#endif
                 if ((datatype = H5Tcreate(H5T_STRING, (size_t) (rand() % STRING_TYPE_MAX_SIZE))) < 0) {
                     H5_FAILED();
                     printf("    couldn't create fixed-length string datatype\n");
@@ -16931,7 +16933,10 @@ generate_random_datatype(H5T_class_t parent_class)
                     printf("    couldn't set H5T_STR_NULLPAD for fixed-length string type\n");
                     goto error;
                 }
+#if 0
             }
+#endif
+#if 0
             else {
                 if ((datatype = H5Tcreate(H5T_STRING, H5T_VARIABLE)) < 0) {
                     H5_FAILED();
@@ -16945,6 +16950,7 @@ generate_random_datatype(H5T_class_t parent_class)
                     goto error;
                 }
             }
+#endif
 
             if (H5Tset_cset(datatype, H5T_CSET_ASCII) < 0) {
                 H5_FAILED();
