@@ -662,6 +662,8 @@ static herr_t RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int
 static void   RV_free_link_table(link_table_entry *link_table, size_t num_entries);
 static herr_t RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_data *iter_data, const char *cur_link_rel_path);
 
+static void RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
+
 #ifdef RV_PLUGIN_DEBUG
 /* Helper functions to print out useful debugging information */
 static const char *object_type_to_string(H5I_type_t obj_type);
@@ -8906,6 +8908,11 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
     if (link_iter_data->is_recursive) {
         if (NULL == (visited_link_table = rv_hash_table_new(rv_hash_string, rv_compare_string_keys)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate hash table for determining cyclic links")
+
+        /* Since the JSON parse trees aren't persistent, the keys inserted into the visited link hash table
+         * are RV_malloc()ed copies. Make sure to free these when freeing the table.
+         */
+        rv_hash_table_register_free_functions(visited_link_table, RV_free_visited_link_hash_table_key, NULL);
     } /* end if */
 
     /* Build a table of all of the links in the given group */
@@ -14223,9 +14230,18 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(
 
                 /* Check if this link has been visited already before processing it */
                 if (RV_HASH_TABLE_NULL == rv_hash_table_lookup(visited_link_table, link_id)) {
-                    /* Add the key to the hash table to prevent future cyclic links from being visited */
-                    if (!rv_hash_table_insert(visited_link_table, link_id, link_id))
+                    size_t link_id_len = strlen(link_id);
+                    char*  link_id_copy;
+
+                    /* Make a copy of the key and add it to the hash table to prevent future cyclic links from being visited */
+                    if (NULL == (link_id_copy = RV_malloc(link_id_len + 1)))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "unable to allocate space for key in visited link hash table")
+
+                    strncpy(link_id_copy, link_id, link_id_len);
+                    link_id_copy[link_id_len] = '\0';
+
+                    if (!rv_hash_table_insert(visited_link_table, link_id_copy, link_id_copy))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTINSERT, FAIL, "unable to insert key into visited link hash table")
 
                     /* Make a GET request to the server to retrieve all of the links in the subgroup */
 
@@ -14509,6 +14525,24 @@ done:
 
     return ret_value;
 } /* end RV_traverse_link_table() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_free_visited_link_hash_table_key
+ *
+ * Purpose:     Helper function to free keys in the visited link hash table
+ *              used by link iteration.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              June, 2018
+ */
+static void
+RV_free_visited_link_hash_table_key(rv_hash_table_key_t value)
+{
+    value = RV_free(value);
+}
 
 #ifdef RV_PLUGIN_DEBUG
 
