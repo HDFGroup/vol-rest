@@ -519,6 +519,9 @@ static void *RV_calloc(size_t size);
 static void *RV_realloc(void *mem, size_t size);
 static void *RV_free(void *mem);
 
+/* Function to set the connection information for the plugin to connect to the server */
+static herr_t RV_set_connection_information(void);
+
 /* REST VOL Attribute callbacks */
 static void  *RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, hid_t acpl_id, hid_t aapl_id, hid_t dxpl_id, void **req);
 static void  *RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, hid_t aapl_id, hid_t dxpl_id, void **req);
@@ -993,14 +996,7 @@ RV_term(hid_t vtpl_id)
 herr_t
 H5Pset_fapl_rest_vol(hid_t fapl_id)
 {
-    const char *URL;
-    const char *username;
-    const char *password;
-    size_t      URL_len = 0;
-    herr_t      ret_value;
-
-    if (NULL == (URL = getenv("HSDS_ENDPOINT")))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "must specify a base URL - please set HSDS_ENDPOINT environment variable")
+    herr_t ret_value;
 
     if (REST_g < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_UNINITIALIZED, FAIL, "REST VOL plugin not initialized")
@@ -1011,32 +1007,165 @@ H5Pset_fapl_rest_vol(hid_t fapl_id)
     if ((ret_value = H5Pset_vol(fapl_id, REST_g, NULL)) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't set REST VOL plugin in FAPL")
 
-    /* Save a copy of the base URL being worked on so that operations like
-     * creating a Group can be redirected to "base URL"/groups by building
-     * off of the base URL supplied.
-     */
-    URL_len = strlen(URL);
-    if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space for necessary base URL")
-
-    strncpy(base_URL, URL, URL_len);
-    base_URL[URL_len] = '\0';
-
-    if ((username = getenv("HSDS_USERNAME")) && strlen(username)) {
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, username))
-            FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf)
-    } /* end if */
-
-    if ((password = getenv("HSDS_PASSWORD")) && strlen(password)) {
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, password))
-            FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf)
-    } /* end if */
+    if (RV_set_connection_information() < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't set REST VOL plugin connection information")
 
 done:
     PRINT_ERROR_STACK
 
     return ret_value;
 } /* end H5Pset_fapl_rest_vol() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_set_connection_information
+ *
+ * Purpose:     Set the connection information for the REST VOL by first
+ *              attempting to get the information from the environment,
+ *              then, failing that, attempting to pull the information from
+ *              a config file in the user's home directory.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              June, 2018
+ */
+static herr_t
+RV_set_connection_information(void)
+{
+    const char *URL;
+    size_t      URL_len = 0;
+    FILE       *config_file = NULL;
+    herr_t      ret_value = SUCCEED;
+
+    /*
+     * Attempt to pull in configuration/authentication information from
+     * the environment.
+     */
+    if ((URL = getenv("HSDS_ENDPOINT"))) {
+        const char *username = getenv("HSDS_USERNAME");
+        const char *password = getenv("HSDS_PASSWORD");
+
+        /*
+         * Save a copy of the base URL being worked on so that operations like
+         * creating a Group can be redirected to "base URL"/groups by building
+         * off of the base URL supplied.
+         */
+        URL_len = strlen(URL);
+        if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for base URL")
+
+        strncpy(base_URL, URL, URL_len);
+        base_URL[URL_len] = '\0';
+
+        if (username && strlen(username)) {
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, username))
+                FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf)
+        } /* end if */
+
+        if (password && strlen(password)) {
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, password))
+                FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf)
+        } /* end if */
+    } /* end if */
+    else {
+        const char *cfg_file_name = ".hscfg";
+        size_t      pathname_len = 0;
+        char       *home_dir = NULL;
+        char       *pathname = NULL;
+        char        file_line[1024];
+        int         file_path_len = 0;
+
+        /*
+         * If a valid endpoint was not obtained from the environment,
+         * try to get the connection information from a config file
+         * in the user's home directory.
+         */
+#ifdef WIN32
+        char *home_drive = NULL;
+
+        if (NULL == (home_drive = getenv("HOMEDRIVE")))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "reading config file - unable to retrieve location of home directory")
+
+        if (NULL == (home_dir = getenv("HOMEPATH")))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "reading config file - unable to retrieve location of home directory")
+
+        pathname_len = strlen(home_drive) + strlen(home_dir) + strlen(cfg_file_name) + 3;
+        if (NULL == (pathname = RV_malloc(pathname_len)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "unable to allocate space for config file pathname")
+
+        if ((file_path_len = snprintf(pathname, pathname_len, "%s\%s\%s", home_drive, home_dir, cfg_file_name)) < 0)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "snprintf error")
+
+        if (file_path_len >= pathname_len)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "config file path length exceeded maximum path length")
+#else
+        if (NULL == (home_dir = getenv("HOME")))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "reading config file - unable to retrieve location of home directory")
+
+        pathname_len = strlen(home_dir) + strlen(cfg_file_name) + 2;
+        if (NULL == (pathname = RV_malloc(pathname_len)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "unable to allocate space for config file pathname")
+
+        if ((file_path_len = snprintf(pathname, pathname_len, "%s/%s", home_dir, cfg_file_name)) < 0)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+        if (file_path_len >= pathname_len)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "config file path length exceeded maximum path length")
+#endif
+
+        if (NULL == (config_file = fopen(pathname, "r")))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTOPENFILE, FAIL, "unable to open config file")
+
+        /*
+         * Parse the connection information by searching for
+         * URL, username and password key-value pairs.
+         */
+        while (fgets(file_line, sizeof(file_line), config_file) != NULL) {
+            const char *key = strtok(file_line, " =\n");
+            const char *val = strtok(NULL, " =\n");
+
+            if (!strcmp(key, "hs_endpoint")) {
+                if (val) {
+                    /*
+                     * Save a copy of the base URL being worked on so that operations like
+                     * creating a Group can be redirected to "base URL"/groups by building
+                     * off of the base URL supplied.
+                     */
+                    URL_len = strlen(val);
+                    if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
+                        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for base URL")
+
+                    strncpy(base_URL, val, URL_len);
+                    base_URL[URL_len] = '\0';
+                } /* end if */
+            } /* end if */
+            else if (!strcmp(key, "hs_username")) {
+                if (val && strlen(val)) {
+                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, val))
+                        FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf)
+                } /* end if */
+            } /* end else if */
+            else if (!strcmp(key, "hs_password")) {
+                if (val && strlen(val)) {
+                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, val))
+                        FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf)
+                } /* end if */
+            } /* end else if */
+        } /* end while */
+    } /* end else */
+
+    if (!base_URL)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "must specify a base URL - please set HSDS_ENDPOINT environment variable or create a config file")
+
+done:
+    if (config_file)
+        fclose(config_file);
+
+    PRINT_ERROR_STACK
+
+    return ret_value;
+} /* end RV_set_connection_information() */
 
 
 const char *
