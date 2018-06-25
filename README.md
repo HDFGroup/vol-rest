@@ -572,9 +572,6 @@ Due to underlying implementation details, the following circumstances are
 known to be problematic for the REST VOL plugin and will likely cause issues
 for the application if not avoided or taken into account:
 
-+ Cyclic links in the file. The plugin currently cannot detect cyclic links,
-  which will generally end in infinite recursion and application stack issues.
-
 + Trying to open an object in the file by using a pathname where one or more
   components of the path on the way to the object in question are soft links.
   For example, trying to open a dataset by the pathname
