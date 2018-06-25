@@ -228,9 +228,9 @@ done:
 hid_t
 H5VL_register_id(H5I_type_t type, void *object, H5VL_t *vol_driver, hbool_t app_ref)
 {
-    H5VL_object_t *new_obj = NULL;
-    H5T_t *dt = NULL;
-    hid_t ret_value = H5I_INVALID_HID;
+    H5VL_object_t  *new_obj     = NULL;
+    H5T_t          *dt          = NULL;
+    hid_t           ret_value   = H5I_INVALID_HID;
 
     FUNC_ENTER_NOAPI(H5I_INVALID_HID)
 
@@ -240,10 +240,11 @@ H5VL_register_id(H5I_type_t type, void *object, H5VL_t *vol_driver, hbool_t app_
 
     /* setup VOL object */
     if (NULL == (new_obj = H5FL_CALLOC(H5VL_object_t)))
-        HGOTO_ERROR(H5E_VOL, H5E_NOSPACE, H5I_INVALID_HID, "can't allocate top object structure");
+        HGOTO_ERROR(H5E_VOL, H5E_CANTALLOC, H5I_INVALID_HID, "can't allocate top object structure");
     new_obj->vol_info = vol_driver;
-    vol_driver->nrefs ++;
     new_obj->vol_obj = object;
+
+    vol_driver->nrefs++;
 
     if (H5I_DATATYPE == type) {
         if (NULL == (dt = H5T_construct_datatype(new_obj)))
@@ -265,8 +266,8 @@ done:
 /*-------------------------------------------------------------------------
  * Function:    H5VL_free_object
  *
- * Purpose:     Wrapper to register an object ID with a VOL aux struct
- *              and increment ref count on VOL driver ID
+ * Purpose:     Wrapper to unregister an object ID with a VOL aux struct
+ *              and decrement ref count on VOL driver ID
  *
  * Return:      SUCCEED/FAIL
  *
@@ -533,8 +534,8 @@ done:
 /*-------------------------------------------------------------------------
  * Function:    H5VL_object_verify
  *
- * Purpose:     Utility function to return the VOL object pointer associated with
- *              a hid_t.
+ * Purpose:     Utility function to return the VOL object pointer associated
+ *              with an identifier.
  *
  * Return:      Success:    object pointer
  *              Failure:    NULL

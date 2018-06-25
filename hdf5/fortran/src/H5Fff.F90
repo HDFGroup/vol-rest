@@ -506,6 +506,7 @@ CONTAINS
 !  port).  February 28, 2001
 !
 ! SOURCE
+#ifdef VOL_FIXME
   SUBROUTINE h5fis_hdf5_f(name, status, hdferr)
     IMPLICIT NONE
     CHARACTER(LEN=*), INTENT(IN) :: name   ! Name of the file
@@ -533,6 +534,8 @@ CONTAINS
     IF (flag .EQ. 0) status = .FALSE.
 
   END SUBROUTINE h5fis_hdf5_f
+#endif
+
 !****s* H5F/h5fclose_f
 !
 ! NAME

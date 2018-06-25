@@ -422,6 +422,7 @@ h5fget_access_plist_c (hid_t_f *file_id, hid_t_f *access_id)
  *
  * SOURCE
 */
+#ifndef H5_NO_DEPRECATED_SYMBOLS
 int_f
 h5fis_hdf5_c (_fcd name, int_f *namelen, int_f *flag)
 /******/
@@ -448,6 +449,8 @@ h5fis_hdf5_c (_fcd name, int_f *namelen, int_f *flag)
      HDfree(c_name);
      return ret_value;
 }
+#endif /* H5_NO_DEPRECATED_SYMBOLS */
+
 /****if* H5Ff/h5fclose_c
  * NAME
  *  h5fclose_c

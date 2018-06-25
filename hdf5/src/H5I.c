@@ -753,10 +753,10 @@ H5I_register(H5I_type_t type, const void *object, hbool_t app_ref)
 
     /* Create the struct & its ID */
     new_id = H5I_MAKE(type, type_ptr->nextid);
-    id_ptr->id = new_id;
-    id_ptr->count = 1; /* initial reference count */
-    id_ptr->app_count = !!app_ref;
-    id_ptr->obj_ptr = object;
+    id_ptr->id          = new_id;
+    id_ptr->count       = 1; /* initial reference count */
+    id_ptr->app_count   = !!app_ref;
+    id_ptr->obj_ptr     = object;
 
     /* Insert into the type */
     if (H5SL_insert(type_ptr->ids, id_ptr, &id_ptr->id) < 0)
@@ -790,46 +790,58 @@ done:
  *-------------------------------------------------------------------------
  */
 herr_t
-H5I_register_with_id(H5I_type_t type, const void *object, hbool_t app_ref, hid_t id)
+H5I_register_with_id(H5I_type_t type, const void *object, H5VL_t *vol_info,
+        hbool_t app_ref, hid_t id)
 {
-    H5I_id_type_t   *type_ptr;              /* ptr to the type                  */
-    H5I_id_info_t   *id_ptr;                /* ptr to the new ID information    */
+    H5VL_object_t  *new_obj = NULL;         /* pointer to new VOL object        */
+    H5I_id_type_t  *type_ptr;               /* ptr to the type                  */
+    H5I_id_info_t  *id_ptr;                 /* ptr to the new ID information    */
     herr_t          ret_value = SUCCEED;    /* return value                     */
 
     FUNC_ENTER_NOAPI(FAIL)
 
     /* Check arguments */
+    HDassert(object);
+    HDassert(vol_info);
 
     /* Make sure ID is not already in use */
-    if(NULL != (id_ptr = H5I__find_id(id)))
+    if (NULL != (id_ptr = H5I__find_id(id)))
         HGOTO_ERROR(H5E_ATOM, H5E_BADRANGE, FAIL, "ID already in use?!")
 
     /* Make sure type number is valid */
-    if(type <= H5I_BADID || type >= H5I_next_type)
+    if (type <= H5I_BADID || type >= H5I_next_type)
         HGOTO_ERROR(H5E_ARGS, H5E_BADRANGE, FAIL, "invalid type number")
 
     /* Get type pointer from list of types */
     type_ptr = H5I_id_type_list_g[type];
 
-    if(NULL == type_ptr || type_ptr->init_count <= 0)
+    if (NULL == type_ptr || type_ptr->init_count <= 0)
         HGOTO_ERROR(H5E_ATOM, H5E_BADGROUP, FAIL, "invalid type")
 
     /* Make sure requested ID belongs to object's type */
-    if(H5I_TYPE(id) != type)
+    if (H5I_TYPE(id) != type)
         HGOTO_ERROR(H5E_ATOM, H5E_BADRANGE, FAIL, "invalid type for provided ID")
 
     /* Allocate new structure to house this ID */
-    if(NULL == (id_ptr = H5FL_MALLOC(H5I_id_info_t)))
+    if (NULL == (id_ptr = H5FL_MALLOC(H5I_id_info_t)))
         HGOTO_ERROR(H5E_ATOM, H5E_NOSPACE, FAIL, "memory allocation failed")
 
+    /* Set up the new VOL object */
+    if (NULL == (new_obj = H5FL_CALLOC(H5VL_object_t)))
+        HGOTO_ERROR(H5E_ATOM, H5E_CANTALLOC, FAIL, "can't allocate top object structure");
+    new_obj->vol_info = vol_info;
+    new_obj->vol_obj = object;
+
+    vol_info->nrefs++;
+
     /* Create the struct & insert requested ID */
-    id_ptr->id = id;
-    id_ptr->count = 1; /*initial reference count*/
-    id_ptr->app_count = !!app_ref;
-    id_ptr->obj_ptr = object;
+    id_ptr->id          = id;
+    id_ptr->count       = 1; /*initial reference count*/
+    id_ptr->app_count   = !!app_ref;
+    id_ptr->obj_ptr     = new_obj;
 
     /* Insert into the type */
-    if(H5SL_insert(type_ptr->ids, id_ptr, &id_ptr->id) < 0)
+    if (H5SL_insert(type_ptr->ids, id_ptr, &id_ptr->id) < 0)
         HGOTO_ERROR(H5E_ATOM, H5E_CANTINSERT, FAIL, "can't insert ID node into skip list")
     type_ptr->id_count++;
 
@@ -899,8 +911,8 @@ H5I_object(hid_t id)
     /* General lookup of the ID */
     if (NULL != (id_ptr = H5I__find_id(id))) {
         /* Get the object pointer to return */
-        /* (Casting away const OK -QAK) */
-        ret_value = (void *)id_ptr->obj_ptr;
+        ret_value = (void *)id_ptr->obj_ptr;        /* (Casting away const OK -QAK) */
+
     }
 
     FUNC_LEAVE_NOAPI(ret_value)

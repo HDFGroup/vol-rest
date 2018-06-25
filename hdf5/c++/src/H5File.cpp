@@ -181,6 +181,7 @@ H5File::H5File(const H5File& original) : Group()
     incRefCount(); // increment number of references to this id
 }
 
+#ifndef H5_NO_DEPRECATED_SYMBOLS
 //--------------------------------------------------------------------------
 // Function:    H5File::isHdf5 (static)
 ///\brief       Determines whether a file in HDF5 format. (Static)
@@ -215,6 +216,7 @@ bool H5File::isHdf5(const H5std_string& name)
 {
    return(isHdf5( name.c_str()));
 }
+#endif /* H5_NO_DEPRECATED_SYMBOLS */
 
 //--------------------------------------------------------------------------
 // Function:    openFile

@@ -3306,9 +3306,17 @@ H5F_start_swmr_write(H5F_t *file)
         HGOTO_ERROR(H5E_FILE, H5E_CANTFLUSH, FAIL, "unable to evict file's cached information")
 
     /* Refresh (reopen) the objects (groups & datasets) in the file */
-    for (u = 0; u < grp_dset_count; u++)
-        if (H5O_refresh_metadata_reopen(obj_ids[u], &obj_glocs[u], H5AC_ind_read_dxpl_id, TRUE) < 0)
+    for (u = 0; u < grp_dset_count; u++) {
+
+        H5VL_object_t *vol_obj = NULL;
+
+        /* Get a copy of the VOL info from the ID */
+        if (NULL == (vol_obj = H5VL_get_object(obj_ids[u])))
+            HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid object identifier")
+
+        if (H5O_refresh_metadata_reopen(obj_ids[u], &obj_glocs[u], H5AC_ind_read_dxpl_id, vol_obj->vol_info, TRUE) < 0)
             HGOTO_ERROR(H5E_ATOM, H5E_CLOSEERROR, FAIL, "can't refresh-close object")
+    }
 
     /* Unlock the file */
     if (H5FD_unlock(file->shared->lf) < 0)

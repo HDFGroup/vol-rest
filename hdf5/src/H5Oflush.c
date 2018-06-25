@@ -233,6 +233,7 @@ done:
 herr_t
 H5O_refresh_metadata(hid_t oid, H5O_loc_t oloc, hid_t dxpl_id)
 {
+    H5VL_object_t *vol_obj = NULL;      /* VOL object associated with the ID */
     hbool_t objs_incr = FALSE;          /* Whether the object count in the file was incremented */
     herr_t ret_value = SUCCEED;         /* Return value */
 
@@ -255,12 +256,16 @@ H5O_refresh_metadata(hid_t oid, H5O_loc_t oloc, hid_t dxpl_id)
         H5F_incr_nopen_objs(oloc.file);
         objs_incr = TRUE;
 
+        /* Get a copy of the VOL info from the ID */
+        if (NULL == (vol_obj = H5VL_get_object(oid)))
+            HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid object identifier")
+
         /* Close object & evict its metadata */
         if((H5O_refresh_metadata_close(oid, oloc, &obj_loc, dxpl_id)) < 0)
             HGOTO_ERROR(H5E_OHDR, H5E_CANTLOAD, FAIL, "unable to refresh object")
 
         /* Re-open the object, re-fetching its metadata */
-        if((H5O_refresh_metadata_reopen(oid, &obj_loc, dxpl_id, FALSE)) < 0)
+        if((H5O_refresh_metadata_reopen(oid, &obj_loc, dxpl_id, vol_obj->vol_info, FALSE)) < 0)
             HGOTO_ERROR(H5E_OHDR, H5E_CANTLOAD, FAIL, "unable to refresh object")
     }
 
@@ -358,7 +363,7 @@ done:
  *-------------------------------------------------------------------------
  */
 herr_t
-H5O_refresh_metadata_reopen(hid_t oid, H5G_loc_t *obj_loc, hid_t dxpl_id, hbool_t start_swmr)
+H5O_refresh_metadata_reopen(hid_t oid, H5G_loc_t *obj_loc, hid_t dxpl_id, H5VL_t *vol_info, hbool_t start_swmr)
 {
     void *object = NULL;        /* Dataset for this operation */
     H5I_type_t type;            /* Type of object for the ID */
@@ -366,28 +371,31 @@ H5O_refresh_metadata_reopen(hid_t oid, H5G_loc_t *obj_loc, hid_t dxpl_id, hbool_
 
     FUNC_ENTER_NOAPI(FAIL)
 
+    HDassert(obj_loc);
+    HDassert(vol_info);
+
     /* Get object's type */
     type = H5I_get_type(oid);
 
-    switch(type) {
+    switch (type) {
         case H5I_GROUP:
             /* Re-open the group */
-            if(NULL == (object = H5G_open(obj_loc, dxpl_id)))
+            if (NULL == (object = H5G_open(obj_loc, dxpl_id)))
                 HGOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, FAIL, "unable to open group")
             break;
 
         case H5I_DATATYPE:
             /* Re-open the named datatype */
-            if(NULL == (object = H5T_open(obj_loc, dxpl_id)))
+            if (NULL == (object = H5T_open(obj_loc, dxpl_id)))
                 HGOTO_ERROR(H5E_DATATYPE, H5E_CANTOPENOBJ, FAIL, "unable to open named datatype")
             break;
 
         case H5I_DATASET:
             /* Re-open the dataset */
-            if(NULL == (object = H5D_open(obj_loc, H5P_DATASET_ACCESS_DEFAULT, dxpl_id)))
+            if (NULL == (object = H5D_open(obj_loc, H5P_DATASET_ACCESS_DEFAULT, dxpl_id)))
                 HGOTO_ERROR(H5E_DATASET, H5E_CANTOPENOBJ, FAIL, "unable to open dataset")
-            if(!start_swmr) /* No need to handle multiple opens when H5Fstart_swmr_write() */
-                if(H5D_mult_refresh_reopen((H5D_t *)object, dxpl_id) < 0)
+            if (!start_swmr) /* No need to handle multiple opens when H5Fstart_swmr_write() */
+                if (H5D_mult_refresh_reopen((H5D_t *)object, dxpl_id) < 0)
                     HGOTO_ERROR(H5E_DATASET, H5E_CANTOPENOBJ, FAIL, "unable to finish refresh for dataset")
             break;
 
@@ -411,7 +419,7 @@ H5O_refresh_metadata_reopen(hid_t oid, H5G_loc_t *obj_loc, hid_t dxpl_id, hbool_
     }
 
     /* Re-register ID for the object */
-    if((H5I_register_with_id(type, object, TRUE, oid)) < 0)
+    if ((H5I_register_with_id(type, object, vol_info, TRUE, oid)) < 0)
         HGOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "unable to re-register object atom")
 
 done:

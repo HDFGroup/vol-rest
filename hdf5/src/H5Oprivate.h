@@ -43,6 +43,7 @@ typedef struct H5O_fill_t H5O_fill_t;
 #include "H5HGprivate.h"        /* Global Heaps                         */
 #include "H5SLprivate.h"	/* Skip lists				*/
 #include "H5Tprivate.h"		/* Datatype functions			*/
+#include "H5VLprivate.h"
 #include "H5Zprivate.h"         /* I/O pipeline filters			*/
 
 /* Forward references of package typedefs */
@@ -944,7 +945,7 @@ H5_DLL herr_t H5O_msg_get_flags(const H5O_loc_t *loc, unsigned type_id, hid_t dx
 H5_DLL herr_t H5O_flush_common(H5O_loc_t *oloc, hid_t obj_id, hid_t dxpl_id);
 H5_DLL herr_t H5O_refresh_metadata(hid_t oid, H5O_loc_t oloc, hid_t dxpl_id);
 H5_DLL herr_t H5O_refresh_metadata_close(hid_t oid, H5O_loc_t oloc, H5G_loc_t *obj_loc, hid_t dxpl_id);
-H5_DLL herr_t H5O_refresh_metadata_reopen(hid_t oid, H5G_loc_t *obj_loc, hid_t dxpl_id, hbool_t start_swmr);
+H5_DLL herr_t H5O_refresh_metadata_reopen(hid_t oid, H5G_loc_t *obj_loc, hid_t dxpl_id, H5VL_t *vol_info, hbool_t start_swmr);
 
 /* Object copying routines */
 H5_DLL herr_t H5O_copy_header_map(const H5O_loc_t *oloc_src, H5O_loc_t *oloc_dst /*out */,

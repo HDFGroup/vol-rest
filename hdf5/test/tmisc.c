@@ -2713,15 +2713,15 @@ test_misc15(void)
     fapl = H5Fget_access_plist(file);
     CHECK(fapl, FAIL, "H5Fget_access_plist");
 
-    ret = H5Pclose(fapl);
-    CHECK(ret, FAIL, "H5Pclose");
-
     ret = H5Fclose(file);
     CHECK(ret, FAIL, "H5Fclose");
 
     /* Verify that the file is still OK */
-    ret = H5Fis_hdf5(MISC15_FILE);
+    ret = H5Fis_accessible(MISC15_FILE, fapl);
     CHECK(ret, FAIL, "H5Fis_hdf5");
+
+    ret = H5Pclose(fapl);
+    CHECK(ret, FAIL, "H5Pclose");
 
     file = H5Fopen(MISC15_FILE, H5F_ACC_RDONLY, H5P_DEFAULT);
     CHECK(file, FAIL, "H5Fopen");

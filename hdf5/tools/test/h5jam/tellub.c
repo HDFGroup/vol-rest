@@ -105,12 +105,7 @@ parse_command_line (int argc, const char *argv[])
  *
  * Purpose:     HDF5 user block unjammer
  *
- * Return:      Success:    0
- *              Failure:    1
- *
- * Programmer:
- *
- * Modifications:
+ * Return:      EXIT_SUCCESS/EXIT_FAILURE
  *
  *-------------------------------------------------------------------------
  */
@@ -124,7 +119,7 @@ main (int argc, const char *argv[])
   hsize_t usize;
   htri_t testval;
   herr_t status;
-  hid_t plist;
+  hid_t plist = -1;
 
   h5tools_setprogname(PROGRAMNAME);
   h5tools_setstatus(EXIT_SUCCESS);
@@ -136,53 +131,53 @@ main (int argc, const char *argv[])
   H5Eget_auto2(H5E_DEFAULT, &func, &edata);
   H5Eset_auto2(H5E_DEFAULT, NULL, NULL);
 
-  parse_command_line (argc, argv);
+  parse_command_line(argc, argv);
 
   if (argc <= (opt_ind))
     {
       error_msg("missing file name\n");
       usage (h5tools_getprogname());
-      return (EXIT_FAILURE);
+      return EXIT_FAILURE;
     }
 
-  ifname = HDstrdup (argv[opt_ind]);
+  ifname = HDstrdup(argv[opt_ind]);
 
-  testval = H5Fis_hdf5 (ifname);
+  testval = H5Fis_accessible(ifname, H5P_DEFAULT);
 
   if (testval <= 0)
     {
       error_msg("Input HDF5 file is not HDF \"%s\"\n", ifname);
-      return (EXIT_FAILURE);
+      return EXIT_FAILURE;
     }
 
-  ifile = H5Fopen (ifname, H5F_ACC_RDONLY, H5P_DEFAULT);
+  ifile = H5Fopen(ifname, H5F_ACC_RDONLY, H5P_DEFAULT);
 
   if (ifile < 0)
     {
       error_msg("Can't open input HDF5 file \"%s\"\n", ifname);
-      return (EXIT_FAILURE);
+      return EXIT_FAILURE;
     }
 
-  plist = H5Fget_create_plist (ifile);
+  plist = H5Fget_create_plist(ifile);
   if (plist < 0)
     {
       error_msg("Can't get file creation plist for file \"%s\"\n",
      ifname);
-      return (EXIT_FAILURE);
+      return EXIT_FAILURE;
     }
 
-  status = H5Pget_userblock (plist, &usize);
+  status = H5Pget_userblock(plist, &usize);
   if (status < 0)
     {
       error_msg("Can't get user block for file \"%s\"\n", ifname);
-      return (EXIT_FAILURE);
+      return EXIT_FAILURE;
     }
 
-  printf ("%ld\n", (long) usize);
+  HDprintf("%ld\n", (long) usize);
 
   H5Pclose (plist);
   H5Fclose (ifile);
 
-  return (EXIT_SUCCESS);
+  return EXIT_SUCCESS;
 }
 

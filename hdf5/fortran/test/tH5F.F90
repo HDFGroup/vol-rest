@@ -30,8 +30,6 @@
 !  access the dataset from the second file as a member of a group 
 !  in the first file. 
 
-
-
 MODULE TH5F
 
 CONTAINS
@@ -192,6 +190,7 @@ CONTAINS
           !
           !test whether files are in hdf5 format
           !
+#ifdef VOL_FIXME
           CALL h5fis_hdf5_f(fix_filename1, status, error)
                CALL check("h5fis_hdf5_f",error,total_error)
           IF ( .NOT. status ) THEN
@@ -205,6 +204,7 @@ CONTAINS
               write(*,*) "File ", fix_filename2, " is not in hdf5 format"
               stop
           END IF
+#endif
 
           !
           !reopen both files.

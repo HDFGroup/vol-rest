@@ -77,6 +77,10 @@ if [ $rc -ne 0 ] ; then
     exit 0
 fi
 
+# XXX: TEMPORARILY DISABLED
+echo "SKIPPED (temporarily disabled)"
+exit 0
+
 # HDF5 has several tests that create and delete signal files to communicate
 # between processes, and it seems that even though the names of the files are
 # different, occasionally the wrong file is deleted, interrupting the flow of

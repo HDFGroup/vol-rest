@@ -75,6 +75,7 @@ static herr_t H5VL_native_dataset_write(void *dset, hid_t mem_type_id, hid_t mem
                                         hid_t file_space_id, hid_t plist_id, const void *buf, void **req);
 static herr_t H5VL_native_dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
 static herr_t H5VL_native_dataset_specific(void *dset, H5VL_dataset_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+static herr_t H5VL_native_dataset_optional(void *dset, hid_t dxpl_id, void **req, va_list arguments);
 static herr_t H5VL_native_dataset_close(void *dset, hid_t dxpl_id, void **req);
 
 /* File callbacks */
@@ -148,7 +149,7 @@ static H5VL_class_t H5VL_native_g = {
         H5VL_native_dataset_write,                  /* write        */
         H5VL_native_dataset_get,                    /* get          */
         H5VL_native_dataset_specific,               /* specific     */
-        NULL,                                       /* optional     */
+        H5VL_native_dataset_optional,               /* optional     */
         H5VL_native_dataset_close                   /* close        */
     },
     {   /* datatype_cls */
@@ -1261,7 +1262,7 @@ H5VL_native_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t dxpl_id,
 
                 /* Set return value */
                 if (H5D__get_storage_size(dset, dxpl_id, ret) < 0)
-                    HGOTO_ERROR(H5E_DATASET, H5E_CANTGET, 0, "can't get size of dataset's storage")
+                    HGOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get size of dataset's storage")
                 break;
             }
             /* H5Dget_offset */
@@ -1343,6 +1344,100 @@ H5VL_native_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
 done:
     FUNC_LEAVE_NOAPI(ret_value)
 } /* end H5VL_native_dataset_specific() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    H5VL_native_dataset_optional
+ *
+ * Purpose:     Perform a driver specific operation on a native dataset
+ *
+ * Return:      SUCCEED/FAIL
+ *
+ *-------------------------------------------------------------------------
+ */
+static herr_t
+H5VL_native_dataset_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, va_list arguments)
+{
+    H5D_t *dset = NULL;             /* Dataset */
+    H5VL_dataset_optional_t optional_type = va_arg(arguments, H5VL_dataset_optional_t);
+    herr_t ret_value = SUCCEED;    /* Return value */
+
+    FUNC_ENTER_NOAPI_NOINIT
+
+    switch (optional_type) {
+        case H5VL_DATASET_FORMAT_CONVERT:
+            {
+                dset = (H5D_t *)obj;
+
+                switch(dset->shared->layout.type) {
+                    case H5D_CHUNKED:
+                        /* Convert the chunk indexing type to version 1 B-tree if not */
+                        if (dset->shared->layout.u.chunk.idx_type != H5D_CHUNK_IDX_BTREE)
+                            if ((H5D__format_convert(dset, H5AC_ind_read_dxpl_id)) < 0)
+                                HGOTO_ERROR(H5E_DATASET, H5E_CANTLOAD, FAIL, "unable to downgrade chunk indexing type for dataset")
+                        break;
+
+                    case H5D_CONTIGUOUS:
+                    case H5D_COMPACT:
+                        /* Downgrade the layout version to 3 if greater than 3 */
+                        if (dset->shared->layout.version > H5O_LAYOUT_VERSION_DEFAULT)
+                            if ((H5D__format_convert(dset, H5AC_ind_read_dxpl_id)) < 0)
+                                HGOTO_ERROR(H5E_DATASET, H5E_CANTLOAD, FAIL, "unable to downgrade layout version for dataset")
+                        break;
+
+                    case H5D_VIRTUAL:
+                        /* Nothing to do even though layout is version 4 */
+                        break;
+
+                    case H5D_LAYOUT_ERROR:
+                    case H5D_NLAYOUTS:
+                        HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid dataset layout type")
+
+                    default: 
+                        HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "unknown dataset layout type")
+                } /* end switch */
+
+                break;
+            }
+        case H5VL_DATASET_GET_CHUNK_INDEX_TYPE:
+            {
+                H5D_chunk_index_t *idx_type = va_arg(arguments, H5D_chunk_index_t *);
+
+                dset = (H5D_t *)obj;
+
+                /* Make sure the dataset is chunked */
+                if (H5D_CHUNKED != dset->shared->layout.type)
+                    HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a chunked dataset")
+
+                /* Get the chunk indexing type */
+                *idx_type = dset->shared->layout.u.chunk.idx_type;
+
+                break;
+            }
+        case H5VL_DATASET_GET_CHUNK_STORAGE_SIZE:
+            {
+                hsize_t *offset = va_arg(arguments, hsize_t *);
+                hsize_t *chunk_nbytes = va_arg(arguments, hsize_t *);
+
+                dset = (H5D_t *)obj;
+
+                /* Make sure the dataset is chunked */
+                if (H5D_CHUNKED != dset->shared->layout.type)
+                    HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a chunked dataset")
+
+                /* Call private function */
+                if (H5D__get_chunk_storage_size(dset, H5P_DATASET_XFER_DEFAULT, offset, chunk_nbytes) < 0)
+                    HGOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get storage size of chunk")
+
+                break;
+            }
+        default:
+            HGOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "invalid optional operation")
+    }
+
+done:
+    FUNC_LEAVE_NOAPI(ret_value)
+} /* end H5VL_native_dataset_optional() */
 
 
 /*-------------------------------------------------------------------------
@@ -1986,9 +2081,47 @@ H5VL_native_file_optional(void *obj, hid_t dxpl_id, void H5_ATTR_UNUSED **req, v
                 HGOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "invalid optional operation")
                 break;
             }
-        case H5VL_FILE_FORMAT_CONVERT_SUPER:
+        case H5VL_FILE_FORMAT_CONVERT:
             {
-                HGOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, FAIL, "invalid optional operation")
+                hbool_t   mark_dirty = FALSE;
+
+                f = (H5F_t *)obj;
+
+                /* Check if the superblock should be downgraded */
+                if (f->shared->sblock->super_vers > HDF5_SUPERBLOCK_VERSION_V18_LATEST) {
+                    f->shared->sblock->super_vers = HDF5_SUPERBLOCK_VERSION_V18_LATEST;
+                    mark_dirty = TRUE;
+                }
+
+                /* Check for persistent freespace manager, which needs to be downgraded */
+                if (!(f->shared->fs_strategy == H5F_FILE_SPACE_STRATEGY_DEF &&
+                        f->shared->fs_persist == H5F_FREE_SPACE_PERSIST_DEF &&
+                        f->shared->fs_threshold == H5F_FREE_SPACE_THRESHOLD_DEF &&
+                        f->shared->fs_page_size == H5F_FILE_SPACE_PAGE_SIZE_DEF)) {
+                    /* Check to remove free-space manager info message from superblock extension */
+                    if (H5F_addr_defined(f->shared->sblock->ext_addr))
+                        if (H5F_super_ext_remove_msg(f, H5AC_ind_read_dxpl_id, H5O_FSINFO_ID) < 0)
+                            HGOTO_ERROR(H5E_FILE, H5E_CANTRELEASE, FAIL, "error in removing message from superblock extension")
+
+                    /* Close freespace manager */
+                    if (H5MF_try_close(f, H5AC_ind_read_dxpl_id) < 0)
+                        HGOTO_ERROR(H5E_FILE, H5E_CANTRELEASE, FAIL, "unable to free free-space address")
+
+                    /* Set non-persistent freespace manager */
+                    f->shared->fs_strategy = H5F_FILE_SPACE_STRATEGY_DEF;
+                    f->shared->fs_persist = H5F_FREE_SPACE_PERSIST_DEF;
+                    f->shared->fs_threshold = H5F_FREE_SPACE_THRESHOLD_DEF;
+                    f->shared->fs_page_size = H5F_FILE_SPACE_PAGE_SIZE_DEF;
+
+                    /* Indicate that the superblock should be marked dirty */
+                    mark_dirty = TRUE;
+                }
+
+                /* Check if we should mark the superblock dirty */
+                if (mark_dirty)
+                    if (H5F_super_dirty(f) < 0)
+                        HGOTO_ERROR(H5E_FILE, H5E_CANTMARKDIRTY, FAIL, "unable to mark superblock as dirty")
+
                 break;
             }
         case H5VL_FILE_RESET_PAGE_BUFFERING_STATS:

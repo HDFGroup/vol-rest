@@ -287,10 +287,6 @@ test_basic_file_operation(void)
     if (H5Fclose(fid) < 0)
         TEST_ERROR;
 
-    /* H5Fis_hdf5 */
-    if (H5Fis_hdf5(NATIVE_VOL_TEST_FILENAME) < 0)
-        TEST_ERROR;
-
     /* H5Fis_accessible */
     if (H5Fis_accessible(NATIVE_VOL_TEST_FILENAME, H5P_DEFAULT) < 0)
         TEST_ERROR;
