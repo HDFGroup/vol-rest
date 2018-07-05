@@ -94,17 +94,17 @@ endif ()
 #-----------------------------------------------------------------------------
 if (PREBUILT_HDF5_DIR)
   add_custom_target(
-    pubconf
+    rest_vol_pubconf_depend
     DEPENDS ${PREBUILT_HDF5_DIR}/include/H5pubconf.h
   )
 else ()
   add_custom_target(
-    pubconf
+    rest_vol_pubconf_depend
     DEPENDS ${CMAKE_BINARY_DIR}/${HDF5_DIR_NAME}/H5pubconf.h
   )
 endif ()
 
-add_dependencies(${REST_VOL_LIB_TARGET} pubconf)
+add_dependencies(${REST_VOL_LIB_TARGET} rest_vol_pubconf_depend)
 
 #-----------------------------------------------------------------------------
 # Add file(s) to CMake Install

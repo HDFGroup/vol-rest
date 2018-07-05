@@ -470,6 +470,14 @@ include (${REST_VOL_RESOURCES_DIR}/HDFCompilerFlags.cmake)
 #-----------------------------------------------------------------------------
 if (NOT PREBUILT_HDF5_DIR)
   add_subdirectory(${HDF5_DIR} ${PROJECT_BINARY_DIR}/${HDF5_DIR_NAME})
+else ()
+  link_directories(${PREBUILT_HDF5_DIR}/lib)
+  set (HDF5_LIBRARIES_TO_EXPORT
+       libhdf5.so
+       libhdf5_hl.so
+       libhdf5.a
+       libhdf5_hl.a
+  )
 endif ()
 
 #-----------------------------------------------------------------------------

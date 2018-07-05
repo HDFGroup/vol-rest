@@ -4331,7 +4331,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
             mem_space_id = dataset->u.dataset.space_id;
 
             /* Copy the selection from file_space_id into the mem_space_id. */
-            if (H5Sselect_copy(mem_space_id, file_space_id, FALSE) < 0)
+            if (H5Sselect_copy(mem_space_id, file_space_id) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL, "can't copy selection from file space to memory space")
         } /* end if */
 
@@ -4599,7 +4599,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
             mem_space_id = dataset->u.dataset.space_id;
 
             /* Copy the selection from file_space_id into the mem_space_id */
-            if (H5Sselect_copy(mem_space_id, file_space_id, FALSE) < 0)
+            if (H5Sselect_copy(mem_space_id, file_space_id) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL, "can't copy selection from file space to memory space")
         } /* end if */
 
