@@ -167,6 +167,13 @@ Additionally, the CMake build scripts have the following configuration option:
             REST VOL plugin source root directory. Note that the REST VOL does not
             support in-source CMake builds.
 
+    -G DIR  Specifies the CMake Generator to use when generating the build files
+            for the project. On Unix systems, the default is "Unix Makefiles" and if
+            this is not changed, the build script will automatically attempt to build
+            the project after generating the Makefiles. If the generator is changed, the
+            build script will only generate the build files and the build command to
+            build the project will have to be run manually.
+
 ### II.B.iii. Manual Build
 
 In general, the process for building the REST VOL plugin involves either obtaining a VOL-enabled
