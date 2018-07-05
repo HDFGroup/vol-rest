@@ -26,7 +26,7 @@ INSTALL_DIR="${SCRIPT_DIR}/rest_vol_build"
 BUILD_DIR="${SCRIPT_DIR}/rest_vol_cmake_build_files"
 
 # By default, tell CMake to generate Unix Makefiles
-GENERATOR="Unix Makefiles"
+CMAKE_GENERATOR="Unix Makefiles"
 
 # Default name of the directory for the included HDF5 source distribution,
 # as well as the default directory where it gets installed
@@ -80,6 +80,9 @@ usage()
     echo "              included HDF5 source distribution and the"
     echo "              REST VOL plugin have been built once."
     echo
+    echo "      -G      Specify the CMake Generator to use for the build"
+    echo "              files created. Default is 'Unix Makefiles'."
+    echo
     echo "      -P DIR  Similar to '-DCMAKE_INSTALL_PREFIX=DIR', specifies"
     echo "              where the REST VOL should be installed to. Default"
     echo "              is 'source directory/rest_vol_build'."
@@ -103,7 +106,7 @@ usage()
     echo
 }
 
-optspec=":hctdmH:C:Y:B:P:-"
+optspec=":hctdmG:H:C:Y:B:P:-"
 while getopts "$optspec" optchar; do
     case "${optchar}" in
     h)
@@ -128,6 +131,11 @@ while getopts "$optspec" optchar; do
     t)
         build_tools=true
         echo "Building tools with REST VOL support"
+        echo
+        ;;
+    G)
+        CMAKE_GENERATOR="$OPTARG"
+        echo "CMake Generator set to: ${CMAKE_GENERATOR}"
         echo
         ;;
     B)
@@ -197,10 +205,12 @@ rm -f "${BUILD_DIR}/CMakeCache.txt"
 
 cd "${BUILD_DIR}"
 
-cmake -G "${GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${CMAKE_OPTS}" "${SCRIPT_DIR}"
+cmake -G "${CMAKE_GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${CMAKE_OPTS}" "${SCRIPT_DIR}"
+
+echo "Build files have been generated for CMake generator '${CMAKE_GENERATOR}'"
 
 # Build with autotools make by default
-if [ "${GENERATOR}" = "Unix Makefiles" ]; then
+if [ "${CMAKE_GENERATOR}" = "Unix Makefiles" ]; then
   make -j${NPROCS} && make install || exit 1
 fi
 
