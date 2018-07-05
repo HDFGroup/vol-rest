@@ -121,6 +121,11 @@ while getopts "$optspec" optchar; do
         echo
         ;;
     P)
+        if [ "$HDF5_INSTALL_DIR" = "$INSTALL_DIR" ]; then
+            HDF5_INSTALL_DIR="$OPTARG"
+            echo "Set HDF5 install directory to: ${HDF5_INSTALL_DIR}"
+        fi
+
         INSTALL_DIR="$OPTARG"
         echo "Prefix set to: ${INSTALL_DIR}"
         echo
