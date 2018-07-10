@@ -513,7 +513,7 @@ H5VLobject(hid_t id)
 
 done:
     FUNC_LEAVE_API(ret_value)
-} /* H5VLobject */
+} /* end H5VLobject() */
 
 
 /*---------------------------------------------------------------------------
