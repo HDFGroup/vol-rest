@@ -28,10 +28,6 @@ BUILD_DIR="${SCRIPT_DIR}/rest_vol_cmake_build_files"
 # By default, tell CMake to generate Unix Makefiles
 CMAKE_GENERATOR="Unix Makefiles"
 
-# Default name of the directory for the included HDF5 source distribution,
-# as well as the default directory where it gets installed
-HDF5_INSTALL_DIR="${INSTALL_DIR}"
-
 # Determine the number of processors to use when
 # building in parallel with Autotools make
 NPROCS=0
@@ -53,7 +49,10 @@ REST_VOL_LINK="-lrestvol"
 COMP_OPTS="-Wall -pedantic -Wunused-macros"
 
 # Extra options passed to the REST VOLs CMake script
-CMAKE_OPTS=""
+PLUGIN_DEBUG_OPT=
+CURL_DEBUG_OPT=
+MEM_TRACK_OPT=
+PREBUILT_HDF5_OPT=
 
 
 echo
@@ -114,17 +113,17 @@ while getopts "$optspec" optchar; do
         exit 0
         ;;
     d)
-        CMAKE_OPTS="-DREST_VOL_ENABLE_DEBUG=ON ${CMAKE_OPTS}"
+        PLUGIN_DEBUG_OPT="-DREST_VOL_ENABLE_DEBUG=ON"
         echo "Enabled plugin debugging"
         echo
         ;;
     c)
-        CMAKE_OPTS="-DREST_VOL_ENABLE_CURL_DEBUG=ON ${CMAKE_OPTS}"
+        CURL_DEBUG_OPT="-DREST_VOL_ENABLE_CURL_DEBUG=ON"
         echo "Enabled cURL debugging"
         echo
         ;;
     m)
-        CMAKE_OPTS="-DREST_VOL_ENABLE_MEM_TRACKING=ON ${CMAKE_OPTS}"
+        MEM_TRACK_OPT="-DREST_VOL_ENABLE_MEM_TRACKING=ON"
         echo "Enabled plugin memory tracking"
         echo
         ;;
@@ -149,9 +148,8 @@ while getopts "$optspec" optchar; do
         echo
         ;;
     H)
-        HDF5_INSTALL_DIR="$OPTARG"
-        CMAKE_OPTS="-DPREBUILT_HDF5_DIR=${HDF5_INSTALL_DIR} ${CMAKE_OPTS}"
-        echo "Set HDF5 install directory to: ${HDF5_INSTALL_DIR}"
+        PREBUILT_HDF5_OPT="-DPREBUILT_HDF5_DIR=$OPTARG"
+        echo "Set HDF5 install directory to: $OPTARG"
         echo
         ;;
     C)
@@ -205,7 +203,7 @@ rm -f "${BUILD_DIR}/CMakeCache.txt"
 
 cd "${BUILD_DIR}"
 
-cmake -G "${CMAKE_GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${CMAKE_OPTS}" "${SCRIPT_DIR}"
+cmake -G "${CMAKE_GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${PREBUILT_HDF5_OPT}" "${PLUGIN_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${SCRIPT_DIR}"
 
 echo "Build files have been generated for CMake generator '${CMAKE_GENERATOR}'"
 
