@@ -154,11 +154,11 @@ endif ()
 # Parse the full version number from README.md and include in REST_VOL_VERS_INFO
 #-------------------------------------------------------------------------------
 file (READ ${REST_VOL_SOURCE_DIR}/README.md _readme_contents)
-string (REGEX REPLACE ".*([0-9][0-9]*).[0-9][0-9]*.[0-9][0-9]*.*$"
+string (REGEX REPLACE "^.*REST.?VOL.?plugin.?version.([0-9][0-9]*).[0-9][0-9]*.[0-9][0-9]*.*$"
     "\\1" REST_VOL_VERS_MAJOR ${_readme_contents})
-string (REGEX REPLACE ".*[0-9][0-9]*.([0-9][0-9]*).[0-9][0-9]*.*$"
+string (REGEX REPLACE "^.*REST.?VOL.?plugin.?version.[0-9][0-9]*.([0-9][0-9]*).[0-9][0-9]*.*$"
     "\\1" REST_VOL_VERS_MINOR ${_readme_contents})
-string (REGEX REPLACE ".*[0-9][0-9]*.[0-9][0-9]*.([0-9][0-9]*).*$"
+string (REGEX REPLACE "^.*REST.?VOL.?plugin.?version.[0-9][0-9]*.[0-9][0-9]*.([0-9][0-9]*).*$"
     "\\1" REST_VOL_VERS_RELEASE ${_readme_contents})
 message (STATUS "VERSION: ${REST_VOL_VERS_MAJOR}.${REST_VOL_VERS_MINOR}.${REST_VOL_VERS_RELEASE}")
 
