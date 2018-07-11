@@ -128,6 +128,11 @@ Note that if you wish to use a manually built version of the HDF5 library, it mu
 a version which contains the VOL abstraction layer; otherwise, the REST VOL plugin will
 not function correctly.
 
+NOTE: For those who are capable of using both build systems, the autotools build currently
+does not support out-of-tree builds. If the REST VOL source directory is used for an autotools
+build, it is important not to re-use the source directory for a later build using CMake.
+This will causes build conflicts and result in strange and unexpected behavior.
+
 
 ### II.B.ii.a. Build Script Options
 
