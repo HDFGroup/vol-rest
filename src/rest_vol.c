@@ -424,7 +424,7 @@ typedef struct attr_table_entry {
 } attr_table_entry;
 
 /* Host header string for specifying the host (Domain) for requests */
-const char * const host_string = "Host: ";
+const char * const host_string = "X-Hdf-domain: ";
 
 /* List of all the JSON keys used by yajl_tree_get throughout this plugin
  * to retrieve various information from a section of JSON */
@@ -1531,7 +1531,7 @@ RV_attr_create(void *obj, H5VL_loc_params_t loc_params, const char *attr_name, h
     printf("-> Attribute create request JSON:\n%s\n\n", create_request_body);
 #endif
 
-    /* Setup the "Host: " header */
+    /* Setup the host header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
@@ -1809,7 +1809,7 @@ RV_attr_open(void *obj, H5VL_loc_params_t loc_params, const char *attr_name,
 
     /* Make a GET request to the server to retrieve information about the attribute */
 
-    /* Setup the "Host: " header */
+    /* Setup the host header */
     host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
@@ -2031,7 +2031,7 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
     printf("-> Attribute's datatype size: %zu\n\n", dtype_size);
 #endif
 
-    /* Setup the "Host: " header */
+    /* Setup the host header */
     host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -2219,7 +2219,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
 
     write_body_len = (size_t) file_select_npoints * dtype_size;
 
-    /* Setup the "Host: " header */
+    /* Setup the host header */
     host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -2583,7 +2583,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
 
             /* Make a GET request to the server to retrieve the attribute's info */
 
-            /* Setup the "Host: " header */
+            /* Setup the host header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -2881,7 +2881,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                     FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
             } /* end switch */
 
-            /* Setup the "Host: " header */
+            /* Setup the host header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -3032,7 +3032,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                     FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset")
             } /* end switch */
 
-            /* Setup the "Host: " header */
+            /* Setup the host header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -3320,7 +3320,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
 
             /* Make a GET request to the server to retrieve all of the attributes attached to the given object */
 
-            /* Setup the "Host: " header */
+            /* Setup the host header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -3621,7 +3621,7 @@ RV_datatype_commit(void *obj, H5VL_loc_params_t loc_params, const char *name, hi
     printf("-> Datatype commit request body:\n%s\n\n", commit_request_body);
 #endif
 
-    /* Setup the "Host: " header */
+    /* Setup the host header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
@@ -4034,7 +4034,7 @@ RV_dataset_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid
             ASSIGN_TO_SAME_SIZE_UNSIGNED_TO_SIGNED(create_request_body_len, curl_off_t, tmp_len, size_t)
     }
 
-    /* Setup the "Host: " header */
+    /* Setup the host header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
@@ -4360,7 +4360,7 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     printf("-> %lld points selected in memory dataspace\n\n", mem_select_npoints);
 #endif
 
-    /* Setup the "Host: " header */
+    /* Setup the host header */
     host_header_len = strlen(dataset->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -4649,7 +4649,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     } /* end else */
 
 
-    /* Setup the "Host: " header */
+    /* Setup the host header */
     host_header_len = strlen(dataset->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -5067,7 +5067,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     strncpy(new_file->u.file.filepath_name, name, name_length);
     new_file->u.file.filepath_name[name_length] = '\0';
 
-    /* Setup the "Host: " header */
+    /* Setup the host header */
     host_header_len = name_length + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
@@ -5252,7 +5252,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     strncpy(file->u.file.filepath_name, name, name_length);
     file->u.file.filepath_name[name_length] = '\0';
 
-    /* Setup the "Host: " header */
+    /* Setup the host header */
     host_header_len = name_length + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
@@ -5795,7 +5795,7 @@ RV_group_create(void *obj, H5VL_loc_params_t loc_params, const char *name, hid_t
 #endif
     } /* end if */
 
-    /* Setup the "Host: " header */
+    /* Setup the host header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for request Host header")
@@ -6094,7 +6094,7 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va
                     FUNC_GOTO_ERROR(H5E_SYM, H5E_BADVALUE, FAIL, "invalid loc_params type")
             } /* end switch */
 
-            /* Setup the "Host: " header */
+            /* Setup the host header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -6446,7 +6446,7 @@ RV_link_create(H5VL_link_create_type_t create_type, void *obj, H5VL_loc_params_t
             FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "Invalid link create type")
     } /* end switch */
 
-    /* Setup the "Host: " header */
+    /* Setup the host header */
     host_header_len = strlen(new_link_loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
     if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -6704,7 +6704,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
 
             /* Make a GET request to the server to retrieve the number of attributes attached to the object */
 
-            /* Setup the "Host: " header */
+            /* Setup the host header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -6820,7 +6820,7 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
 
             /* Make a GET request to the server to retrieve the number of attributes attached to the object */
 
-            /* Setup the "Host: " header */
+            /* Setup the host header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -6987,7 +6987,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
 
             /* Setup cURL to make the DELETE request */
 
-            /* Setup the "Host: " header */
+            /* Setup the host header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -7064,7 +7064,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
 
             /* Setup cURL to make the GET request */
 
-            /* Setup the "Host: " header */
+            /* Setup the host header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -7202,7 +7202,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
 
             /* Make a GET request to the server to retrieve all of the links in the given group */
 
-            /* Setup the "Host: " header */
+            /* Setup the host header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -7961,7 +7961,7 @@ RV_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments)
 
             /* Make a GET request to the server to retrieve the number of attributes attached to the object */
 
-            /* Setup the "Host: " header */
+            /* Setup the host header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -10169,7 +10169,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
 
         /* Setup cURL for making GET requests */
 
-        /* Setup the "Host: " header */
+        /* Setup the host header */
         host_header_len = strlen(parent_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
         if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
@@ -10382,7 +10382,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
 
         /* Setup cURL for making GET requests */
 
-        /* Setup the "Host: " header */
+        /* Setup the host header */
         host_header_len = strlen(parent_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
         if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
