@@ -199,7 +199,7 @@ Autotools
     $ autogen.sh
     $ configure --with-hdf5[=DIR] [options]
     $ make
-    $ make check (requires HDF5 REST API server access -- see section III.C.i.)
+    $ make check (requires HDF5 REST API server access -- see section II.A.ii.)
     $ make install
 
 CMake
@@ -328,7 +328,7 @@ HDF5 applications.
 
 ## II.C. Testing the REST VOL plugin installation
 
-The REST VOL plugin tests require access to an HDF5 REST API-aware server -- see section III.C.i.
+The REST VOL plugin tests require access to an HDF5 REST API-aware server -- see section II.A.ii and III.C.
 
 After building the REST VOL plugin and obtaining access to a server which implements
 the HDF5 REST API according to the above reference, it is highly advised that you run
