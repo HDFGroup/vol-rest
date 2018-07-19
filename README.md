@@ -437,7 +437,7 @@ For example:
 ## III.C. Running HDF5 REST VOL plugin applications
 
 Running applications that use the HDF5 REST VOL plugin requires access to a server which implements
-the HDF5 REST API (http://hdf-rest-api.readthedocs.io/en/latest/).
+the HDF5 REST API (http://hdf-rest-api.readthedocs.io/en/latest/); see section II.A.ii.
 
 ### III.C.i. Runtime Environment
 
