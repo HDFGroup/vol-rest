@@ -22,9 +22,9 @@
  *
  *          Due to specialized improvements needed for performance reasons
  *          and otherwise, this VOL plugin is currently only supported for
- *          use with the HSDS (Highly Scalable Data Service) server
+ *          use with the HDF Kita server (https://www.hdfgroup.org/hdf-kita).
  *
- *          HSDS is a web service that implements a REST-based web service
+ *          HDF Kita is a web service that implements a REST-based web service
  *          for HDF5 data stores as described in the paper:
  *          http://hdfgroup.org/pubs/papers/RESTful_HDF5.pdf.
  */
@@ -9156,9 +9156,9 @@ done:
  *              info into the callback_data_out parameter, which should be
  *              a H5A_info_t *. This callback is used to help
  *              H5Aget_info (_by_name/_by_idx); currently the H5A_info_t
- *              struct is just initialized to 0, as HSDS does not have any
- *              provisions for returning any of the relevant information
- *              in the H5A_info_t struct.
+ *              struct is just initialized to 0, as HDF Kita does not have
+ *              any provisions for returning any of the relevant
+ *              information in the H5A_info_t struct.
  *
  * Return:      Non-negative on success/Negative on failure
  *
@@ -11808,12 +11808,14 @@ done:
  *              references into a binary buffer of object reference
  *              strings, which can then be transferred to the server.
  *
- *              Note that HSDS expects each element of an object reference
- *              typed dataset to be a 48-byte string, which should be
- *              enough to hold the URI of the referenced object, as well as
- *              a prefixed string corresponding to the type of the
- *              referenced object, e.g. an object reference to a group may
- *              look like "groups/g-7e538c7e-d9dd-11e7-b940-0242ac110009".
+ *              Note that HDF Kita expects each element of an object
+ *              reference typed dataset to be a 48-byte string, which
+ *              should be enough to hold the URI of the referenced object,
+ *              as well as a prefixed string corresponding to the type of
+ *              the referenced object, e.g. an object reference to a group
+ *              may look like
+ *              "groups/g-7e538c7e-d9dd-11e7-b940-0242ac110009".
+ *
  *              Therefore, this function allocates a buffer of size
  *              (48 * number of elements in object reference array) bytes
  *              and continues to append strings until the end of the array
@@ -12006,7 +12008,7 @@ RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
 
         strncpy(out[i].ref_obj_URI, URI_start, OBJECT_REF_STRING_LEN);
 
-        /* Since the first character of HSDS' object URIs denotes
+        /* Since the first character of the server's object URIs denotes
          * the type of the object, e.g. 'g' denotes a group object,
          * capture this here.
          */

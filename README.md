@@ -9,7 +9,7 @@ HDF5 REST VOL plugin version 1.0.0 - currently under development
     II. Installation
         A. Prerequisites
             i. External Libraries
-            ii. HSDS Access
+            ii. HDF5 REST API server access
         B. Building the REST VOL plugin
             i. Obtaining the Source
             ii. One-Step Build
@@ -23,8 +23,8 @@ HDF5 REST VOL plugin version 1.0.0 - currently under development
         A. Writing HDF5 REST VOL plugin applications
             i. Skeleton Example
         B. Building HDF5 REST VOL plugin applications
-        C. HDF5 REST VOL plugin applications and HSDS
-            i. HSDS Setup
+        C. Running HDF5 REST VOL plugin applications
+            i. Runtime Environment
             ii. Example applications
     IV. Feature Support
         A. Unsupported HDF5 API calls
@@ -82,9 +82,13 @@ supplied to the REST VOL plugin's build scripts. Refer to section II.B.ii. below
 for more information.
 
 
-### II.A.ii. HSDS Access
+### II.A.ii. HDF5 REST API server access
 
-TODO: HSDS description
+Additionally, the HDF5 REST VOL plugin requires access to a server which implements
+the HDF5 REST API.
+
+For more information on The HDF Group's officially supported service, please see
+https://www.hdfgroup.org/hdf-kita.
 
 
 ## II.B. Building the REST VOL plugin
@@ -195,7 +199,7 @@ Autotools
     $ autogen.sh
     $ configure --with-hdf5[=DIR] [options]
     $ make
-    $ make check (requires HSDS setup -- see section III.C.i.)
+    $ make check (requires HDF5 REST API server access -- see section III.C.i.)
     $ make install
 
 CMake
@@ -324,12 +328,12 @@ HDF5 applications.
 
 ## II.C. Testing the REST VOL plugin installation
 
-The REST VOL plugin tests require HSDS setup and access -- see section III.C.i.
+The REST VOL plugin tests require access to an HDF5 REST API-aware server -- see section III.C.i.
 
-After building the REST VOL plugin and setting up HSDS access according to the above
-reference, it is highly advised that you run `make check` (for Autotools builds) or
-`ctest .` (for CMake builds) to verify that the HDF5 library and REST VOL plugin
-are functioning correctly.
+After building the REST VOL plugin and obtaining access to a server which implements
+the HDF5 REST API according to the above reference, it is highly advised that you run
+`make check` (for Autotools builds) or `ctest .` (for CMake builds) to verify that
+the HDF5 library and REST VOL plugin are functioning correctly.
 
 Each of these commands will run the `test_rest_vol` executable, which is built by
 each of the REST VOL plugin's build systems and contains a set of tests to cover a
@@ -430,26 +434,26 @@ For example:
 
 
 
-## III.C. HDF5 REST VOL plugin applications and HSDS
+## III.C. Running HDF5 REST VOL plugin applications
 
-Running applications that use the REST VOL plugin requires... 
+Running applications that use the HDF5 REST VOL plugin requires access to a server which implements
+the HDF5 REST API (http://hdf-rest-api.readthedocs.io/en/latest/).
 
-TODO: mention HSDS
+### III.C.i. Runtime Environment
 
-### III.C.i. HSDS Setup
+For the REST VOL plugin to correctly interact with an HDF5 REST API-aware server instance, there are three
+environment variables (two optional and one required) which should first be set. These are:
 
-TODO: HSDS setup details
+    + HSDS_USERNAME - (optional) The username to use for authentication
 
+    + HSDS_PASSWORD - (optional) The password to use for authentication
 
-For the REST VOL plugin to correctly interact with an HSDS server instance, there are three
-environment variables the plugin uses which must be first set. These are:
+    + HSDS_ENDPOINT - The base URL of the instance (e.g. http://hsdshdflab.hdfgroup.org)
 
-    + HSDS_USERNAME - 
-
-    + HSDS_PASSWORD - 
-
-    + HSDS_ENDPOINT - 
-
+Note that there are cases where authentication may not be required, such as when simply retrieving
+the information about a publicly-accessible HDF5 dataset or similar. In these cases, it may not be
+necessary to supply any authentication information and just the HSDS_ENDPOINT environment variable
+should be set.
 
 ### III.C.ii. Example applications
 
@@ -457,15 +461,12 @@ The file `test/test_rest_vol.c`, in addition to being the source for the REST VO
 test suite, serves double purpose with each test function being an example application
 in miniature, focused on a particular behavior. This application tests a moderate amount
 of HDF5's public API functionality with the REST VOL plugin and should be a good indicator
-of whether the REST VOL plugin is working correctly in conjunction with a running HSDS
-instance.
+of whether the REST VOL plugin is working correctly in conjunction with a running HDF5 REST
+API-aware instance.
 
 In addition to this file, some of the example C applications included with HDF5
 distributions have been adapted to work with the REST VOL plugin and are included
 under the top-level `examples` directory in the REST VOL plugin source root directory.
-
-Before running any of the examples, an HSDS server must be set up, with the relevant
-environment variables set (see section III.C.i. for more information).
 
 --------------------------------------------------------------------------------
 
@@ -611,6 +612,7 @@ for the application if not avoided or taken into account:
 
 + RESTful HDF5 - A description of the HDF5 REST API
     + https://support.hdfgroup.org/pubs/papers/RESTful_HDF5.pdf
+    + http://hdf-rest-api.readthedocs.io/en/latest/
 
 + HDF5-JSON - A specification of and tools for representing HDF5 in JSON
     + http://hdf5-json.readthedocs.io/en/latest/
@@ -621,7 +623,8 @@ for the application if not avoided or taken into account:
     + https://support.hdfgroup.org/projects/hdfserver/
     + https://s3.amazonaws.com/hdfgroup/docs/HDFServer_SciPy2015.pdf
 
-+ HSDS/HDF in the Cloud
++ HDF in the Cloud
+    + https://www.hdfgroup.org/hdf-kita
     + https://www.hdfgroup.org/solutions/hdf-cloud
     + https://www.slideshare.net/HDFEOS/hdf-cloud-services
 

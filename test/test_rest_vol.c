@@ -15151,7 +15151,7 @@ test_read_dataset_w_obj_refs(void)
         }
 
         /* Check the URI of the referenced object according to
-         * the HSDS spec where each URI is prefixed as
+         * the server spec where each URI is prefixed as
          * 'X-', where X is a character denoting the type
          * of object */
         if (   (ref_array[i].ref_obj_URI[1] != '-')
@@ -17019,7 +17019,7 @@ generate_random_datatype(H5T_class_t parent_class)
             size_t compound_size = 0;
             size_t i;
 
-            /* HSDS only allows arrays of integer, float or string. Pick another type if we
+            /* Currently only allows arrays of integer, float or string. Pick another type if we
              * are creating an array of something other than these. Also don't allow recursion
              * to go too deep. Pick another type that doesn't recursively call this function. */
             if (H5T_ARRAY == parent_class || depth > RECURSION_MAX_DEPTH) {
@@ -17094,7 +17094,7 @@ generate_random_datatype(H5T_class_t parent_class)
         case_reference:
         case H5T_REFERENCE:
         {
-            /* HSDS only allows arrays of integer, float or string. Pick another type if we
+            /* Currently only allows arrays of integer, float or string. Pick another type if we
              * are creating an array of something other than these. */
             if (H5T_ARRAY == parent_class) {
                 switch (rand() % H5T_NCLASSES) {
@@ -17160,7 +17160,7 @@ generate_random_datatype(H5T_class_t parent_class)
         {
             size_t i;
 
-            /* HSDS doesn't currently support ARRAY of ENUM, so try another type
+            /* Currently doesn't currently support ARRAY of ENUM, so try another type
              * if this happens. */
             if (H5T_ARRAY == parent_class) {
                 switch (rand() % H5T_NCLASSES) {
@@ -17236,7 +17236,7 @@ generate_random_datatype(H5T_class_t parent_class)
             size_t   i;
             hid_t    base_datatype = -1;
 
-            /* HSDS doesn't currently support ARRAY of ARRAY, so try another type
+            /* Currently doesn't currently support ARRAY of ARRAY, so try another type
              * if this happens. Also check for too much recursion. */
             if (H5T_ARRAY == parent_class || depth > RECURSION_MAX_DEPTH) {
                 switch (rand() % H5T_NCLASSES) {
