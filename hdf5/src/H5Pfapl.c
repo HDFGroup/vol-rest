@@ -49,7 +49,7 @@
 #endif
 
 /* Includes needed to set the default VOL driver */
-#include "H5VLnative.h"         /* Native HDF5 file VOL driver          */
+#include "H5VLnative_private.h" /* Native VOL driver                        */
 
 
 /****************/
@@ -419,7 +419,7 @@ static const hbool_t H5F_def_coll_md_write_flag_g = H5F_ACS_COLL_MD_WRITE_FLAG_D
 static const H5AC_cache_image_config_t H5F_def_mdc_initCacheImageCfg_g = H5F_ACS_META_CACHE_INIT_IMAGE_CONFIG_DEF;  /* Default metadata cache image settings */
 static const size_t H5F_def_page_buf_size_g = H5F_ACS_PAGE_BUFFER_SIZE_DEF;      /* Default page buffer size */
 static const unsigned H5F_def_page_buf_min_meta_perc_g = H5F_ACS_PAGE_BUFFER_MIN_META_PERC_DEF;      /* Default page buffer minimum metadata size */
-static const unsigned H5F_def_page_buf_min_raw_perc_g = H5F_ACS_PAGE_BUFFER_MIN_RAW_PERC_DEF;      /* Default page buffer minumum raw data size */
+static const unsigned H5F_def_page_buf_min_raw_perc_g = H5F_ACS_PAGE_BUFFER_MIN_RAW_PERC_DEF;      /* Default page buffer mininum raw data size */
 
 
 /*-------------------------------------------------------------------------
@@ -443,110 +443,110 @@ H5P__facc_reg_prop(H5P_genclass_t *pclass)
     FUNC_ENTER_STATIC
 
     /* Register the initial metadata cache resize configuration */
-    if(H5P_register_real(pclass, H5F_ACS_META_CACHE_INIT_CONFIG_NAME, H5F_ACS_META_CACHE_INIT_CONFIG_SIZE, &H5F_def_mdc_initCacheCfg_g,
+    if(H5P__register_real(pclass, H5F_ACS_META_CACHE_INIT_CONFIG_NAME, H5F_ACS_META_CACHE_INIT_CONFIG_SIZE, &H5F_def_mdc_initCacheCfg_g,
             NULL, NULL, NULL, H5F_ACS_META_CACHE_INIT_CONFIG_ENC, H5F_ACS_META_CACHE_INIT_CONFIG_DEC,
             NULL, NULL, H5F_ACS_META_CACHE_INIT_CONFIG_CMP, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the size of raw data chunk cache (elements) */
-    if(H5P_register_real(pclass, H5F_ACS_DATA_CACHE_NUM_SLOTS_NAME, H5F_ACS_DATA_CACHE_NUM_SLOTS_SIZE, &H5F_def_rdcc_nslots_g,
+    if(H5P__register_real(pclass, H5F_ACS_DATA_CACHE_NUM_SLOTS_NAME, H5F_ACS_DATA_CACHE_NUM_SLOTS_SIZE, &H5F_def_rdcc_nslots_g,
             NULL, NULL, NULL, H5F_ACS_DATA_CACHE_NUM_SLOTS_ENC, H5F_ACS_DATA_CACHE_NUM_SLOTS_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the size of raw data chunk cache(bytes) */
-    if(H5P_register_real(pclass, H5F_ACS_DATA_CACHE_BYTE_SIZE_NAME, H5F_ACS_DATA_CACHE_BYTE_SIZE_SIZE, &H5F_def_rdcc_nbytes_g,
+    if(H5P__register_real(pclass, H5F_ACS_DATA_CACHE_BYTE_SIZE_NAME, H5F_ACS_DATA_CACHE_BYTE_SIZE_SIZE, &H5F_def_rdcc_nbytes_g,
             NULL, NULL, NULL, H5F_ACS_DATA_CACHE_BYTE_SIZE_ENC, H5F_ACS_DATA_CACHE_BYTE_SIZE_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the preemption for reading chunks */
-    if(H5P_register_real(pclass, H5F_ACS_PREEMPT_READ_CHUNKS_NAME, H5F_ACS_PREEMPT_READ_CHUNKS_SIZE, &H5F_def_rdcc_w0_g,
+    if(H5P__register_real(pclass, H5F_ACS_PREEMPT_READ_CHUNKS_NAME, H5F_ACS_PREEMPT_READ_CHUNKS_SIZE, &H5F_def_rdcc_w0_g,
             NULL, NULL, NULL, H5F_ACS_PREEMPT_READ_CHUNKS_ENC, H5F_ACS_PREEMPT_READ_CHUNKS_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the threshold for alignment */
-    if(H5P_register_real(pclass, H5F_ACS_ALIGN_THRHD_NAME, H5F_ACS_ALIGN_THRHD_SIZE, &H5F_def_threshold_g,
+    if(H5P__register_real(pclass, H5F_ACS_ALIGN_THRHD_NAME, H5F_ACS_ALIGN_THRHD_SIZE, &H5F_def_threshold_g,
             NULL, NULL, NULL, H5F_ACS_ALIGN_THRHD_ENC, H5F_ACS_ALIGN_THRHD_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the alignment */
-    if(H5P_register_real(pclass, H5F_ACS_ALIGN_NAME, H5F_ACS_ALIGN_SIZE, &H5F_def_alignment_g,
+    if(H5P__register_real(pclass, H5F_ACS_ALIGN_NAME, H5F_ACS_ALIGN_SIZE, &H5F_def_alignment_g,
             NULL, NULL, NULL, H5F_ACS_ALIGN_ENC, H5F_ACS_ALIGN_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the minimum metadata allocation block size */
-    if(H5P_register_real(pclass, H5F_ACS_META_BLOCK_SIZE_NAME, H5F_ACS_META_BLOCK_SIZE_SIZE, &H5F_def_meta_block_size_g,
+    if(H5P__register_real(pclass, H5F_ACS_META_BLOCK_SIZE_NAME, H5F_ACS_META_BLOCK_SIZE_SIZE, &H5F_def_meta_block_size_g,
             NULL, NULL, NULL, H5F_ACS_META_BLOCK_SIZE_ENC, H5F_ACS_META_BLOCK_SIZE_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the maximum sieve buffer size */
-    if(H5P_register_real(pclass, H5F_ACS_SIEVE_BUF_SIZE_NAME, H5F_ACS_SIEVE_BUF_SIZE_SIZE, &H5F_def_sieve_buf_size_g,
+    if(H5P__register_real(pclass, H5F_ACS_SIEVE_BUF_SIZE_NAME, H5F_ACS_SIEVE_BUF_SIZE_SIZE, &H5F_def_sieve_buf_size_g,
             NULL, NULL, NULL, H5F_ACS_SIEVE_BUF_SIZE_ENC, H5F_ACS_SIEVE_BUF_SIZE_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the minimum "small data" allocation block size */
-    if(H5P_register_real(pclass, H5F_ACS_SDATA_BLOCK_SIZE_NAME, H5F_ACS_SDATA_BLOCK_SIZE_SIZE, &H5F_def_sdata_block_size_g,
+    if(H5P__register_real(pclass, H5F_ACS_SDATA_BLOCK_SIZE_NAME, H5F_ACS_SDATA_BLOCK_SIZE_SIZE, &H5F_def_sdata_block_size_g,
             NULL, NULL, NULL, H5F_ACS_SDATA_BLOCK_SIZE_ENC, H5F_ACS_SDATA_BLOCK_SIZE_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the garbage collection reference */
-    if(H5P_register_real(pclass, H5F_ACS_GARBG_COLCT_REF_NAME, H5F_ACS_GARBG_COLCT_REF_SIZE, &H5F_def_gc_ref_g,
+    if(H5P__register_real(pclass, H5F_ACS_GARBG_COLCT_REF_NAME, H5F_ACS_GARBG_COLCT_REF_SIZE, &H5F_def_gc_ref_g,
             NULL, NULL, NULL, H5F_ACS_GARBG_COLCT_REF_ENC, H5F_ACS_GARBG_COLCT_REF_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the file driver ID & info */
     /* (Note: this property should not have an encode/decode callback -QAK) */
-    if(H5P_register_real(pclass, H5F_ACS_FILE_DRV_NAME, H5F_ACS_FILE_DRV_SIZE, &def_driver_prop,
+    if(H5P__register_real(pclass, H5F_ACS_FILE_DRV_NAME, H5F_ACS_FILE_DRV_SIZE, &def_driver_prop,
             H5F_ACS_FILE_DRV_CRT, H5F_ACS_FILE_DRV_SET, H5F_ACS_FILE_DRV_GET, NULL, NULL,
             H5F_ACS_FILE_DRV_DEL, H5F_ACS_FILE_DRV_COPY, H5F_ACS_FILE_DRV_CMP, H5F_ACS_FILE_DRV_CLOSE) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the file close degree */
-    if(H5P_register_real(pclass, H5F_ACS_CLOSE_DEGREE_NAME, H5F_CLOSE_DEGREE_SIZE, &H5F_def_close_degree_g,
+    if(H5P__register_real(pclass, H5F_ACS_CLOSE_DEGREE_NAME, H5F_CLOSE_DEGREE_SIZE, &H5F_def_close_degree_g,
             NULL, NULL, NULL, H5F_CLOSE_DEGREE_ENC, H5F_CLOSE_DEGREE_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the offset of family driver info */
-    if(H5P_register_real(pclass, H5F_ACS_FAMILY_OFFSET_NAME, H5F_ACS_FAMILY_OFFSET_SIZE, &H5F_def_family_offset_g,
+    if(H5P__register_real(pclass, H5F_ACS_FAMILY_OFFSET_NAME, H5F_ACS_FAMILY_OFFSET_SIZE, &H5F_def_family_offset_g,
             NULL, NULL, NULL, H5F_ACS_FAMILY_OFFSET_ENC, H5F_ACS_FAMILY_OFFSET_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the private property of new family file size. It's used by h5repart only. */
     /* (Note: this property should not have an encode/decode callback -QAK) */
-    if(H5P_register_real(pclass, H5F_ACS_FAMILY_NEWSIZE_NAME, H5F_ACS_FAMILY_NEWSIZE_SIZE, &H5F_def_family_newsize_g,
+    if(H5P__register_real(pclass, H5F_ACS_FAMILY_NEWSIZE_NAME, H5F_ACS_FAMILY_NEWSIZE_SIZE, &H5F_def_family_newsize_g,
             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the private property of whether convert family to sec2 driver. It's used by h5repart only. */
     /* (Note: this property should not have an encode/decode callback -QAK) */
-    if(H5P_register_real(pclass, H5F_ACS_FAMILY_TO_SEC2_NAME, H5F_ACS_FAMILY_TO_SEC2_SIZE, &H5F_def_family_to_sec2_g,
+    if(H5P__register_real(pclass, H5F_ACS_FAMILY_TO_SEC2_NAME, H5F_ACS_FAMILY_TO_SEC2_SIZE, &H5F_def_family_to_sec2_g,
             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the data type of multi driver info */
-    if(H5P_register_real(pclass, H5F_ACS_MULTI_TYPE_NAME, H5F_ACS_MULTI_TYPE_SIZE, &H5F_def_mem_type_g,
+    if(H5P__register_real(pclass, H5F_ACS_MULTI_TYPE_NAME, H5F_ACS_MULTI_TYPE_SIZE, &H5F_def_mem_type_g,
             NULL, NULL, NULL, H5F_ACS_MULTI_TYPE_ENC, H5F_ACS_MULTI_TYPE_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the 'low' bound of library format versions */
-    if(H5P_register_real(pclass, H5F_ACS_LIBVER_LOW_BOUND_NAME, H5F_ACS_LIBVER_LOW_BOUND_SIZE, &H5F_def_libver_low_bound_g,
+    if(H5P__register_real(pclass, H5F_ACS_LIBVER_LOW_BOUND_NAME, H5F_ACS_LIBVER_LOW_BOUND_SIZE, &H5F_def_libver_low_bound_g,
             NULL, NULL, NULL, H5F_ACS_LIBVER_LOW_BOUND_ENC, H5F_ACS_LIBVER_LOW_BOUND_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the 'high' bound of library format versions */
-    if(H5P_register_real(pclass, H5F_ACS_LIBVER_HIGH_BOUND_NAME, H5F_ACS_LIBVER_HIGH_BOUND_SIZE, &H5F_def_libver_high_bound_g,
+    if(H5P__register_real(pclass, H5F_ACS_LIBVER_HIGH_BOUND_NAME, H5F_ACS_LIBVER_HIGH_BOUND_SIZE, &H5F_def_libver_high_bound_g,
             NULL, NULL, NULL, H5F_ACS_LIBVER_HIGH_BOUND_ENC, H5F_ACS_LIBVER_HIGH_BOUND_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
@@ -554,123 +554,123 @@ H5P__facc_reg_prop(H5P_genclass_t *pclass)
     /* Register the private property of whether to retrieve the file descriptor from the core VFD */
     /* (used internally to the library only) */
     /* (Note: this property should not have an encode/decode callback -QAK) */
-    if(H5P_register_real(pclass, H5F_ACS_WANT_POSIX_FD_NAME, H5F_ACS_WANT_POSIX_FD_SIZE, &H5F_def_want_posix_fd_g,
+    if(H5P__register_real(pclass, H5F_ACS_WANT_POSIX_FD_NAME, H5F_ACS_WANT_POSIX_FD_SIZE, &H5F_def_want_posix_fd_g,
             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the external file cache size */
-    if(H5P_register_real(pclass, H5F_ACS_EFC_SIZE_NAME, H5F_ACS_EFC_SIZE_SIZE, &H5F_def_efc_size_g,
+    if(H5P__register_real(pclass, H5F_ACS_EFC_SIZE_NAME, H5F_ACS_EFC_SIZE_SIZE, &H5F_def_efc_size_g,
             NULL, NULL, NULL, H5F_ACS_EFC_SIZE_ENC, H5F_ACS_EFC_SIZE_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the initial file image info */
     /* (Note: this property should not have an encode/decode callback -QAK) */
-    if(H5P_register_real(pclass, H5F_ACS_FILE_IMAGE_INFO_NAME, H5F_ACS_FILE_IMAGE_INFO_SIZE, &H5F_def_file_image_info_g,
+    if(H5P__register_real(pclass, H5F_ACS_FILE_IMAGE_INFO_NAME, H5F_ACS_FILE_IMAGE_INFO_SIZE, &H5F_def_file_image_info_g,
             NULL, H5F_ACS_FILE_IMAGE_INFO_SET, H5F_ACS_FILE_IMAGE_INFO_GET, NULL, NULL,
             H5F_ACS_FILE_IMAGE_INFO_DEL, H5F_ACS_FILE_IMAGE_INFO_COPY, H5F_ACS_FILE_IMAGE_INFO_CMP, H5F_ACS_FILE_IMAGE_INFO_CLOSE) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the core VFD backing store write tracking flag */
-    if(H5P_register_real(pclass, H5F_ACS_CORE_WRITE_TRACKING_FLAG_NAME, H5F_ACS_CORE_WRITE_TRACKING_FLAG_SIZE, &H5F_def_core_write_tracking_flag_g,
+    if(H5P__register_real(pclass, H5F_ACS_CORE_WRITE_TRACKING_FLAG_NAME, H5F_ACS_CORE_WRITE_TRACKING_FLAG_SIZE, &H5F_def_core_write_tracking_flag_g,
             NULL, NULL, NULL, H5F_ACS_CORE_WRITE_TRACKING_FLAG_ENC, H5F_ACS_CORE_WRITE_TRACKING_FLAG_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the size of the core VFD backing store page size */
-    if(H5P_register_real(pclass, H5F_ACS_CORE_WRITE_TRACKING_PAGE_SIZE_NAME, H5F_ACS_CORE_WRITE_TRACKING_PAGE_SIZE_SIZE, &H5F_def_core_write_tracking_page_size_g,
+    if(H5P__register_real(pclass, H5F_ACS_CORE_WRITE_TRACKING_PAGE_SIZE_NAME, H5F_ACS_CORE_WRITE_TRACKING_PAGE_SIZE_SIZE, &H5F_def_core_write_tracking_page_size_g,
             NULL, NULL, NULL, H5F_ACS_CORE_WRITE_TRACKING_PAGE_SIZE_ENC, H5F_ACS_CORE_WRITE_TRACKING_PAGE_SIZE_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the # of read attempts */
-    if(H5P_register_real(pclass, H5F_ACS_METADATA_READ_ATTEMPTS_NAME, H5F_ACS_METADATA_READ_ATTEMPTS_SIZE, &H5F_def_metadata_read_attempts_g,
+    if(H5P__register_real(pclass, H5F_ACS_METADATA_READ_ATTEMPTS_NAME, H5F_ACS_METADATA_READ_ATTEMPTS_SIZE, &H5F_def_metadata_read_attempts_g,
             NULL, NULL, NULL, H5F_ACS_METADATA_READ_ATTEMPTS_ENC, H5F_ACS_METADATA_READ_ATTEMPTS_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register object flush callback */
     /* (Note: this property should not have an encode/decode callback -QAK) */
-    if(H5P_register_real(pclass, H5F_ACS_OBJECT_FLUSH_CB_NAME, H5F_ACS_OBJECT_FLUSH_CB_SIZE, &H5F_def_object_flush_cb_g,
+    if(H5P__register_real(pclass, H5F_ACS_OBJECT_FLUSH_CB_NAME, H5F_ACS_OBJECT_FLUSH_CB_SIZE, &H5F_def_object_flush_cb_g,
             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the private property of whether to clear the superblock status_flags. It's used by h5clear only. */
-    if(H5P_register_real(pclass, H5F_ACS_CLEAR_STATUS_FLAGS_NAME, H5F_ACS_CLEAR_STATUS_FLAGS_SIZE, &H5F_def_clear_status_flags_g,
+    if(H5P__register_real(pclass, H5F_ACS_CLEAR_STATUS_FLAGS_NAME, H5F_ACS_CLEAR_STATUS_FLAGS_SIZE, &H5F_def_clear_status_flags_g,
             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the private property of whether to skip EOF check. It's used by h5clear only. */
-    if(H5P_register_real(pclass, H5F_ACS_SKIP_EOF_CHECK_NAME, H5F_ACS_SKIP_EOF_CHECK_SIZE, &H5F_def_skip_eof_check_g,
+    if(H5P__register_real(pclass, H5F_ACS_SKIP_EOF_CHECK_NAME, H5F_ACS_SKIP_EOF_CHECK_SIZE, &H5F_def_skip_eof_check_g,
             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the private property of whether to drop free-space to the floor. It's used by h5clear only. */
-    if(H5P_register_real(pclass, H5F_ACS_NULL_FSM_ADDR_NAME, H5F_ACS_NULL_FSM_ADDR_SIZE, &H5F_def_null_fsm_addr_g,
+    if(H5P__register_real(pclass, H5F_ACS_NULL_FSM_ADDR_NAME, H5F_ACS_NULL_FSM_ADDR_SIZE, &H5F_def_null_fsm_addr_g,
             NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the metadata cache logging flag. */
-    if(H5P_register_real(pclass, H5F_ACS_USE_MDC_LOGGING_NAME, H5F_ACS_USE_MDC_LOGGING_SIZE, &H5F_def_use_mdc_logging_g,
+    if(H5P__register_real(pclass, H5F_ACS_USE_MDC_LOGGING_NAME, H5F_ACS_USE_MDC_LOGGING_SIZE, &H5F_def_use_mdc_logging_g,
             NULL, NULL, NULL, H5F_ACS_USE_MDC_LOGGING_ENC, H5F_ACS_USE_MDC_LOGGING_DEC, NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the metadata cache log location. */
-    if(H5P_register_real(pclass, H5F_ACS_MDC_LOG_LOCATION_NAME, H5F_ACS_MDC_LOG_LOCATION_SIZE, &H5F_def_mdc_log_location_g,
+    if(H5P__register_real(pclass, H5F_ACS_MDC_LOG_LOCATION_NAME, H5F_ACS_MDC_LOG_LOCATION_SIZE, &H5F_def_mdc_log_location_g,
         NULL, NULL, NULL, H5F_ACS_MDC_LOG_LOCATION_ENC, H5F_ACS_MDC_LOG_LOCATION_DEC,
         H5F_ACS_MDC_LOG_LOCATION_DEL, H5F_ACS_MDC_LOG_LOCATION_COPY, H5F_ACS_MDC_LOG_LOCATION_CMP, H5F_ACS_MDC_LOG_LOCATION_CLOSE) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the flag that indicates whether mdc logging starts on file access. */
-    if(H5P_register_real(pclass, H5F_ACS_START_MDC_LOG_ON_ACCESS_NAME, H5F_ACS_START_MDC_LOG_ON_ACCESS_SIZE, &H5F_def_start_mdc_log_on_access_g,
+    if(H5P__register_real(pclass, H5F_ACS_START_MDC_LOG_ON_ACCESS_NAME, H5F_ACS_START_MDC_LOG_ON_ACCESS_SIZE, &H5F_def_start_mdc_log_on_access_g,
             NULL, NULL, NULL, H5F_ACS_START_MDC_LOG_ON_ACCESS_ENC, H5F_ACS_START_MDC_LOG_ON_ACCESS_DEC, NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the evict on close flag */
-    if(H5P_register_real(pclass, H5F_ACS_EVICT_ON_CLOSE_FLAG_NAME, H5F_ACS_EVICT_ON_CLOSE_FLAG_SIZE, &H5F_def_evict_on_close_flag_g,
+    if(H5P__register_real(pclass, H5F_ACS_EVICT_ON_CLOSE_FLAG_NAME, H5F_ACS_EVICT_ON_CLOSE_FLAG_SIZE, &H5F_def_evict_on_close_flag_g,
             NULL, NULL, NULL, H5F_ACS_EVICT_ON_CLOSE_FLAG_ENC, H5F_ACS_EVICT_ON_CLOSE_FLAG_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
 #ifdef H5_HAVE_PARALLEL
     /* Register the metadata collective read flag */
-    if(H5P_register_real(pclass, H5_COLL_MD_READ_FLAG_NAME, H5F_ACS_COLL_MD_READ_FLAG_SIZE, &H5F_def_coll_md_read_flag_g,
+    if(H5P__register_real(pclass, H5_COLL_MD_READ_FLAG_NAME, H5F_ACS_COLL_MD_READ_FLAG_SIZE, &H5F_def_coll_md_read_flag_g,
             NULL, NULL, NULL, H5F_ACS_COLL_MD_READ_FLAG_ENC, H5F_ACS_COLL_MD_READ_FLAG_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the metadata collective write flag */
-    if(H5P_register_real(pclass, H5F_ACS_COLL_MD_WRITE_FLAG_NAME, H5F_ACS_COLL_MD_WRITE_FLAG_SIZE, &H5F_def_coll_md_write_flag_g,
+    if(H5P__register_real(pclass, H5F_ACS_COLL_MD_WRITE_FLAG_NAME, H5F_ACS_COLL_MD_WRITE_FLAG_SIZE, &H5F_def_coll_md_write_flag_g,
             NULL, NULL, NULL, H5F_ACS_COLL_MD_WRITE_FLAG_ENC, H5F_ACS_COLL_MD_WRITE_FLAG_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 #endif /* H5_HAVE_PARALLEL */
 
     /* Register the initial metadata cache image configuration */
-    if(H5P_register_real(pclass, H5F_ACS_META_CACHE_INIT_IMAGE_CONFIG_NAME, H5F_ACS_META_CACHE_INIT_IMAGE_CONFIG_SIZE, &H5F_def_mdc_initCacheImageCfg_g,
+    if(H5P__register_real(pclass, H5F_ACS_META_CACHE_INIT_IMAGE_CONFIG_NAME, H5F_ACS_META_CACHE_INIT_IMAGE_CONFIG_SIZE, &H5F_def_mdc_initCacheImageCfg_g,
             NULL, NULL, NULL, H5F_ACS_META_CACHE_INIT_IMAGE_CONFIG_ENC, H5F_ACS_META_CACHE_INIT_IMAGE_CONFIG_DEC,
             NULL, NULL, H5F_ACS_META_CACHE_INIT_IMAGE_CONFIG_CMP, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the size of the page buffer size */
-    if(H5P_register_real(pclass, H5F_ACS_PAGE_BUFFER_SIZE_NAME, H5F_ACS_PAGE_BUFFER_SIZE_SIZE, &H5F_def_page_buf_size_g,
+    if(H5P__register_real(pclass, H5F_ACS_PAGE_BUFFER_SIZE_NAME, H5F_ACS_PAGE_BUFFER_SIZE_SIZE, &H5F_def_page_buf_size_g,
             NULL, NULL, NULL, H5F_ACS_PAGE_BUFFER_SIZE_ENC, H5F_ACS_PAGE_BUFFER_SIZE_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
     /* Register the size of the page buffer minimum metadata size */
-    if(H5P_register_real(pclass, H5F_ACS_PAGE_BUFFER_MIN_META_PERC_NAME, H5F_ACS_PAGE_BUFFER_MIN_META_PERC_SIZE, &H5F_def_page_buf_min_meta_perc_g,
+    if(H5P__register_real(pclass, H5F_ACS_PAGE_BUFFER_MIN_META_PERC_NAME, H5F_ACS_PAGE_BUFFER_MIN_META_PERC_SIZE, &H5F_def_page_buf_min_meta_perc_g,
             NULL, NULL, NULL, H5F_ACS_PAGE_BUFFER_MIN_META_PERC_ENC, H5F_ACS_PAGE_BUFFER_MIN_META_PERC_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
     /* Register the size of the page buffer minimum raw data size */
-    if(H5P_register_real(pclass, H5F_ACS_PAGE_BUFFER_MIN_RAW_PERC_NAME, H5F_ACS_PAGE_BUFFER_MIN_RAW_PERC_SIZE, &H5F_def_page_buf_min_raw_perc_g,
+    if(H5P__register_real(pclass, H5F_ACS_PAGE_BUFFER_MIN_RAW_PERC_NAME, H5F_ACS_PAGE_BUFFER_MIN_RAW_PERC_SIZE, &H5F_def_page_buf_min_raw_perc_g,
             NULL, NULL, NULL, H5F_ACS_PAGE_BUFFER_MIN_RAW_PERC_ENC, H5F_ACS_PAGE_BUFFER_MIN_RAW_PERC_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the file VOL driver ID & info */
     /* (Note: this property should not have an encode/decode callback -QAK) */
-    if(H5P_register_real(pclass, H5F_ACS_VOL_DRV_NAME, H5F_ACS_VOL_SIZE, &def_vol_prop,
+    if(H5P__register_real(pclass, H5F_ACS_VOL_DRV_NAME, H5F_ACS_VOL_SIZE, &def_vol_prop,
             H5F_ACS_VOL_CRT, H5F_ACS_VOL_SET, H5F_ACS_VOL_GET, NULL, NULL,
             H5F_ACS_VOL_DEL, H5F_ACS_VOL_COPY, H5F_ACS_VOL_CMP, H5F_ACS_VOL_CLOSE) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
@@ -1744,7 +1744,7 @@ H5Pget_mdc_image_config(hid_t plist_id, H5AC_cache_image_config_t *config_ptr)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "Unknown image config version.")
 
     /* If we ever support multiple versions of H5AC_cache_config_t, we
-     * will have to get the cannonical version here, and then translate
+     * will have to get the canonical version here, and then translate
      * to the version of the structure supplied.
      */
 
@@ -1839,7 +1839,7 @@ H5Pget_mdc_config(hid_t plist_id, H5AC_cache_config_t *config_ptr)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "Unknown config version.")
 
     /* If we ever support multiple versions of H5AC_cache_config_t, we
-     * will have to get the cannonical version here, and then translate
+     * will have to get the canonical version here, and then translate
      * to the version of the structure supplied.
      */
 
@@ -2353,7 +2353,7 @@ done:
  *              necessary to represent features used.
  *              (This is the "make certain to take advantage of <new feature>
  *              in the file format" use case (maybe <new feature> is smaller
- *              or scales better than an ealier version, which would otherwise
+ *              or scales better than an earlier version, which would otherwise
  *              be used))
  *
  *         LOW = H5F_FORMAT_1_2_0, HIGH = H5F_FORMAT_1_6_0 => creates objects
@@ -2438,10 +2438,10 @@ done:
 /*-------------------------------------------------------------------------
  * Function:    H5Pget_libver_bounds
  *
- * Purpose:    Returns the current settings for the library version format bounds
- *      from a file access property list.
+ * Purpose:     Returns the current settings for the library version format bounds
+ *              from a file access property list.
  *
- * Return:    Non-negative on success/Negative on failure
+ * Return:      Non-negative on success/Negative on failure
  *
  * Programmer:    Quincey Koziol
  *              Thursday, January 3, 2008
@@ -2580,7 +2580,7 @@ H5Pset_file_image(hid_t fapl_id, void *buf_ptr, size_t buf_len)
 
     /* validate parameters */
     if(!(((buf_ptr == NULL) && (buf_len == 0)) || ((buf_ptr != NULL) && (buf_len > 0))))
-        HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "inconsistant buf_ptr and buf_len")
+        HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "inconsistent buf_ptr and buf_len")
 
     /* Get the plist structure */
     if(NULL == (fapl = H5P_object_verify(fapl_id, H5P_FILE_ACCESS)))
@@ -2683,7 +2683,7 @@ H5Pget_file_image(hid_t fapl_id, void **buf_ptr_ptr, size_t *buf_len_ptr)
     if(H5P_peek(fapl, H5F_ACS_FILE_IMAGE_INFO_NAME, &image_info) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get file image info")
 
-    /* verify file image field consistancy */
+    /* verify file image field consistency */
     HDassert(((image_info.buffer != NULL) && (image_info.size > 0)) ||
              ((image_info.buffer == NULL) && (image_info.size == 0)));
 
@@ -2759,7 +2759,7 @@ H5Pset_file_image_callbacks(hid_t fapl_id, H5FD_file_image_callbacks_t *callback
     if(H5P_peek(fapl, H5F_ACS_FILE_IMAGE_INFO_NAME, &info) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get old file image info")
 
-    /* verify file image field consistancy */
+    /* verify file image field consistency */
     HDassert(((info.buffer != NULL) && (info.size > 0)) ||
              ((info.buffer == NULL) && (info.size == 0)));
 
@@ -2835,7 +2835,7 @@ H5Pget_file_image_callbacks(hid_t fapl_id, H5FD_file_image_callbacks_t *callback
     if(H5P_peek(fapl, H5F_ACS_FILE_IMAGE_INFO_NAME, &info) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get file image info")
 
-    /* verify file image field consistancy */
+    /* verify file image field consistency */
     HDassert(((info.buffer != NULL) && (info.size > 0)) ||
              ((info.buffer == NULL) && (info.size == 0)));
 
@@ -2889,7 +2889,7 @@ H5P__file_image_info_copy(void *value)
 
         info = (H5FD_file_image_info_t *)value;
 
-        /* verify file image field consistancy */
+        /* verify file image field consistency */
         HDassert(((info->buffer != NULL) && (info->size > 0)) ||
                  ((info->buffer == NULL) && (info->size == 0)));
 
@@ -2963,7 +2963,7 @@ H5P__file_image_info_free(void *value)
 
         info = (H5FD_file_image_info_t *)value;
 
-        /* Verify file image field consistancy */
+        /* Verify file image field consistency */
         HDassert(((info->buffer != NULL) && (info->size > 0)) ||
                  ((info->buffer == NULL) && (info->size == 0)));
 
@@ -4990,10 +4990,10 @@ H5P_set_vol(H5P_genplist_t *plist, hid_t vol_id, const void *vol_info)
 
     FUNC_ENTER_NOAPI(FAIL)
 
-    if (NULL == H5I_object_verify(vol_id, H5I_VOL))
+    if(NULL == H5I_object_verify(vol_id, H5I_VOL))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a VOL driver ID")
 
-    if (TRUE == H5P_isa_class(plist->plist_id, H5P_FILE_ACCESS)) {
+    if(TRUE == H5P_isa_class(plist->plist_id, H5P_FILE_ACCESS)) {
         H5VL_driver_prop_t vol_prop;         /* Property for VOL ID & info */
 
         /* Prepare the VOL driver property */
@@ -5001,7 +5001,7 @@ H5P_set_vol(H5P_genplist_t *plist, hid_t vol_id, const void *vol_info)
         vol_prop.driver_info = vol_info;
 
         /* Set the driver ID & info property */
-        if (H5P_set(plist, H5F_ACS_VOL_DRV_NAME, &vol_prop) < 0)
+        if(H5P_set(plist, H5F_ACS_VOL_DRV_NAME, &vol_prop) < 0)
             HGOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set VOL driver ID & info")
     }
     else
@@ -5033,13 +5033,13 @@ H5Pset_vol(hid_t plist_id, hid_t new_vol_id, const void *new_vol_info)
     H5TRACE3("e", "ii*x", plist_id, new_vol_id, new_vol_info);
 
     /* Check arguments */
-    if (NULL == (plist = (H5P_genplist_t *)H5I_object_verify(plist_id, H5I_GENPROP_LST)))
+    if(NULL == (plist = (H5P_genplist_t *)H5I_object_verify(plist_id, H5I_GENPROP_LST)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a property list")
-    if (NULL == H5I_object_verify(new_vol_id, H5I_VOL))
+    if(NULL == H5I_object_verify(new_vol_id, H5I_VOL))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a file vol ID")
 
     /* Set the vol */
-    if (H5P_set_vol(plist, new_vol_id, new_vol_info) < 0)
+    if(H5P_set_vol(plist, new_vol_id, new_vol_info) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set vol")
 
 done:
@@ -5052,8 +5052,6 @@ done:
  *
  * Purpose:     Returns a pointer directly to the file vol-specific
  *              information of a file access property list.
- *
- *              XXX: This API call seems like a REALLY bad idea - DER
  *
  * Return:      Success:    Ptr to *uncopied* vol specific data
  *                          structure if any.
@@ -5073,10 +5071,10 @@ H5P_get_vol_info(H5P_genplist_t *plist)
     FUNC_ENTER_NOAPI(NULL)
 
     /* Get the current vol info */
-    if (TRUE == H5P_isa_class(plist->plist_id, H5P_FILE_ACCESS)) {
+    if(TRUE == H5P_isa_class(plist->plist_id, H5P_FILE_ACCESS)) {
         H5VL_driver_prop_t driver_prop;         /* Property for vol driver ID & info */
 
-        if (H5P_peek(plist, H5F_ACS_VOL_DRV_NAME, &driver_prop) < 0)
+        if(H5P_peek(plist, H5F_ACS_VOL_DRV_NAME, &driver_prop) < 0)
             HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get vol driver info")
         ret_value = (void *)driver_prop.driver_info;
     } else
@@ -5093,7 +5091,7 @@ done:
  * Purpose:     Returns a pointer directly to the file vol-specific
  *              information of a file access property list.
  *
- *              XXX: This API call seems like a REALLY bad idea - DER
+ *              XXX (VOL MERGE): This API call seems like a REALLY bad idea - DER
  *
  * Return:      Success:    Ptr to *uncopied* vol specific data
  *                          structure if any.
@@ -5114,10 +5112,10 @@ H5Pget_vol_info(hid_t plist_id)
     FUNC_ENTER_API(NULL)
     H5TRACE1("*x", "i", plist_id);
 
-    if (NULL == (plist = (H5P_genplist_t *)H5I_object_verify(plist_id, H5I_GENPROP_LST)))
+    if(NULL == (plist = (H5P_genplist_t *)H5I_object_verify(plist_id, H5I_GENPROP_LST)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, NULL, "not a property list")
 
-    if (NULL == (ret_value = H5P_get_vol_info(plist)))
+    if(NULL == (ret_value = H5P_get_vol_info(plist)))
         HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get vol info")
 
 done:
@@ -5146,31 +5144,31 @@ H5P__vol_copy(void *value)
 
     FUNC_ENTER_STATIC
 
-    if (value) {
+    if(value) {
         H5VL_driver_prop_t *info = (H5VL_driver_prop_t *)value; /* Driver ID & info struct */
 
         /* Copy the driver ID & info, if there is one */
-        if (info->driver_id > 0) {
+        if(info->driver_id > 0) {
             /* Increment the reference count on driver ID and copy driver info */
-            if (H5I_inc_ref(info->driver_id, FALSE) < 0)
+            if(H5I_inc_ref(info->driver_id, FALSE) < 0)
                 HGOTO_ERROR(H5E_PLIST, H5E_CANTINC, FAIL, "unable to increment ref count on VOL driver ID")
 
             /* Copy driver info, if it exists */
-            if (info->driver_info) {
+            if(info->driver_info) {
                 H5VL_class_t *driver;       /* Pointer to driver */
                 void *new_driver;           /* Copy of driver info */
 
                 /* Retrieve the driver for the ID */
-                if (NULL == (driver = (H5VL_class_t *)H5I_object(info->driver_id)))
+                if(NULL == (driver = (H5VL_class_t *)H5I_object(info->driver_id)))
                     HGOTO_ERROR(H5E_PLIST, H5E_BADTYPE, FAIL, "not a VOL driver ID")
 
                 /* Allow the driver to copy or do it ourselves */
-                if (driver->fapl_copy) {
-                    if (NULL == (new_driver = (driver->fapl_copy)(info->driver_info)))
+                if(driver->fapl_copy) {
+                    if(NULL == (new_driver = (driver->fapl_copy)(info->driver_info)))
                         HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "driver info copy failed")
                 }
-                else if (driver->fapl_size > 0) {
-                    if (NULL == (new_driver = H5MM_malloc(driver->fapl_size)))
+                else if(driver->fapl_size > 0) {
+                    if(NULL == (new_driver = H5MM_malloc(driver->fapl_size)))
                         HGOTO_ERROR(H5E_PLIST, H5E_CANTALLOC, FAIL, "driver info allocation failed")
                     HDmemcpy(new_driver, info->driver_info, driver->fapl_size);
                 }
@@ -5205,21 +5203,21 @@ H5P__vol_free(void *value)
 
     FUNC_ENTER_STATIC
 
-    if (value) {
+    if(value) {
         H5VL_driver_prop_t *info = (H5VL_driver_prop_t *)value; /* Driver ID & info struct */
 
         /* Free the driver info (if it exists) and decrement the ID */
-        if (info->driver_id > 0) {
-            if (info->driver_info) {
+        if(info->driver_id > 0) {
+            if(info->driver_info) {
                 H5VL_class_t *driver;       /* Pointer to driver */
 
                 /* Retrieve the driver for the ID */
-                if (NULL == (driver = (H5VL_class_t *)H5I_object(info->driver_id)))
+                if(NULL == (driver = (H5VL_class_t *)H5I_object(info->driver_id)))
                     HGOTO_ERROR(H5E_PLIST, H5E_BADTYPE, FAIL, "not a VOL driver ID")
 
                 /* Allow the driver to free info or do it ourselves */
-                if (driver->fapl_free) {
-                    if ((driver->fapl_free)((void *)info->driver_info) < 0)     /* Casting away const OK -QAK */
+                if(driver->fapl_free) {
+                    if((driver->fapl_free)((void *)info->driver_info) < 0)     /* Casting away const OK -QAK */
                         HGOTO_ERROR(H5E_PLIST, H5E_CANTFREE, FAIL, "driver info free request failed")
                 }
                 else
@@ -5227,7 +5225,7 @@ H5P__vol_free(void *value)
             }
 
             /* Decrement reference count for driver ID */
-            if (H5I_dec_ref(info->driver_id) < 0)
+            if(H5I_dec_ref(info->driver_id) < 0)
                 HGOTO_ERROR(H5E_PLIST, H5E_CANTDEC, FAIL, "can't decrement reference count for driver ID")
         }
     }
@@ -5255,7 +5253,7 @@ H5P__facc_vol_create(const char H5_ATTR_UNUSED *name, size_t H5_ATTR_UNUSED size
     FUNC_ENTER_STATIC
 
     /* Make copy of the VOL driver */
-    if (H5P__vol_copy(value) < 0)
+    if(H5P__vol_copy(value) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy VOL driver")
 
 done:
@@ -5285,7 +5283,7 @@ H5P__facc_vol_set(hid_t H5_ATTR_UNUSED prop_id, const char H5_ATTR_UNUSED *name,
     HDassert(value);
 
     /* Make copy of VOL driver ID & info */
-    if (H5P__vol_copy(value) < 0)
+    if(H5P__vol_copy(value) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy VOL driver")
 
 done:
@@ -5315,7 +5313,7 @@ H5P__facc_vol_get(hid_t H5_ATTR_UNUSED prop_id, const char H5_ATTR_UNUSED *name,
     HDassert(value);
 
     /* Make copy of VOL driver */
-    if (H5P__vol_copy(value) < 0)
+    if(H5P__vol_copy(value) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy VOL driver")
 
 done:
@@ -5341,7 +5339,7 @@ H5P__facc_vol_del(hid_t H5_ATTR_UNUSED prop_id, const char H5_ATTR_UNUSED *name,
     FUNC_ENTER_STATIC
 
     /* Free the VOL driver ID & info */
-    if (H5P__vol_free(value) < 0)
+    if(H5P__vol_free(value) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTRELEASE, FAIL, "can't release VOL driver")
 
 done:
@@ -5367,7 +5365,7 @@ H5P__facc_vol_copy(const char H5_ATTR_UNUSED *name, size_t H5_ATTR_UNUSED size, 
     FUNC_ENTER_STATIC
 
     /* Make copy of VOL driver */
-    if (H5P__vol_copy(value) < 0)
+    if(H5P__vol_copy(value) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy VOL driver")
 
 done:
@@ -5405,31 +5403,31 @@ H5P__facc_vol_cmp(const void *_info1, const void *_info2, size_t H5_ATTR_UNUSED 
     HDassert(size == sizeof(H5VL_driver_prop_t));
 
     /* Compare drivers */
-    if (NULL == (cls1 = (H5VL_class_t *)H5I_object(info1->driver_id)))
+    if(NULL == (cls1 = (H5VL_class_t *)H5I_object(info1->driver_id)))
         HGOTO_DONE(-1)
-    if (NULL == (cls2 = (H5VL_class_t *)H5I_object(info2->driver_id)))
+    if(NULL == (cls2 = (H5VL_class_t *)H5I_object(info2->driver_id)))
         HGOTO_DONE(1)
-    if (cls1->name == NULL && cls2->name != NULL)
+    if(cls1->name == NULL && cls2->name != NULL)
         HGOTO_DONE(-1);
-    if (cls1->name != NULL && cls2->name == NULL)
+    if(cls1->name != NULL && cls2->name == NULL)
         HGOTO_DONE(1);
-    if (0 != (cmp_value = HDstrcmp(cls1->name, cls2->name)))
+    if(0 != (cmp_value = HDstrcmp(cls1->name, cls2->name)))
         HGOTO_DONE(cmp_value);
 
     /* Compare driver info */
-    if (cls1->fapl_size < cls2->fapl_size)
+    if(cls1->fapl_size < cls2->fapl_size)
         HGOTO_DONE(-1)
-    if (cls1->fapl_size > cls2->fapl_size)
+    if(cls1->fapl_size > cls2->fapl_size)
         HGOTO_DONE(1)
     HDassert(cls1->fapl_size == cls2->fapl_size);
 
-    if (info1->driver_info == NULL && info2->driver_info != NULL)
+    if(info1->driver_info == NULL && info2->driver_info != NULL)
         HGOTO_DONE(-1);
-    if (info1->driver_info != NULL && info2->driver_info == NULL)
+    if(info1->driver_info != NULL && info2->driver_info == NULL)
         HGOTO_DONE(1);
-    if (info1->driver_info) {
+    if(info1->driver_info) {
         HDassert(cls1->fapl_size > 0);
-        if (0 != (cmp_value = HDmemcmp(info1->driver_info, info2->driver_info, cls1->fapl_size)))
+        if(0 != (cmp_value = HDmemcmp(info1->driver_info, info2->driver_info, cls1->fapl_size)))
             HGOTO_DONE(cmp_value);
     }
 
@@ -5456,7 +5454,7 @@ H5P__facc_vol_close(const char H5_ATTR_UNUSED *name, size_t H5_ATTR_UNUSED size,
     FUNC_ENTER_STATIC
 
     /* Free the VOL driver */
-    if (H5P__vol_free(value) < 0)
+    if(H5P__vol_free(value) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTRELEASE, FAIL, "can't release VOL driver")
 
 done:

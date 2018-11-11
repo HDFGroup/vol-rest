@@ -762,10 +762,10 @@ test_rdwr_cases(hid_t file, hid_t dcpl, const char *dname, void *_fillval,
     comp_datatype	*buf_c=NULL;
     H5D_space_status_t  allocation;
 
-    if(datatype==H5T_INTEGER) {
+    if(datatype == H5T_INTEGER) {
         fillval = *(int*)_fillval;
     }
-    else if(datatype==H5T_COMPOUND) {
+    else if(datatype == H5T_COMPOUND) {
         fill_c.a=((comp_datatype*)_fillval)->a;
         fill_c.x=((comp_datatype*)_fillval)->x;
         fill_c.y=((comp_datatype*)_fillval)->y;
@@ -1092,22 +1092,22 @@ test_rdwr(hid_t fapl, const char *base_name, H5D_layout_t layout)
     }
 
     h5_fixname(base_name, fapl, filename, sizeof filename);
-    if((file=H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl)) < 0)
+    if((file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl)) < 0)
         goto error;
 
-    if((dcpl=H5Pcreate(H5P_DATASET_CREATE)) < 0)
+    if((dcpl = H5Pcreate(H5P_DATASET_CREATE)) < 0)
         goto error;
 
-    if(H5D_CHUNKED==layout) {
+    if(H5D_CHUNKED == layout) {
         if(H5Pset_chunk(dcpl, 5, ch_size) < 0)
             goto error;
     }
-    else if(H5D_COMPACT==layout) {
+    else if(H5D_COMPACT == layout) {
         if(H5Pset_layout(dcpl, H5D_COMPACT) < 0)
             goto error;
     }
 
-    if((ctype_id=create_compound_type()) < 0)
+    if((ctype_id = create_compound_type()) < 0)
         goto error;
 
     /* I. Test H5D_ALLOC_TIME_LATE space allocation cases */

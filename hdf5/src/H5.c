@@ -21,6 +21,7 @@
 /***********/
 #include "H5private.h"          /* Generic Functions                        */
 #include "H5ACprivate.h"        /* Metadata cache                           */
+#include "H5CXprivate.h"        /* API Contexts                             */
 #include "H5Dprivate.h"         /* Datasets                                 */
 #include "H5Eprivate.h"         /* Error handling                           */
 #include "H5FLprivate.h"        /* Free lists                               */
@@ -30,7 +31,6 @@
 #include "H5Pprivate.h"         /* Property lists                           */
 #include "H5SLprivate.h"        /* Skip lists                               */
 #include "H5Tprivate.h"         /* Datatypes                                */
-#include "H5FSprivate.h"        /* File free space                          */
 
 /****************/
 /* Local Macros */
@@ -227,7 +227,7 @@ H5_init_library(void)
     if(H5L_init() < 0)
         HGOTO_ERROR(H5E_FUNC, H5E_CANTINIT, FAIL, "unable to initialize link interface")
     if(H5FS_init() < 0)
-       HGOTO_ERROR(H5E_FUNC, H5E_CANTINIT, FAIL, "unable to initialize FS interface")
+        HGOTO_ERROR(H5E_FUNC, H5E_CANTINIT, FAIL, "unable to initialize FS interface")
 
     /* Debugging? */
     H5_debug_mask("-all");
@@ -265,10 +265,13 @@ H5_term_library(void)
 
     /* Don't do anything if the library is already closed */
     if(!(H5_INIT_GLOBAL))
-	goto done;
+        goto done;
 
     /* Indicate that the library is being shut down */
     H5_TERM_GLOBAL = TRUE;
+
+    /* Push the API context without checking for errors */
+    H5CX_push_special();
 
     /* Check if we should display error output */
     (void)H5Eget_auto2(H5E_DEFAULT, &func, NULL);
@@ -355,9 +358,12 @@ H5_term_library(void)
             /* Don't shut down the skip list code until everything that uses it is down */
             if(pending == 0)
                 pending += DOWN(SL);
-            /* Don't shut down the free list code until _everything_ else is down */
+            /* Don't shut down the free list code until everything that uses it is down */
             if(pending == 0)
                 pending += DOWN(FL);
+            /* Don't shut down the API context code until _everything_ else is down */
+            if(pending == 0)
+                pending += DOWN(CX);
         } /* end if */
     } while(pending && ntries++ < 100);
 
@@ -377,18 +383,18 @@ H5_term_library(void)
      * down if any of the below code involves using the instrumentation code.
      */
     if(H5_MPEinit_g) {
-	int mpi_initialized;
-	int mpi_finalized;
-	int mpe_code;
+        int mpi_initialized;
+        int mpi_finalized;
+        int mpe_code;
 
-	MPI_Initialized(&mpi_initialized);
-	MPI_Finalized(&mpi_finalized);
+        MPI_Initialized(&mpi_initialized);
+        MPI_Finalized(&mpi_finalized);
 
         if (mpi_initialized && !mpi_finalized) {
-	    mpe_code = MPE_Finish_log("h5log");
-	    HDassert(mpe_code >=0);
-	} /* end if */
-	H5_MPEinit_g = FALSE;	/* turn it off no matter what */
+            mpe_code = MPE_Finish_log("h5log");
+            HDassert(mpe_code >=0);
+        } /* end if */
+        H5_MPEinit_g = FALSE;	/* turn it off no matter what */
     } /* end if */
 #endif
 
@@ -412,6 +418,8 @@ H5_term_library(void)
 
     /* Mark library as closed */
     H5_INIT_GLOBAL = FALSE;
+
+    /* Don't pop the API context (i.e. H5CX_pop), since it's been shut down already */
 
 done:
 #ifdef H5_HAVE_THREADSAFE
@@ -466,7 +474,7 @@ H5dont_atexit(void)
  *		library, which are supposed to free any unused memory they have
  *		allocated.
  *
- *      These should probably be registered dynamicly in a linked list of
+ *      These should probably be registered dynamically in a linked list of
  *          functions to call, but there aren't that many right now, so we
  *          hard-wire them...
  *
@@ -781,7 +789,7 @@ H5check_version(unsigned majnum, unsigned minnum, unsigned relnum)
 	    HDfprintf (stderr, "%s", H5libhdf5_settings);
 	    break;
 	default:
-	    /* 2 or higer: continue silently */
+	    /* 2 or higher: continue silently */
 	    break;
         } /* end switch */
 
@@ -911,7 +919,7 @@ H5allocate_memory(size_t size, hbool_t clear)
     else
         ret_value = H5MM_malloc(size);
 
-    FUNC_LEAVE_API(ret_value)
+    FUNC_LEAVE_API_NOINIT(ret_value)
 } /* end H5allocate_memory() */
 
 
@@ -949,7 +957,7 @@ H5resize_memory(void *mem, size_t size)
 
     ret_value = H5MM_realloc(mem, size);
 
-    FUNC_LEAVE_API(ret_value)
+    FUNC_LEAVE_API_NOINIT(ret_value)
 } /* end H5resize_memory() */
 
 
@@ -974,7 +982,7 @@ H5free_memory(void *mem)
     /* At this time, it is impossible for this to fail. */
     H5MM_xfree(mem);
 
-    FUNC_LEAVE_API(SUCCEED)
+    FUNC_LEAVE_API_NOINIT(SUCCEED)
 } /* end H5free_memory() */
 
 
@@ -991,20 +999,19 @@ H5free_memory(void *mem)
 herr_t
 H5is_library_threadsafe(hbool_t *is_ts)
 {
-    herr_t ret_value = SUCCEED;
-
     FUNC_ENTER_API_NOINIT
     H5TRACE1("e", "*b", is_ts);
 
     HDassert(is_ts);
  
+    /* At this time, it is impossible for this to fail. */
 #ifdef H5_HAVE_THREADSAFE
     *is_ts = TRUE;
 #else /* H5_HAVE_THREADSAFE */
     *is_ts = FALSE;
 #endif /* H5_HAVE_THREADSAFE */
 
-    FUNC_LEAVE_API(ret_value)
+    FUNC_LEAVE_API_NOINIT(SUCCEED)
 } /* end H5is_library_threadsafe() */
 
 

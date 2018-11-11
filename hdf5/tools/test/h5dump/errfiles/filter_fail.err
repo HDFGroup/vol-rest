@@ -15,7 +15,7 @@ HDF5-DIAG: Error detected in HDF5 (version (number)) thread (IDs):
     major: Low-level I/O
     minor: Read failed
   #005: (file name) line (number) in H5D__chunk_lock(): data pipeline read failed
-    major: Data filters
+    major: Dataset
     minor: Filter operation failed
   #006: (file name) line (number) in H5Z_pipeline(): required filter 'filter_fail_test' is not registered
     major: Data filters

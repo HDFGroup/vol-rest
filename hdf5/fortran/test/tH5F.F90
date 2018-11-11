@@ -101,6 +101,10 @@ CONTAINS
           !
           INTEGER     ::   i, j
 
+          !number of objects
+          INTEGER(SIZE_T) :: obj_count
+          INTEGER(HID_T) :: t1, t2, t3, t4
+
           !
           !data buffers
           !
@@ -131,11 +135,51 @@ CONTAINS
           CALL h5_fixname_f(filename2, fix_filename2, H5P_DEFAULT_F, error)
           if(error .ne. 0) stop
 
+          ! Test object counts
+          CALL h5tcopy_f(H5T_NATIVE_CHARACTER, t1, error)
+          CALL check(" h5tcopy_f",error,total_error)
+          CALL h5tcopy_f(H5T_NATIVE_CHARACTER, t2, error)
+          CALL check(" h5tcopy_f",error,total_error)
+          CALL h5tcopy_f(H5T_NATIVE_CHARACTER, t3, error)
+          CALL check(" h5tcopy_f",error,total_error)
+          CALL h5tcopy_f(H5T_NATIVE_CHARACTER, t4, error)
+          CALL check(" h5tcopy_f",error,total_error)
+          
+          CALL h5fget_obj_count_f(INT(H5F_OBJ_ALL_F,HID_T), H5F_OBJ_ALL_F, obj_count,  error)
+          CALL check(" h5fget_obj_count_f",error,total_error)
+
+          IF(obj_count.NE.4)THEN
+             total_error = total_error + 1
+          ENDIF
+
           !
           !Create first file "mount1.h5" using default properties.
           !
           CALL h5fcreate_f(fix_filename1, H5F_ACC_TRUNC_F, file1_id, error)
-               CALL check("h5fcreate_f",error,total_error)
+          CALL check("h5fcreate_f",error,total_error)
+
+          CALL h5fget_obj_count_f(INT(H5F_OBJ_ALL_F,HID_T), H5F_OBJ_ALL_F, obj_count,  error)
+          CALL check(" h5fget_obj_count_f",error,total_error)
+
+          IF(obj_count.NE.5)THEN
+             total_error = total_error + 1
+          ENDIF
+
+          CALL h5tclose_f(t1, error)
+          CALL check("h5tclose_f",error,total_error)
+          CALL h5tclose_f(t2, error)
+          CALL check("h5tclose_f",error,total_error)
+          CALL h5tclose_f(t3, error)
+          CALL check("h5tclose_f",error,total_error)
+          CALL h5tclose_f(t4, error)
+          CALL check("h5tclose_f",error,total_error)
+
+          CALL h5fget_obj_count_f(INT(H5F_OBJ_ALL_F,HID_T), H5F_OBJ_ALL_F, obj_count,  error)
+          CALL check(" h5fget_obj_count_f",error,total_error)
+
+          IF(obj_count.NE.1)THEN
+             total_error = total_error + 1
+          ENDIF
 
           !
           !Create group "/G" inside file "mount1.h5".
@@ -188,9 +232,25 @@ CONTAINS
               CALL check("h5fclose_f",error,total_error)
 
           !
-          !test whether files are in hdf5 format
+          !test whether files are accessible as HDF5 (new, VOL-safe, way)
           !
-#ifdef VOL_FIXME
+          CALL h5fis_accessible_f(fix_filename1, status, error)
+               CALL check("h5fis_accessible_f",error,total_error)
+          IF ( .NOT. status ) THEN
+              write(*,*) "File ", fix_filename1, " is not accessible as hdf5"
+              stop
+          END IF
+
+          CALL h5fis_accessible_f(fix_filename2, status, error)
+               CALL check("h5fis_accessible_f",error,total_error)
+          IF ( .NOT. status ) THEN
+              write(*,*) "File ", fix_filename2, " is not accessible as hdf5"
+              stop
+          END IF
+
+          !
+          !test whether files are in hdf5 format (old way)
+          !
           CALL h5fis_hdf5_f(fix_filename1, status, error)
                CALL check("h5fis_hdf5_f",error,total_error)
           IF ( .NOT. status ) THEN
@@ -204,16 +264,29 @@ CONTAINS
               write(*,*) "File ", fix_filename2, " is not in hdf5 format"
               stop
           END IF
-#endif
 
           !
           !reopen both files.
           !
           CALL h5fopen_f (fix_filename1, H5F_ACC_RDWR_F, file1_id, error)
               CALL check("hfopen_f",error,total_error)
+
+          CALL h5fget_obj_count_f(INT(H5F_OBJ_ALL_F,HID_T), H5F_OBJ_ALL_F, obj_count,  error)
+          CALL check(" h5fget_obj_count_f",error,total_error)
+
+          IF(obj_count.NE.1)THEN
+             total_error = total_error + 1
+          ENDIF  
+
           CALL h5fopen_f (fix_filename2, H5F_ACC_RDWR_F, file2_id, error)
               CALL check("h5fopen_f",error,total_error)
 
+          CALL h5fget_obj_count_f(INT(H5F_OBJ_ALL_F,HID_T), H5F_OBJ_ALL_F, obj_count,  error)
+          CALL check(" h5fget_obj_count_f",error,total_error)
+
+          IF(obj_count.NE.2)THEN
+             total_error = total_error + 1
+          ENDIF  
           !
           !mount the second file under the first file's "/G" group.
           !
@@ -245,6 +318,7 @@ CONTAINS
           do i = 1, NX
               do j = 1, NY
                   IF (data_out(i,j) .NE. data_in(i, j)) THEN
+                     total_error = total_error + 1
                   END IF
               end do
           end do
@@ -267,10 +341,25 @@ CONTAINS
           !
           !Close both files.
           !
+
+          CALL h5fget_obj_count_f(INT(H5F_OBJ_ALL_F,HID_T), H5F_OBJ_ALL_F, obj_count,  error)
+          CALL check(" h5fget_obj_count_f",error,total_error)
+
+          IF(obj_count.NE.2)THEN
+             total_error = total_error + 1
+          ENDIF
+
           CALL h5fclose_f(file1_id, error)
               CALL check("h5fclose_f",error,total_error)
           CALL h5fclose_f(file2_id, error)
               CALL check("h5fclose_f",error,total_error)
+
+          CALL h5fget_obj_count_f(INT(H5F_OBJ_ALL_F,HID_T), H5F_OBJ_ALL_F, obj_count,  error)
+          CALL check(" h5fget_obj_count_f",error,total_error)
+
+          IF(obj_count.NE.0)THEN
+             total_error = total_error + 1
+          ENDIF
 
           if(cleanup) CALL h5_cleanup_f(filename1, H5P_DEFAULT_F, error)
               CALL check("h5_cleanup_f", error, total_error)

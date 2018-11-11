@@ -22,7 +22,6 @@
 #define H5T_FRIEND		/*suppress error about including H5Tpkg	  */
 #include "H5Tpkg.h"		/*to turn off hardware conversions*/
 #include "H5Iprivate.h"
-#include "H5VLprivate.h"        /* Virtual Object Layer                     */
 
 #include "h5test.h"
 

@@ -164,7 +164,7 @@ The following configuration options are available to all of the build scripts:
             installation prefix when building HDF5 manually.
 
     -C DIR  Specifies the top-level directory where cURL is installed. Used if cURL is
-            not installed to a system path or used to override 
+            not installed to a system path or used to override
 
     -Y DIR  Specifies the top-level directory where YAJL is installed. Used if YAJL is
             not installed to a system path or used to override
@@ -196,23 +196,29 @@ respective build system in order to build the REST VOL plugin against the HDF5 d
 Autotools
 ---------
 
-    $ autogen.sh
-    $ configure --with-hdf5[=DIR] [options]
-    $ make
-    $ make check (requires HDF5 REST API server access -- see section II.A.ii.)
-    $ make install
+```bash
+$ autogen.sh
+$ configure --with-hdf5[=DIR] [options]
+$ make
+$ make check (requires HDF5 REST API server access -- see section II.A.ii.)
+$ make install
+```
 
 CMake
 -----
 
-    $ mkdir builddir
-    $ cd builddir
-    $ cmake -G "CMake Generator (Unix Makefiles, etc.)" -DPREBUILT_HDF5_DIR=built_hdf5_dir [options] rest_vol_src_dir
-    $ build command (e.g. `make && make install` for CMake Generator "Unix Makefiles")
+```bash
+$ mkdir builddir
+$ cd builddir
+$ cmake -G "CMake Generator (Unix Makefiles, etc.)" -DPREBUILT_HDF5_DIR=built_hdf5_dir [options] rest_vol_src_dir
+$ build command (e.g. `make && make install` for CMake Generator "Unix Makefiles")
+```
 
 and optionally:
 
-    $ cpack
+```bash
+$ cpack
+```
 
 ### II.B.iii.a. Options for `configure`
 
@@ -362,19 +368,19 @@ Any HDF5 application using the REST VOL plugin must:
 An HDF5 REST VOL plugin application requires three new function calls in addition
 to those for an equivalent HDF5 application:
 
-+ RVinit() - Initializes the REST VOL plugin
++ `RVinit()` - Initializes the REST VOL plugin
 
     Called upon application startup, before any file is accessed.
 
 
-+ H5Pset_fapl_rest_vol() - Set REST VOL plugin access on File Access Property List.
-  
++ `H5Pset_fapl_rest_vol()` - Set REST VOL plugin access on File Access Property List.
+
     Called to prepare a FAPL to open a file through the REST VOL plugin. See
-    `https://support.hdfgroup.org/HDF5/Tutor/property.html#fa` for more information
+    https://support.hdfgroup.org/HDF5/Tutor/property.html#fa for more information
     about File Access Property Lists.
 
 
-+ RVterm() - Cleanly shutdown the REST VOL plugin
++ `RVterm()` - Cleanly shutdown the REST VOL plugin
 
     Called on application shutdown, after all files have been closed.
 
@@ -384,30 +390,31 @@ to those for an equivalent HDF5 application:
 Below is a no-op application that opens and closes a file using the REST VOL plugin.
 For clarity, no error-checking is performed.
 
-    #include "hdf5.h"
-    #include "rest_vol_public.h"
+```c
+#include "hdf5.h"
+#include "rest_vol_public.h"
 
-    int main(void)
-    {
-        hid_t fapl_id;
-        hid_t file_id;
+int main(void)
+{
+    hid_t fapl_id;
+    hid_t file_id;
 
-        RVinit();
+    RVinit();
 
-        fapl_id = H5Pcreate(H5P_FILE_ACCESS);
-        H5Pset_fapl_rest_vol(fapl_id);
-        file_id = H5Fopen("my/file.h5");
+    fapl_id = H5Pcreate(H5P_FILE_ACCESS);
+    H5Pset_fapl_rest_vol(fapl_id);
+    file_id = H5Fopen("my/file.h5");
 
-        /* operate on file */
+    /* operate on file */
 
-        H5Pclose(fapl_id);
-        H5Fclose(file_id);
+    H5Pclose(fapl_id);
+    H5Fclose(file_id);
 
-        RVterm();
+    RVterm();
 
-        return 0;
-    }
-
+    return 0;
+}
+```
 
 
 ## III.B. Building HDF5 REST VOL plugin applications
@@ -417,9 +424,7 @@ must be built prior to running. In general, the application should be built as n
 any other HDF5 application.
 
 To link in the required libraries, the compiler will likely require the additional linker
-flags:
-
-`-lrestvol -lcurl -lyajl`
+flags: `-lrestvol -lcurl -lyajl`
 
 However, these may vary depending on platform, compiler and installation location of the
 REST VOL plugin.
@@ -430,25 +435,26 @@ manage linking with the HDF5 library. `h5cc` may be found in the `/bin` director
 installation. The above notice about additional libraries applies to usage of `h5cc`.
 For example:
 
-`h5cc -lrestvol -curl -lyajl my_restvol_application.c -o my_executable`
-
+```bash
+h5cc -lrestvol -lcurl -lyajl my_restvol_application.c -o my_executable
+```
 
 
 ## III.C. Running HDF5 REST VOL plugin applications
 
 Running applications that use the HDF5 REST VOL plugin requires access to a server which implements
-the HDF5 REST API (http://hdf-rest-api.readthedocs.io/en/latest/); see section II.A.ii.
+the [HDF5 REST API](http://hdf-rest-api.readthedocs.io/en/latest/); see section II.A.ii.
 
 ### III.C.i. Runtime Environment
 
 For the REST VOL plugin to correctly interact with an HDF5 REST API-aware server instance, there are three
 environment variables (two optional and one required) which should first be set. These are:
 
-    + HSDS_USERNAME - (optional) The username to use for authentication
+* `HSDS_USERNAME` - (optional) The username to use for authentication
 
-    + HSDS_PASSWORD - (optional) The password to use for authentication
+* `HSDS_PASSWORD` - (optional) The password to use for authentication
 
-    + HSDS_ENDPOINT - The base URL of the instance (e.g. http://hsdshdflab.hdfgroup.org)
+* `HSDS_ENDPOINT` - The base URL of the instance (e.g. http://hsdshdflab.hdfgroup.org)
 
 Note that there are cases where authentication may not be required, such as when simply retrieving
 the information about a publicly-accessible HDF5 dataset or similar. In these cases, it may not be
@@ -561,9 +567,9 @@ The following other features are currently unsupported:
 
 + Non-predefined integer and floating-point datatypes
 + Variable-length, Opaque, Bitfield and Time datatypes
-+ Character sets other than H5T_CSET_ASCII for string datatypes
-+ String padding values other than H5T_STR_NULLPAD for fixed-length strings
-+ String padding values other than H5T_STR_NULLTERM for variable-length strings
++ Character sets other than `H5T_CSET_ASCII` for string datatypes
++ String padding values other than `H5T_STR_NULLPAD` for fixed-length strings
++ String padding values other than `H5T_STR_NULLTERM` for variable-length strings
   (Note that variable-length string datatypes are currently unsupported by the
   REST VOL plugin, but a dataset can still be created with a variable-length
   string type)
@@ -574,7 +580,7 @@ The following other features are currently unsupported:
 + User-defined links
 + External links
 
-+ H5Pset_create_intermediate_group property (the plugin will not currently
++ `H5Pset_create_intermediate_group` property (the plugin will not currently
   create intermediate groups in a path if they do not exist)
 
 
@@ -627,4 +633,3 @@ for the application if not avoided or taken into account:
     + https://www.hdfgroup.org/hdf-kita
     + https://www.hdfgroup.org/solutions/hdf-cloud
     + https://www.slideshare.net/HDFEOS/hdf-cloud-services
-

@@ -85,7 +85,7 @@ tts_error(void)
     expected_g[4].maj_num = H5E_LINK;
     expected_g[4].min_num = H5E_CANTINIT;
 
-    expected_g[5].maj_num = H5E_SYM;
+    expected_g[5].maj_num = H5E_LINK;
     expected_g[5].min_num = H5E_CANTINSERT;
 
     expected_g[6].maj_num = H5E_SYM;
@@ -94,7 +94,7 @@ tts_error(void)
     expected_g[7].maj_num = H5E_SYM;
     expected_g[7].min_num = H5E_CALLBACK;
 
-    expected_g[8].maj_num = H5E_SYM;
+    expected_g[8].maj_num = H5E_LINK;
     expected_g[8].min_num = H5E_EXISTS;
 
     /* set up mutex for global count of errors */

@@ -13,7 +13,7 @@
 
 /***********************************************************
 *
-* Test program:	 tarray
+* Test program:     tarray
 *
 * Test the Array Datatype functionality
 *
@@ -26,8 +26,8 @@
 #define TESTFILE   "tarrold.h5"
 
 /* 1-D array datatype */
-#define ARRAY1_RANK	1
-#define ARRAY1_DIM1 4
+#define ARRAY1_RANK     1
+#define ARRAY1_DIM1     4
 
 /* 3-D array datatype */
 #define ARRAY2_RANK     3
@@ -1580,9 +1580,9 @@ test_array_bkg(void)
     unsigned     ndims[3] = {1,1,1};
 
     typedef struct {
-	  int      a[ALEN];
-	  float    b[ALEN];
-	  double   c[ALEN];
+        int      a[ALEN];
+        float    b[ALEN];
+        double   c[ALEN];
     } CmpField;
 
     CmpField     cf[LENGTH];

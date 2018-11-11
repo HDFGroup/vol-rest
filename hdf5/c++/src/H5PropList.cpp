@@ -142,7 +142,6 @@ PropList::PropList(const hid_t plist_id) : IdComponent()
          * the stated behavior and causes test failures.
          * (DER, July 2017)
          */
-        case H5I_UNINIT:
         case H5I_BADID:
         case H5I_FILE:
         case H5I_GROUP:
@@ -157,6 +156,7 @@ PropList::PropList(const hid_t plist_id) : IdComponent()
         case H5I_ERROR_MSG:
         case H5I_ERROR_STACK:
         case H5I_NTYPES:
+        case H5I_UNINIT:
         default:
           id = H5P_DEFAULT;
           break;
@@ -469,7 +469,7 @@ H5std_string PropList::getProperty(const char* name) const
         throw PropListIException(inMemFunc("getProperty"), "H5Pget failed");
     }
 
-    // Return propety value as a string after deleting temp C-string
+    // Return property value as a string after deleting temp C-string
     H5std_string prop_strg(prop_strg_C);
     delete []prop_strg_C;
     return (prop_strg);

@@ -32,7 +32,6 @@
 /***********/
 #include "H5private.h"          /* Generic Functions                        */
 #include "H5Eprivate.h"         /* Error handling                           */
-#include "H5Iprivate.h"         /* IDs                                      */
 #include "H5Ppkg.h"             /* Property lists                           */
 #include "H5VLprivate.h"        /* Virtual Object Layer                     */
 
@@ -113,19 +112,19 @@ H5P_acrt_reg_prop(H5P_genclass_t *pclass)
     FUNC_ENTER_NOAPI_NOINIT
 
     /* Register the type ID property*/
-    if (H5P_register_real(pclass, H5VL_PROP_ATTR_TYPE_ID, sizeof(hid_t), &type_id, 
+    if(H5P__register_real(pclass, H5VL_PROP_ATTR_TYPE_ID, sizeof(hid_t), &type_id, 
                          NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the space ID property */
-    if (H5P_register_real(pclass, H5VL_PROP_ATTR_SPACE_ID, sizeof(hid_t), &space_id, 
+    if(H5P__register_real(pclass, H5VL_PROP_ATTR_SPACE_ID, sizeof(hid_t), &space_id, 
                          NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the lcpl ID property */
     HDmemset(&loc_params, 0, sizeof(H5VL_loc_params_t));
     loc_params.obj_type = H5A_CRT_LOCATION_DEF;
-    if (H5P_register_real(pclass, H5VL_PROP_ATTR_LOC_PARAMS, H5A_CRT_LOCATION_SIZE, &loc_params, 
+    if(H5P__register_real(pclass, H5VL_PROP_ATTR_LOC_PARAMS, H5A_CRT_LOCATION_SIZE, &loc_params, 
                          NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 

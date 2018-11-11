@@ -1635,13 +1635,16 @@ error:
  *
  * Return:      SUCCEED/FAIL
  *
+ * Programmer:  Neil Fortner
+ *              Tuesday, April 12, 2011
+ *
  *-------------------------------------------------------------------------
  */
 static herr_t
 h5_verify_cached_stabs_cb(hid_t oid, const char H5_ATTR_UNUSED *name,
     const H5O_info_t *oinfo, void H5_ATTR_UNUSED *udata)
 {
-    if (oinfo->type == H5O_TYPE_GROUP)
+    if(oinfo->type == H5O_TYPE_GROUP)
         return H5G__verify_cached_stabs_test(oid);
     else
         return SUCCEED;
@@ -1687,8 +1690,8 @@ h5_verify_cached_stabs(const char *base_name[], hid_t fapl)
             continue;
         } /* end if */
 
-        if(H5Ovisit(file, H5_INDEX_NAME, H5_ITER_NATIVE,
-                h5_verify_cached_stabs_cb, NULL) < 0)
+        if(H5Ovisit2(file, H5_INDEX_NAME, H5_ITER_NATIVE,
+                h5_verify_cached_stabs_cb, NULL, H5O_INFO_BASIC) < 0)
             goto error;
 
         if(H5Fclose(file) < 0)
@@ -1912,7 +1915,7 @@ error:
  *              them (e.g.: for testing VOL driver ID handling).
  *
  *              This API call will return a pointer to a VOL class that
- *              can be used to construct a test VOL using H5VLregister().
+ *              can be used to construct a test VOL using H5VLregister_driver().
  *
  * Return:      Success:    A pointer to a VOL class struct
  *              Failure:    NULL

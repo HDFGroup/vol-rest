@@ -21,7 +21,7 @@
 *
 *************************************************************/
 
-#define H5D_FRIEND		/*suppress error about including H5Dpkg	  */
+#define H5D_FRIEND        /*suppress error about including H5Dpkg      */
 
 /* Define this macro to indicate that the testing APIs should be available */
 #define H5D_TESTING
@@ -674,11 +674,11 @@ test_misc4(void)
     CHECK(group3, FAIL, "H5Gcreate2");
 
     /* Get the stat information for each group */
-    ret = H5Oget_info_by_name(file1, MISC4_GROUP_1, &oinfo1, H5P_DEFAULT);
+    ret = H5Oget_info_by_name2(file1, MISC4_GROUP_1, &oinfo1, H5O_INFO_BASIC, H5P_DEFAULT);
     CHECK(ret, FAIL, "H5Oget_info_by_name");
-    ret = H5Oget_info_by_name(file1, MISC4_GROUP_2, &oinfo2, H5P_DEFAULT);
+    ret = H5Oget_info_by_name2(file1, MISC4_GROUP_2, &oinfo2, H5O_INFO_BASIC, H5P_DEFAULT);
     CHECK(ret, FAIL, "H5Oget_info_by_name");
-    ret = H5Oget_info_by_name(file2, MISC4_GROUP_1, &oinfo3, H5P_DEFAULT);
+    ret = H5Oget_info_by_name2(file2, MISC4_GROUP_1, &oinfo3, H5O_INFO_BASIC, H5P_DEFAULT);
     CHECK(ret, FAIL, "H5Oget_info_by_name");
 
     /* Verify that the fileno values are the same for groups from file1 */
@@ -1815,11 +1815,11 @@ test_misc11(void)
     unsigned    sym_ik;         /* Symbol table B-tree initial 'K' value */
     unsigned    istore_ik;      /* Indexed storage B-tree initial 'K' value */
     unsigned    sym_lk;         /* Symbol table B-tree leaf 'K' value */
-    unsigned 	nindexes;       /* Shared message number of indexes */
+    unsigned     nindexes;       /* Shared message number of indexes */
     H5F_info2_t finfo;          /* global information about file */
     H5F_fspace_strategy_t strategy;  /* File space strategy */
-    hsize_t  	threshold;      /* Free-space section threshold */
-    hbool_t	persist;	/* To persist free-space or not */
+    hsize_t      threshold;      /* Free-space section threshold */
+    hbool_t    persist;    /* To persist free-space or not */
     herr_t      ret;            /* Generic return value */
 
     /* Output message about test being performed */
@@ -1858,7 +1858,7 @@ test_misc11(void)
 
     /* This should fail as (32770*2) will exceed ^16 - 2 bytes for storing btree entries */
     H5E_BEGIN_TRY {
-	ret=H5Pset_sym_k(fcpl, 32770, 0);
+    ret=H5Pset_sym_k(fcpl, 32770, 0);
     } H5E_END_TRY;
     VERIFY(ret, FAIL, "H5Pset_sym_k");
 
@@ -1867,7 +1867,7 @@ test_misc11(void)
 
     /* This should fail as (32770*2) will exceed ^16 - 2 bytes for storing btree entries */
     H5E_BEGIN_TRY {
-	ret=H5Pset_istore_k(fcpl, 32770);
+    ret=H5Pset_istore_k(fcpl, 32770);
     } H5E_END_TRY;
     VERIFY(ret, FAIL, "H5Pset_istore_k");
 
@@ -1979,19 +1979,19 @@ test_misc12(void)
        "las palabras del que murio en la cruz."
         };
     char        *rdata [MISC12_SPACE1_DIM1+MISC12_APPEND_SIZE]; /* Information read in */
-    hid_t		fid1;
-    hid_t		dataset;
-    hid_t		sid1, space, memspace;
-    hid_t		tid1, cparms;
-    hsize_t		dims1[] = {MISC12_SPACE1_DIM1};
-    hsize_t		dimsn[] = {MISC12_APPEND_SIZE};
-    hsize_t		maxdims1[1] = {H5S_UNLIMITED};
-    hsize_t		chkdims1[1] = {MISC12_CHUNK_SIZE};
+    hid_t        fid1;
+    hid_t        dataset;
+    hid_t        sid1, space, memspace;
+    hid_t        tid1, cparms;
+    hsize_t        dims1[] = {MISC12_SPACE1_DIM1};
+    hsize_t        dimsn[] = {MISC12_APPEND_SIZE};
+    hsize_t        maxdims1[1] = {H5S_UNLIMITED};
+    hsize_t        chkdims1[1] = {MISC12_CHUNK_SIZE};
     hsize_t     newsize[1] = {MISC12_SPACE1_DIM1+MISC12_APPEND_SIZE};
-    hsize_t    	offset[1] = {MISC12_SPACE1_DIM1};
+    hsize_t        offset[1] = {MISC12_SPACE1_DIM1};
     hsize_t     count[1] = {MISC12_APPEND_SIZE};
     int         i;          /* counting variable */
-    herr_t		ret;		/* Generic return value  */
+    herr_t        ret;        /* Generic return value  */
 
     /* Output message about test being performed */
     MESSAGE(5, ("Testing VL-type in chunked dataset\n"));
@@ -2272,7 +2272,7 @@ misc13_insert_user_block(const char *old_name, const char *new_name, const char 
     CHECK_PTR(user_block, "HDcalloc");
 
     /* Copy in the user block data */
-    HDmemcpy(user_block, str, strlen(str));
+    HDmemcpy(user_block, str, HDstrlen(str));
 
     /* Open the new file */
     new_fp = HDfopen(new_name,"wb");
@@ -2745,10 +2745,10 @@ test_misc16(void)
     herr_t ret;         /* Generic return value */
     char wdata[MISC16_SPACE_DIM][MISC16_STR_SIZE];
     char rdata[MISC16_SPACE_DIM][MISC16_STR_SIZE];  /* Information read in */
-    hid_t		dataset;	/* Dataset ID			*/
-    hid_t		sid;       /* Dataspace ID			*/
-    hid_t		tid;       /* Datatype ID			*/
-    hsize_t		dims[] = {MISC16_SPACE_DIM};
+    hid_t        dataset;    /* Dataset ID            */
+    hid_t        sid;       /* Dataspace ID            */
+    hid_t        tid;       /* Datatype ID            */
+    hsize_t        dims[] = {MISC16_SPACE_DIM};
     int                 i;
 
     /* Initialize the data */
@@ -2830,10 +2830,10 @@ test_misc17(void)
     herr_t ret;         /* Generic return value */
     char wdata[MISC17_SPACE_DIM1][MISC17_SPACE_DIM2];
     char rdata[MISC17_SPACE_DIM1][MISC17_SPACE_DIM2];  /* Information read in */
-    hid_t		dataset;	/* Dataset ID			*/
-    hid_t		sid;       /* Dataspace ID			*/
-    hid_t		tid;       /* Datatype ID			*/
-    hsize_t		dims[] = {MISC17_SPACE_DIM1, MISC17_SPACE_DIM2};
+    hid_t        dataset;    /* Dataset ID            */
+    hid_t        sid;       /* Dataspace ID            */
+    hid_t        tid;       /* Datatype ID            */
+    hsize_t        dims[] = {MISC17_SPACE_DIM1, MISC17_SPACE_DIM2};
     int                 i;
 
     /* Initialize the data */
@@ -2929,7 +2929,7 @@ test_misc18(void)
     CHECK(did1, FAIL, "H5Dcreate2");
 
     /* Get object information */
-    ret = H5Oget_info_by_name(fid, MISC18_DSET1_NAME, &oinfo, H5P_DEFAULT);
+    ret = H5Oget_info_by_name2(fid, MISC18_DSET1_NAME, &oinfo, H5O_INFO_HDR|H5O_INFO_NUM_ATTRS, H5P_DEFAULT);
     CHECK(ret, FAIL, "H5Oget_info_by_name");
     VERIFY(oinfo.hdr.nmesgs, 6, "H5Oget_info_by_name");
     VERIFY(oinfo.hdr.nchunks, 1, "H5Oget_info_by_name");
@@ -2942,7 +2942,7 @@ test_misc18(void)
     CHECK(did2, FAIL, "H5Dcreate2");
 
     /* Get object information */
-    ret = H5Oget_info_by_name(fid, MISC18_DSET2_NAME, &oinfo, H5P_DEFAULT);
+    ret = H5Oget_info_by_name2(fid, MISC18_DSET2_NAME, &oinfo, H5O_INFO_HDR|H5O_INFO_NUM_ATTRS, H5P_DEFAULT);
     CHECK(ret, FAIL, "H5Oget_info_by_name");
     VERIFY(oinfo.hdr.nmesgs, 6, "H5Oget_info_by_name");
     VERIFY(oinfo.hdr.nchunks, 1, "H5Oget_info_by_name");
@@ -2975,7 +2975,7 @@ test_misc18(void)
     } /* end for */
 
     /* Get object information for dataset #1 now */
-    ret = H5Oget_info_by_name(fid, MISC18_DSET1_NAME, &oinfo, H5P_DEFAULT);
+    ret = H5Oget_info_by_name2(fid, MISC18_DSET1_NAME, &oinfo, H5O_INFO_HDR|H5O_INFO_NUM_ATTRS, H5P_DEFAULT);
     CHECK(ret, FAIL, "H5Oget_info_by_name");
     VERIFY(oinfo.hdr.nmesgs, 24, "H5Oget_info_by_name");
     VERIFY(oinfo.hdr.nchunks, 9, "H5Oget_info_by_name");
@@ -2984,7 +2984,7 @@ test_misc18(void)
     VERIFY(oinfo.num_attrs, 10, "H5Oget_info_by_name");
 
     /* Get object information for dataset #2 now */
-    ret = H5Oget_info_by_name(fid, MISC18_DSET2_NAME, &oinfo, H5P_DEFAULT);
+    ret = H5Oget_info_by_name2(fid, MISC18_DSET2_NAME, &oinfo, H5O_INFO_HDR|H5O_INFO_NUM_ATTRS, H5P_DEFAULT);
     CHECK(ret, FAIL, "H5Oget_info_by_name");
     VERIFY(oinfo.hdr.nmesgs, 24, "H5Oget_info_by_name");
     VERIFY(oinfo.hdr.nchunks, 9, "H5Oget_info_by_name");
@@ -3487,9 +3487,9 @@ test_misc19(void)
     vol_cls = h5_get_dummy_vol_class();
     CHECK(vol_cls, NULL, "h5_get_dummy_vol_class");
 
-    /* Register a virtual object driver */
-    volid = H5VLregister(vol_cls);
-    CHECK(volid, FAIL, "H5VLregister");
+    /* Register a VOL driver */
+    volid = H5VLregister_driver(vol_cls);
+    CHECK(volid, FAIL, "H5VLregister_driver");
 
     /* Check the reference count */
     rc = H5Iget_ref(volid);
@@ -3500,8 +3500,8 @@ test_misc19(void)
     VERIFY(rc, 2, "H5Iinc_ref");
 
     /* Unregister the VOL driver normally */
-    ret = H5VLunregister(volid);
-    CHECK(ret, FAIL, "H5VLunregister");
+    ret = H5VLunregister_driver(volid);
+    CHECK(ret, FAIL, "H5VLunregister_driver");
 
     /* Check the reference count */
     rc = H5Iget_ref(volid);
@@ -3513,9 +3513,9 @@ test_misc19(void)
 
     /* Try unregistering the VOL driver again (should fail) */
     H5E_BEGIN_TRY {
-        ret = H5VLunregister(volid);
+        ret = H5VLunregister_driver(volid);
     } H5E_END_TRY;
-    VERIFY(ret, FAIL, "H5VLunregister");
+    VERIFY(ret, FAIL, "H5VLunregister_driver");
 
     HDfree(vol_cls);
 
@@ -3837,13 +3837,13 @@ test_misc22(void)
 
                 /* compute the correct PPB that should be set by SZIP */
                 if(offsets[k] == 0)
-            	    correct = prec[j];
+                    correct = prec[j];
                 else
                     correct = H5Tget_size(idts[i]) * 8;
                 if(correct > 24) {
-            	    if(correct <= 32)
+                    if(correct <= 32)
                         correct = 32;
-            	    else if(correct <= 64)
+                    else if(correct <= 64)
                         correct = 64;
                 } /* end if */
 
@@ -3998,7 +3998,7 @@ test_misc23(void)
     tmp_id = H5Gopen2(file_id, "/A/B01", H5P_DEFAULT);
     CHECK(tmp_id, FAIL, "H5Gopen2");
 
-    status = H5Oget_info(tmp_id, &oinfo);
+    status = H5Oget_info2(tmp_id, &oinfo, H5O_INFO_BASIC);
     CHECK(status, FAIL, "H5Oget_info");
     VERIFY(oinfo.rc, 1, "H5Oget_info");
 
@@ -4761,6 +4761,7 @@ test_misc25a(void)
     CHECK(ret, FAIL, "H5Fclose");
 } /* end test_misc25a() */
 
+
 /****************************************************************
 **
 **  test_misc25b(): Exercise null object header message merge bug
@@ -5278,7 +5279,7 @@ test_misc30_get_info_cb(hid_t loc_id, const char *name, const H5L_info_t H5_ATTR
 {
     H5O_info_t object_info;
 
-    return H5Oget_info_by_name(loc_id, name, &object_info, H5P_DEFAULT);  
+    return H5Oget_info_by_name2(loc_id, name, &object_info, H5O_INFO_BASIC, H5P_DEFAULT);
 }
 
 static int
@@ -5319,15 +5320,15 @@ test_misc30(void)
         CHECK(ret, FAIL, "H5Gclose");
         ret = H5Fclose(fid);
         CHECK(ret, FAIL, "H5Fclose");
-        
+
         for(i = 0; i < 20; i++) {
             char gname[32];
 
             fid = H5Fopen(MISC30_FILE, H5F_ACC_RDWR, H5P_DEFAULT);
             CHECK(fid, FAIL, "H5Fopen");
-    
+
             if(get_info) {
-                ret = test_misc30_get_info(fid);      
+                ret = test_misc30_get_info(fid);
                 CHECK(ret, FAIL, "test_misc30_get_info");
             }
 
@@ -5339,16 +5340,16 @@ test_misc30(void)
             CHECK(ret, FAIL, "H5Gclose");
             ret = H5Fclose(fid);
             CHECK(ret, FAIL, "H5Fclose");
-        } 
-        
+        }
+
         fid = H5Fopen(MISC30_FILE, H5F_ACC_RDONLY, H5P_DEFAULT);
         CHECK(fid, FAIL, "H5Fopen");
         ret = H5Fget_filesize(fid, &file_size[get_info]);
         CHECK(fid, FAIL, "H5Fget_filesize");
         ret = H5Fclose(fid);
         CHECK(ret, FAIL, "H5Fclose");
-    } 
-    
+    }
+
     VERIFY(file_size[0], file_size[1], "test_misc30");
 } /* end test_misc30() */
 
@@ -5443,7 +5444,7 @@ test_misc31(void)
     CHECK(ret, FAIL, "H5Fclose");
     ret = H5Tclose(dtype_id);
     CHECK(ret, FAIL, "H5Tclose");
-    
+
 #else /* H5_NO_DEPRECATED_SYMBOLS */
     /* Output message about test being skipped */
     MESSAGE(5, (" ...Skipped"));
@@ -5514,7 +5515,7 @@ test_misc32(void)
     resized = H5resize_memory(NULL, 0);
     CHECK_PTR_NULL(resized, "H5resize_memory"); /*BAD*/
 #endif /* NDEBUG */
-    
+
 } /* end test_misc32() */
 
 /****************************************************************
@@ -5539,24 +5540,24 @@ test_misc33(void)
     MESSAGE(5, ("Testing that bad offset into the heap returns error"));
 
     /* Open the test file */
-    fid = H5Fopen(testfile, H5F_ACC_RDWR, H5P_DEFAULT);
+    fid = H5Fopen(testfile, H5F_ACC_RDONLY, H5P_DEFAULT);
     CHECK(fid, FAIL, "H5Fopen");
 
     /* Case (1) */
     H5E_BEGIN_TRY {
-        ret = H5Oget_info_by_name(fid, "/soft_two", &oinfo, H5P_DEFAULT);
+        ret = H5Oget_info_by_name2(fid, "/soft_two", &oinfo, H5O_INFO_BASIC, H5P_DEFAULT);
     } H5E_END_TRY;
     VERIFY(ret, FAIL, "H5Oget_info_by_name");
 
     /* Case (2) */
     H5E_BEGIN_TRY {
-        ret = H5Oget_info_by_name(fid, "/dsetA", &oinfo, H5P_DEFAULT);
+        ret = H5Oget_info_by_name2(fid, "/dsetA", &oinfo, H5O_INFO_BASIC, H5P_DEFAULT);
     } H5E_END_TRY;
     VERIFY(ret, FAIL, "H5Oget_info_by_name");
 
     /* Case (3) */
     H5E_BEGIN_TRY {
-        ret = H5Oget_info_by_name(fid, "/soft_one", &oinfo, H5P_DEFAULT);
+        ret = H5Oget_info_by_name2(fid, "/soft_one", &oinfo, H5O_INFO_BASIC, H5P_DEFAULT);
     } H5E_END_TRY;
     VERIFY(ret, FAIL, "H5Oget_info_by_name");
 
@@ -5679,17 +5680,14 @@ test_misc(void)
 
 
 /*-------------------------------------------------------------------------
- * Function:	cleanup_misc
+ * Function:    cleanup_misc
  *
- * Purpose:	Cleanup temporary test files
+ * Purpose:    Cleanup temporary test files
  *
- * Return:	none
+ * Return:    none
  *
- * Programmer:	Albert Cheng
+ * Programmer:    Albert Cheng
  *              July 2, 1998
- *
- * Modifications:
- *
  *-------------------------------------------------------------------------
  */
 void

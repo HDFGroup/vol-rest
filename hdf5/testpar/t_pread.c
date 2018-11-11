@@ -90,7 +90,7 @@ generate_test_file( MPI_Comm comm, int mpi_rank, int group_id )
     int header = -1;
     const char *fcn_name = "generate_test_file()";
     const char *failure_mssg = NULL;
-    char *group_filename = NULL;
+    const char *group_filename = NULL;
     char data_filename[FILENAME_BUF_SIZE];
     int file_index = 0;
     int group_size;
@@ -699,18 +699,11 @@ test_parallel_read(MPI_Comm comm, int mpi_rank, int group_id)
  *              with the opening and validation of the data contained
  *              therein.
  *
- *              WARNING: This test uses fork() and execve(), and
- *                       therefore will not run on Windows.
- *
  * Return:      Success: 0
- *
  *              Failure: 1
  *
  * Programmer:  Richard Warren
  *              10/1/17
- *
- * Modifications:
- *
  *-------------------------------------------------------------------------
  */
 

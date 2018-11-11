@@ -3016,7 +3016,7 @@ test_start_swmr_write_stress_ohdr(hid_t in_fapl)
 
     /* Retrieve the chunk # for the dataspace message */
     chunk_num = UINT_MAX;
-    if(H5O_msg_get_chunkno_test(did, H5O_SDSPACE_ID, &chunk_num) < 0)
+    if(H5O__msg_get_chunkno_test(did, H5O_SDSPACE_ID, &chunk_num) < 0)
         FAIL_STACK_ERROR;
     /* Should be in chunk #0 for now */
     if(0 != chunk_num)
@@ -3073,7 +3073,7 @@ test_start_swmr_write_stress_ohdr(hid_t in_fapl)
 
     /* Retrieve the chunk # for the dataspace message */
     chunk_num = UINT_MAX;
-    if(H5O_msg_get_chunkno_test(did, H5O_SDSPACE_ID, &chunk_num) < 0)
+    if(H5O__msg_get_chunkno_test(did, H5O_SDSPACE_ID, &chunk_num) < 0)
         FAIL_STACK_ERROR;
     /* Should be in chunk #0 for now */
     if(1 != chunk_num)
@@ -6502,7 +6502,7 @@ test_refresh_concur(hid_t in_fapl, hbool_t new_format)
         /* Wait for notification from parent process */
         while(child_notify != 1) {
             if(HDread(out_pdf[0], &child_notify, sizeof(int)) < 0)
-            HDexit(EXIT_FAILURE);
+                HDexit(EXIT_FAILURE);
         }
 
         /* Open the file 2 times */
@@ -6542,7 +6542,7 @@ test_refresh_concur(hid_t in_fapl, hbool_t new_format)
         /* Wait for notification from parent process */
         while(child_notify != 3) {
             if(HDread(out_pdf[0], &child_notify, sizeof(int)) < 0)
-            HDexit(EXIT_FAILURE);
+                HDexit(EXIT_FAILURE);
         }
 
         /* Refresh dataset via did1 */
@@ -7039,15 +7039,11 @@ main(void)
     char *lock_env_var = NULL; /* file locking env var pointer */
     hbool_t use_file_locking;   /* read from env var */
 
-    /* XXX: TEMPORARILY DISABLED */
-    HDputs("SKIPPED (temporarily disabled)");
-    return EXIT_SUCCESS;
-
     /* Skip this test if SWMR I/O is not supported for the VFD specified
      * by the environment variable.
      */
     driver = HDgetenv("HDF5_DRIVER");
-    if(!H5FD_supports_swmr_test(driver)) {
+    if(!H5FD__supports_swmr_test(driver)) {
         HDprintf("This VFD does not support SWMR I/O\n");
         return EXIT_SUCCESS;
     } /* end if */

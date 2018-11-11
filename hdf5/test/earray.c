@@ -25,6 +25,7 @@
 #include "H5EApkg.h"		/* Extensible Arrays			*/
 
 /* Other private headers that this test requires */
+#include "H5CXprivate.h"        /* API Contexts                         */
 #include "H5Iprivate.h"		/* IDs			  		*/
 #include "H5VLprivate.h"        /* Virtual Object Layer                     */
 #include "H5VMprivate.h"		/* Vectors and arrays 			*/
@@ -407,7 +408,7 @@ error:
  *-------------------------------------------------------------------------
  */
 static int
-reopen_file(hid_t *file, H5F_t **f, hid_t fapl, hid_t dxpl,
+reopen_file(hid_t *file, H5F_t **f, hid_t fapl, 
     H5EA_t **ea, haddr_t ea_addr, const earray_test_param_t *tparam)
 {
     /* Check for closing & re-opening the array */
@@ -415,7 +416,7 @@ reopen_file(hid_t *file, H5F_t **f, hid_t fapl, hid_t dxpl,
     if(tparam->reopen_array) {
         /* Close array, if given */
         if(ea && *ea) {
-            if(H5EA_close(*ea, dxpl) < 0)
+            if(H5EA_close(*ea) < 0)
                 FAIL_STACK_ERROR
             *ea = NULL;
         } /* end if */
@@ -442,7 +443,7 @@ reopen_file(hid_t *file, H5F_t **f, hid_t fapl, hid_t dxpl,
 
         /* Re-open array, if given */
         if(ea)
-            if(NULL == (*ea = H5EA_open(*f, dxpl, ea_addr, NULL)))
+            if(NULL == (*ea = H5EA_open(*f, ea_addr, NULL)))
                 FAIL_STACK_ERROR
     } /* end if */
 
@@ -468,14 +469,14 @@ error:
  *-------------------------------------------------------------------------
  */
 static int
-create_array(H5F_t *f, hid_t dxpl, const H5EA_create_t *cparam,
+create_array(H5F_t *f, const H5EA_create_t *cparam,
     H5EA_t **ea, haddr_t *ea_addr, H5EA__ctx_cb_t *cb)
 {
     hsize_t     nelmts;                 /* Number of elements in array */
     earray_state_t state;               /* State of extensible array */
 
     /* Create array */
-    if(NULL == (*ea = H5EA_create(f, dxpl, cparam, cb)))
+    if(NULL == (*ea = H5EA_create(f, cparam, cb)))
         FAIL_STACK_ERROR
 
     /* Check status of array */
@@ -521,18 +522,18 @@ verify_cparam(const H5EA_t *ea, const H5EA_create_t *cparam)
 
     /* Retrieve creation parameters */
     HDmemset(&test_cparam, 0, sizeof(H5EA_create_t));
-    if(H5EA_get_cparam_test(ea, &test_cparam) < 0)
+    if(H5EA__get_cparam_test(ea, &test_cparam) < 0)
         FAIL_STACK_ERROR
 
     /* Verify creation parameters */
-    if(H5EA_cmp_cparam_test(cparam, &test_cparam))
+    if(H5EA__cmp_cparam_test(cparam, &test_cparam))
         TEST_ERROR
 
     /* Success */
-    return(0);
+    return 0;
 
 error:
-    return(-1);
+    return -1;
 } /* verify_cparam() */
 
 
@@ -556,7 +557,7 @@ finish(hid_t file, hid_t fapl, H5F_t *f, H5EA_t *ea, haddr_t ea_addr)
     h5_stat_size_t file_size;           /* File size, after deleting array */
 
     /* Close the extensible array */
-    if(H5EA_close(ea, H5AC_ind_read_dxpl_id) < 0)
+    if(H5EA_close(ea) < 0)
         FAIL_STACK_ERROR
 
 #ifdef QAK
@@ -566,7 +567,7 @@ HDsystem("cp earray.h5 earray.h5.save");
 #endif /* QAK */
 
     /* Delete array */
-    if(H5EA_delete(f, H5AC_ind_read_dxpl_id, ea_addr, NULL) < 0)
+    if(H5EA_delete(f, ea_addr, NULL) < 0)
         FAIL_STACK_ERROR
 
     /* Close the file */
@@ -628,11 +629,11 @@ test_create(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t H5_ATTR_UNUSE
     HDmemcpy(&test_cparam, cparam, sizeof(test_cparam));
     test_cparam.raw_elmt_size = 0;
     H5E_BEGIN_TRY {
-        ea = H5EA_create(f, H5AC_ind_read_dxpl_id, &test_cparam, NULL);
+        ea = H5EA_create(f, &test_cparam, NULL);
     } H5E_END_TRY;
     if(ea) {
         /* Close opened extensible array */
-        H5EA_close(ea, H5AC_ind_read_dxpl_id);
+        H5EA_close(ea);
         ea = NULL;
 
         /* Indicate error */
@@ -643,11 +644,11 @@ test_create(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t H5_ATTR_UNUSE
     HDmemcpy(&test_cparam, cparam, sizeof(test_cparam));
     test_cparam.max_nelmts_bits = 0;
     H5E_BEGIN_TRY {
-        ea = H5EA_create(f, H5AC_ind_read_dxpl_id, &test_cparam, NULL);
+        ea = H5EA_create(f, &test_cparam, NULL);
     } H5E_END_TRY;
     if(ea) {
         /* Close opened extensible array */
-        H5EA_close(ea, H5AC_ind_read_dxpl_id);
+        H5EA_close(ea);
         ea = NULL;
 
         /* Indicate error */
@@ -657,11 +658,11 @@ test_create(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t H5_ATTR_UNUSE
     HDmemcpy(&test_cparam, cparam, sizeof(test_cparam));
     test_cparam.max_nelmts_bits = 65;
     H5E_BEGIN_TRY {
-        ea = H5EA_create(f, H5AC_ind_read_dxpl_id, &test_cparam, NULL);
+        ea = H5EA_create(f, &test_cparam, NULL);
     } H5E_END_TRY;
     if(ea) {
         /* Close opened extensible array */
-        H5EA_close(ea, H5AC_ind_read_dxpl_id);
+        H5EA_close(ea);
         ea = NULL;
 
         /* Indicate error */
@@ -672,11 +673,11 @@ test_create(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t H5_ATTR_UNUSE
     HDmemcpy(&test_cparam, cparam, sizeof(test_cparam));
     test_cparam.sup_blk_min_data_ptrs = 0;
     H5E_BEGIN_TRY {
-        ea = H5EA_create(f, H5AC_ind_read_dxpl_id, &test_cparam, NULL);
+        ea = H5EA_create(f, &test_cparam, NULL);
     } H5E_END_TRY;
     if(ea) {
         /* Close opened extensible array */
-        H5EA_close(ea, H5AC_ind_read_dxpl_id);
+        H5EA_close(ea);
         ea = NULL;
 
         /* Indicate error */
@@ -685,11 +686,11 @@ test_create(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t H5_ATTR_UNUSE
     HDmemcpy(&test_cparam, cparam, sizeof(test_cparam));
     test_cparam.sup_blk_min_data_ptrs = 1;
     H5E_BEGIN_TRY {
-        ea = H5EA_create(f, H5AC_ind_read_dxpl_id, &test_cparam, NULL);
+        ea = H5EA_create(f, &test_cparam, NULL);
     } H5E_END_TRY;
     if(ea) {
         /* Close opened extensible array */
-        H5EA_close(ea, H5AC_ind_read_dxpl_id);
+        H5EA_close(ea);
         ea = NULL;
 
         /* Indicate error */
@@ -698,11 +699,11 @@ test_create(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t H5_ATTR_UNUSE
     HDmemcpy(&test_cparam, cparam, sizeof(test_cparam));
     test_cparam.sup_blk_min_data_ptrs = 6;
     H5E_BEGIN_TRY {
-        ea = H5EA_create(f, H5AC_ind_read_dxpl_id, &test_cparam, NULL);
+        ea = H5EA_create(f, &test_cparam, NULL);
     } H5E_END_TRY;
     if(ea) {
         /* Close opened extensible array */
-        H5EA_close(ea, H5AC_ind_read_dxpl_id);
+        H5EA_close(ea);
         ea = NULL;
 
         /* Indicate error */
@@ -713,11 +714,11 @@ test_create(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t H5_ATTR_UNUSE
     HDmemcpy(&test_cparam, cparam, sizeof(test_cparam));
     test_cparam.data_blk_min_elmts = 0;
     H5E_BEGIN_TRY {
-        ea = H5EA_create(f, H5AC_ind_read_dxpl_id, &test_cparam, NULL);
+        ea = H5EA_create(f, &test_cparam, NULL);
     } H5E_END_TRY;
     if(ea) {
         /* Close opened extensible array */
-        H5EA_close(ea, H5AC_ind_read_dxpl_id);
+        H5EA_close(ea);
         ea = NULL;
 
         /* Indicate error */
@@ -729,11 +730,11 @@ test_create(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t H5_ATTR_UNUSE
         HDmemcpy(&test_cparam, cparam, sizeof(test_cparam));
         test_cparam.max_dblk_page_nelmts_bits = (uint8_t)(H5VM_log2_gen((uint64_t)test_cparam.idx_blk_elmts) - 1);
         H5E_BEGIN_TRY {
-            ea = H5EA_create(f, H5AC_ind_read_dxpl_id, &test_cparam, NULL);
+            ea = H5EA_create(f, &test_cparam, NULL);
         } H5E_END_TRY;
         if(ea) {
             /* Close opened extensible array */
-            H5EA_close(ea, H5AC_ind_read_dxpl_id);
+            H5EA_close(ea);
             ea = NULL;
 
             /* Indicate error */
@@ -743,11 +744,11 @@ test_create(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t H5_ATTR_UNUSE
     HDmemcpy(&test_cparam, cparam, sizeof(test_cparam));
     test_cparam.max_dblk_page_nelmts_bits = 4;  /* corresponds to 16 elements in data block page, which is less than the 64 elements for the default settings */
     H5E_BEGIN_TRY {
-        ea = H5EA_create(f, H5AC_ind_read_dxpl_id, &test_cparam, NULL);
+        ea = H5EA_create(f, &test_cparam, NULL);
     } H5E_END_TRY;
     if(ea) {
         /* Close opened extensible array */
-        H5EA_close(ea, H5AC_ind_read_dxpl_id);
+        H5EA_close(ea);
         ea = NULL;
 
         /* Indicate error */
@@ -756,11 +757,11 @@ test_create(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t H5_ATTR_UNUSE
     HDmemcpy(&test_cparam, cparam, sizeof(test_cparam));
     test_cparam.max_dblk_page_nelmts_bits = (uint8_t)(test_cparam.max_nelmts_bits + 1);
     H5E_BEGIN_TRY {
-        ea = H5EA_create(f, H5AC_ind_read_dxpl_id, &test_cparam, NULL);
+        ea = H5EA_create(f, &test_cparam, NULL);
     } H5E_END_TRY;
     if(ea) {
         /* Close opened extensible array */
-        H5EA_close(ea, H5AC_ind_read_dxpl_id);
+        H5EA_close(ea);
         ea = NULL;
 
         /* Indicate error */
@@ -780,7 +781,7 @@ test_create(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t H5_ATTR_UNUSE
     TESTING("extensible array creation");
 
     /* Create array */
-    if(create_array(f, H5AC_ind_read_dxpl_id, cparam, &ea, &ea_addr, NULL) < 0)
+    if(create_array(f, cparam, &ea, &ea_addr, NULL) < 0)
         TEST_ERROR
 
     PASSED()
@@ -804,7 +805,7 @@ test_create(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t H5_ATTR_UNUSE
 error:
     H5E_BEGIN_TRY {
         if(ea)
-            H5EA_close(ea, H5AC_ind_read_dxpl_id);
+            H5EA_close(ea);
 	H5Fclose(file);
     } H5E_END_TRY;
 
@@ -843,19 +844,19 @@ test_reopen(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam)
     TESTING("create, close & reopen extensible array");
 
     /* Create array */
-    if(create_array(f, H5AC_ind_read_dxpl_id, cparam, &ea, &ea_addr, NULL) < 0)
+    if(create_array(f, cparam, &ea, &ea_addr, NULL) < 0)
         TEST_ERROR
 
     /* Close the extensible array */
-    if(H5EA_close(ea, H5AC_ind_read_dxpl_id) < 0)
+    if(H5EA_close(ea) < 0)
         FAIL_STACK_ERROR
 
     /* Check for closing & re-opening the file */
-    if(reopen_file(&file, &f, fapl, H5AC_ind_read_dxpl_id, NULL, HADDR_UNDEF, tparam) < 0)
+    if(reopen_file(&file, &f, fapl, NULL, HADDR_UNDEF, tparam) < 0)
         TEST_ERROR
 
     /* Re-open the array */
-    if(NULL == (ea = H5EA_open(f, H5AC_ind_read_dxpl_id, ea_addr, NULL)))
+    if(NULL == (ea = H5EA_open(f, ea_addr, NULL)))
         FAIL_STACK_ERROR
 
     /* Verify the creation parameters */
@@ -874,7 +875,7 @@ test_reopen(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam)
 error:
     H5E_BEGIN_TRY {
         if(ea)
-            H5EA_close(ea, H5AC_ind_read_dxpl_id);
+            H5EA_close(ea);
 	H5Fclose(file);
     } H5E_END_TRY;
 
@@ -916,11 +917,11 @@ test_open_twice(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam)
     TESTING("open extensible array twice");
 
     /* Create array */
-    if(create_array(f, H5AC_ind_read_dxpl_id, cparam, &ea, &ea_addr, NULL) < 0)
+    if(create_array(f, cparam, &ea, &ea_addr, NULL) < 0)
         TEST_ERROR
 
     /* Open the array again, through the first file handle */
-    if(NULL == (ea2 = H5EA_open(f, H5AC_ind_read_dxpl_id, ea_addr, NULL)))
+    if(NULL == (ea2 = H5EA_open(f, ea_addr, NULL)))
         FAIL_STACK_ERROR
 
     /* Verify the creation parameters */
@@ -930,12 +931,12 @@ test_open_twice(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam)
         TEST_ERROR
 
     /* Close the second extensible array wrapper */
-    if(H5EA_close(ea2, H5AC_ind_read_dxpl_id) < 0)
+    if(H5EA_close(ea2) < 0)
         FAIL_STACK_ERROR
     ea2 = NULL;
 
     /* Check for closing & re-opening the file */
-    if(reopen_file(&file, &f, fapl, H5AC_ind_read_dxpl_id, &ea, ea_addr, tparam) < 0)
+    if(reopen_file(&file, &f, fapl, &ea, ea_addr, tparam) < 0)
         TEST_ERROR
 
     /* Re-open the file */
@@ -947,7 +948,7 @@ test_open_twice(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam)
         FAIL_STACK_ERROR
 
     /* Open the extensible array through the second file handle */
-    if(NULL == (ea2 = H5EA_open(f2, H5AC_ind_read_dxpl_id, ea_addr, NULL)))
+    if(NULL == (ea2 = H5EA_open(f2, ea_addr, NULL)))
         FAIL_STACK_ERROR
 
     /* Verify the creation parameters */
@@ -955,7 +956,7 @@ test_open_twice(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam)
         TEST_ERROR
 
     /* Close the first extensible array wrapper */
-    if(H5EA_close(ea, H5AC_ind_read_dxpl_id) < 0)
+    if(H5EA_close(ea) < 0)
         FAIL_STACK_ERROR
     ea = NULL;
 
@@ -978,9 +979,9 @@ test_open_twice(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam)
 error:
     H5E_BEGIN_TRY {
         if(ea)
-            H5EA_close(ea, H5AC_ind_read_dxpl_id);
+            H5EA_close(ea);
         if(ea2)
-            H5EA_close(ea2, H5AC_ind_read_dxpl_id);
+            H5EA_close(ea2);
 	H5Fclose(file);
 	H5Fclose(file2);
     } H5E_END_TRY;
@@ -1028,11 +1029,11 @@ test_open_twice_diff(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tpa
     TESTING("open extensible array twice, through different file handles");
 
     /* Create array */
-    if(create_array(f, H5AC_ind_read_dxpl_id, cparam, &ea, &ea_addr, NULL) < 0)
+    if(create_array(f, cparam, &ea, &ea_addr, NULL) < 0)
         TEST_ERROR
 
     /* Open the array again, through the first file handle */
-    if(NULL == (ea2 = H5EA_open(f, H5AC_ind_read_dxpl_id, ea_addr, NULL)))
+    if(NULL == (ea2 = H5EA_open(f, ea_addr, NULL)))
         FAIL_STACK_ERROR
 
     /* Verify the creation parameters */
@@ -1042,7 +1043,7 @@ test_open_twice_diff(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tpa
         TEST_ERROR
 
     /* Close the second extensible array wrapper */
-    if(H5EA_close(ea2, H5AC_ind_read_dxpl_id) < 0)
+    if(H5EA_close(ea2) < 0)
         FAIL_STACK_ERROR
     ea2 = NULL;
 
@@ -1054,7 +1055,7 @@ test_open_twice_diff(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tpa
         FAIL_STACK_ERROR
 
     /* Check for closing & re-opening the file */
-    if(reopen_file(&file, &f, fapl, H5AC_ind_read_dxpl_id, &ea, ea_addr, tparam) < 0)
+    if(reopen_file(&file, &f, fapl, &ea, ea_addr, tparam) < 0)
         TEST_ERROR
 
     /* Verify the creation parameters */
@@ -1062,7 +1063,7 @@ test_open_twice_diff(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tpa
         TEST_ERROR
 
     /* Close the first extensible array wrapper */
-    if(H5EA_close(ea, H5AC_ind_read_dxpl_id) < 0)
+    if(H5EA_close(ea) < 0)
         FAIL_STACK_ERROR
     ea = NULL;
 
@@ -1093,7 +1094,7 @@ test_open_twice_diff(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tpa
         FAIL_STACK_ERROR
 
     /* Open the extensible array through the second file handle */
-    if(NULL == (ea2 = H5EA_open(f2, H5AC_ind_read_dxpl_id, ea_addr, NULL)))
+    if(NULL == (ea2 = H5EA_open(f2, ea_addr, NULL)))
         FAIL_STACK_ERROR
 
     /* Verify the creation parameters */
@@ -1118,9 +1119,9 @@ test_open_twice_diff(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tpa
 error:
     H5E_BEGIN_TRY {
         if(ea)
-            H5EA_close(ea, H5AC_ind_read_dxpl_id);
+            H5EA_close(ea);
         if(ea2)
-            H5EA_close(ea2, H5AC_ind_read_dxpl_id);
+            H5EA_close(ea2);
 	H5Fclose(file);
 	H5Fclose(file2);
 	H5Fclose(file0);
@@ -1164,15 +1165,15 @@ test_delete_open(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam)
     TESTING("deleting open extensible array");
 
     /* Create array */
-    if(create_array(f, H5AC_ind_read_dxpl_id, cparam, &ea, &ea_addr, NULL) < 0)
+    if(create_array(f, cparam, &ea, &ea_addr, NULL) < 0)
         TEST_ERROR
 
     /* Open the array again */
-    if(NULL == (ea2 = H5EA_open(f, H5AC_ind_read_dxpl_id, ea_addr, NULL)))
+    if(NULL == (ea2 = H5EA_open(f, ea_addr, NULL)))
         FAIL_STACK_ERROR
 
     /* Request that the array be deleted */
-    if(H5EA_delete(f, H5AC_ind_read_dxpl_id, ea_addr, NULL) < 0)
+    if(H5EA_delete(f, ea_addr, NULL) < 0)
         FAIL_STACK_ERROR
 
     /* Verify the creation parameters */
@@ -1182,38 +1183,38 @@ test_delete_open(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam)
         TEST_ERROR
 
     /* Close the second extensible array wrapper */
-    if(H5EA_close(ea2, H5AC_ind_read_dxpl_id) < 0)
+    if(H5EA_close(ea2) < 0)
         FAIL_STACK_ERROR
     ea2 = NULL;
 
     /* Try re-opening the array again (should fail, as array will be deleted) */
     H5E_BEGIN_TRY {
-        ea2 = H5EA_open(f, H5AC_ind_read_dxpl_id, ea_addr, NULL);
+        ea2 = H5EA_open(f, ea_addr, NULL);
     } H5E_END_TRY;
     if(ea2) {
         /* Close opened array */
-        H5EA_close(ea2, H5AC_ind_read_dxpl_id);
+        H5EA_close(ea2);
 
         /* Indicate error */
         TEST_ERROR
     } /* end if */
 
     /* Close the first extensible array wrapper */
-    if(H5EA_close(ea, H5AC_ind_read_dxpl_id) < 0)
+    if(H5EA_close(ea) < 0)
         FAIL_STACK_ERROR
     ea = NULL;
 
     /* Check for closing & re-opening the file */
-    if(reopen_file(&file, &f, fapl, H5AC_ind_read_dxpl_id, NULL, HADDR_UNDEF, tparam) < 0)
+    if(reopen_file(&file, &f, fapl, NULL, HADDR_UNDEF, tparam) < 0)
         TEST_ERROR
 
     /* Try re-opening the array again (should fail, as array is now deleted) */
     H5E_BEGIN_TRY {
-        ea = H5EA_open(f, H5AC_ind_read_dxpl_id, ea_addr, NULL);
+        ea = H5EA_open(f, ea_addr, NULL);
     } H5E_END_TRY;
     if(ea) {
         /* Close opened array */
-        H5EA_close(ea, H5AC_ind_read_dxpl_id);
+        H5EA_close(ea);
 
         /* Indicate error */
         TEST_ERROR
@@ -1239,9 +1240,9 @@ test_delete_open(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam)
 error:
     H5E_BEGIN_TRY {
         if(ea)
-            H5EA_close(ea, H5AC_ind_read_dxpl_id);
+            H5EA_close(ea);
         if(ea2)
-            H5EA_close(ea2, H5AC_ind_read_dxpl_id);
+            H5EA_close(ea2);
 	H5Fclose(file);
     } H5E_END_TRY;
 
@@ -2112,7 +2113,7 @@ test_set_elmts(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam,
         TEST_ERROR
 
     /* Create array */
-    if(create_array(f, H5AC_ind_read_dxpl_id, cparam, &ea, &ea_addr, NULL) < 0)
+    if(create_array(f, cparam, &ea, &ea_addr, NULL) < 0)
         TEST_ERROR
 
     /* Verify the creation parameters */
@@ -2120,7 +2121,7 @@ test_set_elmts(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam,
         TEST_ERROR
 
     /* Check for closing & re-opening the file */
-    if(reopen_file(&file, &f, fapl, H5AC_ind_read_dxpl_id, &ea, ea_addr, tparam) < 0)
+    if(reopen_file(&file, &f, fapl, &ea, ea_addr, tparam) < 0)
         TEST_ERROR
 
     /* Verify high-water # of elements written */
@@ -2151,7 +2152,7 @@ test_set_elmts(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam,
 
         /* Retrieve element of array (not set yet) */
         relmt = (uint64_t)0;
-        if(H5EA_get(ea, H5AC_ind_read_dxpl_id, idx, &relmt) < 0)
+        if(H5EA_get(ea, idx, &relmt) < 0)
             FAIL_STACK_ERROR
 
         /* Verify element is fill value for array */
@@ -2179,7 +2180,7 @@ test_set_elmts(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam,
 
         /* Retrieve element of array (not set yet) */
         relmt = (uint64_t)0;
-        if(H5EA_get(ea, H5AC_ind_read_dxpl_id, idx, &relmt) < 0)
+        if(H5EA_get(ea, idx, &relmt) < 0)
             FAIL_STACK_ERROR
 
         /* Verify element is fill value for array */
@@ -2188,7 +2189,7 @@ test_set_elmts(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam,
 
         /* Set element of array */
         welmt = (uint64_t)7 + idx;
-        if(H5EA_set(ea, H5AC_ind_read_dxpl_id, idx, &welmt) < 0)
+        if(H5EA_set(ea, idx, &welmt) < 0)
             FAIL_STACK_ERROR
 
         /* Get the max. array index */
@@ -2216,7 +2217,7 @@ test_set_elmts(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam,
 
         /* Retrieve element of array (set now) */
         relmt = (uint64_t)0;
-        if(H5EA_get(ea, H5AC_ind_read_dxpl_id, idx, &relmt) < 0)
+        if(H5EA_get(ea, idx, &relmt) < 0)
             FAIL_STACK_ERROR
 
         /* Verify element is value written */
@@ -2240,7 +2241,7 @@ test_set_elmts(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam,
 error:
     H5E_BEGIN_TRY {
         if(ea)
-            H5EA_close(ea, H5AC_ind_read_dxpl_id);
+            H5EA_close(ea);
 	H5Fclose(file);
     } H5E_END_TRY;
 
@@ -2286,7 +2287,7 @@ test_skip_elmts(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam,
         TEST_ERROR
 
     /* Create array */
-    if(create_array(f, H5AC_ind_read_dxpl_id, cparam, &ea, &ea_addr, NULL) < 0)
+    if(create_array(f, cparam, &ea, &ea_addr, NULL) < 0)
         TEST_ERROR
 
     /* Verify the creation parameters */
@@ -2294,7 +2295,7 @@ test_skip_elmts(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam,
         TEST_ERROR
 
     /* Check for closing & re-opening the file */
-    if(reopen_file(&file, &f, fapl, H5AC_ind_read_dxpl_id, &ea, ea_addr, tparam) < 0)
+    if(reopen_file(&file, &f, fapl, &ea, ea_addr, tparam) < 0)
         TEST_ERROR
 
     /* Verify high-water # of elements written */
@@ -2315,7 +2316,7 @@ test_skip_elmts(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam,
 
     /* Retrieve element of array (not set yet) */
     relmt = (uint64_t)0;
-    if(H5EA_get(ea, H5AC_ind_read_dxpl_id, idx, &relmt) < 0)
+    if(H5EA_get(ea, idx, &relmt) < 0)
         FAIL_STACK_ERROR
 
     /* Verify element is fill value for array */
@@ -2324,7 +2325,7 @@ test_skip_elmts(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam,
 
     /* Set element of array */
     welmt = (uint64_t)7 + idx;
-    if(H5EA_set(ea, H5AC_ind_read_dxpl_id, idx, &welmt) < 0)
+    if(H5EA_set(ea, idx, &welmt) < 0)
         FAIL_STACK_ERROR
 
     /* Verify high-water # of elements written */
@@ -2366,7 +2367,7 @@ test_skip_elmts(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam,
 
     /* Retrieve element of array (set now) */
     relmt = (uint64_t)0;
-    if(H5EA_get(ea, H5AC_ind_read_dxpl_id, idx, &relmt) < 0)
+    if(H5EA_get(ea, idx, &relmt) < 0)
         FAIL_STACK_ERROR
 
     /* Verify element is value written */
@@ -2377,7 +2378,7 @@ test_skip_elmts(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam,
     for(cnt = 0; cnt < skip_elmts; cnt++) {
         /* Retrieve element of array (not set yet) */
         relmt = (uint64_t)0;
-        if(H5EA_get(ea, H5AC_ind_read_dxpl_id, cnt, &relmt) < 0)
+        if(H5EA_get(ea, cnt, &relmt) < 0)
             FAIL_STACK_ERROR
 
         /* Verify element is fill value for array */
@@ -2397,8 +2398,8 @@ test_skip_elmts(hid_t fapl, H5EA_create_t *cparam, earray_test_param_t *tparam,
 error:
     H5E_BEGIN_TRY {
         if(ea)
-            H5EA_close(ea, H5AC_ind_read_dxpl_id);
-	H5Fclose(file);
+            H5EA_close(ea);
+        H5Fclose(file);
     } H5E_END_TRY;
 
     return 1;
@@ -2429,6 +2430,7 @@ main(void)
     unsigned	nerrors = 0;            /* Cumulative error count */
     time_t      curr_time;              /* Current time, for seeding random number generator */
     int		ExpressMode;            /* Test express value */
+    hbool_t     api_ctx_pushed = FALSE;             /* Whether API context pushed */
 
     /* Reset library */
     h5_reset();
@@ -2439,6 +2441,10 @@ main(void)
 
     /* Set the filename to use for this test (dependent on fapl) */
     h5_fixname(FILENAME[0], fapl, filename_g, sizeof(filename_g));
+
+    /* Push API context */
+    if(H5CX_push() < 0) FAIL_STACK_ERROR
+    api_ctx_pushed = TRUE;
 
     /* Seed random #'s */
     curr_time = HDtime(NULL);
@@ -2586,6 +2592,10 @@ main(void)
     /* Verify symbol table messages are cached */
     nerrors += (h5_verify_cached_stabs(FILENAME, fapl) < 0 ? 1 : 0);
 
+    /* Pop API context */
+    if(api_ctx_pushed && H5CX_pop() < 0) FAIL_STACK_ERROR
+    api_ctx_pushed = FALSE;
+
     if(nerrors)
         goto error;
     HDputs("All extensible array tests passed.");
@@ -2601,6 +2611,8 @@ error:
     H5E_BEGIN_TRY {
         H5Pclose(fapl);
     } H5E_END_TRY;
+
+    if(api_ctx_pushed) H5CX_pop();
 
     return 1;
 } /* end main() */

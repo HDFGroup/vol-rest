@@ -344,7 +344,7 @@ main(int argc, char **argv)
     }
 
     if (opts->output_file) {
-        if ((output = fopen(opts->output_file, "w")) == NULL) {
+        if ((output = HDfopen(opts->output_file, "w")) == NULL) {
             fprintf(stderr, "%s: cannot open output file\n", progname);
             perror(opts->output_file);
             goto finish;
@@ -472,8 +472,8 @@ run_test(iotype iot, parameters parms, struct options *opts)
             break;
         default:
             /* unknown request */
-            fprintf(stderr, "Unknown IO type request (%d)\n", (int)iot);
-            assert(0 && "Unknown IO tpe");
+            HDfprintf(stderr, "Unknown IO type request (%d)\n", (int)iot);
+            HDassert(0 && "Unknown IO tpe");
             break;
     }
 
@@ -818,14 +818,14 @@ recover_size_and_print(long long val, const char *end)
     if (val >= ONE_KB && (val % ONE_KB) == 0) {
         if (val >= ONE_MB && (val % ONE_MB) == 0) {
             if (val >= ONE_GB && (val % ONE_GB) == 0)
-                fprintf(output, "%" H5_PRINTF_LL_WIDTH "d""GB%s", val / ONE_GB, end);
+                HDfprintf(output, "%" H5_PRINTF_LL_WIDTH "d""GB%s", val / ONE_GB, end);
             else
-                fprintf(output, "%" H5_PRINTF_LL_WIDTH "d""MB%s", val / ONE_MB, end);
+                HDfprintf(output, "%" H5_PRINTF_LL_WIDTH "d""MB%s", val / ONE_MB, end);
         } else {
-            fprintf(output, "%" H5_PRINTF_LL_WIDTH "d""KB%s", val / ONE_KB, end);
+            HDfprintf(output, "%" H5_PRINTF_LL_WIDTH "d""KB%s", val / ONE_KB, end);
         }
     } else {
-        fprintf(output, "%" H5_PRINTF_LL_WIDTH "d""%s", val, end);
+        HDfprintf(output, "%" H5_PRINTF_LL_WIDTH "d""%s", val, end);
     }
 }
 
@@ -833,10 +833,10 @@ static void
 print_io_api(long io_types)
 {
     if (io_types & SIO_POSIX)
-        fprintf(output, "posix ");
+	HDfprintf(output, "posix ");
     if (io_types & SIO_HDF5)
-        fprintf(output, "hdf5 ");
-    fprintf(output, "\n");
+	HDfprintf(output, "hdf5 ");
+    HDfprintf(output, "\n");
 }
 
 static void
@@ -846,92 +846,92 @@ report_parameters(struct options *opts)
     rank = opts->dset_rank;
 
     print_version("HDF5 Library");	/* print library version */
-    fprintf(output, "==== Parameters ====\n");
+    HDfprintf(output, "==== Parameters ====\n");
 
-    fprintf(output, "IO API=");
+    HDfprintf(output, "IO API=");
     print_io_api(opts->io_types);
 
-    fprintf(output, "Number of iterations=%d\n",
+    HDfprintf(output, "Number of iterations=%d\n",
               opts->num_iters);
 
-    fprintf(output, "Dataset size=");
+    HDfprintf(output, "Dataset size=");
 
     for (i=0; i<rank; i++)
         recover_size_and_print((long long)opts->dset_size[i], " ");
-    fprintf(output, "\n");
+    HDfprintf(output, "\n");
 
 
-    fprintf(output, "Transfer buffer size=");
+    HDfprintf(output, "Transfer buffer size=");
     for (i=0; i<rank; i++)
         recover_size_and_print((long long)opts->buf_size[i], " ");
-    fprintf(output, "\n");
+    HDfprintf(output, "\n");
 
     if(opts->page_size) {
-        fprintf(output, "Page Aggregation Enabled. Page size = %ld\n", opts->page_size);
+        HDfprintf(output, "Page Aggregation Enabled. Page size = %ld\n", opts->page_size);
         if(opts->page_buffer_size)
-            fprintf(output, "Page Buffering Enabled. Page Buffer size = %ld\n", opts->page_buffer_size);
+            HDfprintf(output, "Page Buffering Enabled. Page Buffer size = %ld\n", opts->page_buffer_size);
         else
-            fprintf(output, "Page Buffering Disabled\n");
+            HDfprintf(output, "Page Buffering Disabled\n");
     }
     else
-        fprintf(output, "Page Aggregation Disabled\n");
+        HDfprintf(output, "Page Aggregation Disabled\n");
 
-    fprintf(output, "Dimension access order=");
+    HDfprintf(output, "Dimension access order=");
     for (i=0; i<rank; i++)
         recover_size_and_print((long long)opts->order[i], " ");
-    fprintf(output, "\n");
+    HDfprintf(output, "\n");
 
     if (opts->io_types & SIO_HDF5) {
 
-        fprintf(output, "HDF5 data storage method=");
+        HDfprintf(output, "HDF5 data storage method=");
 
         if (opts->h5_use_chunks){
 
-            fprintf(output, "Chunked\n");
-            fprintf(output, "HDF5 chunk size=");
+            HDfprintf(output, "Chunked\n");
+            HDfprintf(output, "HDF5 chunk size=");
             for (i=0; i<rank; i++)
                 recover_size_and_print((long long)opts->chk_size[i], " ");
-            fprintf(output, "\n");
+            HDfprintf(output, "\n");
 
-            fprintf(output, "HDF5 dataset dimensions=");
+            HDfprintf(output, "HDF5 dataset dimensions=");
             if (opts->h5_extendable) {
-                fprintf(output, "Extendable\n");
+                HDfprintf(output, "Extendable\n");
             }
             else {
-                fprintf(output, "Fixed\n");
+                HDfprintf(output, "Fixed\n");
             }
         }
         else {
-            fprintf(output, "Contiguous\n");
+            HDfprintf(output, "Contiguous\n");
         }
 
-        fprintf(output, "HDF5 file driver=");
+        HDfprintf(output, "HDF5 file driver=");
         if (opts->vfd==sec2) {
-            fprintf(output, "sec2\n");
+            HDfprintf(output, "sec2\n");
         } else if (opts->vfd==stdio) {
-            fprintf(output, "stdio\n");
+            HDfprintf(output, "stdio\n");
         } else if (opts->vfd==core) {
-            fprintf(output, "core\n");
+            HDfprintf(output, "core\n");
         } else if (opts->vfd==split) {
-            fprintf(output, "split\n");
+            HDfprintf(output, "split\n");
         } else if (opts->vfd==multi) {
-            fprintf(output, "multi\n");
+            HDfprintf(output, "multi\n");
         } else if (opts->vfd==family) {
-            fprintf(output, "family\n");
+            HDfprintf(output, "family\n");
         } else if (opts->vfd==direct) {
-            fprintf(output, "direct\n");
+            HDfprintf(output, "direct\n");
         }
     }
 
     {
-        char *prefix = getenv("HDF5_PREFIX");
+        char *prefix = HDgetenv("HDF5_PREFIX");
 
-        fprintf(output, "Env HDF5_PREFIX=%s\n",
+        HDfprintf(output, "Env HDF5_PREFIX=%s\n",
                   (prefix ? prefix : "not set"));
     }
 
-    fprintf(output, "==== End of Parameters ====\n");
-    fprintf(output, "\n");
+    HDfprintf(output, "==== End of Parameters ====\n");
+    HDfprintf(output, "\n");
 }
 
 /*
@@ -950,7 +950,7 @@ parse_command_line(int argc, char *argv[])
     struct options *cl_opts;
     int i, default_rank, actual_rank, ranks[4];
 
-    cl_opts = (struct options *)malloc(sizeof(struct options));
+    cl_opts = (struct options *)HDmalloc(sizeof(struct options));
 
     cl_opts->page_buffer_size = 0;
     cl_opts->page_size = 0;
@@ -1001,15 +1001,15 @@ parse_command_line(int argc, char *argv[])
                 while (end && *end != '\0') {
                     char buf[10];
 
-                    memset(buf, '\0', sizeof(buf));
+                    HDmemset(buf, '\0', sizeof(buf));
 
                     for (i = 0; *end != '\0' && *end != ','; ++end)
                         if (isalnum(*end) && i < 10)
                             buf[i++] = *end;
 
-                    if (!strcasecmp(buf, "hdf5")) {
+                    if (!HDstrcasecmp(buf, "hdf5")) {
                         cl_opts->io_types |= SIO_HDF5;
-                    } else if (!strcasecmp(buf, "posix")) {
+                    } else if (!HDstrcasecmp(buf, "posix")) {
                         cl_opts->io_types |= SIO_POSIX;
                     } else {
                         fprintf(stderr, "sio_perf: invalid --api option %s\n",
@@ -1040,7 +1040,7 @@ parse_command_line(int argc, char *argv[])
                 while (end && *end != '\0') {
                     char buf[10];
 
-                    memset(buf, '\0', sizeof(buf));
+                    HDmemset(buf, '\0', sizeof(buf));
 
                     for (i = 0; *end != '\0' && *end != ','; ++end)
                         if (isalnum(*end) && i < 10)
@@ -1068,7 +1068,7 @@ parse_command_line(int argc, char *argv[])
                 while (end && *end != '\0') {
                     char buf[10];
 
-                    memset(buf, '\0', sizeof(buf));
+                    HDmemset(buf, '\0', sizeof(buf));
 
                     for (i = 0; *end != '\0' && *end != ','; ++end)
                         if (isalnum(*end) && i < 10)
@@ -1126,7 +1126,7 @@ parse_command_line(int argc, char *argv[])
                 while (end && *end != '\0') {
                     char buf[10];
 
-                    memset(buf, '\0', sizeof(buf));
+                    HDmemset(buf, '\0', sizeof(buf));
 
                     for (i = 0; *end != '\0' && *end != ','; ++end)
                         if (isalnum(*end) && i < 10)
@@ -1156,19 +1156,19 @@ parse_command_line(int argc, char *argv[])
             cl_opts->h5_threshold = parse_size_directive(opt_arg);
             break;
         case 'v':
-            if (!strcasecmp(opt_arg, "sec2")) {
+            if (!HDstrcasecmp(opt_arg, "sec2")) {
                 cl_opts->vfd=sec2;
-            } else if (!strcasecmp(opt_arg, "stdio")) {
+            } else if (!HDstrcasecmp(opt_arg, "stdio")) {
                 cl_opts->vfd=stdio;
-            } else if (!strcasecmp(opt_arg, "core")) {
+            } else if (!HDstrcasecmp(opt_arg, "core")) {
                 cl_opts->vfd=core;
-            } else if (!strcasecmp(opt_arg, "split")) {
+            } else if (!HDstrcasecmp(opt_arg, "split")) {
                 cl_opts->vfd=split;
-            } else if (!strcasecmp(opt_arg, "multi")) {
+            } else if (!HDstrcasecmp(opt_arg, "multi")) {
                 cl_opts->vfd=multi;
-            } else if (!strcasecmp(opt_arg, "family")) {
+            } else if (!HDstrcasecmp(opt_arg, "family")) {
                 cl_opts->vfd=family;
-            } else if (!strcasecmp(opt_arg, "direct")) {
+            } else if (!HDstrcasecmp(opt_arg, "direct")) {
                 cl_opts->vfd=direct;
             } else {
                 fprintf(stderr, "sio_perf: invalid --api option %s\n",
@@ -1190,7 +1190,7 @@ parse_command_line(int argc, char *argv[])
                 while (end && *end != '\0') {
                     char buf[10];
 
-                    memset(buf, '\0', sizeof(buf));
+                    HDmemset(buf, '\0', sizeof(buf));
 
                     for (i = 0; *end != '\0' && *end != ','; ++end)
                         if (isalnum(*end) && i < 10)
@@ -1218,7 +1218,7 @@ parse_command_line(int argc, char *argv[])
                 while (end && *end != '\0') {
                     char buf[10];
 
-                    memset(buf, '\0', sizeof(buf));
+                    HDmemset(buf, '\0', sizeof(buf));
 
                     for (i = 0; *end != '\0' && *end != ','; ++end)
                         if (isalnum(*end) && i < 10)
@@ -1316,7 +1316,7 @@ parse_size_directive(const char *size)
     hsize_t s;
     char *endptr;
 
-    s = strtoull(size, &endptr, 10);
+    s = HDstrtoull(size, &endptr, 10);
 
     if (endptr && *endptr) {
         while (*endptr != '\0' && (*endptr == ' ' || *endptr == '\t'))

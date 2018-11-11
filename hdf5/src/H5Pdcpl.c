@@ -32,6 +32,7 @@
 /* Headers */
 /***********/
 #include "H5private.h"          /* Generic Functions                        */
+#include "H5CXprivate.h"        /* API Contexts                             */
 #include "H5Dpkg.h"             /* Datasets                                 */
 #include "H5Eprivate.h"         /* Error handling                           */
 #include "H5FLprivate.h"        /* Free Lists                               */
@@ -247,41 +248,41 @@ H5P__dcrt_reg_prop(H5P_genclass_t *pclass)
     FUNC_ENTER_STATIC
 
     /* Register the storage layout property */
-    if(H5P_register_real(pclass, H5D_CRT_LAYOUT_NAME, H5D_CRT_LAYOUT_SIZE, &H5D_def_layout_g, 
+    if(H5P__register_real(pclass, H5D_CRT_LAYOUT_NAME, H5D_CRT_LAYOUT_SIZE, &H5D_def_layout_g, 
             NULL, H5D_CRT_LAYOUT_SET, H5D_CRT_LAYOUT_GET, H5D_CRT_LAYOUT_ENC, H5D_CRT_LAYOUT_DEC,
             H5D_CRT_LAYOUT_DEL, H5D_CRT_LAYOUT_COPY, H5D_CRT_LAYOUT_CMP, H5D_CRT_LAYOUT_CLOSE) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the fill value property */
-    if(H5P_register_real(pclass, H5D_CRT_FILL_VALUE_NAME, H5D_CRT_FILL_VALUE_SIZE, &H5D_def_fill_g, 
+    if(H5P__register_real(pclass, H5D_CRT_FILL_VALUE_NAME, H5D_CRT_FILL_VALUE_SIZE, &H5D_def_fill_g, 
             NULL, H5D_CRT_FILL_VALUE_SET, H5D_CRT_FILL_VALUE_GET, H5D_CRT_FILL_VALUE_ENC, H5D_CRT_FILL_VALUE_DEC,
             H5D_CRT_FILL_VALUE_DEL, H5D_CRT_FILL_VALUE_COPY, H5D_CRT_FILL_VALUE_CMP, H5D_CRT_FILL_VALUE_CLOSE) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the space allocation time state property */
-    if(H5P_register_real(pclass, H5D_CRT_ALLOC_TIME_STATE_NAME, H5D_CRT_ALLOC_TIME_STATE_SIZE, &H5D_def_alloc_time_state_g, 
+    if(H5P__register_real(pclass, H5D_CRT_ALLOC_TIME_STATE_NAME, H5D_CRT_ALLOC_TIME_STATE_SIZE, &H5D_def_alloc_time_state_g, 
             NULL, NULL, NULL, H5D_CRT_ALLOC_TIME_STATE_ENC, H5D_CRT_ALLOC_TIME_STATE_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the external file list property */
-    if(H5P_register_real(pclass, H5D_CRT_EXT_FILE_LIST_NAME, H5D_CRT_EXT_FILE_LIST_SIZE, &H5D_def_efl_g, 
+    if(H5P__register_real(pclass, H5D_CRT_EXT_FILE_LIST_NAME, H5D_CRT_EXT_FILE_LIST_SIZE, &H5D_def_efl_g, 
             NULL, H5D_CRT_EXT_FILE_LIST_SET, H5D_CRT_EXT_FILE_LIST_GET, H5D_CRT_EXT_FILE_LIST_ENC, H5D_CRT_EXT_FILE_LIST_DEC,
             H5D_CRT_EXT_FILE_LIST_DEL, H5D_CRT_EXT_FILE_LIST_COPY, H5D_CRT_EXT_FILE_LIST_CMP, H5D_CRT_EXT_FILE_LIST_CLOSE) < 0)
        HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the type ID property*/
-    if(H5P_register_real(pclass, H5VL_PROP_DSET_TYPE_ID, sizeof(hid_t), &type_id, 
+    if(H5P__register_real(pclass, H5VL_PROP_DSET_TYPE_ID, sizeof(hid_t), &type_id, 
                          NULL, NULL, NULL, NULL, NULL, NULL, NULL, H5P_ignore_cmp, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the space ID property */
-    if(H5P_register_real(pclass, H5VL_PROP_DSET_SPACE_ID, sizeof(hid_t), &space_id, 
+    if(H5P__register_real(pclass, H5VL_PROP_DSET_SPACE_ID, sizeof(hid_t), &space_id, 
                          NULL, NULL, NULL, NULL, NULL, NULL, NULL, H5P_ignore_cmp, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the lcpl ID property */
-    if(H5P_register_real(pclass, H5VL_PROP_DSET_LCPL_ID, sizeof(hid_t), &lcpl_id, 
+    if(H5P__register_real(pclass, H5VL_PROP_DSET_LCPL_ID, sizeof(hid_t), &lcpl_id, 
                          NULL, NULL, NULL, NULL, NULL, NULL, NULL, H5P_ignore_cmp, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
@@ -1347,7 +1348,7 @@ done:
 /*-------------------------------------------------------------------------
  * Function:    H5P__dcrt_ext_file_list_get
  *
- * Purpose:     Copies an external file lsit property when it's retrieved from a property list
+ * Purpose:     Copies an external file list property when it's retrieved from a property list
  *
  * Return:      Success:        Non-negative
  *              Failure:        Negative
@@ -2260,7 +2261,7 @@ H5Pset_virtual(hid_t dcpl_id, hid_t vspace_id, const char *src_file_name,
 
 done:
     /* Set VDS layout information in property list */
-    /* (Even on faliure, so there's not a mangled layout struct in the list) */
+    /* (Even on failure, so there's not a mangled layout struct in the list) */
     if(retrieved_layout) {
         if(H5P_poke(plist, H5D_CRT_LAYOUT_NAME, &virtual_layout) < 0) {
             HDONE_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set layout")
@@ -2387,7 +2388,7 @@ H5Pget_virtual_vspace(hid_t dcpl_id, size_t index)
 
     /* Register ID */
     if((ret_value = H5I_register(H5I_DATASPACE, space, TRUE)) < 0)
-        HGOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "unable to register data space")
+        HGOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "unable to register dataspace")
 
 done:
     /* Free space on failure */
@@ -2478,7 +2479,7 @@ H5Pget_virtual_srcspace(hid_t dcpl_id, size_t index)
 
     /* Register ID */
     if((ret_value = H5I_register(H5I_DATASPACE, space, TRUE)) < 0)
-        HGOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "unable to register data space")
+        HGOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "unable to register dataspace")
 
 done:
     /* Free space on failure */
@@ -3221,7 +3222,6 @@ H5Pset_fill_value(hid_t plist_id, hid_t type_id, const void *value)
         H5T_path_t *tpath;      /* Conversion information */
 
         /* Retrieve pointer to datatype */
-        /* XXX: H5VL? */
         if(NULL == (type = (H5T_t *)H5I_object_verify(type_id, H5I_DATATYPE)))
             HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a datatype")
 
@@ -3234,7 +3234,7 @@ H5Pset_fill_value(hid_t plist_id, hid_t type_id, const void *value)
         HDmemcpy(fill.buf, value, (size_t)fill.size);
 
         /* Set up type conversion function */
-        if(NULL == (tpath = H5T_path_find(type, type, NULL, NULL, H5AC_ind_read_dxpl_id, FALSE)))
+        if(NULL == (tpath = H5T_path_find(type, type)))
             HGOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "unable to convert between src and dest data types")
 
         /* If necessary, convert fill value datatypes (which copies VL components, etc.) */
@@ -3246,7 +3246,7 @@ H5Pset_fill_value(hid_t plist_id, hid_t type_id, const void *value)
                 HGOTO_ERROR(H5E_RESOURCE, H5E_NOSPACE, FAIL, "memory allocation failed")
 
             /* Convert the fill value */
-            if(H5T_convert(tpath, type_id, type_id, (size_t)1, (size_t)0, (size_t)0, fill.buf, bkg_buf, H5AC_ind_read_dxpl_id) < 0) {
+            if(H5T_convert(tpath, type_id, type_id, (size_t)1, (size_t)0, (size_t)0, fill.buf, bkg_buf) < 0) {
                 if(bkg_buf)
                     bkg_buf = H5FL_BLK_FREE(type_conv, bkg_buf);
                 HGOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL, "datatype conversion failed")
@@ -3286,8 +3286,7 @@ done:
  *-------------------------------------------------------------------------
  */
 herr_t
-H5P_get_fill_value(H5P_genplist_t *plist, const H5T_t *type, void *value/*out*/,
-    hid_t dxpl_id)
+H5P_get_fill_value(H5P_genplist_t *plist, const H5T_t *type, void *value/*out*/)
 {
     H5O_fill_t          fill;                   /* Fill value to retrieve */
     H5T_path_t		*tpath;		        /*type conversion info	*/
@@ -3319,7 +3318,7 @@ H5P_get_fill_value(H5P_genplist_t *plist, const H5T_t *type, void *value/*out*/,
      /*
       * Can we convert between the source and destination datatypes?
       */
-    if(NULL == (tpath = H5T_path_find(fill.type, type, NULL, NULL, dxpl_id, FALSE)))
+    if(NULL == (tpath = H5T_path_find(fill.type, type)))
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINIT, FAIL, "unable to convert between src and dst datatypes")
     if((src_id = H5I_register(H5I_DATATYPE, H5T_copy(fill.type, H5T_COPY_TRANSIENT), FALSE)) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINIT, FAIL, "unable to copy/register datatype")
@@ -3345,7 +3344,7 @@ H5P_get_fill_value(H5P_genplist_t *plist, const H5T_t *type, void *value/*out*/,
     /* Do the conversion */
     if((dst_id = H5I_register(H5I_DATATYPE, H5T_copy(type, H5T_COPY_TRANSIENT), FALSE)) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINIT, FAIL, "unable to copy/register datatype")
-    if(H5T_convert(tpath, src_id, dst_id, (size_t)1, (size_t)0, (size_t)0, buf, bkg, dxpl_id) < 0)
+    if(H5T_convert(tpath, src_id, dst_id, (size_t)1, (size_t)0, (size_t)0, buf, bkg) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINIT, FAIL, "datatype conversion failed")
     if(buf != value)
         HDmemcpy(value, buf, H5T_get_size(type));
@@ -3391,7 +3390,6 @@ H5Pget_fill_value(hid_t plist_id, hid_t type_id, void *value/*out*/)
     H5TRACE3("e", "iix", plist_id, type_id, value);
 
     /* Check arguments */
-    /* XXX: H5VL? */
     if(NULL == (type = (H5T_t *)H5I_object_verify(type_id, H5I_DATATYPE)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a datatype")
     if(!value)
@@ -3402,7 +3400,7 @@ H5Pget_fill_value(hid_t plist_id, hid_t type_id, void *value/*out*/)
         HGOTO_ERROR(H5E_ATOM, H5E_BADATOM, FAIL, "can't find object for ID")
 
     /* Get the fill value */
-    if(H5P_get_fill_value(plist, type, value, H5AC_ind_read_dxpl_id) < 0)
+    if(H5P_get_fill_value(plist, type, value) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't get fill value")
 
 done:

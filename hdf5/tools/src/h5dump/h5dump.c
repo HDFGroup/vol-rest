@@ -65,7 +65,7 @@ struct handler_t {
  * parameters. The long-named ones can be partially spelled. When
  * adding more, make sure that they don't clash with each other.
  */
-/* The following initialization makes use of C language cancatenating */
+/* The following initialization makes use of C language concatenating */
 /* "xxx" "yyy" into "xxxyyy". */
 static const char *s_opts = "hn*peyBHirVa:c:d:f:g:k:l:t:w:xD:uX:o*b*F:s:S:A*q:z:m:RE*CM:O*N:vG:";
 static struct long_options l_opts[] = {
@@ -1482,7 +1482,7 @@ main(int argc, const char *argv[])
         }
 
         /* Get object info for root group */
-        if(H5Oget_info_by_name(fid, "/", &oi, H5P_DEFAULT) < 0) {
+        if(H5Oget_info_by_name2(fid, "/", &oi, H5O_INFO_BASIC, H5P_DEFAULT) < 0) {
             error_msg("internal error (file %s:line %d)\n", __FILE__, __LINE__);
             h5tools_setstatus(EXIT_FAILURE);
             goto done;

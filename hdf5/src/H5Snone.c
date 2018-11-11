@@ -15,7 +15,7 @@
  * Programmer:  Quincey Koziol <koziol@ncsa.uiuc.edu>
  *              Tuesday, November 10, 1998
  *
- * Purpose:	"None" selection data space I/O functions.
+ * Purpose:	"None" selection dataspace I/O functions.
  */
 
 #include "H5Smodule.h"          /* This source code file is part of the H5S module */
@@ -408,7 +408,7 @@ H5S_none_copy(H5S_t *dst, const H5S_t H5_ATTR_UNUSED *src, hbool_t H5_ATTR_UNUSE
     TRUE if the selection fits within the extent, FALSE if it does not and
         Negative on an error.
  DESCRIPTION
-    Determines if the current selection at the current offet fits within the
+    Determines if the current selection at the current offset fits within the
     extent for the dataspace.  Offset is irrelevant for this type of selection.
  GLOBAL VARIABLES
  COMMENTS, BUGS, ASSUMPTIONS
@@ -765,7 +765,7 @@ H5S_none_adjust_u(H5S_t H5_ATTR_UNUSED *space, const hsize_t H5_ATTR_UNUSED *off
     HDassert(space);
     HDassert(offset);
 
-    FUNC_LEAVE_NOAPI(FAIL)
+    FUNC_LEAVE_NOAPI(SUCCEED)
 }   /* H5S_none_adjust_u() */
 
 
@@ -898,7 +898,7 @@ H5Sselect_none(hid_t spaceid)
 
     /* Check args */
     if(NULL == (space = (H5S_t *)H5I_object_verify(spaceid, H5I_DATASPACE)))
-        HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a data space")
+        HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a dataspace")
 
     /* Change to "none" selection */
     if(H5S_select_none(space) < 0)

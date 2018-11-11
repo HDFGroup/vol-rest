@@ -518,6 +518,12 @@ static void test_attr_basic_read()
         int num_attrs = dataset.getNumAttrs();
         verify_val(num_attrs, 3, "DataSet::getNumAttrs", __LINE__, __FILE__);
 
+        // Verify the correct number of attributes another way
+        H5O_info_t oinfo;
+        HDmemset(&oinfo, 0, sizeof(oinfo));
+        dataset.getObjinfo(oinfo, H5O_INFO_NUM_ATTRS);
+        verify_val(oinfo.num_attrs, 3, "DataSet::getObjinfo", __LINE__, __FILE__);
+
         // Open an attribute for the dataset
         Attribute ds_attr=dataset.openAttribute(ATTR1_NAME);
 
@@ -538,7 +544,12 @@ static void test_attr_basic_read()
 
         // Verify the correct number of attributes
         num_attrs = group.getNumAttrs();
-        verify_val(num_attrs, 1, "H5Group::getNumAttrs", __LINE__, __FILE__);
+        verify_val(num_attrs, 1, "Group::getNumAttrs", __LINE__, __FILE__);
+
+        // Verify the correct number of attributes another way
+        HDmemset(&oinfo, 0, sizeof(oinfo));
+        group.getObjinfo(oinfo, H5O_INFO_NUM_ATTRS);
+        verify_val(oinfo.num_attrs, 1, "Group::getObjinfo", __LINE__, __FILE__);
 
         // Open an attribute for the group
         Attribute gr_attr = group.openAttribute(ATTR2_NAME);
@@ -657,6 +668,12 @@ static void test_attr_compound_read()
         // Verify the correct number of attributes
         int num_attrs = dataset.getNumAttrs();
         verify_val(num_attrs, 1, "DataSet::getNumAttrs", __LINE__, __FILE__);
+
+        // Verify the correct number of attributes another way
+        H5O_info_t oinfo;
+        HDmemset(&oinfo, 0, sizeof(oinfo));
+        dataset.getObjinfo(oinfo, H5O_INFO_NUM_ATTRS);
+        verify_val(oinfo.num_attrs, 1, "DataSet::getObjinfo", __LINE__, __FILE__);
 
         // Open 1st attribute for the dataset
         Attribute attr = dataset.openAttribute((unsigned)0);
@@ -1695,7 +1712,7 @@ static void test_attr_dense_create(FileCreatPropList& fcpl,
         // Close property list
         dcpl.close();
 
-        // H5O_is_attr_dense_test - un-usable
+        // H5O__is_attr_dense_test - un-usable
 
         // Add attributes, until just before converting to dense storage
         char attr_name[NAME_BUF_SIZE];
@@ -1710,7 +1727,7 @@ static void test_attr_dense_create(FileCreatPropList& fcpl,
             attr.write(PredType::NATIVE_UINT, &attr_num);
         } // end for
 
-        // H5O_is_attr_dense_test - un-usable
+        // H5O__is_attr_dense_test - un-usable
 
         { // Add one more attribute, to push into "dense" storage
 
@@ -1798,8 +1815,8 @@ static void test_attr_corder_create_basic(FileCreatPropList& fcpl,
         ds_space.close();
 
         // Check on dataset's attribute storage status.
-        // NOTE: Wrappers not available yet (H5O_is_attr_empty_test
-        // and H5O_is_attr_dense_test)
+        // NOTE: Wrappers not available yet (H5O__is_attr_empty_test
+        // and H5O__is_attr_dense_test)
 
         // Close dataset
         dataset.close();

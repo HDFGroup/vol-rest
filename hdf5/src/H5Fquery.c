@@ -281,8 +281,7 @@ H5F_get_nopen_objs(const H5F_t *f)
  *
  * Purpose:     Determines if a file ID exists for this file struct
  *
- * Return:      'file_id' on success/abort on failure (shouldn't fail)
- *
+ * Return:      TRUE/FALSE
  *-------------------------------------------------------------------------
  */
 hbool_t
@@ -294,7 +293,7 @@ H5F_file_id_exists(const H5F_t *f)
     HDassert(f);
 
     FUNC_LEAVE_NOAPI(f->id_exists)
-} /* end H5F_get_file_id() */
+} /* end H5F_file_id_exists() */
 
 
 /*-------------------------------------------------------------------------
@@ -719,7 +718,7 @@ H5F_sieve_buf_size(const H5F_t *f)
  *           to store the values.
  *
  * Return:  Success:    The "garbage collect references flag" is returned.
- *           Failure:    (should not happen)
+ *          Failure:    (should not happen)
  *
  * Programmer:  Quincey Koziol
  *              koziol@ncsa.uiuc.edu
@@ -1204,7 +1203,7 @@ H5F_get_first_alloc_dealloc(const H5F_t *f)
  *           Failure:    (can't happen)
  *-------------------------------------------------------------------------
  */
-hbool_t
+haddr_t
 H5F_get_eoa_pre_fsm_fsalloc(const H5F_t *f)
 {
     /* Use FUNC_ENTER_NOAPI_NOINIT_NOERR here to avoid performance issues */

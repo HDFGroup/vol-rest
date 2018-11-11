@@ -202,7 +202,7 @@
  GLOBAL VARIABLES
  COMMENTS, BUGS, ASSUMPTIONS
         The 'set' callback function may be useful to range check the value being
-    set for the property or may perform some tranformation/translation of the
+    set for the property or may perform some transformation/translation of the
     value set.  The 'get' callback would then [probably] reverse the
     transformation, etc.  A single 'get' or 'set' callback could handle
     multiple properties by performing different actions based on the property
@@ -242,7 +242,7 @@ H5Pregister1(hid_t cls_id, const char *name, size_t size, void *def_value,
 
     /* Create the new property list class */
     orig_pclass = pclass;
-    if((ret_value = H5P_register(&pclass, name, size, def_value, prp_create, prp_set, prp_get, NULL, NULL, prp_delete, prp_copy, NULL, prp_close)) < 0)
+    if((ret_value = H5P__register(&pclass, name, size, def_value, prp_create, prp_set, prp_get, NULL, NULL, prp_delete, prp_copy, NULL, prp_close)) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTREGISTER, FAIL, "unable to register property in class");
 
     /* Check if the property class changed and needs to be substituted in the ID */
@@ -255,7 +255,7 @@ H5Pregister1(hid_t cls_id, const char *name, size_t size, void *def_value,
         HDassert(old_pclass == orig_pclass);
 
         /* Close the previous class */
-        if(H5P_close_class(orig_pclass) < 0)
+        if(H5P__close_class(orig_pclass) < 0)
             HGOTO_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "unable to close original property class after substitution")
     } /* end if */
 
@@ -383,7 +383,7 @@ done:
  GLOBAL VARIABLES
  COMMENTS, BUGS, ASSUMPTIONS
         The 'set' callback function may be useful to range check the value being
-    set for the property or may perform some tranformation/translation of the
+    set for the property or may perform some transformation/translation of the
     value set.  The 'get' callback would then [probably] reverse the
     transformation, etc.  A single 'get' or 'set' callback could handle
     multiple properties by performing different actions based on the property

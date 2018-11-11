@@ -109,6 +109,7 @@ typedef pthread_once_t H5TS_once_t;
 extern H5TS_once_t H5TS_first_init_g;
 extern H5TS_key_t H5TS_errstk_key_g;
 extern H5TS_key_t H5TS_funcstk_key_g;
+extern H5TS_key_t H5TS_apictx_key_g;
 
 #if defined c_plusplus || defined __cplusplus
 extern      "C"
@@ -127,3 +128,4 @@ H5_DLL H5TS_thread_t H5TS_create_thread(void *(*func)(void *), H5TS_attr_t * att
 #endif	/* c_plusplus || __cplusplus */
 
 #endif	/* H5TSprivate_H_ */
+

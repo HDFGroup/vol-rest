@@ -1,6 +1,5 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Copyright by The HDF Group.                                               *
- * Copyright by the Board of Trustees of the University of Illinois.         *
  * All rights reserved.                                                      *
  *                                                                           *
  * This file is part of HDF5.  The full HDF5 copyright notice, including     *
@@ -20,7 +19,7 @@
  */
 
 #include "h5test.h"
-#include "H5VLnative.h"
+#include "H5VLnative_private.h"
 
 
 #define NATIVE_VOL_TEST_FILENAME        "native_vol_test"
@@ -136,17 +135,17 @@ test_vol_registration(void)
     TESTING("VOL registration");
 
     /* The test/fake VOL driver should not be registered at the start of the test */
-    if ((is_registered = H5VLis_registered(FAKE_VOL_NAME)) < 0)
+    if ((is_registered = H5VLis_driver_registered(FAKE_VOL_NAME)) < 0)
         FAIL_STACK_ERROR;
     if (is_registered > 0)
         FAIL_PUTS_ERROR("native VOL driver is inappropriately registered");
 
     /* Load a VOL interface */
-    if ((vol_id = H5VLregister(&fake_vol_g)) < 0)
+    if ((vol_id = H5VLregister_driver(&fake_vol_g)) < 0)
         FAIL_STACK_ERROR;
 
     /* The test/fake VOL driver should be registered now */
-    if ((is_registered = H5VLis_registered(FAKE_VOL_NAME)) < 0)
+    if ((is_registered = H5VLis_driver_registered(FAKE_VOL_NAME)) < 0)
         FAIL_STACK_ERROR;
     if (0 == is_registered)
         FAIL_PUTS_ERROR("native VOL driver is un-registered");
@@ -184,7 +183,7 @@ test_native_vol_init(void)
     TESTING("Native VOL driver initialization");
 
     /* The native VOL driver should always be registered */
-    if ((is_registered = H5VLis_registered(H5VL_NATIVE_NAME)) < 0)
+    if ((is_registered = H5VLis_driver_registered(H5VL_NATIVE_NAME)) < 0)
         FAIL_STACK_ERROR;
     if (0 == is_registered)
         FAIL_PUTS_ERROR("native VOL driver is un-registered");
@@ -703,11 +702,11 @@ test_basic_object_operation(void)
         TEST_ERROR;
 
     /* H5Oget_info */
-    if (H5Oget_info(fid, &object_info) < 0)
+    if (H5Oget_info2(fid, &object_info, H5O_INFO_ALL) < 0)
         TEST_ERROR;
 
     /* H5Oget_info_by_name */
-    if (H5Oget_info_by_name(fid, NATIVE_VOL_TEST_GROUP_NAME, &object_info, H5P_DEFAULT) < 0)
+    if (H5Oget_info_by_name2(fid, NATIVE_VOL_TEST_GROUP_NAME, &object_info, H5O_INFO_ALL, H5P_DEFAULT) < 0)
         TEST_ERROR;
 
     /* H5Oexists_by_name */

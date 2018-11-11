@@ -32,7 +32,7 @@
 typedef enum H5PL_type_t {
     H5PL_TYPE_ERROR         = -1,   /* Error                */
     H5PL_TYPE_FILTER        =  0,   /* Filter               */
-    H5PL_TYPE_VOL           =  1,   /* VOL plugin           */
+    H5PL_TYPE_VOL           =  1,   /* VOL driver           */
     H5PL_TYPE_NONE          =  2    /* This must be last!   */
 } H5PL_type_t;
 

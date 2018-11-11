@@ -113,22 +113,26 @@ size_t H5TOOLS_MALLOCSIZE = (128 * 1024 * 1024);
 #define PROGRAM_ERROR   {AT(); goto error;}
 
 /* A UD link traversal function.  Shouldn't actually be called. */
-static hid_t UD_traverse(H5_ATTR_UNUSED const char * link_name,
-        H5_ATTR_UNUSED hid_t cur_group, H5_ATTR_UNUSED const void * udata,
-        H5_ATTR_UNUSED size_t udata_size, H5_ATTR_UNUSED hid_t lapl_id) {
+static hid_t
+UD_traverse(H5_ATTR_UNUSED const char * link_name, H5_ATTR_UNUSED hid_t cur_group,
+     H5_ATTR_UNUSED const void * udata, H5_ATTR_UNUSED size_t udata_size, H5_ATTR_UNUSED hid_t lapl_id,
+     H5_ATTR_UNUSED hid_t dxpl_id)
+{
     return -1;
 }
-const H5L_class_t UD_link_class[1] = { {
-        H5L_LINK_CLASS_T_VERS, /* H5L_class_t version       */
-        (H5L_type_t) MY_LINKCLASS, /* Link type id number            */
-        "UD link class", /* name for debugging             */
-        NULL, /* Creation callback              */
-        NULL, /* Move/rename callback           */
-        NULL, /* Copy callback                  */
-        UD_traverse, /* The actual traversal function  */
-        NULL, /* Deletion callback              */
-        NULL /* Query callback                 */
-} };
+
+const H5L_class_t UD_link_class[1] = {{
+    H5L_LINK_CLASS_T_VERS,    /* H5L_class_t version       */
+        (H5L_type_t)MY_LINKCLASS,             /* Link type id number            */
+        "UD link class",          /* name for debugging             */
+        NULL,                     /* Creation callback              */
+        NULL,                     /* Move/rename callback           */
+        NULL,                     /* Copy callback                  */
+        UD_traverse,              /* The actual traversal function  */
+        NULL,                     /* Deletion callback              */
+        NULL                      /* Query callback                 */
+}};
+
 
 /*-------------------------------------------------------------------------
  * prototypes
@@ -4925,73 +4929,73 @@ test_objs_nocomparables(const char *fname1, const char *fname2)
     * Open file(s) to add objects
     *------------------------------------------------------------------------*/
     /* file1 */
-    if ((fid1 = H5Fopen(fname1, H5F_ACC_RDWR, H5P_DEFAULT)) < 0)
+    if((fid1 = H5Fopen(fname1, H5F_ACC_RDWR, H5P_DEFAULT)) < 0)
         PROGRAM_ERROR
 
     /* file2 */
-    if ((fid2 = H5Fopen(fname2, H5F_ACC_RDWR, H5P_DEFAULT)) < 0)
+    if((fid2 = H5Fopen(fname2, H5F_ACC_RDWR, H5P_DEFAULT)) < 0)
         PROGRAM_ERROR
 
     /*-----------------------------------------------------------------------
     * in file1 : add member objects
     *------------------------------------------------------------------------*/
     /* parent group */
-    if ((topgid1 = H5Gcreate2(fid1, "diffobjtypes", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0)
+    if((topgid1 = H5Gcreate2(fid1, "diffobjtypes", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0)
         PROGRAM_ERROR
 
     /* dataset */
-    if (write_dset(topgid1, 1, dims, "obj1", H5T_NATIVE_INT, data1) < 0)
+    if(write_dset(topgid1, 1, dims, "obj1", H5T_NATIVE_INT, data1) < 0)
         PROGRAM_ERROR
 
     /* group */
-    if ((gid1 = H5Gcreate2(topgid1, "obj2", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0)
+    if((gid1 = H5Gcreate2(topgid1, "obj2", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0)
         PROGRAM_ERROR
 
     /* committed type */
-    if ((tid1 = H5Tcopy(H5T_NATIVE_INT)) < 0)
+    if((tid1 = H5Tcopy(H5T_NATIVE_INT)) < 0)
         PROGRAM_ERROR
-    if (H5Tcommit2(topgid1, "obj3", tid1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) < 0)
+    if(H5Tcommit2(topgid1, "obj3", tid1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) < 0)
         PROGRAM_ERROR
 
     /*-----------------------------------------------------------------------
     * in file2 : add member objects
     *------------------------------------------------------------------------*/
     /* parent group */
-    if ((topgid2 = H5Gcreate2(fid2, "diffobjtypes", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0)
+    if((topgid2 = H5Gcreate2(fid2, "diffobjtypes", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0)
         PROGRAM_ERROR
 
     /* group */
-    if ((gid2 = H5Gcreate2(topgid2, "obj1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0)
+    if((gid2 = H5Gcreate2(topgid2, "obj1", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0)
         PROGRAM_ERROR
 
     /* committed type */
-    if ((tid2 = H5Tcopy(H5T_NATIVE_INT)) < 0)
+    if((tid2 = H5Tcopy(H5T_NATIVE_INT)) < 0)
         PROGRAM_ERROR
-    if (H5Tcommit2(topgid2, "obj2", tid2, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) < 0)
+    if(H5Tcommit2(topgid2, "obj2", tid2, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) < 0)
         PROGRAM_ERROR
 
     /* dataset */
-    if (write_dset(topgid2, 1, dims, "obj3", H5T_NATIVE_INT, data2) < 0)
+    if(write_dset(topgid2, 1, dims, "obj3", H5T_NATIVE_INT, data2) < 0)
         PROGRAM_ERROR
 
     /*-----------------------------------------------------------------------
     * Close IDs
     *-----------------------------------------------------------------------*/
-    if (H5Fclose(fid1) < 0)
+    if(H5Fclose(fid1) < 0)
         PROGRAM_ERROR
-    if (H5Fclose(fid2) < 0)
+    if(H5Fclose(fid2) < 0)
         PROGRAM_ERROR
-    if (H5Gclose(topgid1) < 0)
+    if(H5Gclose(topgid1) < 0)
         PROGRAM_ERROR
-    if (H5Gclose(topgid2) < 0)
+    if(H5Gclose(topgid2) < 0)
         PROGRAM_ERROR
-    if (H5Gclose(gid1) < 0)
+    if(H5Gclose(gid1) < 0)
         PROGRAM_ERROR
-    if (H5Gclose(gid2) < 0)
+    if(H5Gclose(gid2) < 0)
         PROGRAM_ERROR
-    if (H5Tclose(tid1) < 0)
+    if(H5Tclose(tid1) < 0)
         PROGRAM_ERROR
-    if (H5Tclose(tid2) < 0)
+    if(H5Tclose(tid2) < 0)
         PROGRAM_ERROR
 
     return;
@@ -8070,23 +8074,22 @@ write_dset(hid_t loc_id, int rank, hsize_t *dims, const char *name, hid_t tid, v
     hid_t sid = -1;
 
     /* create a space  */
-    if ((sid = H5Screate_simple(rank, dims, NULL)) < 0)
+    if((sid = H5Screate_simple(rank, dims, NULL)) < 0)
         PROGRAM_ERROR
 
     /* create the dataset */
-    if ((did = H5Dcreate2(loc_id, name, tid, sid, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0)
+    if((did = H5Dcreate2(loc_id, name, tid, sid, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0)
         PROGRAM_ERROR
 
     /* write */
-    if (buf) {
-        if (H5Dwrite(did, tid, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf) < 0)
+    if(buf)
+        if(H5Dwrite(did, tid, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf) < 0)
             PROGRAM_ERROR
-    }
 
     /* close */
-    if (H5Dclose(did) < 0)
+    if(H5Dclose(did) < 0)
         PROGRAM_ERROR
-    if (H5Sclose(sid) < 0)
+    if(H5Sclose(sid) < 0)
         PROGRAM_ERROR
 
     return SUCCEED;

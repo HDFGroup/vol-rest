@@ -300,7 +300,7 @@ H5HG__cache_heap_deserialize(const void *_image, size_t len, void *_udata,
             image += heap->obj[0].size;
         } /* end if */
         else {
-            size_t need;
+            size_t need = 0;
             unsigned idx;
             uint8_t *begin = image;
 
@@ -374,7 +374,7 @@ H5HG__cache_heap_deserialize(const void *_image, size_t len, void *_udata,
 
 done:
     if(!ret_value && heap)
-        if(H5HG_free(heap) < 0)
+        if(H5HG__free(heap) < 0)
             HDONE_ERROR(H5E_HEAP, H5E_CANTFREE, NULL, "unable to destroy global heap collection")
 
     FUNC_LEAVE_NOAPI(ret_value)
@@ -420,7 +420,7 @@ H5HG__cache_heap_image_len(const void *_thing, size_t *image_len)
  *
  * Purpose:	Given an appropriately sized buffer and an instance of 
  *		H5HG_heap_t, serialize the global heap for writing to file,
- *		and copy the serialized verion into the buffer.
+ *		and copy the serialized version into the buffer.
  *
  *
  * Return:      Success:        SUCCEED
@@ -485,7 +485,7 @@ H5HG__cache_heap_free_icr(void *_thing)
     HDassert(heap->cache_info.type == H5AC_GHEAP);
 
     /* Destroy global heap collection */
-    if(H5HG_free(heap) < 0)
+    if(H5HG__free(heap) < 0)
         HGOTO_ERROR(H5E_HEAP, H5E_CANTFREE, FAIL, "unable to destroy global heap collection")
 
 done:

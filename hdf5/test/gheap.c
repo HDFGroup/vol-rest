@@ -15,12 +15,14 @@
  * Programmer:  Robb Matzke <matzke@llnl.gov>
  *              Tuesday, March 31, 1998
  *
- * Purpose:	Tests the global heap.  The global heap is the set of all
- *		collections but the collections are not related to one
- *		another by anything that appears in the file format.
+ * Purpose:     Tests the global heap.  The global heap is the set of all
+ *              collections but the collections are not related to one
+ *              another by anything that appears in the file format.
  */
 #include "h5test.h"
 #include "H5ACprivate.h"
+#include "H5CXprivate.h"        /* API Contexts                         */
+#include "H5Eprivate.h"
 #include "H5Fprivate.h"
 #include "H5Gprivate.h"
 #include "H5HGprivate.h"
@@ -57,14 +59,14 @@ const char *FILENAME[] = {
 
 
 /*-------------------------------------------------------------------------
- * Function:	test_1
+ * Function:    test_1
  *
- * Purpose:	Writes a sequence of objects to the global heap where each
- *		object is larger than the one before.
+ * Purpose:     Writes a sequence of objects to the global heap where each
+ *              object is larger than the one before.
  *
- * Return:	Success:	0
+ * Return:      Success:    0
  *
- *		Failure:	number of errors
+ *              Failure:    number of errors
  *
  * Programmer:	Robb Matzke
  *              Tuesday, March 31, 1998
@@ -74,16 +76,16 @@ const char *FILENAME[] = {
 static int
 test_1 (hid_t fapl)
 {
-    hid_t	file = -1;
-    H5F_t 	*f = NULL;
-    H5HG_t	*obj = NULL;
-    uint8_t	out[GHEAP_TEST_NOBJS];
-    uint8_t	in[GHEAP_TEST_NOBJS];
-    size_t	u;
-    size_t	size;
-    herr_t	status;
-    int		nerrors = 0;
-    char	filename[1024];
+    hid_t       file = H5I_INVALID_HID;
+    H5F_t       *f = NULL;
+    H5HG_t      *obj = NULL;
+    uint8_t     out[GHEAP_TEST_NOBJS];
+    uint8_t     in[GHEAP_TEST_NOBJS];
+    size_t      u;
+    size_t      size;
+    herr_t      status;
+    int         nerrors = 0;
+    char        filename[1024];
 
     TESTING("monotonically increasing lengths");
 
@@ -110,11 +112,11 @@ test_1 (hid_t fapl)
         size = u + 1;
         HDmemset(out, (int)('A' + u % 26), size);
         H5Eclear2(H5E_DEFAULT);
-        status = H5HG_insert(f, H5AC_ind_read_dxpl_id, size, out, obj + u);
+        status = H5HG_insert(f, size, out, obj + u);
         if(status < 0) {
             H5_FAILED();
             HDputs("    Unable to insert object into global heap");
-	        nerrors++;
+            nerrors++;
         }
         else if(u && H5F_addr_gt(obj[u - 1].addr, obj[u].addr)) {
             H5_FAILED();
@@ -130,7 +132,7 @@ test_1 (hid_t fapl)
         size = u + 1;
         HDmemset(out, (int)('A' + u % 26), size);
         H5Eclear2(H5E_DEFAULT);
-        if(NULL == H5HG_read(f, H5AC_ind_read_dxpl_id, obj + u, in, NULL)) {
+        if(NULL == H5HG_read(f, obj + u, in, NULL)) {
             H5_FAILED();
             HDputs("    Unable to read object");
             nerrors++;
@@ -165,14 +167,14 @@ error:
 
 
 /*-------------------------------------------------------------------------
- * Function:	test_2
+ * Function:    test_2
  *
- * Purpose:	Writes a sequence of objects to the global heap where each
- *		object is smaller than the one before.
+ * Purpose:     Writes a sequence of objects to the global heap where each
+ *              object is smaller than the one before.
  *
- * Return:	Success:	0
+ * Return:      Success:    0
  *
- *		Failure:        number of errors
+ *              Failure:     number of errors
  *
  * Programmer:	Robb Matzke
  *              Tuesday, March 31, 1998
@@ -182,15 +184,15 @@ error:
 static int
 test_2 (hid_t fapl)
 {
-    hid_t	file = -1;
-    H5F_t 	*f = NULL;
-    H5HG_t	*obj = NULL;
-    uint8_t	out[GHEAP_TEST_NOBJS];
-    uint8_t	in[GHEAP_TEST_NOBJS];
-    size_t	u;
-    size_t	size;
-    int		nerrors = 0;
-    char	filename[1024];
+    hid_t       file = H5I_INVALID_HID;
+    H5F_t       *f = NULL;
+    H5HG_t      *obj = NULL;
+    uint8_t     out[GHEAP_TEST_NOBJS];
+    uint8_t     in[GHEAP_TEST_NOBJS];
+    size_t      u;
+    size_t      size;
+    int         nerrors = 0;
+    char        filename[1024];
 
     TESTING("monotonically decreasing lengths");
 
@@ -215,7 +217,7 @@ test_2 (hid_t fapl)
         size = GHEAP_TEST_NOBJS - u;
         HDmemset(out, (int)('A' + u % 26), size);
         H5Eclear2(H5E_DEFAULT);
-        if (H5HG_insert (f, H5AC_ind_read_dxpl_id, size, out, obj + u) < 0) {
+        if(H5HG_insert(f, size, out, obj + u) < 0) {
             H5_FAILED();
             HDputs("    Unable to insert object into global heap");
             nerrors++;
@@ -229,7 +231,7 @@ test_2 (hid_t fapl)
         size = GHEAP_TEST_NOBJS - u;
         HDmemset(out, (int)('A' + u % 26), size);
         H5Eclear2(H5E_DEFAULT);
-        if (NULL==H5HG_read (f, H5AC_ind_read_dxpl_id, obj + u, in, NULL)) {
+        if(NULL == H5HG_read(f, obj + u, in, NULL)) {
             H5_FAILED();
             HDputs("    Unable to read object");
             nerrors++;
@@ -245,9 +247,9 @@ test_2 (hid_t fapl)
     HDfree(obj);
     obj = NULL;
 
-    if (H5Fclose(file)<0)
+    if(H5Fclose(file) < 0)
         goto error;
-    if (nerrors)
+    if(nerrors)
         goto error;
 
     PASSED();
@@ -264,14 +266,14 @@ test_2 (hid_t fapl)
 
 
 /*-------------------------------------------------------------------------
- * Function:	test_3
+ * Function:    test_3
  *
- * Purpose:	Creates a few global heap objects and then removes them all.
- *		The collection should also be removed.
+ * Purpose:     Creates a few global heap objects and then removes them all.
+ *              The collection should also be removed.
  *
- * Return:	Success:	0
+ * Return:      Success:    0
  *
- *		Failure:	number of errors
+ *              Failure:    number of errors
  *
  * Programmer:	Robb Matzke
  *              Tuesday, March 31, 1998
@@ -281,15 +283,15 @@ test_2 (hid_t fapl)
 static int
 test_3 (hid_t fapl)
 {
-    hid_t	file = -1;
-    H5F_t 	*f = NULL;
-    H5HG_t	*obj = NULL;
-    uint8_t	out[GHEAP_TEST_NOBJS];
-    size_t	u;
-    size_t	size;
-    herr_t	status;
-    int		nerrors = 0;
-    char	filename[1024];
+    hid_t       file = H5I_INVALID_HID;
+    H5F_t       *f = NULL;
+    H5HG_t      *obj = NULL;
+    uint8_t     out[GHEAP_TEST_NOBJS];
+    size_t      u;
+    size_t      size;
+    herr_t      status;
+    int         nerrors = 0;
+    char        filename[1024];
 
     TESTING("complete object removal");
 
@@ -312,7 +314,7 @@ test_3 (hid_t fapl)
         size = u % 30 + 100;
         HDmemset(out, (int)('A' + u % 26), size);
         H5Eclear2(H5E_DEFAULT);
-        status = H5HG_insert (f, H5AC_ind_read_dxpl_id, size, out, obj + u);
+        status = H5HG_insert(f, size, out, obj + u);
         if (status<0) {
             H5_FAILED();
             HDputs("    Unable to insert object into global heap");
@@ -322,7 +324,7 @@ test_3 (hid_t fapl)
 
     /* Remove everything */
     for(u = 0; u < GHEAP_TEST_NOBJS; u++) {
-        status = H5HG_remove (f, H5AC_ind_read_dxpl_id, obj + u);
+        status = H5HG_remove(f, obj + u);
         if (status<0) {
             H5_FAILED();
             HDputs("    Unable to remove object");
@@ -334,9 +336,9 @@ test_3 (hid_t fapl)
     HDfree(obj);
     obj = NULL;
 
-    if (H5Fclose(file)<0)
+    if(H5Fclose(file) < 0)
         goto error;
-    if (nerrors)
+    if(nerrors)
         goto error;
 
     PASSED();
@@ -353,15 +355,15 @@ test_3 (hid_t fapl)
 
 
 /*-------------------------------------------------------------------------
- * Function:	test_4
+ * Function:    test_4
  *
- * Purpose:	Tests the H5HG_remove() feature by writing lots of objects
- *		and occassionally removing some.  When we're done they're all
- *		removed.
+ * Purpose:     Tests the H5HG_remove() feature by writing lots of objects
+ *              and occassionally removing some.  When we're done they're all
+ *              removed.
  *
- * Return:	Success:	0
+ * Return:      Success:    0
  *
- *		Failure:	number of errors
+ *              Failure:    number of errors
  *
  * Programmer:	Robb Matzke
  *              Tuesday, March 31, 1998
@@ -371,15 +373,15 @@ test_3 (hid_t fapl)
 static int
 test_4 (hid_t fapl)
 {
-    hid_t	file = -1;
-    H5F_t 	*f = NULL;
-    H5HG_t	*obj = NULL;
-    uint8_t	out[GHEAP_TEST_NOBJS];
-    size_t	u;
-    size_t	size;
-    herr_t	status;
-    int		nerrors = 0;
-    char	filename[1024];
+    hid_t       file = H5I_INVALID_HID;
+    H5F_t       *f = NULL;
+    H5HG_t      *obj = NULL;
+    uint8_t     out[GHEAP_TEST_NOBJS];
+    size_t      u;
+    size_t      size;
+    herr_t      status;
+    int         nerrors = 0;
+    char        filename[1024];
 
     TESTING("partial object removal");
 
@@ -402,21 +404,20 @@ test_4 (hid_t fapl)
         size = u % 30 + 100;
         HDmemset(out, (int)('A' + u % 26), size);
         H5Eclear2(H5E_DEFAULT);
-        status = H5HG_insert (f, H5AC_ind_read_dxpl_id, size, out, obj + u);
+        status = H5HG_insert(f, size, out, obj + u);
         if (status<0) {
             H5_FAILED();
             HDputs("    Unable to insert object into global heap");
             nerrors++;
         }
 
-        /*
-         * Remove every third one beginning with the second, but after the
+        /* Remove every third one beginning with the second, but after the
          * next one has already been inserted.  That is, insert A, B, C;
          * remove B, insert D, E, F; remove E; etc.
          */
         if(1 == (u % 3)) {
             H5Eclear2(H5E_DEFAULT);
-            status = H5HG_remove (f, H5AC_ind_read_dxpl_id, obj + u - 1);
+            status = H5HG_remove(f, obj + u - 1);
             if (status<0) {
                 H5_FAILED();
                 HDputs("    Unable to remove object");
@@ -430,9 +431,9 @@ test_4 (hid_t fapl)
     HDfree(obj);
     obj = NULL;
 
-    if (H5Fclose(file)<0)
+    if(H5Fclose(file) < 0)
         goto error;
-    if (nerrors)
+    if(nerrors)
         goto error;
 
     PASSED();
@@ -449,16 +450,16 @@ test_4 (hid_t fapl)
 
 
 /*-------------------------------------------------------------------------
- * Function:	test_ooo_indices
+ * Function:    test_ooo_indices
  *
- * Purpose:	Tests that indices can be stored out of order.  This can
+ * Purpose:     Tests that indices can be stored out of order.  This can
  *              happen when the indices "wrap around" due to many
  *              insertions and deletions (for example, from rewriting a
  *              VL dataset).
  *
- * Return:	Success:	0
+ * Return:      Success:    0
  *
- *		Failure:	number of errors
+ *              Failure:    number of errors
  *
  * Programmer:	Neil Fortner
  *              Monday, October 26, 2009
@@ -468,13 +469,13 @@ test_4 (hid_t fapl)
 static int
 test_ooo_indices(hid_t fapl)
 {
-    hid_t	file = -1;
-    H5F_t 	*f = NULL;
-    unsigned	i, j;
-    H5HG_t	*obj = NULL;
-    herr_t	status;
-    int		nerrors=0;
-    char	filename[1024];
+    hid_t       file = H5I_INVALID_HID;
+    H5F_t       *f = NULL;
+    unsigned    i, j;
+    H5HG_t      *obj = NULL;
+    herr_t      status;
+    int         nerrors = 0;
+    char        filename[1024];
 
     TESTING("out of order indices");
 
@@ -494,14 +495,14 @@ test_ooo_indices(hid_t fapl)
     /* Alternately insert 1000 entries and remove the previous group of 1000
      * entries, until the indices wrap around.
      */
-    for(i=0; i<66; i++) {
+    for(i = 0; i < 66; i++) {
         /* Insert 1000 entries.  The index into the obj array will alternate up
          * and down by 1000 so the previous set of insertions is preserved and
          * can be deleted.
          */
         for(j=1000*((~i&1)); j<1000*((~i&1)+1); j++) {
             H5Eclear2(H5E_DEFAULT);
-            status = H5HG_insert(f, H5AC_ind_read_dxpl_id, sizeof(j), &j, &obj[j]);
+            status = H5HG_insert(f, sizeof(j), &j, &obj[j]);
             if (status<0)
                 GHEAP_REPEATED_ERR("    Unable to insert object into global heap")
 
@@ -514,7 +515,7 @@ test_ooo_indices(hid_t fapl)
         if(i>0)
             for(j=1000*(i&1); j<1000*((i&1)+1); j++) {
                 H5Eclear2(H5E_DEFAULT);
-                status = H5HG_remove(f, H5AC_ind_read_dxpl_id, &obj[j]);
+                status = H5HG_remove(f, &obj[j]);
                 if (status<0)
                     GHEAP_REPEATED_ERR("    Unable to remove object from global heap");
             }
@@ -525,7 +526,7 @@ test_ooo_indices(hid_t fapl)
     HDassert(obj[535].idx == 1);
 
     /* Reopen the file */
-    if (H5Fclose(file)<0)
+    if (H5Fclose(file) < 0)
         goto error;
     if((file = H5Fopen(filename, H5F_ACC_RDWR, fapl)) < 0)
         goto error;
@@ -537,7 +538,7 @@ test_ooo_indices(hid_t fapl)
 
     /* Read the objects to make sure the heap is still readable */
     for(i=0; i<1000; i++) {
-        if(NULL == H5HG_read(f, H5AC_ind_read_dxpl_id, &obj[i], &j, NULL))
+        if(NULL == H5HG_read(f, &obj[i], &j, NULL))
             goto error;
         if(i != j) {
             H5_FAILED();
@@ -546,12 +547,13 @@ test_ooo_indices(hid_t fapl)
         }
     }
 
-    if (H5Fclose(file)<0)
+    if(H5Fclose(file) < 0)
         goto error;
-    if (nerrors)
+    if(nerrors)
         goto error;
     HDfree(obj);
     obj = NULL;
+
     PASSED();
     return 0;
 
@@ -577,12 +579,17 @@ test_ooo_indices(hid_t fapl)
 int
 main (void)
 {
-    int		nerrors=0;
+    int		nerrors = 0;
     hid_t	fapl_id = H5I_INVALID_HID;
+    hbool_t     api_ctx_pushed = FALSE;             /* Whether API context pushed */
 
     h5_reset();
     if ((fapl_id = h5_fileaccess()) < 0)
         goto error;
+
+    /* Push API context */
+    if(H5CX_push() < 0) FAIL_STACK_ERROR
+    api_ctx_pushed = TRUE;
 
     nerrors += test_1(fapl_id);
     nerrors += test_2(fapl_id);
@@ -597,6 +604,11 @@ main (void)
         goto error;
 
     HDputs("All global heap tests passed.");
+
+    /* Pop API context */
+    if(api_ctx_pushed && H5CX_pop() < 0) FAIL_STACK_ERROR
+    api_ctx_pushed = FALSE;
+
     h5_cleanup(FILENAME, fapl_id);
     HDexit(EXIT_SUCCESS);
 
@@ -604,6 +616,8 @@ main (void)
     H5E_BEGIN_TRY {
         H5Pclose(fapl_id);
     } H5E_END_TRY;
+
+    if(api_ctx_pushed) H5CX_pop();
 
     HDputs("*** TESTS FAILED ***");
     HDexit(EXIT_FAILURE);

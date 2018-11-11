@@ -31,6 +31,7 @@
 /* Headers */
 /***********/
 #include "H5private.h"          /* Generic Functions                        */
+#include "H5CXprivate.h"        /* API Contexts                             */
 #include "H5Eprivate.h"         /* Error handling                           */
 #include "H5Fprivate.h"         /* File access                              */
 #include "H5Iprivate.h"         /* IDs                                      */
@@ -72,7 +73,7 @@
 /* Local Variables */
 /*******************/
 
-
+
 /*-------------------------------------------------------------------------
  * Function:    H5Oopen
  *
@@ -91,33 +92,35 @@
  *
  *              Failure:    H5I_INVALID_HID
  *
+ * Programmer:	James Laird
+ *		July 14 2006
+ *
  *-------------------------------------------------------------------------
  */
 hid_t
 H5Oopen(hid_t loc_id, const char *name, hid_t lapl_id)
 {
-    H5VL_object_t  *obj         = NULL;                     /* Object token of loc_id */
+    H5VL_object_t  *vol_obj         = NULL;                     /* Object token of loc_id */
     H5I_type_t      opened_type;
     void           *opened_obj  = NULL;
     H5VL_loc_params_t loc_params;
-    hid_t           dxpl_id     = H5AC_ind_read_dxpl_id;    /* dxpl used by library */
     hid_t           ret_value   = H5I_INVALID_HID;
 
     FUNC_ENTER_API(H5I_INVALID_HID)
     H5TRACE3("i", "i*si", loc_id, name, lapl_id);
 
     /* Check args */
-    if (!name)
+    if(!name)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, H5I_INVALID_HID, "name parameter cannot be NULL")
-    if (!*name)
+    if(!*name)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, H5I_INVALID_HID, "name parameter cannot be an empty string")
 
-    /* Verify access property list and get correct dxpl */
-    if (H5P_verify_apl_and_dxpl(&lapl_id, H5P_CLS_LACC, &dxpl_id, loc_id, FALSE) < 0)
-        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, H5I_INVALID_HID, "can't set access and transfer property lists")
+    /* Verify access property list and set up collective metadata if appropriate */
+    if(H5CX_set_apl(&lapl_id, H5P_CLS_LACC, loc_id, FALSE) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, H5I_INVALID_HID, "can't set access property list info")
 
     /* Get the location object */
-    if (NULL == (obj = (H5VL_object_t *)H5I_object(loc_id)))
+    if(NULL == (vol_obj = (H5VL_object_t *)H5I_object(loc_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, H5I_INVALID_HID, "invalid location identifier")
 
     /* Set location struct fields */
@@ -126,13 +129,13 @@ H5Oopen(hid_t loc_id, const char *name, hid_t lapl_id)
     loc_params.loc_data.loc_by_name.lapl_id = lapl_id;
     loc_params.obj_type                     = H5I_get_type(loc_id);
 
-    /* Open the object through the VOL */
-    if (NULL == (opened_obj = H5VL_object_open(obj->vol_obj, loc_params, obj->vol_info->vol_cls, 
-                                              &opened_type, dxpl_id, H5_REQUEST_NULL)))
+    /* Open the object */
+    if(NULL == (opened_obj = H5VL_object_open(vol_obj->data, loc_params, vol_obj->driver->cls, 
+                                              &opened_type, H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL)))
         HGOTO_ERROR(H5E_OHDR, H5E_CANTOPENOBJ, H5I_INVALID_HID, "unable to open object")
 
     /* Get an atom for the object */
-    if ((ret_value = H5VL_register_id(opened_type, opened_obj, obj->vol_info, TRUE)) < 0)
+    if((ret_value = H5VL_register(opened_type, opened_obj, vol_obj->driver, TRUE)) < 0)
         HGOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, H5I_INVALID_HID, "unable to atomize object handle")
 done:
     FUNC_LEAVE_API(ret_value)
@@ -166,11 +169,10 @@ hid_t
 H5Oopen_by_idx(hid_t loc_id, const char *group_name, H5_index_t idx_type,
     H5_iter_order_t order, hsize_t n, hid_t lapl_id)
 {
-    H5VL_object_t *obj = NULL;        /* object token of loc_id */
+    H5VL_object_t *vol_obj = NULL;        /* object token of loc_id */
     H5I_type_t opened_type;
     void *opened_obj = NULL;
     H5VL_loc_params_t loc_params;
-    hid_t dxpl_id = H5AC_ind_read_dxpl_id; /* dxpl used by library */
     hid_t ret_value = H5I_INVALID_HID;
 
     FUNC_ENTER_API(H5I_INVALID_HID)
@@ -184,9 +186,9 @@ H5Oopen_by_idx(hid_t loc_id, const char *group_name, H5_index_t idx_type,
     if(order <= H5_ITER_UNKNOWN || order >= H5_ITER_N)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, H5I_INVALID_HID, "invalid iteration order specified")
 
-    /* Verify access property list and get correct dxpl */
-    if(H5P_verify_apl_and_dxpl(&lapl_id, H5P_CLS_LACC, &dxpl_id, loc_id, FALSE) < 0)
-        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, H5I_INVALID_HID, "can't set access and transfer property lists")
+    /* Verify access property list and set up collective metadata if appropriate */
+    if(H5CX_set_apl(&lapl_id, H5P_CLS_LACC, loc_id, FALSE) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, H5I_INVALID_HID, "can't set access property list info")
 
     loc_params.type = H5VL_OBJECT_BY_IDX;
     loc_params.loc_data.loc_by_idx.name = group_name;
@@ -197,15 +199,15 @@ H5Oopen_by_idx(hid_t loc_id, const char *group_name, H5_index_t idx_type,
     loc_params.obj_type = H5I_get_type(loc_id);
 
     /* get the location object */
-    if(NULL == (obj = (H5VL_object_t *)H5I_object(loc_id)))
+    if(NULL == (vol_obj = (H5VL_object_t *)H5I_object(loc_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, H5I_INVALID_HID, "invalid location identifier")
 
-    /* Open the object through the VOL */
-    if(NULL == (opened_obj = H5VL_object_open(obj->vol_obj, loc_params, obj->vol_info->vol_cls, 
-                                              &opened_type, dxpl_id, H5_REQUEST_NULL)))
+    /* Open the object */
+    if(NULL == (opened_obj = H5VL_object_open(vol_obj->data, loc_params, vol_obj->driver->cls, 
+                                              &opened_type, H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL)))
         HGOTO_ERROR(H5E_OHDR, H5E_CANTOPENOBJ, H5I_INVALID_HID, "unable to open object")
 
-    if((ret_value = H5VL_register_id(opened_type, opened_obj, obj->vol_info, TRUE)) < 0)
+    if((ret_value = H5VL_register(opened_type, opened_obj, vol_obj->driver, TRUE)) < 0)
         HGOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, H5I_INVALID_HID, "unable to atomize object handle")
 
 done:
@@ -251,11 +253,11 @@ done:
 hid_t
 H5Oopen_by_addr(hid_t loc_id, haddr_t addr)
 {
-    H5VL_object_t *obj = NULL;        /* object token of loc_id */
+    H5VL_object_t *vol_obj = NULL;        /* object token of loc_id */
     H5I_type_t opened_type;
     void *opened_obj = NULL;
     H5VL_loc_params_t loc_params;
-    hid_t ret_value = H5I_INVALID_HID;
+    hid_t       ret_value = H5I_INVALID_HID;	/* Return value */
 
     FUNC_ENTER_API(H5I_INVALID_HID)
     H5TRACE2("i", "ia", loc_id, addr);
@@ -264,20 +266,20 @@ H5Oopen_by_addr(hid_t loc_id, haddr_t addr)
     loc_params.loc_data.loc_by_addr.addr = addr;
     loc_params.obj_type = H5I_get_type(loc_id);
 
-    /* get the location object */
-    if(NULL == (obj = (H5VL_object_t *)H5I_object(loc_id)))
+    /* Get the location object */
+    if(NULL == (vol_obj = (H5VL_object_t *)H5I_object(loc_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, H5I_INVALID_HID, "invalid location identifier")
 
-    /* Open the object through the VOL */
-    if(NULL == (opened_obj = H5VL_object_open(obj->vol_obj, loc_params, obj->vol_info->vol_cls, &opened_type, 
-                                              H5AC_ind_read_dxpl_id, H5_REQUEST_NULL)))
+    /* Open the object */
+    if(NULL == (opened_obj = H5VL_object_open(vol_obj->data, loc_params, vol_obj->driver->cls, &opened_type, 
+                                              H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL)))
         HGOTO_ERROR(H5E_OHDR, H5E_CANTOPENOBJ, H5I_INVALID_HID, "unable to open object")
 
-    if((ret_value = H5VL_register_id(opened_type, opened_obj, obj->vol_info, TRUE)) < 0)
+    /* Register the dataset ID */
+    if((ret_value = H5VL_register(opened_type, opened_obj, vol_obj->driver, TRUE)) < 0)
         HGOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, H5I_INVALID_HID, "unable to atomize object handle")
 
 done:
-
     FUNC_LEAVE_API(ret_value)
 } /* end H5Oopen_by_addr() */
 
@@ -307,12 +309,11 @@ herr_t
 H5Olink(hid_t obj_id, hid_t new_loc_id, const char *new_name, hid_t lcpl_id,
     hid_t lapl_id)
 {
-    H5VL_object_t    *obj1 = NULL;        /* object token of obj_id */
-    H5VL_object_t    *obj2 = NULL;        /* object token of new_loc_id */
+    H5VL_object_t    *vol_obj1 = NULL;        /* object token of obj_id */
+    H5VL_object_t    *vol_obj2 = NULL;        /* object token of new_loc_id */
     H5VL_loc_params_t loc_params1;
     H5VL_loc_params_t loc_params2;
     H5P_genplist_t *plist;      /* Property list pointer */
-    hid_t dxpl_id = H5AC_ind_read_dxpl_id; /* dxpl used by library */
     herr_t         ret_value = SUCCEED;       /* Return value */
 
     FUNC_ENTER_API(FAIL)
@@ -335,9 +336,9 @@ H5Olink(hid_t obj_id, hid_t new_loc_id, const char *new_name, hid_t lcpl_id,
     if(H5P_DEFAULT == lcpl_id)
         lcpl_id = H5P_LINK_CREATE_DEFAULT;
 
-    /* Verify access property list and get correct dxpl */
-    if(H5P_verify_apl_and_dxpl(&lapl_id, H5P_CLS_LACC, &dxpl_id, obj_id, TRUE) < 0)
-        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set access and transfer property lists")
+    /* Verify access property list and set up collective metadata if appropriate */
+    if(H5CX_set_apl(&lapl_id, H5P_CLS_LACC, obj_id, TRUE) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set access property list info")
 
     loc_params1.type = H5VL_OBJECT_BY_SELF;
     loc_params1.obj_type = H5I_get_type(obj_id);
@@ -349,17 +350,17 @@ H5Olink(hid_t obj_id, hid_t new_loc_id, const char *new_name, hid_t lcpl_id,
 
     if(H5L_SAME_LOC != obj_id) {
         /* get the location object */
-        if(NULL == (obj1 = H5VL_get_object(obj_id)))
+        if(NULL == (vol_obj1 = H5VL_vol_object(obj_id)))
             HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid location identifier")
     }
     if(H5L_SAME_LOC != new_loc_id) {
         /* get the location object */
-        if(NULL == (obj2 = H5VL_get_object(new_loc_id)))
+        if(NULL == (vol_obj2 = H5VL_vol_object(new_loc_id)))
             HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid location identifier")
     }
     /* Make sure that the VOL plugins are the same */
-    if(obj1 && obj2) {
-        if (obj1->vol_info->vol_cls->value != obj2->vol_info->vol_cls->value)
+    if(vol_obj1 && vol_obj2) {
+        if (vol_obj1->driver->cls->value != vol_obj2->driver->cls->value)
             HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "Objects are accessed through different VOL plugins and can't be linked")
     }
 
@@ -368,16 +369,16 @@ H5Olink(hid_t obj_id, hid_t new_loc_id, const char *new_name, hid_t lcpl_id,
         HGOTO_ERROR(H5E_ATOM, H5E_BADATOM, FAIL, "can't find object for ID")
 
     /* set creation properties */
-    if(H5P_set(plist, H5VL_PROP_LINK_TARGET, &obj1->vol_obj) < 0)
+    if(H5P_set(plist, H5VL_PROP_LINK_TARGET, &vol_obj1->data) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't set property value for target id")
     if(H5P_set(plist, H5VL_PROP_LINK_TARGET_LOC_PARAMS, &loc_params1) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't set property value for target id")
 
-    /* Create the link through the VOL */
-    if(H5VL_link_create(H5VL_LINK_CREATE_HARD, obj2->vol_obj, loc_params2, 
-                        (obj1!=NULL ? obj1->vol_info->vol_cls : obj2->vol_info->vol_cls),
-                        lcpl_id, lapl_id, dxpl_id, H5_REQUEST_NULL) < 0)
-        HGOTO_ERROR(H5E_SYM, H5E_CANTINIT, FAIL, "unable to create link")
+    /* Create a link to the object */
+    if(H5VL_link_create(H5VL_LINK_CREATE_HARD, vol_obj2->data, loc_params2, 
+                        (vol_obj1 != NULL ? vol_obj1->driver->cls : vol_obj2->driver->cls),
+                        lcpl_id, lapl_id, H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTCREATE, FAIL, "unable to create link")
 
 done:
     FUNC_LEAVE_API(ret_value)
@@ -407,7 +408,7 @@ done:
 herr_t
 H5Oincr_refcount(hid_t object_id)
 {
-    H5VL_object_t    *obj = NULL;        /* object token of loc_id */
+    H5VL_object_t    *vol_obj = NULL;        /* object token of loc_id */
     H5VL_loc_params_t loc_params;
     herr_t      ret_value = SUCCEED;
 
@@ -417,13 +418,17 @@ H5Oincr_refcount(hid_t object_id)
     loc_params.type = H5VL_OBJECT_BY_SELF;
     loc_params.obj_type = H5I_get_type(object_id);
 
-    /* get the location object */
-    if(NULL == (obj = H5VL_get_object(object_id)))
+    /* Get the location object */
+    if(NULL == (vol_obj = H5VL_vol_object(object_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid location identifier")
 
-    /* change the ref count through the VOL */
-    if(H5VL_object_specific(obj->vol_obj, loc_params, obj->vol_info->vol_cls, H5VL_OBJECT_CHANGE_REF_COUNT, 
-                            H5AC_ind_read_dxpl_id, H5_REQUEST_NULL, 1) < 0)
+    /* Set up collective metadata if appropriate */
+    if(H5CX_set_loc(object_id) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set access property list info")
+
+    /* Change the object's reference count */
+    if(H5VL_object_specific(vol_obj->data, loc_params, vol_obj->driver->cls, H5VL_OBJECT_CHANGE_REF_COUNT, 
+                            H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL, 1) < 0)
         HGOTO_ERROR(H5E_OHDR, H5E_LINKCOUNT, FAIL, "modifying object link count failed")
 
 done:
@@ -454,9 +459,9 @@ done:
 herr_t
 H5Odecr_refcount(hid_t object_id)
 {
-    H5VL_object_t    *obj = NULL;        /* object token of loc_id */
+    H5VL_object_t    *vol_obj = NULL;        /* object token of loc_id */
     H5VL_loc_params_t loc_params;
-    herr_t      ret_value = SUCCEED;
+    herr_t      ret_value = SUCCEED;	/* Return value */
 
     FUNC_ENTER_API(FAIL)
     H5TRACE1("e", "i", object_id);
@@ -464,13 +469,17 @@ H5Odecr_refcount(hid_t object_id)
     loc_params.type = H5VL_OBJECT_BY_SELF;
     loc_params.obj_type = H5I_get_type(object_id);
 
-    /* get the location object */
-    if(NULL == (obj = H5VL_get_object(object_id)))
+    /* Get the location object */
+    if(NULL == (vol_obj = H5VL_vol_object(object_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid location identifier")
 
-    /* change the ref count through the VOL */
-    if(H5VL_object_specific(obj->vol_obj, loc_params, obj->vol_info->vol_cls, H5VL_OBJECT_CHANGE_REF_COUNT, 
-                            H5AC_ind_read_dxpl_id, H5_REQUEST_NULL, -1) < 0)
+    /* Set up collective metadata if appropriate */
+    if(H5CX_set_loc(object_id) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set access property list info")
+
+    /* Change the object's reference count */
+    if(H5VL_object_specific(vol_obj->data, loc_params, vol_obj->driver->cls, H5VL_OBJECT_CHANGE_REF_COUNT, 
+                            H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL, -1) < 0)
         HGOTO_ERROR(H5E_OHDR, H5E_LINKCOUNT, FAIL, "modifying object link count failed")
 
 done:
@@ -484,34 +493,36 @@ done:
  * Purpose:     Determine if a linked-to object exists
  *
  * Return:      Success:    TRUE/FALSE
- *              Failure:    -1
+ *              Failure:    FAIL
+ *
+ * Programmer:	Quincey Koziol
+ *		February  2 2010
  *
  *-------------------------------------------------------------------------
  */
 htri_t
 H5Oexists_by_name(hid_t loc_id, const char *name, hid_t lapl_id)
 {
-    H5VL_object_t  *obj         = NULL;         /* Object token of loc_id */
+    H5VL_object_t  *vol_obj         = NULL;         /* Object token of loc_id */
     H5VL_loc_params_t loc_params;
-    hid_t           dxpl_id     = H5AC_ind_read_dxpl_id; /* dxpl used by library */
-    htri_t          ret_value   = -1;           /* Return value */
+    htri_t      ret_value = FAIL;       /* Return value */
 
-    FUNC_ENTER_API((-1))
+    FUNC_ENTER_API(FAIL)
     H5TRACE3("t", "i*si", loc_id, name, lapl_id);
 
     /* Check args */
-    if (!name)
-        HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, (-1), "name parameter cannot be NULL")
-    if (!*name)
-        HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, (-1), "name parameter cannot be an empty string")
+    if(!name)
+        HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "name parameter cannot be NULL")
+    if(!*name)
+        HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "name parameter cannot be an empty string")
 
-    /* Verify access property list and get correct dxpl */
-    if (H5P_verify_apl_and_dxpl(&lapl_id, H5P_CLS_LACC, &dxpl_id, loc_id, FALSE) < 0)
-        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, (-1), "can't set access and transfer property lists")
+    /* Verify access property list and set up collective metadata if appropriate */
+    if(H5CX_set_apl(&lapl_id, H5P_CLS_LACC, loc_id, FALSE) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set access property list info")
 
     /* Get the location object */
-    if (NULL == (obj = H5VL_get_object(loc_id)))
-        HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, (-1), "invalid location identifier")
+    if(NULL == (vol_obj = H5VL_vol_object(loc_id)))
+        HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid location identifier")
 
     /* Set the location struct fields */
     loc_params.type                         = H5VL_OBJECT_BY_NAME;
@@ -519,10 +530,10 @@ H5Oexists_by_name(hid_t loc_id, const char *name, hid_t lapl_id)
     loc_params.loc_data.loc_by_name.lapl_id = lapl_id;
     loc_params.obj_type                     = H5I_get_type(loc_id);
 
-    /* Check if the object exists via the VOL */
-    if (H5VL_object_specific(obj->vol_obj, loc_params, obj->vol_info->vol_cls, H5VL_OBJECT_EXISTS, 
-                            dxpl_id, H5_REQUEST_NULL, &ret_value) < 0)
-        HGOTO_ERROR(H5E_OHDR, H5E_CANTGET, (-1), "unable to determine if '%s' exists", name)
+    /* Check if the object exists */
+    if(H5VL_object_specific(vol_obj->data, loc_params, vol_obj->driver->cls, H5VL_OBJECT_EXISTS, 
+                            H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL, &ret_value) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTGET, FAIL, "unable to determine if '%s' exists", name)
 
 done:
     FUNC_LEAVE_API(ret_value)
@@ -530,77 +541,91 @@ done:
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5Oget_info
+ * Function:    H5Oget_info2
  *
  * Purpose:     Retrieve information about an object.
  *
+ *              NOTE: Add a parameter "fields" to indicate selection of object info.
+ *
  * Return:      SUCCEED/FAIL
+ *
+ * Programmer:  Neil Fortner
+ *              July 7 2010
  *
  *-------------------------------------------------------------------------
  */
 herr_t
-H5Oget_info(hid_t loc_id, H5O_info_t *oinfo)
+H5Oget_info2(hid_t loc_id, H5O_info_t *oinfo, unsigned fields)
 {
-    H5VL_object_t      *obj         = NULL;         /* Object token of loc_id */
+    H5VL_object_t      *vol_obj         = NULL;         /* Object token of loc_id */
     H5VL_loc_params_t   loc_params;
-    herr_t              ret_value   = SUCCEED;      /* Return value */
+    herr_t      ret_value = SUCCEED;    /* Return value */
 
     FUNC_ENTER_API(FAIL)
-    H5TRACE2("e", "i*x", loc_id, oinfo);
+    H5TRACE3("e", "i*xIu", loc_id, oinfo, fields);
 
     /* Check args */
-    if (!oinfo)
+    if(!oinfo)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "oinfo parameter cannot be NULL")
+    if(fields & ~H5O_INFO_ALL)
+        HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid fields")
 
     /* Set location struct fields */
     loc_params.type         = H5VL_OBJECT_BY_SELF;
     loc_params.obj_type     = H5I_get_type(loc_id);
 
     /* Get the location object */
-    if (NULL == (obj = H5VL_get_object(loc_id)))
+    if(NULL == (vol_obj = H5VL_vol_object(loc_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid location identifier")
 
-    /* Get the group info through the VOL using the location token */
-    if (H5VL_object_optional(obj->vol_obj, obj->vol_info->vol_cls, H5AC_ind_read_dxpl_id, 
-                            H5_REQUEST_NULL, H5VL_OBJECT_GET_INFO, loc_params, oinfo) < 0)
-        HGOTO_ERROR(H5E_INTERNAL, H5E_CANTGET, FAIL, "unable to get group info")
+    /* Retrieve the object's information */
+    if(H5VL_object_optional(vol_obj->data, vol_obj->driver->cls, H5P_DATASET_XFER_DEFAULT, 
+                            H5_REQUEST_NULL, H5VL_OBJECT_GET_INFO, loc_params, oinfo, fields) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTGET, FAIL, "can't get info for object")
 
 done:
     FUNC_LEAVE_API(ret_value)
-} /* end H5Oget_info() */
+} /* end H5Oget_info2() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5Oget_info_by_name
+ * Function:    H5Oget_info_by_name2
  *
- * Purpose:     Retrieve information about an object.
+ * Purpose:     Retrieve information about an object
+ *
+ *              NOTE: Add a parameter "fields" to indicate selection of object info.
  *
  * Return:      SUCCEED/FAIL
+ *
+ * Programmer:  Neil Fortner
+ *              July 7 2010
  *
  *-------------------------------------------------------------------------
  */
 herr_t
-H5Oget_info_by_name(hid_t loc_id, const char *name, H5O_info_t *oinfo, hid_t lapl_id)
+H5Oget_info_by_name2(hid_t loc_id, const char *name, H5O_info_t *oinfo,
+    unsigned fields, hid_t lapl_id)
 {
-    H5VL_object_t    *obj = NULL;        /* object token of loc_id */
+    H5VL_object_t    *vol_obj = NULL;        /* object token of loc_id */
     H5VL_loc_params_t loc_params;
-    hid_t       dxpl_id = H5AC_ind_read_dxpl_id; /* dxpl used by library */
     herr_t      ret_value = SUCCEED;    /* Return value */
 
     FUNC_ENTER_API(FAIL)
-    H5TRACE4("e", "i*s*xi", loc_id, name, oinfo, lapl_id);
+    H5TRACE5("e", "i*s*xIui", loc_id, name, oinfo, fields, lapl_id);
 
     /* Check args */
-    if (!name)
+    if(!name)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "name parameter cannot be NULL")
-    if (!*name)
+    if(!*name)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "name parameter cannot be an empty string")
-    if (!oinfo)
+    if(!oinfo)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "oinfo parameter cannot be NULL")
+    if(fields & ~H5O_INFO_ALL)
+        HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid fields")
 
-    /* Verify access property list and get correct dxpl */
-    if (H5P_verify_apl_and_dxpl(&lapl_id, H5P_CLS_LACC, &dxpl_id, loc_id, FALSE) < 0)
-        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set access and transfer property lists")
+    /* Verify access property list and set up collective metadata if appropriate */
+    if(H5CX_set_apl(&lapl_id, H5P_CLS_LACC, loc_id, FALSE) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set access property list info")
 
     /* Fill out location struct */
     loc_params.type                         = H5VL_OBJECT_BY_NAME;
@@ -609,45 +634,46 @@ H5Oget_info_by_name(hid_t loc_id, const char *name, H5O_info_t *oinfo, hid_t lap
     loc_params.obj_type                     = H5I_get_type(loc_id);
 
     /* Get the location object */
-    if (NULL == (obj = H5VL_get_object(loc_id)))
+    if(NULL == (vol_obj = H5VL_vol_object(loc_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid location identifier")
 
-    /* Get the group info through the VOL using the location token */
-    if (H5VL_object_optional(obj->vol_obj, obj->vol_info->vol_cls, dxpl_id, H5_REQUEST_NULL,
-                            H5VL_OBJECT_GET_INFO, loc_params, oinfo) < 0)
-        HGOTO_ERROR(H5E_INTERNAL, H5E_CANTGET, FAIL, "unable to get group info")
+    /* Retrieve the object's information */
+    if(H5VL_object_optional(vol_obj->data, vol_obj->driver->cls, H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL,
+                            H5VL_OBJECT_GET_INFO, loc_params, oinfo, fields) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTGET, FAIL, "can't get info for object: '%s'", name)
 
 done:
     FUNC_LEAVE_API(ret_value)
-} /* end H5Oget_info_by_name() */
+} /* end H5Oget_info_by_name2() */
 
 
 /*-------------------------------------------------------------------------
- * Function:	H5Oget_info_by_idx
+ * Function:    H5Oget_info_by_idx2
  *
- * Purpose:	Retrieve information about an object, according to the order
+ * Purpose:     Retrieve information about an object, according to the order
  *              of an index.
  *
- * Return:	Success:	Non-negative
- *		Failure:	Negative
+ *              NOTE: Add a parameter "fields" to indicate selection of object info.
+ *
+ * Return:      Success:	Non-negative
+ *              Failure:	Negative
  *
  * Programmer:	Quincey Koziol
- *		November 26 2006
+ *              November 26 2006
  *
  *-------------------------------------------------------------------------
  */
 herr_t
-H5Oget_info_by_idx(hid_t loc_id, const char *group_name, H5_index_t idx_type,
-    H5_iter_order_t order, hsize_t n, H5O_info_t *oinfo, hid_t lapl_id)
+H5Oget_info_by_idx2(hid_t loc_id, const char *group_name, H5_index_t idx_type,
+    H5_iter_order_t order, hsize_t n, H5O_info_t *oinfo, unsigned fields, hid_t lapl_id)
 {
-    H5VL_object_t    *obj = NULL;        /* object token of loc_id */
+    H5VL_object_t    *vol_obj = NULL;        /* object token of loc_id */
     H5VL_loc_params_t loc_params;
-    hid_t       dxpl_id = H5AC_ind_read_dxpl_id; /* dxpl used by library */
     herr_t      ret_value = SUCCEED;    /* Return value */
 
     FUNC_ENTER_API(FAIL)
-    H5TRACE7("e", "i*sIiIoh*xi", loc_id, group_name, idx_type, order, n, oinfo,
-             lapl_id);
+    H5TRACE8("e", "i*sIiIoh*xIui", loc_id, group_name, idx_type, order, n, oinfo,
+             fields, lapl_id);
 
     /* Check args */
     if(!group_name || !*group_name)
@@ -658,10 +684,12 @@ H5Oget_info_by_idx(hid_t loc_id, const char *group_name, H5_index_t idx_type,
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid iteration order specified")
     if(!oinfo)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "no info struct")
+    if(fields & ~H5O_INFO_ALL)
+        HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid fields")
 
-    /* Verify access property list and get correct dxpl */
-    if(H5P_verify_apl_and_dxpl(&lapl_id, H5P_CLS_LACC, &dxpl_id, loc_id, FALSE) < 0)
-        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set access and transfer property lists")
+    /* Verify access property list and set up collective metadata if appropriate */
+    if(H5CX_set_apl(&lapl_id, H5P_CLS_LACC, loc_id, FALSE) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set access property list info")
 
     loc_params.type = H5VL_OBJECT_BY_IDX;
     loc_params.loc_data.loc_by_idx.name = group_name;
@@ -671,18 +699,18 @@ H5Oget_info_by_idx(hid_t loc_id, const char *group_name, H5_index_t idx_type,
     loc_params.loc_data.loc_by_idx.lapl_id = lapl_id;
     loc_params.obj_type = H5I_get_type(loc_id);
 
-    /* get the location object */
-    if(NULL == (obj = H5VL_get_object(loc_id)))
+    /* Get the location object */
+    if(NULL == (vol_obj = H5VL_vol_object(loc_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid location identifier")
 
-    /* Get the group info through the VOL using the location token */
-    if(H5VL_object_optional(obj->vol_obj, obj->vol_info->vol_cls, dxpl_id, H5_REQUEST_NULL, 
-                            H5VL_OBJECT_GET_INFO, loc_params, oinfo) < 0)
-        HGOTO_ERROR(H5E_INTERNAL, H5E_CANTGET, FAIL, "unable to get group info")
+    /* Retrieve the object's information */
+    if(H5VL_object_optional(vol_obj->data, vol_obj->driver->cls, H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL, 
+                            H5VL_OBJECT_GET_INFO, loc_params, oinfo, fields) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTGET, FAIL, "can't get info for object")
 
 done:
     FUNC_LEAVE_API(ret_value)
-} /* end H5Oget_info_by_idx() */
+} /* end H5Oget_info_by_idx2() */
 
 
 /*-------------------------------------------------------------------------
@@ -697,12 +725,15 @@ done:
  *
  * Return:      SUCCEED/FAIL
  *
+ * Programmer:	Quincey Koziol
+ *		August 30 2007
+ *
  *-------------------------------------------------------------------------
  */
 herr_t
 H5Oset_comment(hid_t obj_id, const char *comment)
 {
-    H5VL_object_t    *obj = NULL;        /* object token of loc_id */
+    H5VL_object_t    *vol_obj = NULL;        /* object token of loc_id */
     H5VL_loc_params_t loc_params;
     herr_t      ret_value = SUCCEED;    /* Return value */
 
@@ -710,17 +741,21 @@ H5Oset_comment(hid_t obj_id, const char *comment)
     H5TRACE2("e", "i*s", obj_id, comment);
 
     /* Get the location object */
-    if (NULL == (obj = H5VL_get_object(obj_id)))
+    if(NULL == (vol_obj = H5VL_vol_object(obj_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid location identifier")
+
+    /* Set up collective metadata if appropriate */
+    if(H5CX_set_loc(obj_id) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set collective metadata read info")
 
     /* Fill in location struct fields */
     loc_params.type = H5VL_OBJECT_BY_SELF;
     loc_params.obj_type = H5I_get_type(obj_id);
 
-    /* set comment on object through the VOL */
-    if (H5VL_object_optional(obj->vol_obj, obj->vol_info->vol_cls, H5AC_ind_read_dxpl_id, 
+    /* (Re)set the object's comment */
+    if(H5VL_object_optional(vol_obj->data, vol_obj->driver->cls, H5P_DATASET_XFER_DEFAULT, 
                             H5_REQUEST_NULL, H5VL_OBJECT_SET_COMMENT, loc_params, comment) < 0)
-        HGOTO_ERROR(H5E_OHDR, H5E_CANTINIT, FAIL, "unable to set comment value")
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set comment for object")
 
 done:
     FUNC_LEAVE_API(ret_value)
@@ -739,27 +774,29 @@ done:
  *
  * Return:      SUCCEED/FAIL
  *
+ * Programmer:	Quincey Koziol
+ *		August 30 2007
+ *
  *-------------------------------------------------------------------------
  */
 herr_t
 H5Oset_comment_by_name(hid_t loc_id, const char *name, const char *comment,
     hid_t lapl_id)
 {
-    H5VL_object_t    *obj = NULL;        /* object token of loc_id */
+    H5VL_object_t    *vol_obj = NULL;        /* object token of loc_id */
     H5VL_loc_params_t loc_params;
-    hid_t       dxpl_id = H5AC_ind_read_dxpl_id; /* dxpl used by library */
     herr_t      ret_value = SUCCEED;    /* Return value */
 
     FUNC_ENTER_API(FAIL)
     H5TRACE4("e", "i*s*si", loc_id, name, comment, lapl_id);
 
     /* Check args */
-    if (!name || !*name)
+    if(!name || !*name)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "no name")
 
-    /* Verify access property list and get correct dxpl */
-    if (H5P_verify_apl_and_dxpl(&lapl_id, H5P_CLS_LACC, &dxpl_id, loc_id, TRUE) < 0)
-        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set access and transfer property lists")
+    /* Verify access property list and set up collective metadata if appropriate */
+    if(H5CX_set_apl(&lapl_id, H5P_CLS_LACC, loc_id, TRUE) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set access property list info")
 
     /* Fill in location struct fields */
     loc_params.type                         = H5VL_OBJECT_BY_NAME;
@@ -767,14 +804,14 @@ H5Oset_comment_by_name(hid_t loc_id, const char *name, const char *comment,
     loc_params.loc_data.loc_by_name.lapl_id = lapl_id;
     loc_params.obj_type                     = H5I_get_type(loc_id);
 
-    /* get the location object */
-    if (NULL == (obj = H5VL_get_object(loc_id)))
+    /* Get the location object */
+    if(NULL == (vol_obj = H5VL_vol_object(loc_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid location identifier")
 
-    /* Set comment on object through the VOL */
-    if (H5VL_object_optional(obj->vol_obj, obj->vol_info->vol_cls, dxpl_id, H5_REQUEST_NULL, 
+    /* (Re)set the object's comment */
+    if(H5VL_object_optional(vol_obj->data, vol_obj->driver->cls, H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL, 
                             H5VL_OBJECT_SET_COMMENT, loc_params, comment) < 0)
-        HGOTO_ERROR(H5E_OHDR, H5E_CANTINIT, FAIL, "unable to set comment value")
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set comment for object: '%s'", name)
 
 done:
     FUNC_LEAVE_API(ret_value)
@@ -792,12 +829,15 @@ done:
  *
  *              Failure:    -1
  *
+ * Programmer:	Quincey Koziol
+ *		August 30 2007
+ *
  *-------------------------------------------------------------------------
  */
 ssize_t
 H5Oget_comment(hid_t obj_id, char *comment, size_t bufsize)
 {
-    H5VL_object_t    *obj = NULL;        /* object token of loc_id */
+    H5VL_object_t    *vol_obj = NULL;        /* object token of loc_id */
     H5VL_loc_params_t loc_params;
     ssize_t     ret_value = -1;              /* Return value */
 
@@ -805,17 +845,17 @@ H5Oget_comment(hid_t obj_id, char *comment, size_t bufsize)
     H5TRACE3("Zs", "i*sz", obj_id, comment, bufsize);
 
     /* Get the object */
-    if (NULL == (obj = H5VL_get_object(obj_id)))
+    if (NULL == (vol_obj = H5VL_vol_object(obj_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, (-1), "invalid location identifier")
 
     /* Set fields in the location struct */
     loc_params.type         = H5VL_OBJECT_BY_SELF;
     loc_params.obj_type     = H5I_get_type(obj_id);
 
-    /* Get the comment via the VOL */
-    if (H5VL_object_optional(obj->vol_obj, obj->vol_info->vol_cls, H5AC_ind_read_dxpl_id, H5_REQUEST_NULL, 
+    /* Retrieve the object's comment */
+    if (H5VL_object_optional(vol_obj->data, vol_obj->driver->cls, H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL, 
                             H5VL_OBJECT_GET_COMMENT, loc_params, comment, bufsize, &ret_value) < 0)
-        HGOTO_ERROR(H5E_INTERNAL, H5E_CANTGET, (-1), "unable to get object comment")
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTGET, (-1), "can't get comment for object")
 
 done:
     FUNC_LEAVE_API(ret_value)
@@ -833,27 +873,29 @@ done:
  *
  *              Failure:    -1
  *
+ * Programmer:	Quincey Koziol
+ *		August 30 2007
+ *
  *-------------------------------------------------------------------------
  */
 ssize_t
 H5Oget_comment_by_name(hid_t loc_id, const char *name, char *comment, size_t bufsize,
     hid_t lapl_id)
 {
-    H5VL_object_t    *obj = NULL;        /* object token of loc_id */
+    H5VL_object_t    *vol_obj = NULL;        /* object token of loc_id */
     H5VL_loc_params_t loc_params;
-    hid_t       dxpl_id = H5AC_ind_read_dxpl_id; /* dxpl used by library */
     ssize_t     ret_value = -1;              /* Return value */
 
     FUNC_ENTER_API((-1))
     H5TRACE5("Zs", "i*s*szi", loc_id, name, comment, bufsize, lapl_id);
 
     /* Check args */
-    if (!name || !*name)
+    if(!name || !*name)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, (-1), "no name")
 
-    /* Verify access property list and get correct dxpl */
-    if (H5P_verify_apl_and_dxpl(&lapl_id, H5P_CLS_LACC, &dxpl_id, loc_id, FALSE) < 0)
-        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, (-1), "can't set access and transfer property lists")
+    /* Verify access property list and set up collective metadata if appropriate */
+    if(H5CX_set_apl(&lapl_id, H5P_CLS_LACC, loc_id, FALSE) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, (-1), "can't set access property list info")
 
     /* Fill in location struct fields */
     loc_params.type                         = H5VL_OBJECT_BY_NAME;
@@ -862,13 +904,13 @@ H5Oget_comment_by_name(hid_t loc_id, const char *name, char *comment, size_t buf
     loc_params.obj_type                     = H5I_get_type(loc_id);
 
     /* Get the location object */
-    if (NULL == (obj = H5VL_get_object(loc_id)))
+    if(NULL == (vol_obj = H5VL_vol_object(loc_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, (-1), "invalid location identifier")
 
-    /* Get the comment via the VOL */
-    if (H5VL_object_optional(obj->vol_obj, obj->vol_info->vol_cls, dxpl_id, H5_REQUEST_NULL, 
+    /* Retrieve the object's comment */
+    if(H5VL_object_optional(vol_obj->data, vol_obj->driver->cls, H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL, 
                             H5VL_OBJECT_GET_COMMENT, loc_params, comment, bufsize, &ret_value) < 0)
-        HGOTO_ERROR(H5E_INTERNAL, H5E_CANTGET, (-1), "unable to get object info")
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTGET, (-1), "can't get comment for object: '%s'", name)
 
 done:
     FUNC_LEAVE_API(ret_value)
@@ -876,7 +918,7 @@ done:
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5Ovisit
+ * Function:    H5Ovisit2
  *
  * Purpose:     Recursively visit an object and all the objects reachable
  *              from it.  If the starting object is a group, all the objects
@@ -894,6 +936,9 @@ done:
  *              iteration index and iteration order given) will be used to in
  *              the callback about the object.
  *
+ *              NOTE: Add a a parameter "fields" to indicate selection of
+ *              object info to be retrieved to the callback "op".
+ *
  * Return:      Success:    The return value of the first operator that
  *                          returns non-zero, or zero if all members were
  *                          processed with no operator returning non-zero.
@@ -902,48 +947,53 @@ done:
  *                          library, or the negative value returned by one
  *                          of the operators.
  *
+ * Programmer:	Quincey Koziol
+ *              November 25 2007
+ *
  *-------------------------------------------------------------------------
  */
 herr_t
-H5Ovisit(hid_t obj_id, H5_index_t idx_type, H5_iter_order_t order,
-    H5O_iterate_t op, void *op_data)
+H5Ovisit2(hid_t obj_id, H5_index_t idx_type, H5_iter_order_t order,
+    H5O_iterate_t op, void *op_data, unsigned fields)
 {
-    H5VL_object_t      *obj         = NULL;     /* Object token of loc_id */
+    H5VL_object_t      *vol_obj         = NULL;     /* Object token of loc_id */
     H5VL_loc_params_t   loc_params;
     herr_t              ret_value;              /* Return value */
 
     FUNC_ENTER_API(FAIL)
-    H5TRACE5("e", "iIiIox*x", obj_id, idx_type, order, op, op_data);
+    H5TRACE6("e", "iIiIox*xIu", obj_id, idx_type, order, op, op_data, fields);
 
     /* Check args */
-    if (idx_type <= H5_INDEX_UNKNOWN || idx_type >= H5_INDEX_N)
+    if(idx_type <= H5_INDEX_UNKNOWN || idx_type >= H5_INDEX_N)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid index type specified")
-    if (order <= H5_ITER_UNKNOWN || order >= H5_ITER_N)
+    if(order <= H5_ITER_UNKNOWN || order >= H5_ITER_N)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid iteration order specified")
     if(!op)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "no callback operator specified")
+    if(fields & ~H5O_INFO_ALL)
+        HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid fields")
 
     /* Get the location object */
-    if (NULL == (obj = H5VL_get_object(obj_id)))
+    if(NULL == (vol_obj = H5VL_vol_object(obj_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid location identifier")
 
     /* Set location parameters */
     loc_params.type         = H5VL_OBJECT_BY_SELF;
     loc_params.obj_type     = H5I_get_type(obj_id);
 
-    /* Iterate over the objects through the VOL */
-    if ((ret_value = H5VL_object_specific(obj->vol_obj, loc_params, obj->vol_info->vol_cls, 
-                                         H5VL_OBJECT_VISIT, H5AC_ind_read_dxpl_id, H5_REQUEST_NULL, 
-                                         idx_type, order, op, op_data)) < 0)
+    /* Visit the objects */
+    if((ret_value = H5VL_object_specific(vol_obj->data, loc_params, vol_obj->driver->cls,
+                                         H5VL_OBJECT_VISIT, H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL, 
+                                         idx_type, order, op, op_data, fields)) < 0)
         HGOTO_ERROR(H5E_OHDR, H5E_BADITER, FAIL, "object iteration failed")
 
 done:
     FUNC_LEAVE_API(ret_value)
-} /* end H5Ovisit() */
+} /* end H5Ovisit2() */
 
 
 /*-------------------------------------------------------------------------
- * Function:    H5Ovisit_by_name
+ * Function:    H5Ovisit_by_name2
  *
  * Purpose:     Recursively visit an object and all the objects reachable
  *              from it.  If the starting object is a group, all the objects
@@ -961,6 +1011,9 @@ done:
  *              iteration index and iteration order given) will be used to in
  *              the callback about the object.
  *
+ *              NOTE: Add a a parameter "fields" to indicate selection of
+ *              object info to be retrieved to the callback "op".
+ *
  * Return:      Success:    The return value of the first operator that
  *                          returns non-zero, or zero if all members were
  *                          processed with no operator returning non-zero.
@@ -969,39 +1022,43 @@ done:
  *                          library, or the negative value returned by one
  *                          of the operators.
  *
+ * Programmer:	Quincey Koziol
+ *              November 24 2007
+ *
  *-------------------------------------------------------------------------
  */
 herr_t
-H5Ovisit_by_name(hid_t loc_id, const char *obj_name, H5_index_t idx_type,
-    H5_iter_order_t order, H5O_iterate_t op, void *op_data, hid_t lapl_id)
+H5Ovisit_by_name2(hid_t loc_id, const char *obj_name, H5_index_t idx_type,
+    H5_iter_order_t order, H5O_iterate_t op, void *op_data, unsigned fields, hid_t lapl_id)
 {
-    H5VL_object_t       *obj        = NULL;     /* Object token of loc_id */
+    H5VL_object_t       *vol_obj        = NULL;     /* Object token of loc_id */
     H5VL_loc_params_t   loc_params; 
-    hid_t               dxpl_id     = H5AC_ind_read_dxpl_id; /* dxpl used by library */
     herr_t              ret_value;              /* Return value */
 
     FUNC_ENTER_API(FAIL)
-    H5TRACE7("e", "i*sIiIox*xi", loc_id, obj_name, idx_type, order, op, op_data,
-             lapl_id);
+    H5TRACE8("e", "i*sIiIox*xIui", loc_id, obj_name, idx_type, order, op, op_data,
+             fields, lapl_id);
 
     /* Check args */
-    if (!obj_name)
+    if(!obj_name)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "obj_name parameter cannot be NULL")
-    if (!*obj_name)
+    if(!*obj_name)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "obj_name parameter cannot be an empty string")
-    if (idx_type <= H5_INDEX_UNKNOWN || idx_type >= H5_INDEX_N)
+    if(idx_type <= H5_INDEX_UNKNOWN || idx_type >= H5_INDEX_N)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid index type specified")
-    if (order <= H5_ITER_UNKNOWN || order >= H5_ITER_N)
+    if(order <= H5_ITER_UNKNOWN || order >= H5_ITER_N)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid iteration order specified")
-    if (!op)
+    if(!op)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "no callback operator specified")
+    if(fields & ~H5O_INFO_ALL)
+        HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid fields")
 
-    /* Verify access property list and get correct dxpl */
-    if (H5P_verify_apl_and_dxpl(&lapl_id, H5P_CLS_LACC, &dxpl_id, loc_id, FALSE) < 0)
-        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set access and transfer property lists")
+    /* Verify access property list and set up collective metadata if appropriate */
+    if(H5CX_set_apl(&lapl_id, H5P_CLS_LACC, loc_id, FALSE) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_CANTSET, FAIL, "can't set access property list info")
 
     /* Get the location object */
-    if (NULL == (obj = H5VL_get_object(loc_id)))
+    if(NULL == (vol_obj = H5VL_vol_object(loc_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid location identifier")
 
     /* Set location parameters */
@@ -1010,15 +1067,15 @@ H5Ovisit_by_name(hid_t loc_id, const char *obj_name, H5_index_t idx_type,
     loc_params.loc_data.loc_by_name.lapl_id = lapl_id;
     loc_params.obj_type                     = H5I_get_type(loc_id);
 
-    /* iterate over the objects through the VOL */
-    if ((ret_value = H5VL_object_specific(obj->vol_obj, loc_params, obj->vol_info->vol_cls, 
-                                         H5VL_OBJECT_VISIT, dxpl_id, H5_REQUEST_NULL, 
-                                         idx_type, order, op, op_data)) < 0)
-        HGOTO_ERROR(H5E_OHDR, H5E_BADITER, FAIL, "link iteration failed")
+    /* Visit the objects */
+    if((ret_value = H5VL_object_specific(vol_obj->data, loc_params, vol_obj->driver->cls, 
+                                         H5VL_OBJECT_VISIT, H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL, 
+                                         idx_type, order, op, op_data, fields)) < 0)
+        HGOTO_ERROR(H5E_OHDR, H5E_BADITER, FAIL, "object iteration failed")
 
 done:
     FUNC_LEAVE_API(ret_value)
-} /* end H5Ovisit_by_name() */
+} /* end H5Ovisit_by_name2() */
 
 
 /*-------------------------------------------------------------------------
@@ -1032,6 +1089,9 @@ done:
  *              the same effect as calling H5Gclose, H5Dclose, or H5Tclose.
  *
  * Return:      SUCCEED/FAIL
+ *
+ * Programmer:	James Laird
+ *		July 14 2006
  *
  *-------------------------------------------------------------------------
  */
@@ -1071,7 +1131,7 @@ H5Oclose(hid_t object_id)
         default:
             HGOTO_ERROR(H5E_ARGS, H5E_CANTRELEASE, FAIL, "not a valid file object ID (dataset, group, or datatype)")
         break;
-    }
+    } /* end switch */
 
 done:
     FUNC_LEAVE_API(ret_value)
@@ -1082,7 +1142,7 @@ done:
  * Function:	H5Odisable_mdc_flushes
  *
  * Purpose:	To "cork" an object:
- *		--keep dirty entries assoicated with the object in the metadata cache
+ *		--keep dirty entries associated with the object in the metadata cache
  *
  * Return:	Success:	Non-negative
  *		Failure:	Negative

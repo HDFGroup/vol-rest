@@ -37,6 +37,7 @@
 /***********/
 #include "H5private.h"		/* Generic Functions			*/
 #include "H5ACprivate.h"        /* Metadata cache                       */
+#include "H5CXprivate.h"        /* API Contexts                         */
 #include "H5Eprivate.h"		/* Error handling		  	*/
 #include "H5FOprivate.h"	/* File objects				*/
 #include "H5Iprivate.h"		/* IDs					*/
@@ -106,47 +107,51 @@ H5FL_EXTERN(H5VL_object_t);
 herr_t
 H5Tcommit1(hid_t loc_id, const char *name, hid_t type_id)
 {
-    void *dt = NULL;                    /* datatype object created by VOL plugin */
+    void *data = NULL;                  /* VOL-managed datatype data */
     H5VL_object_t *new_obj = NULL;      /* VOL object that holds the datatype object and the VOL info */
-    H5T_t *type = NULL;                 /* high level datatype object that wraps the VOL object */
-    H5VL_object_t *obj = NULL;          /* object token of loc_id */
+    H5T_t *dt = NULL;                   /* High level datatype object that wraps the VOL object */
+    H5VL_object_t *vol_obj = NULL;      /* Object token of loc_id */
     H5VL_loc_params_t loc_params;
-    herr_t ret_value = SUCCEED;         /* Return value */
+    herr_t      ret_value = SUCCEED;    /* Return value */
 
     FUNC_ENTER_API(FAIL)
     H5TRACE3("e", "i*si", loc_id, name, type_id);
 
     /* Check arguments */
-    if (H5Tcommitted(type_id))
-        HGOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "datatype is already committed")
     if(!name || !*name)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "no name")
-    if(NULL == (type = (H5T_t *)H5I_object_verify(type_id, H5I_DATATYPE)))
+    if(NULL == (dt = (H5T_t *)H5I_object_verify(type_id, H5I_DATATYPE)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a datatype")
+    if(H5T_is_named(dt))
+        HGOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "datatype is already committed")
+
+    /* Set up collective metadata if appropriate */
+    if(H5CX_set_loc(loc_id) < 0)
+        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, FAIL, "can't set access property list info")
 
     loc_params.type = H5VL_OBJECT_BY_SELF;
     loc_params.obj_type = H5I_get_type(loc_id);
 
     /* get the object from the loc_id */
-    if(NULL == (obj = (H5VL_object_t *)H5I_object(loc_id)))
+    if(NULL == (vol_obj = (H5VL_object_t *)H5I_object(loc_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "invalid object identifier")
 
-    /* commit the datatype through the VOL */
-    if (NULL == (dt = H5VL_datatype_commit(obj->vol_obj, loc_params, obj->vol_info->vol_cls, 
+    /* Commit the datatype */
+    if(NULL == (data = H5VL_datatype_commit(vol_obj->data, loc_params, vol_obj->driver->cls, 
                                            name, type_id, H5P_LINK_CREATE_DEFAULT,
                                            H5P_DATATYPE_CREATE_DEFAULT, H5P_DATATYPE_ACCESS_DEFAULT, 
-                                           H5AC_ind_read_dxpl_id, H5_REQUEST_NULL)))
-        HGOTO_ERROR(H5E_SYM, H5E_CANTINIT, FAIL, "unable to commit datatype")
+                                           H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL)))
+        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTINIT, FAIL, "unable to commit datatype")
 
-    /* setup VOL object */
+    /* Set up VOL object */
     if(NULL == (new_obj = H5FL_CALLOC(H5VL_object_t)))
         HGOTO_ERROR(H5E_VOL, H5E_NOSPACE, FAIL, "can't allocate top object structure")
-    new_obj->vol_info = obj->vol_info;
-    new_obj->vol_info->nrefs ++;
-    new_obj->vol_obj = dt;
+    new_obj->driver = vol_obj->driver;
+    new_obj->driver->nrefs ++;
+    new_obj->data = data;
 
-    /* set the committed type object to the VOL pluging pointer in the H5T_t struct */
-    type->vol_obj = new_obj;
+    /* Set the committed type object to the VOL pluging pointer in the H5T_t struct */
+    dt->vol_obj = new_obj;
 
 done:
     FUNC_LEAVE_API(ret_value)
@@ -172,11 +177,10 @@ done:
 hid_t
 H5Topen1(hid_t loc_id, const char *name)
 {
-    void *vol_dt = NULL;           /* datatype token created by VOL plugin */
-    H5VL_object_t *obj = NULL;     /* object token of loc_id */
+    void *dt = NULL;                    /* Datatype token created by VOL plugin */
+    H5VL_object_t *vol_obj = NULL;      /* Object token of loc_id */
     H5VL_loc_params_t loc_params;
-    hid_t        dxpl_id = H5AC_ind_read_dxpl_id; /* dxpl to use to open datatype */
-    hid_t     ret_value = H5I_INVALID_HID;    /* Return value */
+    hid_t       ret_value = H5I_INVALID_HID;    /* Return value */
 
     FUNC_ENTER_API(H5I_INVALID_HID)
     H5TRACE2("i", "i*s", loc_id, name);
@@ -188,24 +192,25 @@ H5Topen1(hid_t loc_id, const char *name)
     loc_params.type = H5VL_OBJECT_BY_SELF;
     loc_params.obj_type = H5I_get_type(loc_id);
 
-    /* get the location object */
-    if(NULL == (obj = (H5VL_object_t *)H5I_object(loc_id)))
+    /* Get the location object */
+    if(NULL == (vol_obj = (H5VL_object_t *)H5I_object(loc_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, H5I_INVALID_HID, "invalid location identifier")
 
-    /* Create the datatype through the VOL */
-    if(NULL == (vol_dt = H5VL_datatype_open(obj->vol_obj, loc_params, obj->vol_info->vol_cls, 
+    /* Open the datatype */
+    if(NULL == (dt = H5VL_datatype_open(vol_obj->data, loc_params, vol_obj->driver->cls, 
                                             name, H5P_DATATYPE_ACCESS_DEFAULT, 
-                                            dxpl_id, H5_REQUEST_NULL)))
-        HGOTO_ERROR(H5E_SYM, H5E_CANTINIT, H5I_INVALID_HID, "unable to open datatype")
+                                            H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL)))
+        HGOTO_ERROR(H5E_DATATYPE, H5E_CANTOPENOBJ, H5I_INVALID_HID, "unable to open named datatype")
 
-    /* Get an atom for the datatype */
-    if((ret_value = H5VL_register_id(H5I_DATATYPE, vol_dt, obj->vol_info, TRUE)) < 0)
-        HGOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, H5I_INVALID_HID, "unable to atomize datatype handle")
+    /* Register the type and return the ID */
+    if((ret_value = H5VL_register(H5I_DATATYPE, dt, vol_obj->driver, TRUE)) < 0)
+        HGOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, H5I_INVALID_HID, "unable to register named datatype")
 
 done:
-    if (H5I_INVALID_HID == ret_value)
-        if(vol_dt && H5VL_datatype_close(vol_dt, obj->vol_info->vol_cls, dxpl_id, H5_REQUEST_NULL) < 0)
-            HDONE_ERROR(H5E_SYM, H5E_CLOSEERROR, FAIL, "unable to release dataset")
+    /* Cleanup on error */
+    if(H5I_INVALID_HID == ret_value)
+        if(dt && H5VL_datatype_close(dt, vol_obj->driver->cls, H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL) < 0)
+            HDONE_ERROR(H5E_DATATYPE, H5E_CLOSEERROR, H5I_INVALID_HID, "unable to close datatype")
 
     FUNC_LEAVE_API(ret_value)
 } /* end H5Topen1() */

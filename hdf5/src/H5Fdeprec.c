@@ -36,6 +36,7 @@
 /* Headers */
 /***********/
 #include "H5private.h"          /* Generic Functions                        */
+#include "H5CXprivate.h"        /* API Contexts                             */
 #include "H5Eprivate.h"         /* Error handling                           */
 #include "H5Fpkg.h"             /* File access                              */
 #include "H5Iprivate.h"         /* IDs                                      */
@@ -96,13 +97,14 @@ herr_t
 H5Fget_info1(hid_t obj_id, H5F_info1_t *finfo)
 {
     H5F_t *f;                           /* Top file in mount hierarchy */
+    H5F_info2_t finfo2;                 /* Current file info struct */
     herr_t ret_value = SUCCEED;         /* Return value */
 
     FUNC_ENTER_API(FAIL)
     H5TRACE2("e", "i*x", obj_id, finfo);
 
     /* Check args */
-    if (!finfo)
+    if(!finfo)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "no info struct")
 
     /* For file IDs, get the file object directly
@@ -110,31 +112,28 @@ H5Fget_info1(hid_t obj_id, H5F_info1_t *finfo)
      * (This prevents the H5G_loc() call from returning the file pointer for
      * the top file in a mount hierarchy)
      */
-    if (H5I_get_type(obj_id) == H5I_FILE ) {
-        if (NULL == (f = (H5F_t *)H5VL_object(obj_id)))
+    if(H5I_get_type(obj_id) == H5I_FILE ) {
+        if(NULL == (f = (H5F_t *)H5VL_object(obj_id)))
             HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "not a file")
     }
     else {
         H5G_loc_t     loc;        /* Object location */
 
         /* Get symbol table entry */
-        if (H5G_loc(obj_id, &loc) < 0)
+        if(H5G_loc(obj_id, &loc) < 0)
              HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a valid object ID")
         f = loc.oloc->file;
     }
     HDassert(f->shared);
 
-    /* Reset file info struct */
-    HDmemset (finfo, 0, sizeof(*finfo));
+    /* Get the current file info */
+    if(H5F__get_info(f, &finfo2) < 0)
+        HGOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "unable to retrieve file info")
 
-    /* Get the size of the superblock extension */
-    if (H5F__super_size(f, H5AC_ind_read_dxpl_id, NULL, &finfo->super_ext_size) < 0)
-        HGOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "Unable to retrieve superblock extension size")
-
-    /* Check for SOHM info */
-    if (H5F_addr_defined(f->shared->sohm_addr))
-        if (H5SM_ih_size(f, H5AC_ind_read_dxpl_id, &finfo->sohm.hdr_size, &finfo->sohm.msgs_info) < 0)
-            HGOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "Unable to retrieve SOHM index & heap storage info")
+    /* Copy the compatible fields into the older struct */
+    finfo->super_ext_size = finfo2.super.super_ext_size;
+    finfo->sohm.hdr_size = finfo2.sohm.hdr_size;
+    finfo->sohm.msgs_info = finfo2.sohm.msgs_info;
 
 done:
     FUNC_LEAVE_API(ret_value)
@@ -150,9 +149,7 @@ done:
  *              driver when attempting to open the file when in fact it
  *              should use all known file drivers.
  *
- * Return:      Success:    1 (true) or 0 (false)
- *
- *              Failure:    -1
+ * Return:      TRUE/FALSE/FAIL
  *
  *-------------------------------------------------------------------------
  */
@@ -165,11 +162,11 @@ H5Fis_hdf5(const char *name)
     H5TRACE1("t", "*s", name);
 
     /* Check args and all the boring stuff. */
-    if (!name || !*name)
+    if(!name || !*name)
         HGOTO_ERROR(H5E_ARGS, H5E_BADRANGE, (-1), "no file name specified")
 
     /* call the private is_HDF5 function */
-    if ((ret_value = H5F_is_hdf5(name, H5P_FILE_ACCESS_DEFAULT, H5AC_ind_read_dxpl_id, H5AC_rawdata_dxpl_id)) < 0)
+    if((ret_value = H5F__is_hdf5(name, H5P_FILE_ACCESS_DEFAULT)) < 0)
         HGOTO_ERROR(H5E_FILE, H5E_NOTHDF5, (-1), "unable open file")
 
 done:
@@ -212,13 +209,12 @@ done:
  *             
  *-------------------------------------------------------------------------
  */
-/* XXX: This needs to go in the native VOL driver under 'optional' but I'm
- *      going to hack it for now.
+/* XXX (VOL MERGE): This could go in the native VOL driver under 'optional'.
  */
 herr_t
 H5Fset_latest_format(hid_t file_id, hbool_t latest_format)
 {
-    H5VL_object_t *obj;                 	/* File as VOL object           */
+    H5VL_object_t *vol_obj;                 /* File as VOL object           */
     H5F_t *f;                           	/* File                         */
     H5F_libver_t low  = H5F_LIBVER_LATEST;  /* Low bound 					*/
     H5F_libver_t high = H5F_LIBVER_LATEST;  /* High bound 					*/
@@ -228,18 +224,18 @@ H5Fset_latest_format(hid_t file_id, hbool_t latest_format)
     H5TRACE2("e", "ib", file_id, latest_format);
 
     /* Check args */
-    if (NULL == (obj = (H5VL_object_t *)H5I_object_verify(file_id, H5I_FILE)))
+    if(NULL == (vol_obj = (H5VL_object_t *)H5I_object_verify(file_id, H5I_FILE)))
         HGOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "not a file ID")
-    f = (H5F_t *)(obj->vol_obj);
+    f = (H5F_t *)(vol_obj->data);
 
     /* 'low' and 'high' are both initialized to LATEST.
      * If latest format is not expected, set 'low' to EARLIEST
 	 */
-    if (!latest_format)
+    if(!latest_format)
         low = H5F_LIBVER_EARLIEST;
 
     /* Call private set_libver_bounds function to set the bounds */
-    if (H5F_set_libver_bounds(f, low, high) < 0)
+    if(H5F__set_libver_bounds(f, low, high) < 0)
         HGOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "cannot set low/high bounds")
 
 done:

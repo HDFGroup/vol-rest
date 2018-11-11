@@ -39,6 +39,7 @@
 /* Private headers needed by this file */
 #include "H5private.h"		    /* Generic Functions                        */
 #include "H5ACprivate.h"	    /* Metadata cache                           */
+#include "H5CXprivate.h"        /* API Contexts                             */
 #include "H5Eprivate.h"		    /* Error handling                           */
 #include "H5Gprivate.h"		    /* Groups                                   */
 #include "H5Iprivate.h"         /* IDs                                      */
@@ -102,7 +103,7 @@
 H5G_obj_t
 H5Rget_obj_type1(hid_t id, H5R_type_t ref_type, const void *ref)
 {
-    H5VL_object_t    *obj = NULL;        /* object token of loc_id */
+    H5VL_object_t    *vol_obj = NULL;        /* object token of loc_id */
     H5VL_loc_params_t loc_params;
     H5O_type_t obj_type;        /* Object type */
     H5G_obj_t ret_value;        /* Return value */
@@ -121,13 +122,13 @@ H5Rget_obj_type1(hid_t id, H5R_type_t ref_type, const void *ref)
     loc_params.obj_type = H5I_get_type(id);
 
     /* Get the vol object */
-    if (NULL == (obj = H5VL_get_object(id)))
+    if (NULL == (vol_obj = H5VL_vol_object(id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, H5G_UNKNOWN, "invalid file identifier")
 
-    /* Get the object type through the VOL */
-    if (H5VL_object_get(obj->vol_obj, loc_params, obj->vol_info->vol_cls, H5VL_REF_GET_TYPE,
-                                    H5AC_ind_read_dxpl_id, H5_REQUEST_NULL, &obj_type, ref_type, ref) < 0)
-        HGOTO_ERROR(H5E_INTERNAL, H5E_CANTGET, H5G_UNKNOWN, "unable to get group info")
+    /* Get the object information */
+    if (H5VL_object_get(vol_obj->data, loc_params, vol_obj->driver->cls, H5VL_REF_GET_TYPE,
+                                    H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL, &obj_type, ref_type, ref) < 0)
+        HGOTO_ERROR(H5E_REFERENCE, H5E_CANTGET, H5G_UNKNOWN, "unable to determine object type")
 
     /* Set return value */
     ret_value = H5G_map_obj_type(obj_type);
@@ -156,23 +157,23 @@ done:
 hid_t
 H5Rdereference1(hid_t obj_id, H5R_type_t ref_type, const void *_ref)
 {
-    H5VL_object_t *obj = NULL;        /* object token of loc_id */
+    H5VL_object_t *vol_obj = NULL;        /* object token of loc_id */
     H5I_type_t opened_type;
     void *opened_obj = NULL;
     H5VL_loc_params_t loc_params;
-    hid_t ret_value = H5I_INVALID_HID;
-    
+    hid_t ret_value = H5I_INVALID_HID;	/* Return value */
+
     FUNC_ENTER_API(H5I_INVALID_HID)
     H5TRACE3("i", "iRt*x", obj_id, ref_type, _ref);
 
     /* Check args */
-    if(ref_type <= H5R_BADTYPE || ref_type >= H5R_MAXTYPE)
+    if (ref_type <= H5R_BADTYPE || ref_type >= H5R_MAXTYPE)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, H5I_INVALID_HID, "invalid reference type")
-    if(_ref == NULL)
+    if (_ref == NULL)
         HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, H5I_INVALID_HID, "invalid reference pointer")
 
-    /* get the vol object */
-    if(NULL == (obj = H5VL_get_object(obj_id)))
+    /* Get the VOL object */
+    if (NULL == (vol_obj = H5VL_vol_object(obj_id)))
         HGOTO_ERROR(H5E_ARGS, H5E_BADTYPE, H5I_INVALID_HID, "invalid file identifier")
 
     loc_params.type = H5VL_OBJECT_BY_REF;
@@ -181,13 +182,13 @@ H5Rdereference1(hid_t obj_id, H5R_type_t ref_type, const void *_ref)
     loc_params.loc_data.loc_by_ref.lapl_id = H5P_DATASET_ACCESS_DEFAULT;
     loc_params.obj_type = H5I_get_type(obj_id);
 
-    /* Open the object through the VOL */
-    if(NULL == (opened_obj = H5VL_object_open(obj->vol_obj, loc_params, obj->vol_info->vol_cls, &opened_type, 
-                                              H5AC_ind_read_dxpl_id, H5_REQUEST_NULL)))
-        HGOTO_ERROR(H5E_SYM, H5E_CANTINIT, H5I_INVALID_HID, "unable to open object")
+    /* Dereference */
+    if (NULL == (opened_obj = H5VL_object_open(vol_obj->data, loc_params, vol_obj->driver->cls, &opened_type, 
+                                              H5P_DATASET_XFER_DEFAULT, H5_REQUEST_NULL)))
+        HGOTO_ERROR(H5E_REFERENCE, H5E_CANTOPENOBJ, H5I_INVALID_HID, "unable to dereference object")
 
     /* Get an atom for the object */
-    if((ret_value = H5VL_register_id(opened_type, opened_obj, obj->vol_info, TRUE)) < 0)
+    if ((ret_value = H5VL_register(opened_type, opened_obj, vol_obj->driver, TRUE)) < 0)
         HGOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, H5I_INVALID_HID, "unable to atomize object handle")
 
 done:

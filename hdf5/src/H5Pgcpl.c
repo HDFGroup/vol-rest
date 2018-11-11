@@ -134,19 +134,19 @@ H5P__gcrt_reg_prop(H5P_genclass_t *pclass)
     FUNC_ENTER_STATIC
 
     /* Register group info property */
-    if(H5P_register_real(pclass, H5G_CRT_GROUP_INFO_NAME, H5G_CRT_GROUP_INFO_SIZE, &H5G_def_ginfo_g, 
+    if(H5P__register_real(pclass, H5G_CRT_GROUP_INFO_NAME, H5G_CRT_GROUP_INFO_SIZE, &H5G_def_ginfo_g, 
             NULL, NULL, NULL, H5G_CRT_GROUP_INFO_ENC, H5G_CRT_GROUP_INFO_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register link info property */
-    if(H5P_register_real(pclass, H5G_CRT_LINK_INFO_NAME, H5G_CRT_LINK_INFO_SIZE, &H5G_def_linfo_g, 
+    if(H5P__register_real(pclass, H5G_CRT_LINK_INFO_NAME, H5G_CRT_LINK_INFO_SIZE, &H5G_def_linfo_g, 
             NULL, NULL, NULL, H5G_CRT_LINK_INFO_ENC, H5G_CRT_LINK_INFO_DEC,
             NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 
     /* Register the lcpl ID property */
-    if(H5P_register_real(pclass, H5VL_PROP_GRP_LCPL_ID, sizeof(hid_t), &lcpl_id, 
+    if(H5P__register_real(pclass, H5VL_PROP_GRP_LCPL_ID, sizeof(hid_t), &lcpl_id, 
                          NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL) < 0)
         HGOTO_ERROR(H5E_PLIST, H5E_CANTINSERT, FAIL, "can't insert property into class")
 

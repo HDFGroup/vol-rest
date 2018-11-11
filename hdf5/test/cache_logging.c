@@ -65,16 +65,16 @@ test_logging_api(void)
     start_on_access_out = TRUE;
     location = NULL;
     size = 999;
-    if(H5Pget_mdc_log_options(fapl, &is_enabled_out, location, &size, 
+    if(H5Pget_mdc_log_options(fapl, &is_enabled_out, location, &size,
                               &start_on_access_out) < 0)
         TEST_ERROR;
-    if(size != strlen(LOG_LOCATION) + 1)
+    if(size != HDstrlen(LOG_LOCATION) + 1)
         TEST_ERROR;
 
     /* Check to make sure that the property list getter works */
     if(NULL == (location = (char *)HDcalloc(size, sizeof(char))))
         TEST_ERROR;
-    if(H5Pget_mdc_log_options(fapl, &is_enabled_out, location, &size, 
+    if(H5Pget_mdc_log_options(fapl, &is_enabled_out, location, &size,
                               &start_on_access_out) < 0)
         TEST_ERROR;
     if((is_enabled != is_enabled_out)
@@ -163,13 +163,14 @@ main(void)
 
     nerrors += test_logging_api();
 
-    if (nerrors) {
+    if(nerrors) {
         HDprintf("***** %d Metadata cache logging TEST%s FAILED! *****\n",
                nerrors, nerrors > 1 ? "S" : "");
         HDexit(EXIT_FAILURE);
     }
 
     HDprintf("All Metadata Cache Logging tests passed.\n");
+
     HDexit(EXIT_SUCCESS);
 }
 
