@@ -4468,7 +4468,7 @@ test_get_number_attributes(void)
 #endif
 
     /* Now get the number of attributes from the group */
-    if (H5Oget_info(container_group, &obj_info) < 0) {
+    if (H5Oget_info2(container_group, &obj_info, H5O_INFO_ALL) < 0) {
         H5_FAILED();
         printf("    couldn't retrieve root group info\n");
         goto error;
@@ -4484,7 +4484,7 @@ test_get_number_attributes(void)
     puts("Attempting to retrieve the number of attributes on a group with H5Oget_info_by_name\n");
 #endif
 
-    if (H5Oget_info_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, &obj_info, H5P_DEFAULT) < 0) {
+    if (H5Oget_info_by_name2(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, &obj_info, H5O_INFO_ALL, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't retrieve root group info\n");
         goto error;
@@ -4501,7 +4501,7 @@ test_get_number_attributes(void)
 #endif
 
     H5E_BEGIN_TRY {
-        if (H5Oget_info_by_idx(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, &obj_info, H5P_DEFAULT) >= 0) {
+        if (H5Oget_info_by_idx2(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, &obj_info, H5O_INFO_ALL, H5P_DEFAULT) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded!\n");
             goto error;
@@ -14420,7 +14420,7 @@ test_object_visit(void)
     puts("Visiting objects with H5Ovisit\n");
 #endif
 
-        if (H5Ovisit(container_group, H5_INDEX_NAME, H5_ITER_INC, object_visit_callback, NULL) >= 0) {
+        if (H5Ovisit2(container_group, H5_INDEX_NAME, H5_ITER_INC, object_visit_callback, NULL, H5O_INFO_ALL) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded\n");
             goto error;
@@ -14430,7 +14430,7 @@ test_object_visit(void)
     puts("Visiting objects with H5Ovisit_by_name\n");
 #endif
 
-        if (H5Ovisit_by_name(file_id, "/" OBJECT_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, object_visit_callback, NULL, H5P_DEFAULT) >= 0) {
+        if (H5Ovisit_by_name2(file_id, "/" OBJECT_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, object_visit_callback, NULL, H5O_INFO_ALL, H5P_DEFAULT) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded\n");
             goto error;

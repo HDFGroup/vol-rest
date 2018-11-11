@@ -876,7 +876,7 @@ RV_init(void)
 
     /* Register the REST VOL plugin, if it isn't already registered */
     if (H5I_VOL != H5Iget_type(REST_g)) {
-        if ((REST_g = H5VLregister((const H5VL_class_t *) &H5VL_rest_g)) < 0)
+        if ((REST_g = H5VLregister_driver((const H5VL_class_t *) &H5VL_rest_g)) < 0)
             FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTINSERT, FAIL, "can't create ID for REST VOL plugin")
     } /* end if */
 
@@ -936,7 +936,7 @@ done:
 
     /* Unregister the VOL */
     if (REST_g >= 0) {
-        if (H5VLunregister(REST_g) < 0) {
+        if (H5VLunregister_driver(REST_g) < 0) {
             H5Epush2(H5E_DEFAULT, __FILE__, FUNC, __LINE__, H5E_ERR_CLS, H5E_VOL, H5E_CLOSEERROR, "can't unregister REST VOL plugin");
             H5Eprint2(H5E_DEFAULT, NULL);
             H5Eclear2(H5E_DEFAULT);
@@ -3314,7 +3314,7 @@ RV_attr_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_attr_specific_t s
                 } H5E_END_TRY;
             } /* end else */
 
-            if ((attr_iter_object_id = H5VLobject_register(attr_iter_object, parent_obj_type, REST_g)) < 0)
+            if ((attr_iter_object_id = H5VLregister(parent_obj_type, attr_iter_object, REST_g)) < 0)
                 FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "can't create ID for parent object for attribute iteration")
             attr_iter_data.iter_obj_id = attr_iter_object_id;
 
@@ -7196,7 +7196,7 @@ RV_link_specific(void *obj, H5VL_loc_params_t loc_params, H5VL_link_specific_t s
             } H5E_END_TRY;
 
             /* Register an hid_t for the group object */
-            if ((link_iter_group_id = H5VLobject_register(link_iter_group_object, H5I_GROUP, REST_g)) < 0)
+            if ((link_iter_group_id = H5VLregister(H5I_GROUP, link_iter_group_object, REST_g)) < 0)
                 FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "can't create ID for group to be iterated over")
             link_iter_data.iter_obj_id = link_iter_group_id;
 
