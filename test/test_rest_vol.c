@@ -480,9 +480,19 @@ char filename[FILENAME_MAX_LENGTH];
 #define GET_LINK_INFO_TEST_EXT_LINK_NAME   "ext_link"
 #define GET_LINK_INFO_TEST_DSET_NAME       "get_link_info_dset"
 
-#define GET_LINK_NAME_TEST_DSET_SPACE_RANK 2
-#define GET_LINK_NAME_TEST_SUBGROUP_NAME   "get_link_name_test"
-#define GET_LINK_NAME_TEST_DSET_NAME       "get_link_name_dset"
+#define GET_LINK_NAME_BY_IDX_TEST_MAX_LINK_NAME_LENGTH 256
+#define GET_LINK_NAME_BY_IDX_TEST_DSET_SPACE_RANK      2
+#define GET_LINK_NAME_BY_IDX_TEST_SUBGROUP_NAME        "get_link_name_by_idx_test"
+#define GET_LINK_NAME_BY_IDX_TEST_DSET_NAME            "get_link_name_by_idx_dset"
+#define GET_LINK_NAME_BY_IDX_TEST_NUM_LINKS            10
+#define GET_LINK_NAME_BY_IDX_TEST_FIRST_LINK_IDX       4
+#define GET_LINK_NAME_BY_IDX_TEST_FIRST_LINK_NAME      "link4"
+#define GET_LINK_NAME_BY_IDX_TEST_SECOND_LINK_IDX      2
+#define GET_LINK_NAME_BY_IDX_TEST_SECOND_LINK_NAME     "link7"
+#define GET_LINK_NAME_BY_IDX_TEST_THIRD_LINK_IDX       8
+#define GET_LINK_NAME_BY_IDX_TEST_THIRD_LINK_NAME      "link1"
+#define GET_LINK_NAME_BY_IDX_TEST_FOURTH_LINK_IDX      2
+#define GET_LINK_NAME_BY_IDX_TEST_FOURTH_LINK_NAME     "link2"
 
 #define GET_LINK_VAL_TEST_SUBGROUP_NAME  "get_link_val_test"
 #define GET_LINK_VAL_TEST_SOFT_LINK_NAME "soft_link"
@@ -705,7 +715,7 @@ static int test_delete_link(void);
 static int test_copy_link(void);
 static int test_move_link(void);
 static int test_get_link_info(void);
-static int test_get_link_name(void);
+static int test_get_link_name_by_index(void);
 static int test_get_link_val(void);
 static int test_link_iterate(void);
 static int test_link_iterate_0_links(void);
@@ -868,7 +878,7 @@ static int (*link_tests[])(void) = {
         test_copy_link,
         test_move_link,
         test_get_link_info,
-        test_get_link_name,
+        test_get_link_name_by_index,
         test_get_link_val,
         test_link_iterate,
         test_link_iterate_0_links,
@@ -12038,21 +12048,21 @@ error:
 }
 
 static int
-test_get_link_name(void)
+test_get_link_name_by_index(void)
 {
-    hsize_t dims[GET_LINK_NAME_TEST_DSET_SPACE_RANK];
-    ssize_t ret;
-    size_t  i;
-    htri_t  link_exists;
-    size_t  link_name_buf_size = 0;
-    hid_t   file_id = -1, fapl_id = -1;
-    hid_t   container_group = -1, group_id = -1;
-    hid_t   dset_id = -1;
-    hid_t   dset_dtype = -1;
-    hid_t   dset_dspace = -1;
-    char   *link_name_buf = NULL;
+    hsize_t  dims[GET_LINK_NAME_BY_IDX_TEST_DSET_SPACE_RANK];
+    ssize_t  ret;
+    size_t   i;
+    htri_t   link_exists;
+    size_t   link_name_buf_size = 0;
+    hid_t    file_id = -1, fapl_id = -1;
+    hid_t    container_group = -1, group_id = -1;
+    hid_t    dset_id = -1;
+    hid_t    dset_dtype = -1;
+    hid_t    dset_dspace = -1;
+    char    *link_name_buf = NULL;
 
-    TESTING("get link name")
+    TESTING("get link name by index")
 
     if (RVinit() < 0)
         TEST_ERROR
@@ -12074,7 +12084,7 @@ test_get_link_name(void)
         goto error;
     }
 
-    if ((group_id = H5Gcreate2(container_group, GET_LINK_NAME_TEST_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+    if ((group_id = H5Gcreate2(container_group, GET_LINK_NAME_BY_IDX_TEST_SUBGROUP_NAME, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create container subgroup\n");
         goto error;
@@ -12083,21 +12093,21 @@ test_get_link_name(void)
     if ((dset_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
         TEST_ERROR
 
-    for (i = 0; i < GET_LINK_NAME_TEST_DSET_SPACE_RANK; i++)
+    for (i = 0; i < GET_LINK_NAME_BY_IDX_TEST_DSET_SPACE_RANK; i++)
         dims[i] = (hsize_t) (rand() % MAX_DIM_SIZE + 1);
 
-    if ((dset_dspace = H5Screate_simple(GET_LINK_NAME_TEST_DSET_SPACE_RANK, dims, NULL)) < 0)
+    if ((dset_dspace = H5Screate_simple(GET_LINK_NAME_BY_IDX_TEST_DSET_SPACE_RANK, dims, NULL)) < 0)
         TEST_ERROR
 
-    if ((dset_id = H5Dcreate2(group_id, GET_LINK_NAME_TEST_DSET_NAME, dset_dtype, dset_dspace,
+    if ((dset_id = H5Dcreate2(group_id, GET_LINK_NAME_BY_IDX_TEST_DSET_NAME, dset_dtype, dset_dspace,
             H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't create dataset\n");
         goto error;
     }
 
-    /* Verify the link has been created */
-    if ((link_exists = H5Lexists(group_id, GET_LINK_NAME_TEST_DSET_NAME, H5P_DEFAULT)) < 0) {
+    /* Verify that the hard link exists */
+    if ((link_exists = H5Lexists(group_id, GET_LINK_NAME_BY_IDX_TEST_DSET_NAME, H5P_DEFAULT)) < 0) {
         H5_FAILED();
         printf("    couldn't determine if link exists\n");
         goto error;
@@ -12105,50 +12115,254 @@ test_get_link_name(void)
 
     if (!link_exists) {
         H5_FAILED();
-        printf("    link did not exist\n");
+        printf("    link '%s' did not exist\n", GET_LINK_NAME_BY_IDX_TEST_DSET_NAME);
         goto error;
     }
 
-    H5E_BEGIN_TRY {
+    /* Verify that retrieving the link name by index works with hard links; the dataset hard link
+     * should be the only link in the group currently.
+     */
+
 #ifdef RV_PLUGIN_DEBUG
-        puts("Retrieving size of link name\n");
+    puts("Retrieving link name of hard link to dataset\n");
+    puts("Retrieving size of link name\n");
 #endif
 
-        if ((ret = H5Lget_name_by_idx(group_id, ".", H5_INDEX_NAME, H5_ITER_INC, 0, NULL, link_name_buf_size, H5P_DEFAULT)) >= 0) {
-            H5_FAILED();
-            printf("    unsupported API succeeded\n");
-            goto error;
-        }
+    if ((ret = H5Lget_name_by_idx(group_id, ".", H5_INDEX_NAME, H5_ITER_INC, 0, NULL, link_name_buf_size, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    unable to retrieve link name size\n");
+        goto error;
+    }
 
-#if 0
-        link_name_buf_size = (size_t) ret;
-        if (NULL == (link_name_buf = (char *) malloc(link_name_buf_size)))
-            TEST_ERROR
-#endif
+    link_name_buf_size = (size_t) ret;
+    if (NULL == (link_name_buf = (char *) calloc(1, link_name_buf_size + 1)))
+        TEST_ERROR
 
 #ifdef RV_PLUGIN_DEBUG
     puts("Retrieving link name\n");
 #endif
 
-        if (H5Lget_name_by_idx(group_id, ".", H5_INDEX_NAME, H5_ITER_INC, 0, link_name_buf, link_name_buf_size, H5P_DEFAULT) >= 0) {
-            H5_FAILED();
-            printf("    unsupported API succeeded\n");
-            goto error;
-        }
+    if (H5Lget_name_by_idx(group_id, ".", H5_INDEX_NAME, H5_ITER_INC, 0, link_name_buf, link_name_buf_size + 1, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    unable to retrieve link name\n");
+        goto error;
+    }
 
-#if 0
-        if (strcmp(link_name_buf, GET_LINK_NAME_TEST_LINK_NAME)) {
-            H5_FAILED();
-            printf("    link name did not match\n");
-            goto error;
-        }
-#endif
-    } H5E_END_TRY;
+    if (strcmp(link_name_buf, GET_LINK_NAME_BY_IDX_TEST_DSET_NAME)) {
+        H5_FAILED();
+        printf("    link name '%s' did not match '%s'\n", link_name_buf, GET_LINK_NAME_BY_IDX_TEST_DSET_NAME);
+        goto error;
+    }
 
     if (link_name_buf) {
         free(link_name_buf);
         link_name_buf = NULL;
     }
+
+    /*
+     * Delete the dataset hard link so the next tests won't be thrown off
+     */
+    if (H5Ldelete(group_id, GET_LINK_NAME_BY_IDX_TEST_DSET_NAME, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    couldn't delete hard link\n");
+        goto error;
+    }
+
+
+    /* Create 10 soft links for testing with; create links backwards to make sure sorting by creation order
+     * doesn't look the same as sorting by link name */
+    for (i = GET_LINK_NAME_BY_IDX_TEST_NUM_LINKS - 1; i >= 0; i--) {
+        char temp_link_name[GET_LINK_NAME_BY_IDX_TEST_MAX_LINK_NAME_LENGTH];
+
+        snprintf(temp_link_name, GET_LINK_NAME_BY_IDX_TEST_MAX_LINK_NAME_LENGTH, "link%zu", i);
+
+        if (H5Lcreate_soft("/" LINK_TEST_GROUP_NAME "/" GET_LINK_NAME_BY_IDX_TEST_SUBGROUP_NAME, group_id, temp_link_name, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+            H5_FAILED();
+            printf("    failed to create soft link '%s'\n", temp_link_name);
+            goto error;
+        }
+
+        if ((link_exists = H5Lexists(group_id, temp_link_name, H5P_DEFAULT)) < 0) {
+            H5_FAILED();
+            printf("    couldn't determine if link exists\n");
+            goto error;
+        }
+
+        if (!link_exists) {
+            H5_FAILED();
+            printf("    link '%s' did not exist\n", temp_link_name);
+            goto error;
+        }
+
+        if (i == 0) break;
+    }
+
+    /*
+     * A variety of ways of reaching the same group are used below in order to test the
+     * capability of the function to correctly find the specified group by ID and path.
+     */
+
+#ifdef RV_PLUGIN_DEBUG
+    puts("Retrieving link name by index number; sorted by link name in increasing order\n");
+    puts("Retrieving size of link name\n");
+#endif
+
+    if ((ret = H5Lget_name_by_idx(group_id, ".", H5_INDEX_NAME, H5_ITER_INC, GET_LINK_NAME_BY_IDX_TEST_FIRST_LINK_IDX, NULL, link_name_buf_size, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    unable to retrieve link name size\n");
+        goto error;
+    }
+
+    link_name_buf_size = (size_t) ret;
+    if (NULL == (link_name_buf = (char *) calloc(1, link_name_buf_size + 1)))
+        TEST_ERROR
+
+#ifdef RV_PLUGIN_DEBUG
+    puts("Retrieving link name\n");
+#endif
+
+    if (H5Lget_name_by_idx(group_id, ".", H5_INDEX_NAME, H5_ITER_INC, GET_LINK_NAME_BY_IDX_TEST_FIRST_LINK_IDX, link_name_buf, link_name_buf_size + 1, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    unable to retrieve link name\n");
+        goto error;
+    }
+
+    if (strcmp(link_name_buf, GET_LINK_NAME_BY_IDX_TEST_FIRST_LINK_NAME)) {
+        H5_FAILED();
+        printf("    link name '%s' did not match '%s'\n", link_name_buf, GET_LINK_NAME_BY_IDX_TEST_FIRST_LINK_NAME);
+        goto error;
+    }
+
+    if (link_name_buf) {
+        free(link_name_buf);
+        link_name_buf = NULL;
+    }
+
+#ifdef RV_PLUGIN_DEBUG
+    puts("Retrieving link name by index number; sorted by link name in decreasing order\n");
+    puts("Retrieving size of link name\n");
+#endif
+
+    if ((ret = H5Lget_name_by_idx(file_id, "/" LINK_TEST_GROUP_NAME "/" GET_LINK_NAME_BY_IDX_TEST_SUBGROUP_NAME, H5_INDEX_NAME, H5_ITER_DEC, GET_LINK_NAME_BY_IDX_TEST_SECOND_LINK_IDX, NULL, link_name_buf_size, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    unable to retrieve link name size\n");
+        goto error;
+    }
+
+    link_name_buf_size = (size_t) ret;
+    if (NULL == (link_name_buf = (char *) calloc(1, link_name_buf_size + 1)))
+        TEST_ERROR
+
+#ifdef RV_PLUGIN_DEBUG
+    puts("Retrieving link name\n");
+#endif
+
+    if (H5Lget_name_by_idx(file_id, "/" LINK_TEST_GROUP_NAME "/" GET_LINK_NAME_BY_IDX_TEST_SUBGROUP_NAME, H5_INDEX_NAME, H5_ITER_DEC, GET_LINK_NAME_BY_IDX_TEST_SECOND_LINK_IDX, link_name_buf, link_name_buf_size + 1, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    unable to retrieve link name\n");
+        goto error;
+    }
+
+    if (strcmp(link_name_buf, GET_LINK_NAME_BY_IDX_TEST_SECOND_LINK_NAME)) {
+        H5_FAILED();
+        printf("    link name '%s' did not match '%s'\n", link_name_buf, GET_LINK_NAME_BY_IDX_TEST_SECOND_LINK_NAME);
+        goto error;
+    }
+
+    if (link_name_buf) {
+        free(link_name_buf);
+        link_name_buf = NULL;
+    }
+
+#ifdef RV_PLUGIN_DEBUG
+    puts("Retrieving link name by index number; sorted by link creation order in increasing order\n");
+    puts("Retrieving size of link name\n");
+#endif
+
+    if ((ret = H5Lget_name_by_idx(container_group, GET_LINK_NAME_BY_IDX_TEST_SUBGROUP_NAME, H5_INDEX_CRT_ORDER, H5_ITER_INC, GET_LINK_NAME_BY_IDX_TEST_THIRD_LINK_IDX, NULL, link_name_buf_size, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    unable to retrieve link name size\n");
+        goto error;
+    }
+
+    link_name_buf_size = (size_t) ret;
+    if (NULL == (link_name_buf = (char *) calloc(1, link_name_buf_size + 1)))
+        TEST_ERROR
+
+#ifdef RV_PLUGIN_DEBUG
+    puts("Retrieving link name\n");
+#endif
+
+    if (H5Lget_name_by_idx(container_group, GET_LINK_NAME_BY_IDX_TEST_SUBGROUP_NAME, H5_INDEX_CRT_ORDER, H5_ITER_INC, GET_LINK_NAME_BY_IDX_TEST_THIRD_LINK_IDX, link_name_buf, link_name_buf_size + 1, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    unable to retrieve link name\n");
+        goto error;
+    }
+
+    if (strcmp(link_name_buf, GET_LINK_NAME_BY_IDX_TEST_THIRD_LINK_NAME)) {
+        H5_FAILED();
+        printf("    link name '%s' did not match '%s'\n", link_name_buf, GET_LINK_NAME_BY_IDX_TEST_THIRD_LINK_NAME);
+        goto error;
+    }
+
+    if (link_name_buf) {
+        free(link_name_buf);
+        link_name_buf = NULL;
+    }
+
+#ifdef RV_PLUGIN_DEBUG
+    puts("Retrieving link name by index number; sorted by link creation order in decreasing order\n");
+    puts("Retrieving size of link name\n");
+#endif
+
+    if ((ret = H5Lget_name_by_idx(group_id, "/" LINK_TEST_GROUP_NAME "/" GET_LINK_NAME_BY_IDX_TEST_SUBGROUP_NAME, H5_INDEX_CRT_ORDER, H5_ITER_DEC, GET_LINK_NAME_BY_IDX_TEST_FOURTH_LINK_IDX, NULL, link_name_buf_size, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    unable to retrieve link name size\n");
+        goto error;
+    }
+
+    link_name_buf_size = (size_t) ret;
+    if (NULL == (link_name_buf = (char *) calloc(1, link_name_buf_size + 1)))
+        TEST_ERROR
+
+#ifdef RV_PLUGIN_DEBUG
+    puts("Retrieving link name\n");
+#endif
+
+    if (H5Lget_name_by_idx(group_id, "/" LINK_TEST_GROUP_NAME "/" GET_LINK_NAME_BY_IDX_TEST_SUBGROUP_NAME, H5_INDEX_CRT_ORDER, H5_ITER_DEC, GET_LINK_NAME_BY_IDX_TEST_FOURTH_LINK_IDX, link_name_buf, link_name_buf_size + 1, H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    unable to retrieve link name\n");
+        goto error;
+    }
+
+    if (strcmp(link_name_buf, GET_LINK_NAME_BY_IDX_TEST_FOURTH_LINK_NAME)) {
+        H5_FAILED();
+        printf("    link name '%s' did not match '%s'\n", link_name_buf, GET_LINK_NAME_BY_IDX_TEST_FOURTH_LINK_NAME);
+        goto error;
+    }
+
+    if (link_name_buf) {
+        free(link_name_buf);
+        link_name_buf = NULL;
+    }
+
+    /* Check to make sure that using an index number beyond the number of links will fail */
+    H5E_BEGIN_TRY {
+        link_name_buf_size = 256;
+        if (NULL == (link_name_buf = (char *) calloc(1, link_name_buf_size + 1)))
+            TEST_ERROR
+
+        if (H5Lget_name_by_idx(group_id, ".", H5_INDEX_NAME, H5_ITER_INC, GET_LINK_NAME_BY_IDX_TEST_NUM_LINKS, link_name_buf, link_name_buf_size, H5P_DEFAULT) >= 0) {
+            H5_FAILED();
+            printf("    using an index number beyond the number of links didn't fail!\n");
+            goto error;
+        }
+
+        if (link_name_buf) {
+            free(link_name_buf);
+            link_name_buf = NULL;
+        }
+    } H5E_END_TRY;
 
     if (H5Sclose(dset_dspace) < 0)
         TEST_ERROR

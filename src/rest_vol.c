@@ -394,6 +394,15 @@ typedef struct iter_data {
 } iter_data;
 
 /*
+ * A struct which is used to return a link's name or the size of
+ * a link's name when calling H5Lget_name_by_idx.
+ */
+typedef struct link_name_by_idx_data {
+    size_t  link_name_len;
+    char   *link_name;
+} link_name_by_idx_data;
+
+/*
  * A struct which is filled out during link iteration and contains
  * all of the information needed to iterate through links by both
  * alphabetical order and link creation order in increasing and
@@ -602,8 +611,11 @@ static char *RV_url_encode_path(const char *path);
 /* H5Dscatter() callback for dataset reads */
 static herr_t dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *op_data);
 
-/* Qsort callback to sort links by creation order */
-static int cmp_links_by_creation_order(const void *link1, const void *link2);
+/* Qsort callback to sort links by name or creation order */
+static int cmp_links_by_creation_order_inc(const void *link1, const void *link2);
+static int cmp_links_by_creation_order_dec(const void *link1, const void *link2);
+static int cmp_links_by_name_inc(const void *link1, const void *link2);
+static int cmp_links_by_name_dec(const void *link1, const void *link2);
 
 /* Comparison function to compare two keys in an rv_hash_table_t */
 static int rv_compare_string_keys(void *value1, void *value2);
@@ -615,6 +627,7 @@ static herr_t RV_parse_response(char *HTTP_response, void *callback_data_in, voi
 static herr_t RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_link_obj_type_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_get_link_name_by_idx_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 static herr_t RV_attr_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
@@ -2638,7 +2651,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
 
                     *ret_size = (ssize_t) strlen(loc_obj->u.attribute.attr_name);
 
-                    if (name_buf) {
+                    if (name_buf && name_buf_size) {
                         strncpy(name_buf, loc_obj->u.attribute.attr_name, name_buf_size - 1);
                         name_buf[name_buf_size - 1] = '\0';
                     } /* end if */
@@ -5406,7 +5419,7 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_l
 
             *ret_size = (ssize_t) strlen(_obj->domain->u.file.filepath_name);
 
-            if (name_buf) {
+            if (name_buf && name_buf_size) {
                 strncpy(name_buf, _obj->u.file.filepath_name, name_buf_size - 1);
                 name_buf[name_buf_size - 1] = '\0';
             } /* end if */
@@ -6743,7 +6756,92 @@ RV_link_get(void *obj, H5VL_loc_params_t loc_params, H5VL_link_get_t get_type,
         /* H5Lget_name_by_idx */
         case H5VL_LINK_GET_NAME:
         {
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "H5Lget_name_by_idx is unsupported")
+            link_name_by_idx_data  link_name_data;
+            H5I_type_t             obj_type = H5I_GROUP;
+            iter_data              by_idx_data;
+            htri_t                 search_ret;
+            char                  *link_name_buf = va_arg(arguments, char *);
+            size_t                 link_name_buf_size = va_arg(arguments, size_t);
+            ssize_t               *ret_size = va_arg(arguments, ssize_t *);
+
+            /*
+             * NOTE: The current implementation of this function does not do any sort of caching.
+             * On each call, the index of all links in the specified group is built up and sorted according
+             * to the order specified. Then, the nth link's name is retrieved and everything is torn down.
+             * If wanting to retrieve the name of every link in a given group, it will currently be much
+             * more efficient to use H5Literate instead.
+             */
+
+            /*
+             * Setup information needed for determining the order to sort the index by.
+             */
+            by_idx_data.is_recursive               = FALSE;
+            by_idx_data.index_type                 = loc_params.loc_data.loc_by_idx.idx_type;
+            by_idx_data.iter_order                 = loc_params.loc_data.loc_by_idx.order;
+            by_idx_data.idx_p                      = &loc_params.loc_data.loc_by_idx.n;
+            by_idx_data.iter_function.link_iter_op = NULL;
+            by_idx_data.op_data                    = NULL;
+
+            /*
+             * Setup information to be passed back from link name retrieval callback
+             */
+            link_name_data.link_name     = link_name_buf;
+            link_name_data.link_name_len = link_name_buf_size;
+
+            /*
+             * Locate group
+             */
+            search_ret = RV_find_object_by_path(loc_obj, loc_params.loc_data.loc_by_idx.name, &obj_type,
+                    RV_copy_object_URI_callback, NULL, temp_URI);
+            if (!search_ret || search_ret < 0)
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate group")
+
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                                    "%s/groups/%s/links",
+                                    base_URL,
+                                    temp_URI)
+                ) < 0)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error")
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "H5Lget_name_by_idx request URL size exceeded maximum URL size")
+
+            /* Make a GET request to the server to retrieve all of the links in the given group */
+
+            /* Setup the host header */
+            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
+            if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header")
+
+            strcpy(host_header, host_string);
+
+            curl_headers = curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+
+            /* Disable use of Expect: 100 Continue HTTP response */
+            curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf)
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf)
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf)
+
+#ifdef RV_PLUGIN_DEBUG
+            printf("-> Retrieving all links in group using URL: %s\n\n", request_url);
+
+            printf("   /**********************************\\\n");
+            printf("-> | Making GET request to the server |\n");
+            printf("   \\**********************************/\n\n");
+#endif
+
+            CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
+
+            if (RV_parse_response(response_buffer.buffer, &by_idx_data, &link_name_data, RV_get_link_name_by_idx_callback) < 0)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link name by index")
+
+            *ret_size = (ssize_t) link_name_data.link_name_len;
+
             break;
         } /* H5VL_LINK_GET_NAME */
 
@@ -8443,7 +8541,11 @@ dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *
  * Purpose:     Qsort callback to sort attributes by creation order when
  *              doing attribute iteration
  *
- * Return:      Non-negative on success/Negative on failure
+ * Return:      negative if the creation time of attr1 is earlier than that
+ *              of attr2
+ *              0 if the creation time of attr1 and attr2 are equal
+ *              positive if the creation time of attr1 is later than that
+ *              of attr2
  *
  * Programmer:  Jordan Henderson
  *              January, 2018
@@ -8459,24 +8561,103 @@ cmp_attributes_by_creation_order(const void *attr1, const void *attr2)
 
 
 /*-------------------------------------------------------------------------
- * Function:    cmp_links_by_creation_order
+ * Function:    cmp_links_by_creation_order_inc
  *
- * Purpose:     Qsort callback to sort links by creation order when doing
- *              link iteration
+ * Purpose:     Qsort callback to sort links by creation order; the links
+ *              will be sorted in increasing order of creation order.
  *
- * Return:      Non-negative on success/Negative on failure
+ * Return:      negative if the creation time of link1 is earlier than that
+ *              of link2
+ *              0 if the creation time of link1 and link2 are equal
+ *              positive if the creation time of link1 is later than that
+ *              of link2
  *
  * Programmer:  Jordan Henderson
  *              December, 2017
  */
 static int
-cmp_links_by_creation_order(const void *link1, const void *link2)
+cmp_links_by_creation_order_inc(const void *link1, const void *link2)
 {
     const link_table_entry *_link1 = (const link_table_entry *) link1;
     const link_table_entry *_link2 = (const link_table_entry *) link2;
 
     return ((_link1->crt_time > _link2->crt_time) - (_link1->crt_time < _link2->crt_time));
-} /* end cmp_links_by_creation_order() */
+} /* end cmp_links_by_creation_order_inc() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    cmp_links_by_creation_order_dec
+ *
+ * Purpose:     Qsort callback to sort links by creation order; the links
+ *              will be sorted in decreasing order of creation order.
+ *
+ * Return:      negative if the creation time of link1 is later than that
+ *              of link2
+ *              0 if the creation time of link1 and link2 are equal
+ *              positive if the creation time of link1 is earlier than that
+ *              of link2
+ *
+ * Programmer:  Jordan Henderson
+ *              November, 2018
+ */
+static int
+cmp_links_by_creation_order_dec(const void *link1, const void *link2)
+{
+    const link_table_entry *_link1 = (const link_table_entry *) link1;
+    const link_table_entry *_link2 = (const link_table_entry *) link2;
+
+    return ((double) (-1.0)) * ((_link1->crt_time > _link2->crt_time) - (_link1->crt_time < _link2->crt_time));
+} /* end cmp_links_by_creation_order_dec() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    cmp_links_by_name_inc
+ *
+ * Purpose:     Qsort callback to sort links by name; the links will be
+ *              sorted in increasing order of name.
+ *
+ * Return:      negative if the name of link1 comes earlier alphabetically
+ *              than that of link2
+ *              0 if the name of link1 and link2 are alphabetically equal
+ *              positive if the name of link1 comes later alphabetically
+ *              than that of link2
+ *
+ * Programmer:  Jordan Henderson
+ *              November, 2018
+ */
+static int
+cmp_links_by_name_inc(const void *link1, const void *link2)
+{
+    const link_table_entry *_link1 = (const link_table_entry *) link1;
+    const link_table_entry *_link2 = (const link_table_entry *) link2;
+
+    return strncmp(_link1->link_name, _link2->link_name, LINK_NAME_MAX_LENGTH);
+} /* end cmp_links_by_name_inc() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    cmp_links_by_name_dec
+ *
+ * Purpose:     Qsort callback to sort links by name; the links will be
+ *              sorted in decreasing order of name.
+ *
+ * Return:      negative if the name of link1 comes later alphabetically
+ *              than that of link2
+ *              0 if the name of link1 and link2 are alphabetically equal
+ *              positive if the name of link1 comes earlier alphabetically
+ *              than that of link2
+ *
+ * Programmer:  Jordan Henderson
+ *              November, 2018
+ */
+static int
+cmp_links_by_name_dec(const void *link1, const void *link2)
+{
+    const link_table_entry *_link1 = (const link_table_entry *) link1;
+    const link_table_entry *_link2 = (const link_table_entry *) link2;
+
+    return (-1) * strncmp(_link1->link_name, _link2->link_name, LINK_NAME_MAX_LENGTH);
+} /* end cmp_links_by_name_dec() */
 
 
 /*-------------------------------------------------------------------------
@@ -8826,6 +9007,118 @@ done:
 
 
 /*-------------------------------------------------------------------------
+ * Function:    RV_get_link_name_by_idx_callback
+ *
+ * Purpose:     A callback for RV_parse_response which will search an HTTP
+ *              response for all the links in a group, and do one of two
+ *              things, based on the value of the buffer size given through
+ *              the callback_data_in parameter, as well as whether the
+ *              buffer given through the callback_data_in parameter is
+ *              NULL or non-NULL.
+ *
+ *              If the buffer specified is NULL, the size of the name of
+ *              the link specified by the given index number will be
+ *              returned.
+ *
+ *              If the buffer specified is non-NULL and the buffer size
+ *              specified is positive, the name of the link specified by
+ *              the given index number will be copied into the buffer
+ *              given. Up to n characters will be copied, where n is the
+ *              specified size of the buffer. This function makes sure
+ *              to NULL terminate the buffer given.
+ *
+ *              This callback is used by H5Lget_name_by_idx to do all of
+ *              its necessary processing.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              November, 2018
+ */
+static herr_t
+RV_get_link_name_by_idx_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+{
+    link_name_by_idx_data  *link_name_data = (link_name_by_idx_data *) callback_data_out;
+    link_table_entry       *link_table = NULL;
+    iter_data              *by_idx_data = (iter_data *) callback_data_in;
+    size_t                  link_table_num_entries;
+    int                   (*link_table_sort_func)(const void *, const void *);
+    herr_t                  ret_value = SUCCEED;
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL")
+    if (!by_idx_data)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link index order data pointer was NULL")
+    if (!by_idx_data->idx_p)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link index number pointer was NULL")
+    if (!link_name_data)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link name data pointer was NULL")
+
+    /*
+     * Setup the appropriate sorting function
+     */
+    if (H5_INDEX_NAME == by_idx_data->index_type) {
+        if (H5_ITER_INC == by_idx_data->iter_order || H5_ITER_NATIVE == by_idx_data->iter_order)
+            link_table_sort_func = cmp_links_by_name_inc;
+        else
+            link_table_sort_func = cmp_links_by_name_dec;
+    } /* end if */
+    else {
+        if (H5_ITER_INC == by_idx_data->iter_order || H5_ITER_NATIVE == by_idx_data->iter_order)
+            link_table_sort_func = cmp_links_by_creation_order_inc;
+        else
+            link_table_sort_func = cmp_links_by_creation_order_dec;
+    } /* end else */
+
+#ifdef RV_PLUGIN_DEBUG
+    printf("-> Building link table and sorting by %s in %s order\n\n",
+            (H5_INDEX_NAME == by_idx_data->index_type) ? "link name" : "link creation order",
+            (H5_ITER_INC == by_idx_data->iter_order || H5_ITER_NATIVE == by_idx_data->iter_order) ? "increasing" : "decreasing");
+#endif
+
+    if (RV_build_link_table(HTTP_response, by_idx_data->is_recursive, link_table_sort_func,
+            &link_table, &link_table_num_entries, NULL) < 0)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table")
+
+    /* Check to make sure the index given is within bounds */
+    if (*by_idx_data->idx_p >= link_table_num_entries)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link index number larger than number of links")
+
+#ifdef RV_PLUGIN_DEBUG
+    printf("-> Retrieving link name of link at index %llu\n\n", (long long unsigned int) *by_idx_data->idx_p);
+#endif
+
+    /* Retrieve the nth link name */
+    {
+        link_table_entry selected_link_entry = link_table[*by_idx_data->idx_p];
+
+        /* If a buffer of the appropriate size has already been allocated, copy the link name back */
+        if (link_name_data->link_name && link_name_data->link_name_len) {
+            strncpy(link_name_data->link_name, link_table[*by_idx_data->idx_p].link_name, link_name_data->link_name_len);
+            link_name_data->link_name[link_name_data->link_name_len - 1] = '\0';
+
+#ifdef RV_PLUGIN_DEBUG
+            printf("-> Link name was '%s'\n\n", link_name_data->link_name);
+#endif
+        } /* end if */
+
+        /* Set the link name length in case the function call is trying to find this out */
+        link_name_data->link_name_len = strlen(selected_link_entry.link_name);
+
+#ifdef RV_PLUGIN_DEBUG
+        printf("-> Returning link name length of %llu\n\n", (long long unsigned int) link_name_data->link_name_len);
+#endif
+    }
+
+done:
+    if (link_table)
+        RV_free_link_table(link_table, link_table_num_entries);
+
+    return ret_value;
+} /* end RV_get_link_name_by_idx_callback() */
+
+
+/*-------------------------------------------------------------------------
  * Function:    RV_get_link_val_callback
  *
  * Purpose:     A callback for RV_parse_response which will search an HTTP
@@ -9050,7 +9343,7 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
          * by creation order, sort them this way while building the link table. If, in the future, links are not returned
          * in alphabetical order by default, this code should be changed to reflect this.
          */
-        if (RV_build_link_table(HTTP_response, link_iter_data->is_recursive, cmp_links_by_creation_order,
+        if (RV_build_link_table(HTTP_response, link_iter_data->is_recursive, cmp_links_by_creation_order_inc,
                 &link_table, &link_table_num_entries, visited_link_table) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table")
 
