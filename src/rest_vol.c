@@ -14968,6 +14968,18 @@ RV_free_visited_link_hash_table_key(rv_hash_table_key_t value)
     value = RV_free(value);
 }
 
+H5PLUGIN_DLL H5PL_type_t
+H5PLget_plugin_type(void)
+{
+    return H5PL_TYPE_VOL;
+} /* end H5PLget_plugin_type() */
+
+H5PLUGIN_DLL const void *
+H5PLget_plugin_info(void)
+{
+    return &H5VL_rest_g;
+} /* end H5PLget_plugin_info() */
+
 #ifdef RV_PLUGIN_DEBUG
 
 /*-------------------------------------------------------------------------

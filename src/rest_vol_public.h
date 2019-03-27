@@ -25,6 +25,7 @@
 
 #include "H5public.h"
 #include "H5Rpublic.h"
+#include "H5PLextern.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -84,10 +85,10 @@ typedef struct rv_obj_ref_t {
     char       ref_obj_URI[URI_MAX_LENGTH];
 } rv_obj_ref_t;
 
-H5_DLL herr_t      RVinit(void);
-H5_DLL herr_t      RVterm(void);
-H5_DLL herr_t      H5Pset_fapl_rest_vol(hid_t fapl_id);
-H5_DLL const char *RVget_uri(hid_t);
+H5PLUGIN_DLL herr_t      RVinit(void);
+H5PLUGIN_DLL herr_t      RVterm(void);
+H5PLUGIN_DLL herr_t      H5Pset_fapl_rest_vol(hid_t fapl_id);
+H5PLUGIN_DLL const char *RVget_uri(hid_t);
 
 #ifdef __cplusplus
 }

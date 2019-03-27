@@ -44,9 +44,9 @@ set (REST_VOL_PUBLIC_HEADERS
 
 add_library (${REST_VOL_LIB_TARGET} STATIC ${REST_VOL_SRCS} ${REST_VOL_HDRS})
 TARGET_C_PROPERTIES (${REST_VOL_LIB_TARGET} STATIC " " " ")
-target_link_libraries (${REST_VOL_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT} ${LINK_LIBS})
+target_link_libraries (${REST_VOL_LIB_TARGET} PUBLIC ${HDF5_LIBRARIES_TO_EXPORT} ${LINK_LIBS})
 if (NOT WIN32)
-  target_link_libraries (${REST_VOL_LIB_TARGET} dl)
+  target_link_libraries (${REST_VOL_LIB_TARGET} PUBLIC dl)
 endif ()
 set (REST_VOL_LIBRARIES_TO_EXPORT ${REST_VOL_LIB_TARGET} CACHE INTERNAL "Used to pass variables between directories" FORCE)
 set_target_properties (${REST_VOL_LIB_TARGET} PROPERTIES
@@ -71,9 +71,9 @@ if (BUILD_SHARED_LIBS)
   file (MAKE_DIRECTORY "${REST_VOL_BINARY_DIR}/shared")
   add_library (${REST_VOL_LIBSH_TARGET} SHARED ${REST_VOL_SRCS} ${REST_VOL_HDRS})
   TARGET_C_PROPERTIES (${REST_VOL_LIBSH_TARGET} SHARED " " " ")
-  target_link_libraries (${REST_VOL_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT} ${LINK_SHARED_LIBS})
+  target_link_libraries (${REST_VOL_LIBSH_TARGET} PUBLIC ${HDF5_LIBRARIES_TO_EXPORT} ${LINK_SHARED_LIBS})
   if (NOT WIN32)
-    target_link_libraries (${REST_VOL_LIBSH_TARGET} dl)
+    target_link_libraries (${REST_VOL_LIBSH_TARGET} PUBLIC dl)
   endif ()
   set (REST_VOL_LIBRARIES_TO_EXPORT "${REST_VOL_LIBRARIES_TO_EXPORT};${REST_VOL_LIBSH_TARGET}" CACHE INTERNAL "Used to pass variables between directories" FORCE)
   set_target_properties (${REST_VOL_LIBSH_TARGET} PROPERTIES
