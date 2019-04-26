@@ -383,7 +383,7 @@ mark_as_advanced (REST_VOL_USE_FOLDERS)
 if (REST_VOL_USE_FOLDERS)
   set_property (GLOBAL PROPERTY USE_FOLDERS ON)
 endif ()
-option (REST_VOL_NO_PACKAGES "CPACK - Disable packaging" OFF)
+option (REST_VOL_NO_PACKAGES "CPACK - Disable packaging" ON)
 mark_as_advanced (REST_VOL_NO_PACKAGES)
 
 
