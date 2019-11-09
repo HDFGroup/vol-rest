@@ -97,11 +97,11 @@ https://www.hdfgroup.org/hdf-kita.
 
 The latest and most up-to-date REST VOL plugin code can be viewed at:
 
-https://bitbucket.hdfgroup.org/users/jhenderson/repos/rest-vol/browse
+https://bitbucket.hdfgroup.org/projects/HDF5VOL/repos/rest/browse
 
 and can directly be obtained from:
 
-`https://bitbucket.hdfgroup.org/scm/~jhenderson/rest-vol.git`
+`git clone https://jhenderson@bitbucket.hdfgroup.org/scm/hdf5vol/rest.git`
 
 A source distribution of HDF5 has been included in the REST VOL plugin source
 in the `/hdf5` directory. This version of HDF5 has been modified to support
