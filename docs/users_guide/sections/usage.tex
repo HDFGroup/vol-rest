@@ -1,0 +1,191 @@
+\documentclass[../users_guide.tex]{subfiles}
+ 
+\begin{document}
+
+\section{Using the REST VOL connector within an HDF5 application}
+
+This section outlines the unique aspects of writing, building and running
+\acrshort{hdf5} applications with the \rvc{}.
+
+\subsection{Building the HDF5 REST VOL connector}
+
+TODO - refer to README.md
+
+%The following is a quick set of instructions for building the \rvc{} connector.
+%Note that these instructions are not comprehensive and may be subject to change
+%in future releases; please refer to the \rvc{}'s
+%\href{https://bitbucket.hdfgroup.org/projects/HDF5VOL/repos/rest/browse/README.md}{README}
+%file for the most up to date instructions.
+
+\subsection{Writing HDF5 REST VOL connector applications}
+
+There are currently two main ways to tell an existing \acrshort{hdf5} application to use
+the \rvc{}: either \textit{implicitly} by using environment
+variables to tell the \acrshort{hdf5} library to load the connector as a dynamically loaded
+plugin or \textit{explicitly} by making use of \acrshort{hdf5} property lists.
+
+\subsubsection{With the REST VOL connector as a dynamically-loaded plugin}
+\label{sec:dynamic_plugin}
+
+\acrshort{hdf5} has the capability to dynamically load and use a \vc{} for running
+applications with. In order to choose a particular \vc{} to use, two
+initial steps must be taken. First, one must help \acrshort{hdf5} locate the \vc{}
+by pointing to the directory which contains the built library. This can be
+accomplished by setting the environment variable \texttt{HDF5\_PLUGIN\_PATH} to
+this directory. Next, \acrshort{hdf5} needs to know the name of which library to use, which
+is configured by setting the environment variable \texttt{HDF5\_VOL\_CONNECTOR}
+to the name of the connector.
+
+In order to use the \rvc{}, the aforementioned environment variables 
+should be set as:
+
+\begin{verbatim}
+HDF5_PLUGIN_PATH=/rest/vol/installation/directory/lib
+HDF5_VOL_CONNECTOR=REST
+\end{verbatim}
+
+Having completed this step, \acrshort{hdf5} will be setup to load the \rvc{}
+and use it for running applications, including \acrshort{hdf5}'s own tests.
+No additional modifications will need to be made to the existing \acrshort{hdf5} application.
+
+\subsubsection{Without the REST VOL connector as a dynamically-loaded plugin}
+
+If dynamic loading of the \rvc{} is not used, any \acrshort{hdf5} application
+using the connector must:
+\begin{enumerate}
+ \item Include \texttt{rest\_vol\_public.h}, found in the \texttt{include}
+directory of the \rvc{} installation directory.
+ \item Link against \texttt{libhdf5\_vol\_rest.so} (or similar), found in
+the \texttt{lib} directory of the \rvc{} installation directory. Note that dependencies
+can alternatively be retrieved through CMake or pkg-config.
+\end{enumerate}
+
+In this particular case, an \acrshort{hdf5} \rvc{} application will also require three new
+function calls in addition to those for an equivalent \acrshort{hdf5} application (see
+Appendix~\ref{apdx:ref_manual} for more details):
+
+\begin{itemize}
+ \item \texttt{\hyperref[ref:h5rest_init]{H5rest\_init()}} --- Initializes the \rvc{}
+
+    Called upon application startup, before any file is accessed.
+
+ \item \texttt{\hyperref[ref:h5pset_fapl_rest_vol]{H5Pset\_fapl\_rest\_vol()}} --- Sets \rvc{} access on a File Access Property List.
+
+    Called to prepare a FAPL to open a file through the \rvc{}. See \href{https://support.hdfgroup.org/HDF5/Tutor/property.html#fa}{HDF5 File Access Property Lists} for more information about File Access Property Lists.
+
+ \item \texttt{\hyperref[ref:h5rest_term]{H5rest\_term()}} --- Cleanly shutdowns the \rvc{}
+
+    Called on application shutdown, after all files have been closed.
+\end{itemize}
+
+\subsubsection{Skeleton Example}
+
+Below is a no-op application that opens and closes a file using the \rvc{}.
+For clarity, no error-checking is performed. Note that this example is
+meant only for the case when the \rvc{} is not being dynamically loaded.
+
+\begin{minted}[breaklines=true,fontsize=\small]{hdf5-c-lexer.py:HDF5CLexer -x}
+#include "hdf5.h"
+#include "rest_vol_public.h"
+
+int main(void)
+{
+    hid_t file_id;
+    hid_t fapl_id;
+
+    /* Initialize REST VOL connector */
+    H5rest_init();
+
+    fapl_id = H5Pcreate(H5P_FILE_ACCESS);
+    H5Pset_fapl_rest_vol(fapl_id); 
+
+    file_id = H5Fopen("my_file.h5", H5F_ACC_RDWR, fapl_id);
+
+    /* Operate on file */
+    [...]
+
+    H5Pclose(fapl_id);
+    H5Fclose(file_id);
+
+    /* Terminate the REST VOL connector. */
+    H5rest_term();
+
+    return 0;
+}
+\end{minted}
+
+\subsection{Building HDF5 REST VOL connector applications}
+
+Assuming an \acrshort{hdf5} application has been written following the instructions in the previous
+section, the application should be built as normal for any other \acrshort{hdf5} application. However,
+if the \rvc{} is not being dynamically loaded, the steps in the following section are required to
+build the application.
+
+\subsubsection{Without the REST VOL connector as a dynamically-loaded plugin}
+
+To link in the required libraries, the compiler will likely require the
+additional linker flags:
+
+\begin{verbatim}
+-lhdf5_vol_rest -lcurl -lyajl
+\end{verbatim}
+
+However, these flags may vary depending on platform, compiler and installation
+location of the \rvc{}. It is highly recommended that compilation
+of \acrshort{hdf5} \rvc{} applications be done using either the
+\texttt{h5cc} script included with \acrshort{hdf5} distributions, or CMake/
+pkg-config, as these will manage linking with the \acrshort{hdf5} library.
+The above notice about additional library linking applies to usage of
+\texttt{h5cc/h5pcc}. For example:
+\begin{verbatim}
+h5cc -lhdf5_vol_rest -lcurl -lyajl my_application.c -o my_application
+\end{verbatim}
+
+\subsection{Running HDF5 REST VOL connector applications}
+\label{running_rest_vol_apps}
+
+\subsubsection{Server Access}
+
+Running applications that use the \rvc{} connector requires access to a running HDF Kita
+server. Refer to \href{https://www.hdfgroup.org/hdf-kita}{HDF Kita} for more information on
+the setup process for this.
+
+\subsubsection{Connection Information}
+
+For the \rvc{} to correctly interact with a running HDF Kita server instance, the connector
+must be passed the base URL of the HDF Kita endpoint, as well as any authentication credential
+information needed. This can be accomplished in one of the following ways:
+
+\textbf{Environment Variables}
+
+\begin{itemize}
+  \item \texttt{HSDS\_USERNAME} - (optional) The username to use for authentication
+  \item \texttt{HSDS\_PASSWORD} - (optional) The password to use for authentication
+  \item \texttt{HSDS\_ENDPOINT} - The base URL of the HDF Kita instance (e.g. http://hsdshdflab.hdfgroup.org)
+\end{itemize}
+
+\textbf{Configuration File}
+
+TODO
+
+Note that there are cases where authentication may not be required, such as when simply
+retrieving information from a publicly-accessible HDF5 dataset or similar. In these cases, it
+is only necessary to supply the HDF Kita endpoint via the HSDS\_ENDPOINT environment variable
+or the .hscfg configuration file.
+
+\subsubsection{Example Applications}
+
+Some of the example C applications which are included with \acrshort{hdf5} distributions have
+been adapted to work with the \rvc{} and are included under the top-level
+\href{https://bitbucket.hdfgroup.org/projects/HDF5VOL/repos/rest/browse/examples}{\texttt{examples}}
+directory in the \rvc{} source root directory. The built example applications can be run from the
+\texttt{bin} directory inside the build directory.
+
+In addition to these examples, the \href{https://bitbucket.hdfgroup.org/projects/HDF5VOL/repos/rest/browse/test}{\texttt{test/vol-tests}}
+directory contains several test files, each containing test functions that are examples of \acrshort{hdf5}
+applications in miniature, focused on a particular behavior. These mini-application tests cover a moderate
+amount of \acrshort{hdf5}'s public API functionality and should be a good indicator of whether the \rvc{}
+is working correctly in conjunction with a running HDF Kita instance. Note that these tests currently rely
+on \acrshort{hdf5}'s dynamically-loaded \vc{} capabilities in order to run with the \rvc{}.
+
+\end{document}
