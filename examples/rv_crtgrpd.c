@@ -1,6 +1,5 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Copyright by The HDF Group.                                               *
- * Copyright by the Board of Trustees of the University of Illinois.         *
  * All rights reserved.                                                      *
  *                                                                           *
  * This file is part of HDF5.  The full HDF5 copyright notice, including     *
@@ -26,7 +25,7 @@
 #define FILE "groups.h5"
 #define FILE_NAME_MAX_LENGTH 256
 
-int main() {
+int main(void) {
 
    hid_t       file_id, fapl_id, group_id, dataset_id, dataspace_id;  /* identifiers */
    hsize_t     dims[2];
@@ -35,7 +34,7 @@ int main() {
    herr_t      status;
    int         i, j, dset1_data[3][3], dset2_data[2][10];
 
-   RVinit();
+   H5rest_init();
 
    /* Initialize the first dataset. */
    for (i = 0; i < 3; i++)
@@ -106,6 +105,6 @@ int main() {
    /* Close the file. */
    status = H5Fclose(file_id);
 
-   RVterm();
+   H5rest_term();
 }
 

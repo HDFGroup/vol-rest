@@ -1,20 +1,16 @@
 #!/bin/sh
 #
-# Copyright by The HDF Group.                                              
-# All rights reserved.                                                     
+# Copyright by The HDF Group.
+# All rights reserved.
 #
-# This file is part of HDF5. The full HDF5 copyright notice, including     
-# terms governing use, modification, and redistribution, is contained in   
-# the files COPYING and Copyright.html.  COPYING can be found at the root  
-# of the source code distribution tree; Copyright.html can be found at the 
-# root level of an installed copy of the electronic document set and is    
-# linked from the top-level documents page.  It can also be found at       
-# http://hdfgroup.org/HDF5/doc/Copyright.html.  If you do not have access  
-# to either file, you may request a copy from help@hdfgroup.org.           
+# This file is part of the HDF5 REST VOL connector. The full copyright
+# notice, including terms governing use, modification, and redistribution,
+# is contained in the COPYING file, which can be found at the root of the
+# source code distribution tree.
 #
 # A script used to first configure and build the HDF5 source distribution
-# included with the REST VOL plugin source code, and then use that built
-# HDF5 to build the REST VOL plugin itself.
+# included with the REST VOL connector source code, and then use that built
+# HDF5 to build the REST VOL connector itself.
 
 # Get the directory of the script itself
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -31,10 +27,6 @@ build_hdf5=true
 # Determine the number of processors to use when
 # building in parallel with Autotools make
 NPROCS=0
-
-# Default is to not build tools due to circular dependency on VOL being
-# already built
-build_tools=false
 
 # Compiler flags for linking with cURL and YAJL
 CURL_DIR=""
@@ -70,12 +62,6 @@ usage()
     echo
     echo "      -m      Enable memory tracking in the REST VOL."
     echo
-    echo "      -t      Build the tools with REST VOL support. Note"
-    echo "              that due to a circular build dependency, this"
-    echo "              option should not be chosen until after the"
-    echo "              included HDF5 source distribution and the"
-    echo "              REST VOL plugin have been built once."
-    echo
     echo "      -P DIR  Similar to 'configure --prefix=DIR', specifies"
     echo "              where the REST VOL should be installed to. Default"
     echo "              is 'source directory/rest_vol_build'."
@@ -102,7 +88,7 @@ while getopts "$optspec" optchar; do
         ;;
     d)
         RV_OPTS="${RV_OPTS} --enable-build-mode=debug"
-        echo "Enabled plugin debugging"
+        echo "Enabled connector debugging"
         echo
         ;;
     c)
@@ -112,12 +98,7 @@ while getopts "$optspec" optchar; do
         ;;
     m)
         RV_OPTS="${RV_OPTS} --enable-mem-tracking"
-        echo "Enabled plugin memory tracking"
-        echo
-        ;;
-    t)
-        build_tools=true
-        echo "Building tools with REST VOL support"
+        echo "Enabled connector memory tracking"
         echo
         ;;
     P)
@@ -174,6 +155,11 @@ if [ "$NPROCS" -eq "0" ]; then
     fi
 fi
 
+# Ensure that the HDF5 and VOL tests submodules get checked out
+if [ -z "$(ls -A ${SCRIPT_DIR}/${HDF5_DIR})" ]; then
+    git submodule init
+    git submodule update
+fi
 
 # If the user hasn't already, first build HDF5
 if [ "$build_hdf5" = true ]; then
@@ -186,26 +172,15 @@ if [ "$build_hdf5" = true ]; then
 
     ./autogen.sh || exit 1
 
-    # If we are building the tools with REST VOL support, link in the already built
-    # REST VOL library, along with cURL and YAJL.
-    if [ "${build_tools}" = true ]; then
-        ./configure --prefix="${HDF5_INSTALL_DIR}" CFLAGS="${COMP_OPTS} -L${INSTALL_DIR}/lib ${REST_VOL_LINK} ${CURL_LINK} ${YAJL_LINK}" || exit 1
-    else
-        ./configure --prefix="${HDF5_INSTALL_DIR}" CFLAGS="${COMP_OPTS}" || exit 1
-    fi
+    ./configure --prefix="${HDF5_INSTALL_DIR}" CFLAGS="${COMP_OPTS}" || exit 1
 
     make -j${NPROCS} && make install || exit 1
-
-    # If building the tools with REST VOL support, don't rebuild the REST VOL
-    if [ "${build_tools}" = true ]; then
-        exit 0
-    fi
 fi
 
 
-# Once HDF5 has been built, build the REST VOL plugin against HDF5.
+# Once HDF5 has been built, build the REST VOL connector against HDF5.
 echo "*******************************************"
-echo "* Building REST VOL plugin and test suite *"
+echo "* Building REST VOL connector and test suite *"
 echo "*******************************************"
 echo
 

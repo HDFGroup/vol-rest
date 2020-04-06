@@ -46,6 +46,6 @@ Languages:
 
 Features:
 ---------
-            Plugin debug output: @@
+     VOL connector debug output: @CONNECTOR_DEBUG@
               cURL debug output: @CURL_DEBUG@
            Using memory checker: @TRACK_MEM_USAGE@

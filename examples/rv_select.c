@@ -1,6 +1,5 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Copyright by The HDF Group.                                               *
- * Copyright by the Board of Trustees of the University of Illinois.         *
  * All rights reserved.                                                      *
  *                                                                           *
  * This file is part of HDF5.  The full HDF5 copyright notice, including     *
@@ -92,7 +91,7 @@ main (void)
    const char *username;
    char        filename[FILE_NAME_MAX_LENGTH];
 
-   RVinit();
+   H5rest_init();
 
    fapl = H5Pcreate(H5P_FILE_ACCESS);
    H5Pset_fapl_rest_vol(fapl);
@@ -352,7 +351,7 @@ main (void)
      */
     ret = H5Fclose(file);
 
-    ret = RVterm();
+    ret = H5rest_term();
 
     return 0;
 }

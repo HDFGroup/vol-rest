@@ -17,7 +17,7 @@ find_library(YAJL_LIBRARY NAMES yajl libyajl
              HINTS ${PC_YAJL_LIBDIR} ${PC_YAJL_LIBRARY_DIRS} )
 
 include(FindPackageHandleStandardArgs)
-# handle the QUIETLY and REQUIRED arguments and set LIBXML2_FOUND to TRUE
+# handle the QUIETLY and REQUIRED arguments and set LIBYAJL_FOUND to TRUE
 # if all listed variables are TRUE
 find_package_handle_standard_args(yajl DEFAULT_MSG
                                   YAJL_LIBRARY YAJL_INCLUDE_DIR)

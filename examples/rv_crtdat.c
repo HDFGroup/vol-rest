@@ -1,6 +1,5 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Copyright by The HDF Group.                                               *
- * Copyright by the Board of Trustees of the University of Illinois.         *
  * All rights reserved.                                                      *
  *                                                                           *
  * This file is part of HDF5.  The full HDF5 copyright notice, including     *
@@ -26,7 +25,7 @@
 #define FILE "dset.h5"
 #define FILE_NAME_MAX_LENGTH 256
 
-int main() {
+int main(void) {
 
    hid_t       file_id, fapl_id, dataset_id, dataspace_id;  /* identifiers */
    hsize_t     dims[2];
@@ -34,7 +33,7 @@ int main() {
    char        filename[FILE_NAME_MAX_LENGTH];
    herr_t      status;
 
-   RVinit();
+   H5rest_init();
 
    fapl_id = H5Pcreate(H5P_FILE_ACCESS);
    H5Pset_fapl_rest_vol(fapl_id);
@@ -66,6 +65,6 @@ int main() {
    /* Close the file. */
    status = H5Fclose(file_id);
 
-   RVterm();
+   H5rest_term();
 }
 

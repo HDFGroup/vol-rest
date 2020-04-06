@@ -1,40 +1,65 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Copyright by The HDF Group.                                               *
- * Copyright by the Board of Trustees of the University of Illinois.         *
  * All rights reserved.                                                      *
  *                                                                           *
- * This file is part of HDF5.  The full HDF5 copyright notice, including     *
- * terms governing use, modification, and redistribution, is contained in    *
- * the files COPYING and Copyright.html.  COPYING can be found at the root   *
- * of the source code distribution tree; Copyright.html can be found at the  *
- * root level of an installed copy of the electronic HDF5 document set and   *
- * is linked from the top-level documents page.  It can also be found at     *
- * http://hdfgroup.org/HDF5/doc/Copyright.html.  If you do not have          *
- * access to either file, you may request a copy from help@hdfgroup.org.     *
+ * This file is part of the HDF5 REST VOL connector. The full copyright      *
+ * notice, including terms governing use, modification, and redistribution,  *
+ * is contained in the COPYING file, which can be found at the root of the   *
+ * source code distribution tree.                                            *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 /*
  * Programmer:  Jordan Henderson
  *              February, 2017
  *
- * Purpose: The private header file for the REST VOL plugin.
+ * Purpose: The private header file for the REST VOL connector.
  */
 
 #ifndef rest_vol_H
 #define rest_vol_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <assert.h>
 
 #include <curl/curl.h>
 #include <yajl/yajl_tree.h>
 
-#include "rest_vol_public.h"
+/* Includes for HDF5 */
+#include "hdf5.h"
+#include "H5pubconf.h"
+#include "H5VLnative.h"        /* For HDF5 routines that are currently *incorrectly* hidden */
 
-#define HDF5_VOL_REST_VERSION 1 /* Version number of the REST VOL plugin */
+/* Includes for the REST VOL itself */
+#include "rest_vol_public.h"   /* REST VOL's public header file */
+#include "rest_vol_config.h"   /* Defines for enabling debugging functionality in the REST VOL */
+#include "util/rest_vol_err.h" /* REST VOL error reporting macros */
+#include "util/rest_vol_mem.h" /* REST VOL memory management functions */
 
-#define H5_VOL_REST_CLS_VAL (H5VL_class_value_t) H5_VOL_MAX_LIB_VALUE + 1 /* Class value of the REST VOL plugin as defined in H5VLpublic.h */
+#include "rest_vol_attr.h"
+#include "rest_vol_dataset.h"
+#include "rest_vol_datatype.h"
+#include "rest_vol_file.h"
+#include "rest_vol_group.h"
+#include "rest_vol_link.h"
+#include "rest_vol_object.h"
+
+/* Includes for hash table to determine object uniqueness */
+#include "util/rest_vol_hash_string.h"
+#include "util/rest_vol_hash_table.h"
+
+#ifdef RV_CONNECTOR_DEBUG
+#include "rest_vol_debug.h"   /* REST VOL debugging functions */
+#endif
+
+/* Version number of the REST VOL connector */
+#define HDF5_VOL_REST_VERSION 1
+
+/* Class value of the REST VOL connector, as defined in H5VLpublic.h */
+#define HDF5_VOL_REST_CLS_VAL (H5VL_class_value_t) (H5_VOL_RESERVED + 3)
+
+#define HDF5_VOL_REST_NAME "REST"
 
 /* Defines for the use of HTTP status codes */
 #define HTTP_INFORMATIONAL_MIN 100 /* Minimum and maximum values for the 100 class of */
@@ -59,7 +84,341 @@ extern "C" {
 #define HTTP_CLIENT_ERROR(status_code)  (status_code >= HTTP_CLIENT_ERROR_MIN && status_code <= HTTP_CLIENT_ERROR_MAX)
 #define HTTP_SERVER_ERROR(status_code)  (status_code >= HTTP_SERVER_ERROR_MIN && status_code <= HTTP_SERVER_ERROR_MAX)
 
+/************************
+ *                      *
+ *        Macros        *
+ *                      *
+ ************************/
 
+/* Macro to handle various HTTP response codes */
+#define HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value)                                                     \
+do {                                                                                                                        \
+    switch(response_code) {                                                                                                 \
+        case 200:                                                                                                           \
+        case 201:                                                                                                           \
+            break;                                                                                                          \
+        case 400:                                                                                                           \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "400 - Malformed/Bad request for resource\n");                 \
+            break;                                                                                                          \
+        case 401:                                                                                                           \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "401 - Valid username/Password needed to access resource\n");  \
+            break;                                                                                                          \
+        case 403:                                                                                                           \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "403 - Unauthorized access to resource\n");                    \
+            break;                                                                                                          \
+        case 404:                                                                                                           \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "404 - Resource not found\n");                                 \
+            break;                                                                                                          \
+        case 405:                                                                                                           \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "405 - Method not allowed\n");                                 \
+            break;                                                                                                          \
+        case 409:                                                                                                           \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "409 - Resource already exists\n");                            \
+            break;                                                                                                          \
+        case 410:                                                                                                           \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "410 - Resource has been deleted\n");                          \
+            break;                                                                                                          \
+        case 413:                                                                                                           \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "413 - Selection too large\n");                                \
+            break;                                                                                                          \
+        case 500:                                                                                                           \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "500 - An internal server error occurred\n");                  \
+            break;                                                                                                          \
+        case 501:                                                                                                           \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "501 - Functionality not implemented\n");                      \
+            break;                                                                                                          \
+        case 503:                                                                                                           \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "503 - Service unavailable\n");                                \
+            break;                                                                                                          \
+        case 504:                                                                                                           \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "504 - Gateway timeout\n");                                    \
+            break;                                                                                                          \
+        default:                                                                                                            \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Unknown error occurred\n");                                   \
+            break;                                                                                                          \
+    } /* end switch */                                                                                                      \
+} while(0)
+
+/* Macro to perform cURL operation and handle errors. Note that
+ * this macro should not generally be called directly. Use one
+ * of the below macros to call this with the appropriate arguments. */
+#define CURL_PERFORM_INTERNAL(curl_ptr, handle_HTTP_response, ERR_MAJOR, ERR_MINOR, ret_value)                              \
+do {                                                                                                                        \
+    CURLcode result = curl_easy_perform(curl_ptr);                                                                          \
+                                                                                                                            \
+    /* Reset the cURL response buffer write position pointer */                                                             \
+    response_buffer.curr_buf_ptr = response_buffer.buffer;                                                                  \
+                                                                                                                            \
+    if (CURLE_OK != result)                                                                                                 \
+        FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "%s", curl_easy_strerror(result));                                 \
+                                                                                                                            \
+    if (handle_HTTP_response) {                                                                                             \
+        long response_code;                                                                                                 \
+                                                                                                                            \
+        if (CURLE_OK != curl_easy_getinfo(curl_ptr, CURLINFO_RESPONSE_CODE, &response_code))                                \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "can't get HTTP response code");                               \
+                                                                                                                            \
+        HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value);                                                    \
+    } /* end if */                                                                                                          \
+} while(0)
+
+/* Calls the CURL_PERFORM_INTERNAL macro in such a way that any
+ * HTTP error responses will cause an HDF5-like error which
+ * usually calls goto and causes the function to fail. This is
+ * the default behavior for most of the server requests that
+ * this VOL connector makes.
+ */
+#define CURL_PERFORM(curl_ptr, ERR_MAJOR, ERR_MINOR, ret_value)                                                             \
+CURL_PERFORM_INTERNAL(curl_ptr, TRUE, ERR_MAJOR, ERR_MINOR, ret_value)
+
+/* Calls the CURL_PERFORM_INTERNAL macro in such a way that any
+ * HTTP error responses will not cause a function failure. This
+ * is generally useful in cases where a request is sent to the
+ * server to test for the existence of an object, such as in the
+ * behavior for H5Fcreate()'s H5F_ACC_TRUNC flag.
+ */
+#define CURL_PERFORM_NO_ERR(curl_ptr, ret_value)                                                                            \
+CURL_PERFORM_INTERNAL(curl_ptr, FALSE, H5E_NONE_MAJOR, H5E_NONE_MINOR, ret_value)
+
+/* Helper macro to find the matching JSON '}' symbol for a given '{' symbol. This macro is
+ * used to extract out all of the JSON within a JSON object so that processing can be done
+ * on it.
+ */
+#define FIND_JSON_SECTION_END(start_ptr, end_ptr, ERR_MAJOR, ret_value)                                                     \
+do {                                                                                                                        \
+    hbool_t  suspend_processing = FALSE; /* Whether we are suspending processing for characters inside a JSON string */     \
+    size_t   depth_counter = 1; /* Keep track of depth until it reaches 0 again, signalling end of section */               \
+    char    *advancement_ptr = start_ptr + 1; /* Pointer to increment while searching for matching '}' symbols */           \
+    char     current_symbol;                                                                                                \
+                                                                                                                            \
+    while (depth_counter) {                                                                                                 \
+        current_symbol = *advancement_ptr++;                                                                                \
+                                                                                                                            \
+        /* If we reached the end of string before finding the end of the JSON object section, something is                  \
+         * wrong. Most likely the JSON is misformatted, with a stray '{' in the section somewhere.                          \
+         */                                                                                                                 \
+        if (!current_symbol)                                                                                                \
+            FUNC_GOTO_ERROR(ERR_MAJOR, H5E_PARSEERROR, ret_value, "can't locate end of section - misformatted JSON likely");\
+                                                                                                                            \
+        /* If we encounter a " in the buffer, we assume that this is a JSON string and we suspend processing                \
+         * of '{' and '}' symbols until the matching " is found that ends the JSON string. Note however that                \
+         * it is possible for the JSON string to have an escaped \" combination within it, in which case this               \
+         * is not the ending " and we will still suspend processing. Note further that the JSON string may                  \
+         * also have the escaped \\ sequence within it as well. Since it is safer to search forward in the                  \
+         * string buffer (as we know the next character must be valid or the NUL terminator) we check each                  \
+         * character for the presence of a \ symbol, and if the following character is \ or ", we just skip                 \
+         * ahead two characters and continue on.                                                                            \
+         */                                                                                                                 \
+        if (current_symbol == '\\') {                                                                                       \
+            if (*advancement_ptr == '\\' || *advancement_ptr == '"') {                                                      \
+                advancement_ptr++;                                                                                          \
+                continue;                                                                                                   \
+            } /* end if */                                                                                                  \
+        } /* end if */                                                                                                      \
+                                                                                                                            \
+        /* Now safe to suspend/resume processing */                                                                         \
+        if (current_symbol == '"')                                                                                          \
+            suspend_processing = !suspend_processing;                                                                       \
+        else if (current_symbol == '{' && !suspend_processing)                                                              \
+            depth_counter++;                                                                                                \
+        else if (current_symbol == '}' && !suspend_processing)                                                              \
+            depth_counter--;                                                                                                \
+    } /* end while */                                                                                                       \
+                                                                                                                            \
+    end_ptr = advancement_ptr;                                                                                              \
+} while(0)
+
+/* Macro borrowed from H5private.h to assign a value of a larger type to
+ * a variable of a smaller type
+ */
+#define ASSIGN_TO_SMALLER_SIZE(dst, dsttype, src, srctype)                                                                  \
+{                                                                                                                           \
+    srctype _tmp_src = (srctype)(src);                                                                                      \
+    dsttype _tmp_dst = (dsttype)(_tmp_src);                                                                                 \
+    assert(_tmp_src == (srctype)_tmp_dst);                                                                                  \
+    (dst) = _tmp_dst;                                                                                                       \
+}
+
+/* Macro borrowed from H5private.h to assign a value between two types of the
+ * same size, where the source type is an unsigned type and the destination
+ * type is a signed type
+ */
+#define ASSIGN_TO_SAME_SIZE_UNSIGNED_TO_SIGNED(dst, dsttype, src, srctype)                                                  \
+{                                                                                                                           \
+    srctype _tmp_src = (srctype)(src);                                                                                      \
+    dsttype _tmp_dst = (dsttype)(_tmp_src);                                                                                 \
+    assert(_tmp_dst >= 0);                                                                                                  \
+    assert(_tmp_src == (srctype)_tmp_dst);                                                                                  \
+    (dst) = _tmp_dst;                                                                                                       \
+}
+
+/* Macro to change the cast for an off_t type to try and be cross-platform portable */
+#ifdef H5_SIZEOF_OFF_T
+    #if H5_SIZEOF_OFF_T == H5_SIZEOF_INT
+        #define OFF_T_SPECIFIER "%d"
+        #define OFF_T_CAST (int)
+    #elif H5_SIZEOF_OFF_T == H5_SIZEOF_LONG
+        #define OFF_T_SPECIFIER "%ld"
+        #define OFF_T_CAST (long)
+    #else
+        /* Check to see if long long is defined */
+        #if defined(H5_SIZEOF_LONG_LONG) && H5_SIZEOF_LONG_LONG == H5_SIZEOF_OFF_T
+            #define OFF_T_SPECIFIER "%lld"
+            #define OFF_T_CAST (long long)
+        #else
+            #error no suitable cast for off_t
+        #endif
+    #endif
+#else
+    #error type off_t does not exist!
+#endif
+
+/* Occasionally, some arguments passed to a callback by use of va_arg
+ * are not utilized in the particular section of the callback. This
+ * macro is for silencing compiler warnings about those arguments.
+ */
+#define UNUSED_VAR(arg) (void) arg;
+
+/**********************************
+ *                                *
+ *        Global Variables        *
+ *                                *
+ **********************************/
+
+/*
+ * The VOL connector identification number.
+ */
+extern hid_t H5_rest_id_g;
+
+/*
+ * The CURL pointer used for all cURL operations.
+ */
+extern CURL *curl;
+
+/*
+ * cURL error message buffer.
+ */
+extern char curl_err_buf[];
+
+/*
+ * cURL header list
+ */
+extern struct curl_slist *curl_headers;
+
+/*
+ * Saved copy of the base URL for operating on
+ */
+extern char *base_URL;
+
+#ifdef RV_TRACK_MEM_USAGE
+/*
+ * Counter to keep track of the currently allocated amount of bytes
+ */
+extern size_t H5_rest_curr_alloc_bytes;
+#endif
+
+/* Host header string for specifying the host (Domain) for requests */
+extern const char * const host_string;
+
+/* JSON key to retrieve the ID of an object from the server */
+extern const char *object_id_keys[];
+
+/* JSON keys to retrieve the class of a link (HARD, SOFT, EXTERNAL, etc.) */
+extern const char *link_class_keys[];
+extern const char *link_class_keys2[];
+
+/* A global struct containing the buffer which cURL will write its
+ * responses out to after making a call to the server. The buffer
+ * in this struct is allocated upon connector initialization and is
+ * dynamically grown as needed throughout the lifetime of the connector.
+ */
+struct response_buffer {
+    char   *buffer;
+    char   *curr_buf_ptr;
+    size_t  buffer_size;
+};
+extern struct response_buffer response_buffer;
+
+/**************************
+ *                        *
+ *        Typedefs        *
+ *                        *
+ **************************/
+
+/*
+ * A struct which is used to return a link's name or the size of
+ * a link's name when calling H5Lget_name_by_idx.
+ */
+typedef struct link_name_by_idx_data {
+    size_t  link_name_len;
+    char   *link_name;
+} link_name_by_idx_data;
+
+/*
+ * A struct which is filled out and passed to the link and attribute
+ * iteration callback functions when calling
+ * H5Literate(_by_name)/H5Lvisit(_by_name) or H5Aiterate(_by_name).
+ */
+typedef struct iter_data {
+    H5_iter_order_t  iter_order;
+    H5_index_t       index_type;
+    hbool_t          is_recursive;
+    hsize_t         *idx_p;
+    hid_t            iter_obj_id;
+    void            *op_data;
+
+    union {
+        H5A_operator2_t attr_iter_op;
+        H5L_iterate_t   link_iter_op;
+    } iter_function;
+} iter_data;
+
+/*
+ * A struct which is filled out during link iteration and contains
+ * all of the information needed to iterate through links by both
+ * alphabetical order and link creation order in increasing and
+ * decreasing fashion.
+ */
+typedef struct link_table_entry link_table_entry;
+struct link_table_entry {
+    H5L_info_t link_info;
+    double     crt_time;
+    char       link_name[LINK_NAME_MAX_LENGTH];
+
+    struct {
+        link_table_entry *subgroup_link_table;
+        size_t            num_entries;
+    } subgroup;
+};
+
+/*
+ * A struct which is filled out during attribute iteration and
+ * contains all of the information needed to iterate through
+ * attributes by both alphabetical order and creation order in
+ * increasing and decreasing fashion.
+ */
+typedef struct attr_table_entry {
+    H5A_info_t attr_info;
+    double     crt_time;
+    char       attr_name[ATTRIBUTE_NAME_MAX_LENGTH];
+} attr_table_entry;
+
+/* A structure which is used each time an HTTP PUT call is to be
+ * made to the server. This struct contains the data buffer and its
+ * size and is passed to the H5_rest_curl_read_data_callback() function to
+ * copy the data from the local buffer into cURL's internal buffer.
+ */
+typedef struct {
+    const void *buffer;
+    size_t      buffer_size;
+} upload_info;
+
+/*
+ * Definitions for the basic objects which the REST VOL uses
+ * to represent various HDF5 objects internally. The base object
+ * used by the REST VOL is the RV_object_t and object-specific
+ * fields can be accessed through an RV_object_t's object union.
+ */
 typedef struct RV_object_t RV_object_t;
 
 typedef struct RV_file_t {
@@ -112,34 +471,38 @@ struct RV_object_t {
 };
 
 
-/* XXX: The following two definitions are only here until they are
- * moved out of their respective H5Xpkg.h header files and into a
- * more public scope. They are still needed for the REST VOL to handle
- * these API calls being made.
- */
+/****************************
+ *                          *
+ *        Prototypes        *
+ *                          *
+ ****************************/
 
-typedef enum H5VL_file_optional_t {
-    H5VL_FILE_CLEAR_ELINK_CACHE,       /* Clear external link cache             */
-    H5VL_FILE_GET_FILE_IMAGE,          /* file image                            */
-    H5VL_FILE_GET_FREE_SECTIONS,       /* file free selections                  */
-    H5VL_FILE_GET_FREE_SPACE,          /* file freespace                        */
-    H5VL_FILE_GET_INFO,                /* file info                             */
-    H5VL_FILE_GET_MDC_CONF,            /* file metadata cache configuration     */
-    H5VL_FILE_GET_MDC_HR,              /* file metadata cache hit rate          */
-    H5VL_FILE_GET_MDC_SIZE,            /* file metadata cache size              */
-    H5VL_FILE_GET_SIZE,                /* file size                             */
-    H5VL_FILE_GET_VFD_HANDLE,          /* file VFD handle                       */
-    H5VL_FILE_REOPEN,                  /* reopen the file                       */
-    H5VL_FILE_RESET_MDC_HIT_RATE,      /* get metadata cache hit rate           */
-    H5VL_FILE_SET_MDC_CONFIG           /* set metadata cache configuration      */
-} H5VL_file_optional_t;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-typedef enum H5VL_object_optional_t {
-    H5VL_OBJECT_GET_COMMENT,           /* get object comment                    */
-    H5VL_OBJECT_GET_INFO,              /* get object info                       */
-    H5VL_OBJECT_SET_COMMENT            /* set object comment                    */
-} H5VL_object_optional_t;
+/* Alternate, more portable version of the basename function which doesn't modify its argument */
+const char *H5_rest_basename(const char *path);
 
+/* Alternate, more portable version of the dirname function which doesn't modify its argument */
+char *H5_rest_dirname(const char *path);
+
+/* Helper function to parse an HTTP response according to the given parse callback function */
+herr_t RV_parse_response(char *HTTP_response, void *callback_data_in, void *callback_data_out, herr_t (*parse_callback)(char *, void *, void *));
+
+/* Callback for RV_parse_response() to capture an object's URI */
+herr_t RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+
+/* Helper function to find an object given a starting object to search from and a path */
+htri_t RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
+       herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in, void *callback_data_out);
+
+/* Helper function to parse a JSON string representing an HDF5 Dataspace and
+ * setup an hid_t for the Dataspace */
+hid_t RV_parse_dataspace(char *space);
+
+/* Helper function to interpret a dataspace's shape and convert it into JSON */
+herr_t RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **maxdims_body);
 
 #ifdef __cplusplus
 }

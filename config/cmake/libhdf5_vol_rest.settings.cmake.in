@@ -3,7 +3,7 @@
 
 General Information:
 -------------------
-               REST VOL Version: @REST_VOL_PACKAGE_VERSION_STRING@
+               REST VOL Version: @HDF5_VOL_REST_PACKAGE_VERSION_STRING@
                   Configured on: @CONFIG_DATE@
                   Configured by: @CMAKE_GENERATOR@
                     Host system: @CMAKE_HOST_SYSTEM@
@@ -40,11 +40,11 @@ Languages:
                          CFLAGS: @CMAKE_C_FLAGS@
                       RV_CFLAGS: @RV_CFLAGS@
                       AM_CFLAGS: @AM_CFLAGS@
-               Shared C Library: @REST_VOL_ENABLE_SHARED_LIB@
+               Shared C Library: @HDF5_VOL_REST_ENABLE_SHARED_LIB@
                Static C Library: YES
 
 Features:
 ---------
-            Plugin debug output: @REST_VOL_ENABLE_DEBUG@
-              cURL debug output: @REST_VOL_ENABLE_CURL_DEBUG@
-           Using memory checker: @REST_VOL_ENABLE_MEM_TRACKING@
+     VOL connector debug output: @HDF5_VOL_REST_ENABLE_DEBUG@
+              cURL debug output: @HDF5_VOL_REST_ENABLE_CURL_DEBUG@
+           Using memory checker: @HDF5_VOL_REST_ENABLE_MEM_TRACKING@
