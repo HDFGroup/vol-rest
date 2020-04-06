@@ -100,7 +100,7 @@ set (HDF5_VOL_REST_UTIL_DIR            ${HDF5_VOL_REST_SOURCE_DIR}/src/util)
 set (HDF5_VOL_REST_TEST_SRC_DIR        ${HDF5_VOL_REST_SOURCE_DIR}/test)
 set (HDF5_VOL_REST_EXAMPLES_DIR        ${HDF5_VOL_REST_SOURCE_DIR}/examples)
 set (HDF5_DIR_NAME                     "hdf5")
-set (HDF5_DIR                          ${HDF5_VOL_REST_SOURCE_DIR}/${HDF5_DIR_NAME})
+set (HDF5_DIR                          ${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME})
 set (HDF5_BINARY_DIR                   ${HDF5_VOL_REST_BINARY_DIR}/${HDF5_DIR_NAME})
 
 
@@ -109,7 +109,6 @@ set (HDF5_BINARY_DIR                   ${HDF5_VOL_REST_BINARY_DIR}/${HDF5_DIR_NA
 # a pre-built HDF5 distribution for building the REST VOL connector
 #-----------------------------------------------------------------------------
 set (PREBUILT_HDF5_DIR CACHE STRING "Directory of pre-built HDF5 distribution")
-
 
 #-----------------------------------------------------------------------------
 # Find cURL and YAJL before building

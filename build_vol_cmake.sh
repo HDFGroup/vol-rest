@@ -21,6 +21,10 @@ INSTALL_DIR="${SCRIPT_DIR}/rest_vol_build"
 # Set the default build directory
 BUILD_DIR="${SCRIPT_DIR}/rest_vol_cmake_build_files"
 
+# Default name of the directory for the included HDF5 source distribution,
+# as well as the default directory where it gets installed
+HDF5_DIR="src/hdf5"
+
 # By default, tell CMake to generate Unix Makefiles
 CMAKE_GENERATOR="Unix Makefiles"
 

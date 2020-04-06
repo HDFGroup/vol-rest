@@ -20,7 +20,7 @@ INSTALL_DIR="${SCRIPT_DIR}/rest_vol_build"
 
 # Default name of the directory for the included HDF5 source distribution,
 # as well as the default directory where it gets installed
-HDF5_DIR="hdf5"
+HDF5_DIR="src/hdf5"
 HDF5_INSTALL_DIR="${INSTALL_DIR}"
 build_hdf5=true
 
