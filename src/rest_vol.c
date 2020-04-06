@@ -111,9 +111,6 @@ const char *dataspace_max_dims_keys[] = { "shape", "maxdims", (const char *) 0 }
 static herr_t H5_rest_init(hid_t vipl_id);
 static herr_t H5_rest_term(void);
 
-/* Function to set the connection information for the connector to connect to the server */
-static herr_t H5_rest_set_connection_information(void);
-
 /* cURL function callbacks */
 static size_t H5_rest_curl_read_data_callback(char *buffer, size_t size, size_t nmemb, void *inptr);
 static size_t H5_rest_curl_write_data_callback(char *buffer, size_t size, size_t nmemb, void *userp);
@@ -307,11 +304,11 @@ H5rest_init(void)
 
         if (!is_registered) {
             /* Register connector */
-            if((H5_rest_id_g = H5VLregister_connector((const H5VL_class_t *)&H5VL_rest_g, H5P_DEFAULT)) < 0)
+            if ((H5_rest_id_g = H5VLregister_connector((const H5VL_class_t *)&H5VL_rest_g, H5P_DEFAULT)) < 0)
                 FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTINSERT, FAIL, "can't create ID for REST VOL connector");
         } /* end if */
         else {
-            if((H5_rest_id_g = H5VLget_connector_id_by_name(H5VL_rest_g.name)) < 0)
+            if ((H5_rest_id_g = H5VLget_connector_id_by_name(H5VL_rest_g.name)) < 0)
                 FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTGET, FAIL, "unable to get registered ID for REST VOL connector");
         } /* end else */
     } /* end if */
@@ -610,7 +607,7 @@ done:
  * Programmer:  Jordan Henderson
  *              June, 2018
  */
-static herr_t
+herr_t
 H5_rest_set_connection_information(void)
 {
     const char *URL;

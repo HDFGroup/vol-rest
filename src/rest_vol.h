@@ -481,6 +481,9 @@ struct RV_object_t {
 extern "C" {
 #endif
 
+/* Function to set the connection information for the connector to connect to the server */
+herr_t H5_rest_set_connection_information(void);
+
 /* Alternate, more portable version of the basename function which doesn't modify its argument */
 const char *H5_rest_basename(const char *path);
 
