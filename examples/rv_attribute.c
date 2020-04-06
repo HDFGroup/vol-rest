@@ -65,7 +65,7 @@ main (void)
    float matrix[ADIM1][ADIM2]; /* Attribute data */
 
    herr_t  ret;                /* Return value */
-   H5O_info_t oinfo;           /* Object info */
+   H5O_info2_t oinfo;           /* Object info */
    unsigned i, j;              /* Counters */
    char    string_out[80];     /* Buffer to read string attribute back */
    int     point_out;          /* Buffer to read scalar attribute back */

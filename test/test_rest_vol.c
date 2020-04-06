@@ -751,15 +751,15 @@ static int test_double_init_free(void);
 static herr_t attr_iter_callback1(hid_t location_id, const char *attr_name, const H5A_info_t *ainfo, void *op_data);
 static herr_t attr_iter_callback2(hid_t location_id, const char *attr_name, const H5A_info_t *ainfo, void *op_data);
 
-static herr_t link_iter_callback1(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
-static herr_t link_iter_callback2(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
-static herr_t link_iter_callback3(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
+static herr_t link_iter_callback1(hid_t group_id, const char *name, const H5L_info2_t *info, void *op_data);
+static herr_t link_iter_callback2(hid_t group_id, const char *name, const H5L_info2_t *info, void *op_data);
+static herr_t link_iter_callback3(hid_t group_id, const char *name, const H5L_info2_t *info, void *op_data);
 
-static herr_t link_visit_callback1(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
-static herr_t link_visit_callback2(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
-static herr_t link_visit_callback3(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data);
+static herr_t link_visit_callback1(hid_t group_id, const char *name, const H5L_info2_t *info, void *op_data);
+static herr_t link_visit_callback2(hid_t group_id, const char *name, const H5L_info2_t *info, void *op_data);
+static herr_t link_visit_callback3(hid_t group_id, const char *name, const H5L_info2_t *info, void *op_data);
 
-static herr_t object_visit_callback(hid_t o_id, const char *name, const H5O_info_t *object_info, void *op_data);
+static herr_t object_visit_callback(hid_t o_id, const char *name, const H5O_info2_t *object_info, void *op_data);
 
 static hid_t generate_random_datatype(H5T_class_t parent_class);
 
@@ -4409,15 +4409,15 @@ error:
 static int
 test_get_number_attributes(void)
 {
-    H5O_info_t obj_info;
-    hsize_t    dims[ATTRIBUTE_GET_NUM_ATTRS_TEST_SPACE_RANK];
-    size_t     i;
-    htri_t     attr_exists;
-    hid_t      file_id = -1, fapl_id = -1;
-    hid_t      container_group = -1;
-    hid_t      attr_id = -1;
-    hid_t      attr_dtype = -1;
-    hid_t      space_id = -1;
+    H5O_info2_t obj_info;
+    hsize_t     dims[ATTRIBUTE_GET_NUM_ATTRS_TEST_SPACE_RANK];
+    size_t      i;
+    htri_t      attr_exists;
+    hid_t       file_id = -1, fapl_id = -1;
+    hid_t       container_group = -1;
+    hid_t       attr_id = -1;
+    hid_t       attr_dtype = -1;
+    hid_t       space_id = -1;
 
     TESTING("retrieve the number of attributes on an object")
 
@@ -4475,7 +4475,7 @@ test_get_number_attributes(void)
 #endif
 
     /* Now get the number of attributes from the group */
-    if (H5Oget_info2(container_group, &obj_info, H5O_INFO_ALL) < 0) {
+    if (H5Oget_info3(container_group, &obj_info, H5O_INFO_ALL) < 0) {
         H5_FAILED();
         printf("    couldn't retrieve root group info\n");
         goto error;
@@ -4491,7 +4491,7 @@ test_get_number_attributes(void)
     puts("Attempting to retrieve the number of attributes on a group with H5Oget_info_by_name\n");
 #endif
 
-    if (H5Oget_info_by_name2(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, &obj_info, H5O_INFO_ALL, H5P_DEFAULT) < 0) {
+    if (H5Oget_info_by_name3(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, &obj_info, H5O_INFO_ALL, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't retrieve root group info\n");
         goto error;
@@ -4508,7 +4508,7 @@ test_get_number_attributes(void)
 #endif
 
     H5E_BEGIN_TRY {
-        if (H5Oget_info_by_idx2(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, &obj_info, H5O_INFO_ALL, H5P_DEFAULT) >= 0) {
+        if (H5Oget_info_by_idx3(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, &obj_info, H5O_INFO_ALL, H5P_DEFAULT) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded!\n");
             goto error;
@@ -11783,16 +11783,16 @@ error:
 static int
 test_get_link_info(void)
 {
-    H5L_info_t link_info;
-    hsize_t    dims[GET_LINK_INFO_TEST_DSET_SPACE_RANK];
-    size_t     i;
-    htri_t     link_exists;
-    hid_t      file_id = -1, fapl_id = -1;
-    hid_t      container_group = -1, group_id = -1;
-    hid_t      dset_id = -1;
-    hid_t      dset_dtype = -1;
-    hid_t      dset_dspace = -1;
-    char       ext_link_filename[FILENAME_MAX_LENGTH];
+    H5L_info2_t link_info;
+    hsize_t     dims[GET_LINK_INFO_TEST_DSET_SPACE_RANK];
+    size_t      i;
+    htri_t      link_exists;
+    hid_t       file_id = -1, fapl_id = -1;
+    hid_t       container_group = -1, group_id = -1;
+    hid_t       dset_id = -1;
+    hid_t       dset_dtype = -1;
+    hid_t       dset_dspace = -1;
+    char        ext_link_filename[FILENAME_MAX_LENGTH];
 
     TESTING("get link info")
 
@@ -11896,7 +11896,7 @@ test_get_link_info(void)
 
     memset(&link_info, 0, sizeof(link_info));
 
-    if (H5Lget_info(group_id, GET_LINK_INFO_TEST_DSET_NAME, &link_info, H5P_DEFAULT) < 0) {
+    if (H5Lget_info2(group_id, GET_LINK_INFO_TEST_DSET_NAME, &link_info, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't get hard link info\n");
         goto error;
@@ -11914,7 +11914,7 @@ test_get_link_info(void)
 
     memset(&link_info, 0, sizeof(link_info));
 
-    if (H5Lget_info(file_id, "/" LINK_TEST_GROUP_NAME "/" GET_LINK_INFO_TEST_SUBGROUP_NAME "/" GET_LINK_INFO_TEST_SOFT_LINK_NAME,
+    if (H5Lget_info2(file_id, "/" LINK_TEST_GROUP_NAME "/" GET_LINK_INFO_TEST_SUBGROUP_NAME "/" GET_LINK_INFO_TEST_SOFT_LINK_NAME,
             &link_info, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't get soft link info\n");
@@ -11933,7 +11933,7 @@ test_get_link_info(void)
 
     memset(&link_info, 0, sizeof(link_info));
 
-    if (H5Lget_info(group_id, GET_LINK_INFO_TEST_EXT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
+    if (H5Lget_info2(group_id, GET_LINK_INFO_TEST_EXT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't get external link info\n");
         goto error;
@@ -11952,7 +11952,7 @@ test_get_link_info(void)
 
         memset(&link_info, 0, sizeof(link_info));
 
-        if (H5Lget_info_by_idx(group_id, ".", H5_INDEX_NAME, H5_ITER_INC, 0, &link_info, H5P_DEFAULT) >= 0) {
+        if (H5Lget_info_by_idx2(group_id, ".", H5_INDEX_NAME, H5_ITER_INC, 0, &link_info, H5P_DEFAULT) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded!\n");
             goto error;
@@ -11972,7 +11972,7 @@ test_get_link_info(void)
 
         memset(&link_info, 0, sizeof(link_info));
 
-        if (H5Lget_info_by_idx(file_id, "/" LINK_TEST_GROUP_NAME "/" GET_LINK_INFO_TEST_SUBGROUP_NAME,
+        if (H5Lget_info_by_idx2(file_id, "/" LINK_TEST_GROUP_NAME "/" GET_LINK_INFO_TEST_SUBGROUP_NAME,
                 H5_INDEX_CRT_ORDER, H5_ITER_DEC, 1, &link_info, H5P_DEFAULT) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded!\n");
@@ -11993,7 +11993,7 @@ test_get_link_info(void)
 
         memset(&link_info, 0, sizeof(link_info));
 
-        if (H5Lget_info_by_idx(group_id, ".", H5_INDEX_NAME, H5_ITER_DEC, 2, &link_info, H5P_DEFAULT) >= 0) {
+        if (H5Lget_info_by_idx2(group_id, ".", H5_INDEX_NAME, H5_ITER_DEC, 2, &link_info, H5P_DEFAULT) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded!\n");
             goto error;
@@ -12401,16 +12401,16 @@ error:
 static int
 test_get_link_val(void)
 {
-    H5L_info_t  link_info;
-    const char *ext_link_filepath;
-    const char *ext_link_val;
-    unsigned    ext_link_flags;
-    htri_t      link_exists;
-    size_t      link_val_buf_size;
-    char       *link_val_buf = NULL;
-    hid_t       file_id = -1, fapl_id = -1;
-    hid_t       container_group = -1, group_id = -1;
-    char        ext_link_filename[FILENAME_MAX_LENGTH];
+    H5L_info2_t  link_info;
+    const char  *ext_link_filepath;
+    const char  *ext_link_val;
+    unsigned     ext_link_flags;
+    htri_t       link_exists;
+    size_t       link_val_buf_size;
+    char        *link_val_buf = NULL;
+    hid_t        file_id = -1, fapl_id = -1;
+    hid_t        container_group = -1, group_id = -1;
+    char         ext_link_filename[FILENAME_MAX_LENGTH];
 
     TESTING("get link value")
 
@@ -12481,7 +12481,7 @@ test_get_link_val(void)
 
     memset(&link_info, 0, sizeof(link_info));
 
-    if (H5Lget_info(group_id, GET_LINK_VAL_TEST_SOFT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
+    if (H5Lget_info2(group_id, GET_LINK_VAL_TEST_SOFT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't get soft link info\n");
         goto error;
@@ -12515,7 +12515,7 @@ test_get_link_val(void)
 
     memset(&link_info, 0, sizeof(link_info));
 
-    if (H5Lget_info(group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
+    if (H5Lget_info2(group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't get external link info\n");
         goto error;
@@ -12568,7 +12568,7 @@ test_get_link_val(void)
     H5E_BEGIN_TRY {
         memset(&link_info, 0, sizeof(link_info));
 
-        if (H5Lget_info(group_id, GET_LINK_VAL_TEST_SOFT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
+        if (H5Lget_info2(group_id, GET_LINK_VAL_TEST_SOFT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
             H5_FAILED();
             printf("    couldn't get soft link info\n");
             goto error;
@@ -12610,7 +12610,7 @@ test_get_link_val(void)
 
         memset(&link_info, 0, sizeof(link_info));
 
-        if (H5Lget_info(group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
+        if (H5Lget_info2(group_id, GET_LINK_VAL_TEST_EXT_LINK_NAME, &link_info, H5P_DEFAULT) < 0) {
             H5_FAILED();
             printf("    couldn't get external link info\n");
             goto error;
@@ -16641,7 +16641,7 @@ attr_iter_callback2(hid_t location_id, const char *attr_name, const H5A_info_t *
  * expected.
  */
 static herr_t
-link_iter_callback1(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)
+link_iter_callback1(hid_t group_id, const char *name, const H5L_info2_t *info, void *op_data)
 {
     if (!strcmp(name, LINK_ITER_TEST_HARD_LINK_NAME)) {
         if (H5L_TYPE_HARD != info->type) {
@@ -16681,7 +16681,7 @@ error:
  * works correctly.
  */
 static herr_t
-link_iter_callback2(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)
+link_iter_callback2(hid_t group_id, const char *name, const H5L_info2_t *info, void *op_data)
 {
     int *broken = (int *) op_data;
 
@@ -16723,7 +16723,7 @@ error:
 }
 
 static herr_t
-link_iter_callback3(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)
+link_iter_callback3(hid_t group_id, const char *name, const H5L_info2_t *info, void *op_data)
 {
     return 0;
 }
@@ -16734,7 +16734,7 @@ link_iter_callback3(hid_t group_id, const char *name, const H5L_info_t *info, vo
  * expected.
  */
 static herr_t
-link_visit_callback1(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)
+link_visit_callback1(hid_t group_id, const char *name, const H5L_info2_t *info, void *op_data)
 {
     if (!strcmp(name, LINK_VISIT_TEST_NO_CYCLE_SUBGROUP_NAME2 "/" LINK_VISIT_TEST_NO_CYCLE_DSET_NAME)) {
         if (H5L_TYPE_HARD != info->type) {
@@ -16805,7 +16805,7 @@ error:
 }
 
 static herr_t
-link_visit_callback2(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)
+link_visit_callback2(hid_t group_id, const char *name, const H5L_info2_t *info, void *op_data)
 {
     if (!strcmp(name, LINK_VISIT_TEST_CYCLE_SUBGROUP_NAME2 "/" LINK_VISIT_TEST_CYCLE_LINK_NAME1)) {
         if (H5L_TYPE_HARD != info->type) {
@@ -16862,7 +16862,7 @@ error:
 }
 
 static herr_t
-link_visit_callback3(hid_t group_id, const char *name, const H5L_info_t *info, void *op_data)
+link_visit_callback3(hid_t group_id, const char *name, const H5L_info2_t *info, void *op_data)
 {
     return 0;
 }
@@ -16872,7 +16872,7 @@ link_visit_callback3(hid_t group_id, const char *name, const H5L_info_t *info, v
  * group.
  */
 static herr_t
-object_visit_callback(hid_t o_id, const char *name, const H5O_info_t *object_info, void *op_data)
+object_visit_callback(hid_t o_id, const char *name, const H5O_info2_t *object_info, void *op_data)
 {
     return 0;
 }

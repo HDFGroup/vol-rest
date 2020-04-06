@@ -320,7 +320,7 @@ static void hard_link_example(void)
 {
     hid_t file_id;
     hid_t group_id;
-    H5L_info_t li;
+    H5L_info2_t li;
     /* Define the link class that we'll use to register "user-defined hard
      * links" using the callbacks we defined above.
      * A link class can have NULL for any callback except its traverse
@@ -365,7 +365,7 @@ static void hard_link_example(void)
      * the target group's address. We do this by calling H5Lget_info
      * on a hard link to the object.
      */
-    H5Lget_info(file_id, TARGET_GROUP, &li, H5P_DEFAULT);
+    H5Lget_info2(file_id, TARGET_GROUP, &li, H5P_DEFAULT);
 
     /* Now create a user-defined link.  We give it the group's address
      * as its udata.
