@@ -359,60 +359,10 @@ file_specific_type_to_string(H5VL_file_specific_t specific_type)
         case H5VL_FILE_UNMOUNT:       return "H5VL_FILE_UNMOUNT";
         case H5VL_FILE_IS_ACCESSIBLE: return "H5VL_FILE_IS_ACCESSIBLE";
         case H5VL_FILE_DELETE:        return "H5VL_FILE_DELETE";
+        case H5VL_FILE_IS_EQUAL:      return "H5VL_FILE_IS_EQUAL";
         default:                      return "(unknown)";
     } /* end switch */
 } /* end file_specific_type_to_string() */
-
-
-/*-------------------------------------------------------------------------
- * Function:    file_optional_type_to_string
- *
- * Purpose:     Helper function to convert each member of the
- *              H5VL_file_optional_t enum into its string representation
- *
- * Return:      String representation of given object or '(unknown)' if
- *              the function can't determine the type of object it has
- *              been given (can't fail).
- *
- * Programmer:  Jordan Henderson
- *              December, 2017
- */
-const char*
-file_optional_type_to_string(H5VL_native_file_optional_t optional_type)
-{
-    switch (optional_type) {
-        case H5VL_NATIVE_FILE_CLEAR_ELINK_CACHE:            return "H5VL_NATIVE_FILE_CLEAR_ELINK_CACHE";
-        case H5VL_NATIVE_FILE_GET_FILE_IMAGE:               return "H5VL_NATIVE_FILE_GET_FILE_IMAGE";
-        case H5VL_NATIVE_FILE_GET_FREE_SECTIONS:            return "H5VL_NATIVE_FILE_GET_FREE_SECTIONS";
-        case H5VL_NATIVE_FILE_GET_FREE_SPACE:               return "H5VL_NATIVE_FILE_GET_FREE_SPACE";
-        case H5VL_NATIVE_FILE_GET_INFO:                     return "H5VL_NATIVE_FILE_GET_INFO";
-        case H5VL_NATIVE_FILE_GET_MDC_CONF:                 return "H5VL_NATIVE_FILE_GET_MDC_CONF";
-        case H5VL_NATIVE_FILE_GET_MDC_HR:                   return "H5VL_NATIVE_FILE_GET_MDC_HR";
-        case H5VL_NATIVE_FILE_GET_MDC_SIZE:                 return "H5VL_NATIVE_FILE_GET_MDC_SIZE";
-        case H5VL_NATIVE_FILE_GET_SIZE:                     return "H5VL_NATIVE_FILE_GET_SIZE";
-        case H5VL_NATIVE_FILE_GET_VFD_HANDLE:               return "H5VL_NATIVE_FILE_GET_VFD_HANDLE";
-        case H5VL_NATIVE_FILE_GET_FILE_ID:                  return "H5VL_NATIVE_FILE_GET_FILE_ID";
-        case H5VL_NATIVE_FILE_RESET_MDC_HIT_RATE:           return "H5VL_NATIVE_FILE_RESET_MDC_HIT_RATE";
-        case H5VL_NATIVE_FILE_SET_MDC_CONFIG:               return "H5VL_NATIVE_FILE_SET_MDC_CONFIG";
-        case H5VL_NATIVE_FILE_GET_METADATA_READ_RETRY_INFO: return "H5VL_NATIVE_FILE_GET_METADATA_READ_RETRY_INFO";
-        case H5VL_NATIVE_FILE_START_SWMR_WRITE:             return "H5VL_NATIVE_FILE_START_SWMR_WRITE";
-        case H5VL_NATIVE_FILE_START_MDC_LOGGING:            return "H5VL_NATIVE_FILE_START_MDC_LOGGING";
-        case H5VL_NATIVE_FILE_STOP_MDC_LOGGING:             return "H5VL_NATIVE_FILE_STOP_MDC_LOGGING";
-        case H5VL_NATIVE_FILE_GET_MDC_LOGGING_STATUS:       return "H5VL_NATIVE_FILE_GET_MDC_LOGGING_STATUS";
-        case H5VL_NATIVE_FILE_FORMAT_CONVERT:               return "H5VL_NATIVE_FILE_FORMAT_CONVERT";
-        case H5VL_NATIVE_FILE_RESET_PAGE_BUFFERING_STATS:   return "H5VL_NATIVE_FILE_RESET_PAGE_BUFFERING_STATS";
-        case H5VL_NATIVE_FILE_GET_PAGE_BUFFERING_STATS:     return "H5VL_NATIVE_FILE_GET_PAGE_BUFFERING_STATS";
-        case H5VL_NATIVE_FILE_GET_MDC_IMAGE_INFO:           return "H5VL_NATIVE_FILE_GET_MDC_IMAGE_INFO";
-        case H5VL_NATIVE_FILE_GET_EOA:                      return "H5VL_NATIVE_FILE_GET_EOA";
-        case H5VL_NATIVE_FILE_INCR_FILESIZE:                return "H5VL_NATIVE_FILE_INCR_FILESIZE";
-        case H5VL_NATIVE_FILE_SET_LIBVER_BOUNDS:            return "H5VL_NATIVE_FILE_SET_LIBVER_BOUNDS";
-        case H5VL_NATIVE_FILE_GET_MIN_DSET_OHDR_FLAG:       return "H5VL_NATIVE_FILE_GET_MIN_DSET_OHDR_FLAG";
-        case H5VL_NATIVE_FILE_SET_MIN_DSET_OHDR_FLAG:       return "H5VL_NATIVE_FILE_SET_MIN_DSET_OHDR_FLAG";
-        case H5VL_NATIVE_FILE_GET_MPI_ATOMICITY:            return "H5VL_NATIVE_FILE_GET_MPI_ATOMICITY";
-        case H5VL_NATIVE_FILE_SET_MPI_ATOMICITY:            return "H5VL_NATIVE_FILE_SET_MPI_ATOMICITY";
-        default:                                            return "(unknown)";
-    } /* end switch */
-} /* end file_optional_type_to_string() */
 
 
 /*-------------------------------------------------------------------------
@@ -531,8 +481,10 @@ const char*
 object_get_type_to_string(H5VL_object_get_t get_type)
 {
     switch (get_type) {
+        case H5VL_OBJECT_GET_FILE: return "H5VL_OBJECT_GET_FILE";
         case H5VL_OBJECT_GET_NAME: return "H5VL_OBJECT_GET_NAME";
         case H5VL_OBJECT_GET_TYPE: return "H5VL_OBJECT_GET_TYPE";
+        case H5VL_OBJECT_GET_INFO: return "H5VL_OBJECT_GET_INFO";
         default:                   return "(unknown)";
     } /* end switch */
 } /* end object_get_type_to_string() */
@@ -564,32 +516,4 @@ object_specific_type_to_string(H5VL_object_specific_t specific_type)
         default:                           return "(unknown)";
     } /* end switch */
 } /* end object_specific_type_to_string() */
-
-
-/*-------------------------------------------------------------------------
- * Function:    object_optional_type_to_string
- *
- * Purpose:     Helper function to convert each member of the
- *              H5VL_object_optional_t enum into its string representation
- *
- * Return:      String representation of given object or '(unknown)' if
- *              the function can't determine the type of object it has
- *              been given (can't fail).
- *
- * Programmer:  Jordan Henderson
- *              December, 2017
- */
-const char*
-object_optional_type_to_string(H5VL_native_object_optional_t optional_type)
-{
-    switch (optional_type) {
-        case H5VL_NATIVE_OBJECT_GET_COMMENT:              return "H5VL_NATIVE_OBJECT_GET_COMMENT";
-        case H5VL_NATIVE_OBJECT_GET_INFO:                 return "H5VL_NATIVE_OBJECT_GET_INFO";
-        case H5VL_NATIVE_OBJECT_SET_COMMENT:              return "H5VL_NATIVE_OBJECT_SET_COMMENT";
-        case H5VL_NATIVE_OBJECT_DISABLE_MDC_FLUSHES:      return "H5VL_NATIVE_OBJECT_DISABLE_MDC_FLUSHES";
-        case H5VL_NATIVE_OBJECT_ENABLE_MDC_FLUSHES:       return "H5VL_NATIVE_OBJECT_ENABLE_MDC_FLUSHES";
-        case H5VL_NATIVE_OBJECT_ARE_MDC_FLUSHES_DISABLED: return "H5VL_NATIVE_OBJECT_ARE_MDC_FLUSHES_DISABLED";
-        default:                                          return "(unknown)";
-    } /* end switch */
-} /* end object_optional_type_to_string() */
 #endif /* RV_CONNECTOR_DEBUG */

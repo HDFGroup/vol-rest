@@ -240,127 +240,15 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t 
               hid_t dxpl_id, void **req, va_list arguments)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
+    size_t       host_header_len = 0;
+    char        *host_header = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    int          url_len = 0;
     herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received object get call with following parameters:\n");
     printf("     - Object get call type: %s\n", object_get_type_to_string(get_type));
-    printf("     - loc_id object's URI: %s\n", loc_obj->URI);
-    printf("     - loc_id object's type: %s\n", object_type_to_string(loc_obj->obj_type));
-    printf("     - loc_id object's domain path: %s\n\n", loc_obj->domain->u.file.filepath_name);
-#endif
-
-    switch (get_type) {
-        case H5VL_OBJECT_GET_NAME:
-        case H5VL_OBJECT_GET_TYPE:
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "unsupported object operation");
-            break;
-
-        default:
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "unknown object operation");
-    } /* end switch */
-
-done:
-    PRINT_ERROR_STACK;
-
-    return ret_value;
-} /* end RV_object_get() */
-
-
-/*-------------------------------------------------------------------------
- * Function:    RV_object_specific
- *
- * Purpose:     Performs a connector-specific operation on an HDF5 object,
- *              such as calling the H5Ovisit routine.
- *
- * Return:      Non-negative on success/Negative on failure
- *
- * Programmer:  Jordan Henderson
- *              July, 2017
- */
-herr_t
-RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type,
-                   hid_t dxpl_id, void **req, va_list arguments)
-{
-    RV_object_t *loc_obj = (RV_object_t *) obj;
-    herr_t       ret_value = SUCCEED;
-
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Received object-specific call with following parameters:\n");
-    printf("     - Object-specific call type: %s\n", object_specific_type_to_string(specific_type));
-    printf("     - loc_id object's URI: %s\n", loc_obj->URI);
-    printf("     - loc_id object's type: %s\n", object_type_to_string(loc_obj->obj_type));
-    printf("     - loc_id object's domain path: %s\n\n", loc_obj->domain->u.file.filepath_name);
-#endif
-
-    switch (specific_type) {
-        /* H5Oincr/decr_refcount */
-        case H5VL_OBJECT_CHANGE_REF_COUNT:
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Oincr_refcount and H5Odecr_refcount are unsupported");
-            break;
-
-        /* H5Oexists_by_name */
-        case H5VL_OBJECT_EXISTS:
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Oexists_by_name is unsupported");
-            break;
-
-        /* Object lookup for references */
-        case H5VL_OBJECT_LOOKUP:
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "object lookup is unsupported");
-            break;
-
-        /* H5Ovisit(_by_name) */
-        case H5VL_OBJECT_VISIT:
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Ovisit and H5Ovisit_by_name are unsupported");
-            break;
-
-        /* H5Oflush */
-        case H5VL_OBJECT_FLUSH:
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Oflush is unsupported");
-            break;
-
-        /* H5Orefresh */
-        case H5VL_OBJECT_REFRESH:
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Orefresh is unsupported");
-            break;
-
-        default:
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "unknown object operation");
-    } /* end switch */
-
-done:
-    PRINT_ERROR_STACK;
-
-    return ret_value;
-} /* end RV_object_specific() */
-
-
-/*-------------------------------------------------------------------------
- * Function:    RV_object_optional
- *
- * Purpose:     Performs an optional operation on an HDF5 object, such as
- *              calling the H5Oget_info or H5Oset/get_comment routines.
- *
- * Return:      Non-negative on success/Negative on failure
- *
- * Programmer:  Jordan Henderson
- *              July, 2017
- */
-herr_t
-RV_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments)
-{
-    H5VL_native_object_optional_t  optional_type = (H5VL_native_object_optional_t) va_arg(arguments, int);
-    H5VL_loc_params_t             *loc_params = va_arg(arguments, H5VL_loc_params_t *);
-    RV_object_t                   *loc_obj = (RV_object_t *) obj;
-    size_t                         host_header_len = 0;
-    char                          *host_header = NULL;
-    char                           request_url[URL_MAX_LENGTH];
-    int                            url_len = 0;
-    herr_t                         ret_value = SUCCEED;
-
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Received object optional call with following parameters:\n");
-    printf("     - Object optional call type: %s\n", object_optional_type_to_string(optional_type));
     printf("     - loc_id object's URI: %s\n", loc_obj->URI);
     printf("     - loc_id object's type: %s\n", object_type_to_string(loc_obj->obj_type));
     printf("     - loc_id object's domain path: %s\n\n", loc_obj->domain->u.file.filepath_name);
@@ -372,36 +260,18 @@ RV_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments)
         && H5I_DATASET != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file, group, dataset or committed datatype");
 
-    switch (optional_type) {
-        /* H5Oset_comment and H5Oset_comment_by_name */
-        case H5VL_NATIVE_OBJECT_SET_COMMENT:
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "object comments are deprecated in favor of use of object attributes");
+    switch (get_type) {
+        case H5VL_OBJECT_GET_FILE:
+        case H5VL_OBJECT_GET_NAME:
+        case H5VL_OBJECT_GET_TYPE:
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "unsupported object operation");
             break;
 
-        /* H5Oget_comment and H5Oget_comment_by_name */
-        case H5VL_NATIVE_OBJECT_GET_COMMENT:
+        case H5VL_OBJECT_GET_INFO:
         {
-            char    *comment_buf = va_arg(arguments, char *);
-            size_t   comment_buf_size = va_arg(arguments, size_t);
-            ssize_t *ret_size = va_arg(arguments, ssize_t *);
-
-            UNUSED_VAR(comment_buf);
-            UNUSED_VAR(comment_buf_size);
-
-            /* Even though H5Oset_comment is deprecated in favor of attributes, H5Oget_comment is
-             * still used in h5dump, so we just return a comment size of 0 and don't support object
-             * comments.
-             */
-            *ret_size = 0;
-
-            break;
-        } /* H5VL_OBJECT_GET_COMMENT */
-
-        /* H5Oget_info (_by_name/_by_idx) */
-        case H5VL_NATIVE_OBJECT_GET_INFO:
-        {
-            H5O_info_t *obj_info = va_arg(arguments, H5O_info_t *);
-            H5I_type_t  obj_type;
+            H5O_info2_t *obj_info = va_arg(arguments, H5O_info2_t *);
+            unsigned     fields = va_arg(arguments, unsigned);
+            H5I_type_t   obj_type;
 
             switch (loc_params->type) {
                 /* H5Oget_info */
@@ -412,7 +282,7 @@ RV_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments)
                     /* Redirect cURL from the base URL to
                      * "/groups/<id>", "/datasets/<id>" or "/datatypes/<id>",
                      * depending on the type of the object. Also set the
-                     * object's type in the H5O_info_t struct.
+                     * object's type in the H5O_info2_t struct.
                      */
                     switch (obj_type) {
                         case H5I_FILE:
@@ -498,7 +368,7 @@ RV_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments)
                     /* Redirect cURL from the base URL to
                      * "/groups/<id>", "/datasets/<id>" or "/datatypes/<id>",
                      * depending on the type of the object. Also set the
-                     * object's type in the H5O_info_t struct.
+                     * object's type in the H5O_info2_t struct.
                      */
                     switch (obj_type) {
                         case H5I_FILE:
@@ -630,7 +500,75 @@ done:
     PRINT_ERROR_STACK;
 
     return ret_value;
-} /* end RV_object_optional() */
+} /* end RV_object_get() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_object_specific
+ *
+ * Purpose:     Performs a connector-specific operation on an HDF5 object,
+ *              such as calling the H5Ovisit routine.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              July, 2017
+ */
+herr_t
+RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type,
+                   hid_t dxpl_id, void **req, va_list arguments)
+{
+    RV_object_t *loc_obj = (RV_object_t *) obj;
+    herr_t       ret_value = SUCCEED;
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Received object-specific call with following parameters:\n");
+    printf("     - Object-specific call type: %s\n", object_specific_type_to_string(specific_type));
+    printf("     - loc_id object's URI: %s\n", loc_obj->URI);
+    printf("     - loc_id object's type: %s\n", object_type_to_string(loc_obj->obj_type));
+    printf("     - loc_id object's domain path: %s\n\n", loc_obj->domain->u.file.filepath_name);
+#endif
+
+    switch (specific_type) {
+        /* H5Oincr/decr_refcount */
+        case H5VL_OBJECT_CHANGE_REF_COUNT:
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Oincr_refcount and H5Odecr_refcount are unsupported");
+            break;
+
+        /* H5Oexists_by_name */
+        case H5VL_OBJECT_EXISTS:
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Oexists_by_name is unsupported");
+            break;
+
+        /* Object lookup for references */
+        case H5VL_OBJECT_LOOKUP:
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "object lookup is unsupported");
+            break;
+
+        /* H5Ovisit(_by_name) */
+        case H5VL_OBJECT_VISIT:
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Ovisit and H5Ovisit_by_name are unsupported");
+            break;
+
+        /* H5Oflush */
+        case H5VL_OBJECT_FLUSH:
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Oflush is unsupported");
+            break;
+
+        /* H5Orefresh */
+        case H5VL_OBJECT_REFRESH:
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Orefresh is unsupported");
+            break;
+
+        default:
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "unknown object operation");
+    } /* end switch */
+
+done:
+    PRINT_ERROR_STACK;
+
+    return ret_value;
+} /* end RV_object_specific() */
 
 
 /*-------------------------------------------------------------------------
@@ -639,9 +577,9 @@ done:
  * Purpose:     A callback for RV_parse_response which will search
  *              an HTTP response for info about an object and copy that
  *              info into the callback_data_out parameter, which should be
- *              a H5O_info_t *. This callback is used to help H5Oget_info;
+ *              a H5O_info2_t *. This callback is used to help H5Oget_info;
  *              currently only the file number, object address and number
- *              of attributes fields are filled out in the H5O_info_t
+ *              of attributes fields are filled out in the H5O_info2_t
  *              struct. All other fields are cleared and should not be
  *              relied upon.
  *
@@ -654,11 +592,11 @@ static herr_t
 RV_get_object_info_callback(char *HTTP_response,
     void *callback_data_in, void *callback_data_out)
 {
-    H5O_info_t *obj_info = (H5O_info_t *) callback_data_out;
-    yajl_val    parse_tree = NULL, key_obj;
-    size_t      i;
-    char       *object_id, *domain_path = NULL;
-    herr_t      ret_value = SUCCEED;
+    H5O_info2_t *obj_info = (H5O_info2_t *) callback_data_out;
+    yajl_val     parse_tree = NULL, key_obj;
+    size_t       i;
+    char        *object_id, *domain_path = NULL;
+    herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving object's info from server's HTTP response\n\n");
@@ -727,10 +665,11 @@ RV_get_object_info_callback(char *HTTP_response,
     if (NULL == (object_id = YAJL_GET_STRING(key_obj)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "object ID string was NULL");
 
-    obj_info->addr = (haddr_t) rv_hash_string(object_id);
+    /* TODO */
+    obj_info->token = H5O_TOKEN_UNDEF;
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> Object's address: %lu\n", (unsigned long) obj_info->addr);
+    /* TODO: representation of object token */
 #endif
 
     /* Retrieve the object's attribute count */

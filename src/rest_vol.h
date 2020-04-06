@@ -381,9 +381,9 @@ typedef struct iter_data {
  */
 typedef struct link_table_entry link_table_entry;
 struct link_table_entry {
-    H5L_info_t link_info;
-    double     crt_time;
-    char       link_name[LINK_NAME_MAX_LENGTH];
+    H5L_info2_t link_info;
+    double      crt_time;
+    char        link_name[LINK_NAME_MAX_LENGTH];
 
     struct {
         link_table_entry *subgroup_link_table;

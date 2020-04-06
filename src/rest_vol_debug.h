@@ -32,14 +32,12 @@ const char *dataset_specific_type_to_string(H5VL_dataset_specific_t specific_typ
 const char *file_flags_to_string(unsigned flags);
 const char *file_get_type_to_string(H5VL_file_get_t get_type);
 const char *file_specific_type_to_string(H5VL_file_specific_t specific_type);
-const char *file_optional_type_to_string(H5VL_native_file_optional_t optional_type);
 const char *group_get_type_to_string(H5VL_group_get_t get_type);
 const char *link_create_type_to_string(H5VL_link_create_type_t link_create_type);
 const char *link_get_type_to_string(H5VL_link_get_t get_type);
 const char *link_specific_type_to_string(H5VL_link_specific_t specific_type);
 const char *object_get_type_to_string(H5VL_object_get_t get_type);
 const char *object_specific_type_to_string(H5VL_object_specific_t specific_type);
-const char *object_optional_type_to_string(H5VL_native_object_optional_t optional_type);
 
 #ifdef __cplusplus
 }

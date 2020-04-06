@@ -22,7 +22,6 @@ void   *RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fa
 void   *RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, void **req);
 herr_t  RV_file_get(void *file, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
 herr_t  RV_file_specific(void *file, H5VL_file_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-herr_t  RV_file_optional(void *file, hid_t dxpl_id, void **req, va_list arguments);
 herr_t  RV_file_close(void *file, hid_t dxpl_id, void **req);
 
 #ifdef __cplusplus

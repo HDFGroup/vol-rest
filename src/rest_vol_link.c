@@ -473,7 +473,7 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_t get_
         /* H5Lget_info */
         case H5VL_LINK_GET_INFO:
         {
-            H5L_info_t *link_info = va_arg(arguments, H5L_info_t *);
+            H5L_info2_t *link_info = va_arg(arguments, H5L_info2_t *);
 
             switch (loc_params->type) {
                 /* H5Lget_info */
@@ -1197,11 +1197,11 @@ done:
  * Purpose:     A callback for RV_parse_response which will search an HTTP
  *              response for information about a link, such as the link
  *              type, and copy that info into the callback_data_out
- *              parameter, which should be a H5L_info_t *. This callback
+ *              parameter, which should be a H5L_info2_t *. This callback
  *              is used specifically for H5Lget_info (_by_idx). Currently
  *              only the link class, and for soft, external and
  *              user-defined links, the link value, is returned by this
- *              function. All other information in the H5L_info_t struct is
+ *              function. All other information in the H5L_info2_t struct is
  *              initialized to 0.
  *
  * Return:      Non-negative on success/Negative on failure
@@ -1212,10 +1212,10 @@ done:
 herr_t
 RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
-    H5L_info_t *link_info = (H5L_info_t *) callback_data_out;
-    yajl_val    parse_tree = NULL, key_obj;
-    char       *parsed_string;
-    herr_t      ret_value = SUCCEED;
+    H5L_info2_t *link_info = (H5L_info2_t *) callback_data_out;
+    yajl_val     parse_tree = NULL, key_obj;
+    char        *parsed_string;
+    herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving link's info from server's HTTP response\n\n");
@@ -1226,7 +1226,7 @@ RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *cal
     if (!link_info)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link info pointer was NULL");
 
-    memset(link_info, 0, sizeof(H5L_info_t));
+    memset(link_info, 0, sizeof(H5L_info2_t));
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "parsing JSON failed");
@@ -1267,6 +1267,10 @@ RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *cal
         printf("-> Retrieved link's value size: %zu\n\n", link_info->u.val_size);
 #endif
     } /* end if */
+    else {
+        /* TODO */
+        link_info->u.token = H5O_TOKEN_UNDEF;
+    }
 
 done:
     if (parse_tree)
@@ -1295,7 +1299,7 @@ done:
  *              parameter.
  *
  *              This callback is used by H5Lget_info to store the size of
- *              the link's value in an H5L_info_t struct's 'val_size'
+ *              the link's value in an H5L_info2_t struct's 'val_size'
  *              field, and also by H5Lget_val (_by_idx) to actually
  *              retrieve the link's value.
  *
@@ -1636,7 +1640,7 @@ done:
  *
  * Purpose:     A callback for RV_parse_response which will search an HTTP
  *              response for links in a group and iterate through them,
- *              setting up a H5L_info_t struct and calling the supplied
+ *              setting up a H5L_info2_t struct and calling the supplied
  *              callback function for each link. The callback_data_in
  *              parameter should be a iter_data struct *, containing all
  *              the data necessary for link iteration, such as the callback
@@ -1725,7 +1729,7 @@ done:
  *              function builds a list of link_table_entry structs
  *              (defined near the top of this file), one for each link,
  *              which each contain a link's name, creation time and a link
- *              info H5L_info_t struct.
+ *              info H5L_info2_t struct.
  *
  *              Each link_table_entry struct may additionally contain a
  *              pointer to another link table in the case that the link in
@@ -1817,7 +1821,7 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(
     /* For each link, grab its name and creation order, then find its corresponding JSON
      * subsection, place a NULL terminator at the end of it in order to "extract out" that
      * subsection, and pass it to the "get link info" callback function in order to fill
-     * out a H5L_info_t struct for the link.
+     * out a H5L_info2_t struct for the link.
      */
     for (i = 0; i < num_links; i++) {
         char *link_name;
@@ -1842,7 +1846,7 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(
 
         table[i].crt_time = YAJL_GET_DOUBLE(link_field_obj);
 
-        /* Process the JSON for the current link and fill out a H5L_info_t struct for it */
+        /* Process the JSON for the current link and fill out a H5L_info2_t struct for it */
 
         /* Find the beginning and end of the JSON section for this link */
         if (NULL == (link_section_start = strstr(link_section_start, "{")))
@@ -1860,7 +1864,7 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(
          */
         *link_section_end = '\0';
 
-        /* Fill out a H5L_info_t struct for this link */
+        /* Fill out a H5L_info2_t struct for this link */
         if (RV_parse_response(link_section_start, NULL, &table[i].link_info, RV_get_link_info_callback) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "couldn't get link info");
 

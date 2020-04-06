@@ -149,7 +149,7 @@ const H5VL_attr_class_t RV_attribute_callbacks_g = {
     RV_attr_get,
     RV_attr_specific,
     NULL,
-    RV_attr_close
+    RV_attr_close,
 };
 
 /* REST VOL connector dataset callbacks */
@@ -161,7 +161,7 @@ const H5VL_dataset_class_t RV_dataset_callbacks_g = {
     RV_dataset_get,
     RV_dataset_specific,
     NULL,
-    RV_dataset_close
+    RV_dataset_close,
 };
 
 /* REST VOL connector datatype callbacks */
@@ -171,7 +171,7 @@ const H5VL_datatype_class_t RV_datatype_callbacks_g = {
     RV_datatype_get,
     NULL,
     NULL,
-    RV_datatype_close
+    RV_datatype_close,
 };
 
 /* REST VOL connector file callbacks */
@@ -180,8 +180,8 @@ const H5VL_file_class_t RV_file_callbacks_g = {
     RV_file_open,
     RV_file_get,
     RV_file_specific,
-    RV_file_optional,
-    RV_file_close
+    NULL,
+    RV_file_close,
 };
 
 /* REST VOL connector group callbacks */
@@ -191,7 +191,7 @@ const H5VL_group_class_t RV_group_callbacks_g = {
     RV_group_get,
     NULL,
     NULL,
-    RV_group_close
+    RV_group_close,
 };
 
 /* REST VOL connector link callbacks */
@@ -201,7 +201,7 @@ const H5VL_link_class_t RV_link_callbacks_g = {
     RV_link_move,
     RV_link_get,
     RV_link_specific,
-    NULL
+    NULL,
 };
 
 /* REST VOL connector object callbacks */
@@ -210,7 +210,7 @@ const H5VL_object_class_t RV_object_callbacks_g = {
     RV_object_copy,
     RV_object_get,
     RV_object_specific,
-    RV_object_optional
+    NULL,
 };
 
 /* REST VOL connector introspection class */
@@ -1341,13 +1341,13 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
      * we skip ahead to the GET request and optional callback function.
      */
     if (H5I_UNINIT == *target_object_type) {
-        H5L_info_t  link_info;
-        const char *ext_filename = NULL;
-        const char *ext_obj_path = NULL;
-        hbool_t     empty_dirname;
-        htri_t      search_ret;
-        char       *pobj_URI = parent_obj->URI;
-        char        temp_URI[URI_MAX_LENGTH];
+        H5L_info2_t  link_info;
+        const char  *ext_filename = NULL;
+        const char  *ext_obj_path = NULL;
+        hbool_t      empty_dirname;
+        htri_t       search_ret;
+        char        *pobj_URI = parent_obj->URI;
+        char         temp_URI[URI_MAX_LENGTH];
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Unknown target object type; retrieving object type\n\n");

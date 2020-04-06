@@ -540,6 +540,10 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t dxpl_id,
             FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fdelete is unsupported");
             break;
 
+        case H5VL_FILE_IS_EQUAL:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "checking of file equality is unsupported");
+            break;
+
         default:
             FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "unknown file operation");
     } /* end switch */
@@ -549,116 +553,6 @@ done:
 
     return ret_value;
 } /* end RV_file_specific() */
-
-
-/*-------------------------------------------------------------------------
- * Function:    RV_file_optional
- *
- * Purpose:     Performs an optional operation on an HDF5 file, such as
- *              calling the H5Freopen routine.
- *
- * Return:      Non-negative on success/Negative on failure
- *
- * Programmer:  Jordan Henderson
- *              March, 2017
- */
-herr_t
-RV_file_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments)
-{
-    H5VL_native_file_optional_t  optional_type = (H5VL_native_file_optional_t) va_arg(arguments, int);
-    RV_object_t                 *file = (RV_object_t *) obj;
-    herr_t                       ret_value = SUCCEED;
-
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Received file optional call with following parameters:\n");
-    printf("     - File optional call type: %s\n", file_optional_type_to_string(optional_type));
-    printf("     - File's URI: %s\n", file->URI);
-    printf("     - File's pathname: %s\n\n", file->domain->u.file.filepath_name);
-#endif
-
-    if (H5I_FILE != file->obj_type)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file");
-
-    switch (optional_type) {
-        /* H5Fget_info */
-        case H5VL_NATIVE_FILE_GET_INFO:
-        {
-            H5I_type_t   obj_type = va_arg(arguments, H5I_type_t);
-            H5F_info2_t *file_info = va_arg(arguments, H5F_info2_t *);
-
-            /* Shut up compiler warnings */
-            UNUSED_VAR(obj_type);
-
-            /* Initialize entire struct to 0 */
-            memset(file_info, 0, sizeof(*file_info));
-
-            break;
-        } /* H5VL_FILE_GET_INFO */
-
-        /* H5Fclear_elink_file_cache */
-        case H5VL_NATIVE_FILE_CLEAR_ELINK_CACHE:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fclear_elink_file_cache is unsupported");
-            break;
-
-        /* H5Fget_file_image */
-        case H5VL_NATIVE_FILE_GET_FILE_IMAGE:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_file_image is unsupported");
-            break;
-
-        /* H5Fget_free_sections */
-        case H5VL_NATIVE_FILE_GET_FREE_SECTIONS:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_free_sections is unsupported");
-            break;
-
-        /* H5Fget_freespace */
-        case H5VL_NATIVE_FILE_GET_FREE_SPACE:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_freespace is unsupported");
-            break;
-
-        /* H5Fget_mdc_config */
-        case H5VL_NATIVE_FILE_GET_MDC_CONF:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_mdc_config is unsupported");
-            break;
-
-        /* H5Fget_mdc_hit_rate */
-        case H5VL_NATIVE_FILE_GET_MDC_HR:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_mdc_hit_rate is unsupported");
-            break;
-
-        /* H5Fget_mdc_size */
-        case H5VL_NATIVE_FILE_GET_MDC_SIZE:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_mdc_size is unsupported");
-            break;
-
-        /* H5Fget_filesize */
-        case H5VL_NATIVE_FILE_GET_SIZE:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_filesize is unsupported");
-            break;
-
-        /* H5Fget_vfd_handle */
-        case H5VL_NATIVE_FILE_GET_VFD_HANDLE:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_vfd_handle is unsupported");
-            break;
-
-        /* H5Freset_mdc_hit_rate_stats */
-        case H5VL_NATIVE_FILE_RESET_MDC_HIT_RATE:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Freset_mdc_hit_rate_stats is unsupported");
-            break;
-
-        /* H5Fset_mdc_config */
-        case H5VL_NATIVE_FILE_SET_MDC_CONFIG:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fset_mdc_config is unsupported");
-            break;
-
-        default:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "unknown file operation");
-    } /* end switch */
-
-done:
-    PRINT_ERROR_STACK;
-
-    return ret_value;
-} /* end RV_file_optional() */
 
 
 /*-------------------------------------------------------------------------

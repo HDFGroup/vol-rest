@@ -23,7 +23,6 @@ herr_t  RV_object_copy(void *src_obj, const H5VL_loc_params_t *loc_params1, cons
     hid_t lcpl_id, hid_t dxpl_id, void **req);
 herr_t  RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
 herr_t  RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
-herr_t  RV_object_optional(void *obj, hid_t dxpl_id, void **req, va_list arguments);
 
 #ifdef __cplusplus
 }
