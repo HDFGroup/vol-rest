@@ -49,6 +49,15 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     printf("     - Default FAPL? %s\n\n", (H5P_FILE_ACCESS_DEFAULT == fapl_id) ? "yes" : "no");
 #endif
 
+    /*
+     * If the connector has been dynamically loaded, the FAPL used for
+     * creating the file will be a default FAPL, so we need to ensure
+     * that the connection information gets set.
+     */
+    if (fapl_id == H5P_FILE_ACCESS_DEFAULT)
+        if (H5_rest_set_connection_information() < 0)
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
+
     /* Allocate and setup internal File struct */
     if (NULL == (new_file = (RV_object_t *) RV_malloc(sizeof(*new_file))))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for file object");
@@ -256,6 +265,15 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     printf("     - File access flags: %s\n", file_flags_to_string(flags));
     printf("     - Default FAPL? %s\n\n", (H5P_FILE_ACCESS_DEFAULT == fapl_id) ? "yes" : "no");
 #endif
+
+    /*
+     * If the connector has been dynamically loaded, the FAPL used for
+     * creating the file will be a default FAPL, so we need to ensure
+     * that the connection information gets set.
+     */
+    if (fapl_id == H5P_FILE_ACCESS_DEFAULT)
+        if (H5_rest_set_connection_information() < 0)
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
 
     /* Allocate and setup internal File struct */
     if (NULL == (file = (RV_object_t *) RV_malloc(sizeof(*file))))
