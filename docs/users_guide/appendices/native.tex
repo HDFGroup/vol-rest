@@ -1,0 +1,165 @@
+\documentclass[../users_guide.tex]{subfiles}
+ 
+\begin{document}
+
+\section{Native HDF5 VOL connector-specific API calls}
+\label{apdx:native_calls}
+
+The following HDF5 API calls are either specific to the native HDF5 VOL connector or are not routed through the VOL and thus are not able to be implemented by the \rvc{} (or other VOL connectors):
+
+\subsection{H5A interface}
+
+\begin{tabularx}{\linewidth}{| X | >{\RaggedRight}X |}
+\hline
+\rowcolor{lightgray!50}%
+% Center just the header row
+\multicolumn{1}{| c |}{\textbf{API call}} & \multicolumn{1}{c |}{\textbf{Notes}} \\ \hline
+
+H5Aiterate1 & Deprecated in favor of H5Aiterate2 \\ \hline
+H5Aget\_num\_attrs & Deprecated in favor of H5Oget\_info \\ \hline
+
+\end{tabularx}
+
+\subsection{H5D interface}
+
+\begin{tabularx}{\linewidth}{| X | >{\RaggedRight}X |}
+\hline
+\rowcolor{lightgray!50}%
+% Center just the header row
+\multicolumn{1}{| c |}{\textbf{API call}} & \multicolumn{1}{c |}{\textbf{Notes}} \\ \hline
+
+H5Dformat\_convert & \\ \hline
+H5Dget\_offset & \\ \hline
+H5Dget\_chunk\_index\_type & \\ \hline
+H5Dget\_chunk\_storage\_size & \\ \hline
+H5Dvlen\_reclaim & \\ \hline
+H5Dvlen\_get\_buf\_size & \\ \hline
+H5Diterate & \\ \hline
+H5Dscatter & \\ \hline
+H5Dgather & \\ \hline
+H5Dfill & \\ \hline
+H5Dread\_chunk & \\ \hline
+H5Dwrite\_chunk & \\ \hline
+
+\end{tabularx}
+
+\subsection{H5F interface}
+
+\begin{tabularx}{\linewidth}{| X | >{\RaggedRight}X |}
+\hline
+\rowcolor{lightgray!50}%
+% Center just the header row
+\multicolumn{1}{| c |}{\textbf{API call}} & \multicolumn{1}{c |}{\textbf{Notes}} \\ \hline
+
+H5Fis\_hdf5 & Uses a default FAPL so can only ever be routed through the native HDF5 VOL connector\\ \hline
+H5Fget\_vfd\_handle & \\ \hline
+H5Fget\_freespace & \\ \hline
+H5Fget\_filesize & \\ \hline
+H5Fget\_file\_image & \\ \hline
+H5Fget\_mdc\_config & \\ \hline
+H5Fset\_mdc\_config & \\ \hline
+H5Fget\_mdc\_hit\_rate & \\ \hline
+H5Fget\_mdc\_size & \\ \hline
+H5Freset\_mdc\_hit\_rate\_stats & \\ \hline
+H5Fget\_info(1/2) & \\ \hline
+H5Fget\_metadata\_read\_retry\_info & \\ \hline
+H5Fget\_free\_sections & \\ \hline
+H5Fclear\_elink\_file\_cache & \\ \hline
+H5Fstart\_swmr\_write & \\ \hline
+H5Fstart\_mdc\_logging & \\ \hline
+H5Fstop\_mdc\_logging & \\ \hline
+H5Fget\_mdc\_logging\_status & \\ \hline
+H5Fset\_libver\_bounds & \\ \hline
+H5Fformat\_convert & \\ \hline
+H5Freset\_page\_buffering\_stats & \\ \hline
+H5Fget\_page\_buffering\_stats & \\ \hline
+H5Fget\_mdc\_image\_info & \\ \hline
+H5Fget\_eoa & \\ \hline
+H5Fincrement\_filesize & \\ \hline
+H5Fget\_dset\_no\_attrs\_hint & \\ \hline
+H5Fset\_dset\_no\_attrs\_hint & \\ \hline
+H5Fset\_latest\_format & \\ \hline
+H5Fset\_mpi\_atomicity & \\ \hline
+H5Fget\_mpi\_atomicity & \\ \hline
+
+\end{tabularx}
+
+\subsection{H5G interface}
+
+\begin{tabularx}{\linewidth}{| X | >{\RaggedRight}X |}
+\hline
+\rowcolor{lightgray!50}%
+% Center just the header row
+\multicolumn{1}{| c |}{\textbf{API call}} & \multicolumn{1}{c |}{\textbf{Notes}} \\ \hline
+
+H5Gset\_comment & Deprecated in favor of H5Oset\_comment/H5Oset\_comment\_by\_name \\ \hline
+H5Gget\_comment & Deprecated in favor of H5Oget\_comment/H5Oget\_comment\_by\_name \\ \hline
+H5Giterate & Deprecated in favor of H5Literate \\ \hline
+H5Gget\_objinfo & Deprecated in favor of H5Lget\_info/H5Oget\_info \\ \hline
+H5Gget\_objtype\_by\_idx & Deprecated in favor of H5Lget\_info/H5Oget\_info \\ \hline
+
+\end{tabularx}
+
+\subsection{H5L interface}
+
+\begin{tabularx}{\linewidth}{| X | >{\RaggedRight}X |}
+\hline
+\rowcolor{lightgray!50}%
+% Center just the header row
+\multicolumn{1}{| c |}{\textbf{API call}} & \multicolumn{1}{c |}{\textbf{Notes}} \\ \hline
+
+H5Lregister & \\ \hline
+H5Lunregister & \\ \hline
+H5Lis\_registered & \\ \hline
+H5Lunpack\_elink\_val & \\ \hline
+
+\end{tabularx}
+
+\subsection{H5O interface}
+
+\begin{tabularx}{\linewidth}{| X | >{\RaggedRight}X |}
+\hline
+\rowcolor{lightgray!50}%
+% Center just the header row
+\multicolumn{1}{| c |}{\textbf{API call}} & \multicolumn{1}{c |}{\textbf{Notes}} \\ \hline
+
+H5Oget\_info(1/2) & \\ \hline
+H5Oget\_info\_by\_name(1/2) & \\ \hline
+H5Oget\_info\_by\_idx(1/2) & \\ \hline
+H5Oset\_comment(\_by\_name) & Deprecated in favor of using attributes on objects \\ \hline
+H5Oget\_comment(\_by\_name) & Deprecated in favor of using attributes on objects \\ \hline
+H5Oare\_mdc\_flushes\_disabled & \\ \hline
+H5Oenable\_mdc\_flushes & \\ \hline
+H5Odisable\_mdc\_flushes & \\ \hline
+
+\end{tabularx}
+
+\subsection{H5R interface}
+
+\begin{tabularx}{\linewidth}{| X | >{\RaggedRight}X |}
+\hline
+\rowcolor{lightgray!50}%
+% Center just the header row
+\multicolumn{1}{| c |}{\textbf{API call}} & \multicolumn{1}{c |}{\textbf{Notes}} \\ \hline
+
+H5Rdestroy & \\ \hline
+H5Rget\_type & \\ \hline
+H5Requal & \\ \hline
+H5Rcopy & \\ \hline
+H5Rget\_attr\_name & \\ \hline
+
+\end{tabularx}
+
+\subsection{H5T interface}
+
+\begin{tabularx}{\linewidth}{| X | >{\RaggedRight}X |}
+\hline
+\rowcolor{lightgray!50}%
+% Center just the header row
+\multicolumn{1}{| c |}{\textbf{API call}} & \multicolumn{1}{c |}{\textbf{Notes}} \\ \hline
+
+& \\ \hline
+
+\end{tabularx}
+
+\end{document}

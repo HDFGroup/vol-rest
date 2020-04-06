@@ -1,5 +1,4 @@
 cmake_minimum_required (VERSION 3.1.0)
-PROJECT (REST_VOL_SRC C)
 
 macro (IDE_GENERATED_PROPERTIES SOURCE_PATH HEADERS SOURCES)
   #set(source_group_path "Source/AIM/${NAME}")
@@ -16,81 +15,105 @@ endmacro (IDE_GENERATED_PROPERTIES)
 #-----------------------------------------------------------------------------
 # Apply definitions to compiler in this directory
 #-----------------------------------------------------------------------------
-add_definitions(${REST_VOL_EXTRA_C_FLAGS})
+add_definitions(${HDF5_VOL_REST_EXTRA_C_FLAGS})
 
 #-----------------------------------------------------------------------------
 # List source files
 #-----------------------------------------------------------------------------
-set (REST_VOL_SRCS
-    ${REST_VOL_SRC_DIR}/rest_vol.c
+set (HDF5_VOL_REST_SRCS
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol.c
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_attr.c
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_dataset.c
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_datatype.c
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_file.c
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_group.c
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_link.c
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_object.c
+    ${HDF5_VOL_REST_UTIL_DIR}/rest_vol_mem.c
+    ${HDF5_VOL_REST_UTIL_DIR}/rest_vol_hash_table.c
 )
 
-set (REST_VOL_HDRS
-    ${REST_VOL_SRC_DIR}/rest_vol.h
-    ${REST_VOL_SRC_DIR}/rest_vol_public.h
-    ${REST_VOL_SRC_DIR}/rest_vol_err.h
-)
-
-#-----------------------------------------------------------------------------
-# Add in source files from the "util" diectory
-#-----------------------------------------------------------------------------
-add_subdirectory(util ${PROJECT_BINARY_DIR}/src/util)
-
-IDE_GENERATED_PROPERTIES("REST_VOL" "${REST_VOL_HDRS}" "${REST_VOL_SRCS}")
-
-set (REST_VOL_PUBLIC_HEADERS
-    ${REST_VOL_SRC_DIR}/rest_vol_public.h
-)
-
-add_library (${REST_VOL_LIB_TARGET} STATIC ${REST_VOL_SRCS} ${REST_VOL_HDRS})
-TARGET_C_PROPERTIES (${REST_VOL_LIB_TARGET} STATIC " " " ")
-target_link_libraries (${REST_VOL_LIB_TARGET} PUBLIC ${HDF5_LIBRARIES_TO_EXPORT} ${LINK_LIBS})
-if (NOT WIN32)
-  target_link_libraries (${REST_VOL_LIB_TARGET} PUBLIC dl)
+if (HDF5_VOL_REST_ENABLE_DEBUG)
+  set (HDF5_VOL_REST_SRCS ${HDF5_VOL_REST_SRCS} ${HDF5_VOL_REST_SRC_DIR}/rest_vol_debug.c)
 endif ()
-set (REST_VOL_LIBRARIES_TO_EXPORT ${REST_VOL_LIB_TARGET} CACHE INTERNAL "Used to pass variables between directories" FORCE)
-set_target_properties (${REST_VOL_LIB_TARGET} PROPERTIES
+
+set (HDF5_VOL_REST_HDRS
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol.h
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_attr.h
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_dataset.h
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_datatype.h
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_file.h
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_group.h
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_link.h
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_object.h
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_public.h
+    ${HDF5_VOL_REST_UTIL_DIR}/rest_vol_mem.h
+    ${HDF5_VOL_REST_UTIL_DIR}/rest_vol_err.h
+    ${HDF5_VOL_REST_UTIL_DIR}/rest_vol_hash_table.h
+    ${HDF5_VOL_REST_UTIL_DIR}/rest_vol_hash_string.h
+)
+
+if (HDF5_VOL_REST_ENABLE_DEBUG)
+  set (HDF5_VOL_REST_HDRS ${HDF5_VOL_REST_HDRS} ${HDF5_VOL_REST_SRC_DIR}/rest_vol_debug.h)
+endif ()
+
+IDE_GENERATED_PROPERTIES("HDF5_VOL_REST" "${HDF5_VOL_REST_HDRS}" "${HDF5_VOL_REST_SRCS}")
+
+set (HDF5_VOL_REST_PUBLIC_HEADERS
+    ${HDF5_VOL_REST_SRC_DIR}/rest_vol_public.h
+)
+
+if (BUILD_STATIC_LIBS)
+  add_library (${HDF5_VOL_REST_LIB_TARGET} STATIC ${HDF5_VOL_REST_SRCS} ${HDF5_VOL_REST_HDRS})
+  TARGET_C_PROPERTIES (${HDF5_VOL_REST_LIB_TARGET} STATIC " " " ")
+  target_link_libraries (${HDF5_VOL_REST_LIB_TARGET} PUBLIC ${HDF5_LIBRARIES_TO_EXPORT} ${LINK_LIBS})
+  if (NOT WIN32)
+    target_link_libraries (${HDF5_VOL_REST_LIB_TARGET} PRIVATE dl)
+  endif ()
+  set (HDF5_VOL_REST_LIBRARIES_TO_EXPORT ${HDF5_VOL_REST_LIB_TARGET} CACHE INTERNAL "Used to pass variables between directories" FORCE)
+  set_target_properties (${HDF5_VOL_REST_LIB_TARGET} PROPERTIES
     FOLDER libraries
     INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>"
-)
-if (WIN32)
-  set_target_properties (${REST_VOL_LIB_TARGET} PROPERTIES
-    OUTPUT_NAME lib${REST_VOL_LIB_CORENAME}
   )
-else ()
-  set_target_properties (${REST_VOL_LIB_TARGET} PROPERTIES
-    OUTPUT_NAME ${REST_VOL_LIB_CORENAME}
-  )
-endif()
+  if (WIN32)
+    set_target_properties (${HDF5_VOL_REST_LIB_TARGET} PROPERTIES
+      OUTPUT_NAME lib${HDF5_VOL_REST_LIB_CORENAME}
+    )
+  else ()
+    set_target_properties (${HDF5_VOL_REST_LIB_TARGET} PROPERTIES
+      OUTPUT_NAME ${HDF5_VOL_REST_LIB_CORENAME}
+    )
+  endif ()
 
-#add_dependencies(${REST_VOL_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
+  #add_dependencies(${HDF5_VOL_REST_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
 
-set (install_targets ${REST_VOL_LIB_TARGET})
+  set (install_targets ${HDF5_VOL_REST_LIB_TARGET})
+endif ()
 
 if (BUILD_SHARED_LIBS)
-  file (MAKE_DIRECTORY "${REST_VOL_BINARY_DIR}/shared")
-  add_library (${REST_VOL_LIBSH_TARGET} SHARED ${REST_VOL_SRCS} ${REST_VOL_HDRS})
-  TARGET_C_PROPERTIES (${REST_VOL_LIBSH_TARGET} SHARED " " " ")
-  target_link_libraries (${REST_VOL_LIBSH_TARGET} PUBLIC ${HDF5_LIBRARIES_TO_EXPORT} ${LINK_SHARED_LIBS})
+  file (MAKE_DIRECTORY "${HDF5_VOL_REST_BINARY_DIR}/shared")
+  add_library (${HDF5_VOL_REST_LIBSH_TARGET} SHARED ${HDF5_VOL_REST_SRCS} ${HDF5_VOL_REST_HDRS})
+  TARGET_C_PROPERTIES (${HDF5_VOL_REST_LIBSH_TARGET} SHARED " " " ")
+  target_link_libraries (${HDF5_VOL_REST_LIBSH_TARGET} PUBLIC ${HDF5_LIBRARIES_TO_EXPORT} ${LINK_SHARED_LIBS})
   if (NOT WIN32)
-    target_link_libraries (${REST_VOL_LIBSH_TARGET} PUBLIC dl)
+    target_link_libraries (${HDF5_VOL_REST_LIBSH_TARGET} PRIVATE dl)
   endif ()
-  set (REST_VOL_LIBRARIES_TO_EXPORT "${REST_VOL_LIBRARIES_TO_EXPORT};${REST_VOL_LIBSH_TARGET}" CACHE INTERNAL "Used to pass variables between directories" FORCE)
-  set_target_properties (${REST_VOL_LIBSH_TARGET} PROPERTIES
-      OUTPUT_NAME ${REST_VOL_LIB_CORENAME}
+  set (HDF5_VOL_REST_LIBRARIES_TO_EXPORT "${HDF5_VOL_REST_LIBRARIES_TO_EXPORT};${HDF5_VOL_REST_LIBSH_TARGET}" CACHE INTERNAL "Used to pass variables between directories" FORCE)
+  set_target_properties (${HDF5_VOL_REST_LIBSH_TARGET} PROPERTIES
+      OUTPUT_NAME ${HDF5_VOL_REST_LIB_CORENAME}
       FOLDER libraries
-      COMPILE_DEFINITIONS "REST_VOL_BUILT_AS_DYNAMIC_LIB"
+      COMPILE_DEFINITIONS "HDF5_VOL_REST_BUILT_AS_DYNAMIC_LIB"
       INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>"
-      INTERFACE_COMPILE_DEFINITIONS REST_VOL_BUILT_AS_DYNAMIC_LIB=1
+      INTERFACE_COMPILE_DEFINITIONS HDF5_VOL_REST_BUILT_AS_DYNAMIC_LIB=1
   )
-  
-  #add_dependencies(${REST_VOL_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
 
-  set (install_targets ${install_targets} ${REST_VOL_LIBSH_TARGET})
+  #add_dependencies(${HDF5_VOL_REST_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
+
+  set (install_targets ${install_targets} ${HDF5_VOL_REST_LIBSH_TARGET})
 endif ()
 
 #-----------------------------------------------------------------------------
-# Make the REST VOL depend on H5pubconf.h existing
+# Make the REST VOL build depend on H5pubconf.h existing
 #-----------------------------------------------------------------------------
 if (PREBUILT_HDF5_DIR)
   add_custom_target(
@@ -104,17 +127,22 @@ else ()
   )
 endif ()
 
-add_dependencies(${REST_VOL_LIB_TARGET} rest_vol_pubconf_depend)
+if (BUILD_STATIC_LIBS)
+  add_dependencies(${HDF5_VOL_REST_LIB_TARGET} rest_vol_pubconf_depend)
+endif ()
+if (BUILD_SHARED_LIBS)
+  add_dependencies(${HDF5_VOL_REST_LIBSH_TARGET} rest_vol_pubconf_depend)
+endif ()
 
 #-----------------------------------------------------------------------------
 # Add file(s) to CMake Install
 #-----------------------------------------------------------------------------
-if (NOT REST_VOL_INSTALL_NO_DEVELOPMENT)
+if (NOT HDF5_VOL_REST_INSTALL_NO_DEVELOPMENT)
   install (
       FILES
-          ${REST_VOL_PUBLIC_HEADERS}
+          ${HDF5_VOL_REST_PUBLIC_HEADERS}
       DESTINATION
-          ${REST_VOL_INSTALL_INCLUDE_DIR}
+          ${HDF5_VOL_REST_INSTALL_INCLUDE_DIR}
       COMPONENT
           headers
   )
@@ -123,20 +151,20 @@ endif ()
 #-----------------------------------------------------------------------------
 # Add Target(s) to CMake Install for import into other projects
 #-----------------------------------------------------------------------------
-if (REST_VOL_EXPORTED_TARGETS)
+if (HDF5_VOL_REST_EXPORTED_TARGETS)
   if (BUILD_SHARED_LIBS)
-    INSTALL_TARGET_PDB (${REST_VOL_LIBSH_TARGET} ${REST_VOL_INSTALL_BIN_DIR} libraries)
+    INSTALL_TARGET_PDB (${HDF5_VOL_REST_LIBSH_TARGET} ${HDF5_VOL_REST_INSTALL_BIN_DIR} libraries)
   endif ()
 
   install (
       TARGETS
           ${install_targets}
       EXPORT
-          ${REST_VOL_EXPORTED_TARGETS}
-      LIBRARY DESTINATION ${REST_VOL_INSTALL_LIB_DIR} COMPONENT libraries
-      ARCHIVE DESTINATION ${REST_VOL_INSTALL_LIB_DIR} COMPONENT libraries
-      RUNTIME DESTINATION ${REST_VOL_INSTALL_BIN_DIR} COMPONENT libraries
-      FRAMEWORK DESTINATION ${REST_VOL_INSTALL_FWRK_DIR} COMPONENT libraries
+          ${HDF5_VOL_REST_EXPORTED_TARGETS}
+      LIBRARY DESTINATION ${HDF5_VOL_REST_INSTALL_LIB_DIR} COMPONENT libraries
+      ARCHIVE DESTINATION ${HDF5_VOL_REST_INSTALL_LIB_DIR} COMPONENT libraries
+      RUNTIME DESTINATION ${HDF5_VOL_REST_INSTALL_BIN_DIR} COMPONENT libraries
+      FRAMEWORK DESTINATION ${HDF5_VOL_REST_INSTALL_FWRK_DIR} COMPONENT libraries
   )
 endif ()
 
@@ -147,42 +175,42 @@ set (_PKG_CONFIG_PREFIX ${CMAKE_INSTALL_PREFIX})
 set (_PKG_CONFIG_EXEC_PREFIX \${prefix})
 set (_PKG_CONFIG_LIBDIR \${exec_prefix}/lib)
 set (_PKG_CONFIG_INCLUDEDIR \${prefix}/include)
-set (_PKG_CONFIG_LIBNAME "${REST_VOL_LIB_CORENAME}")
-set (_PKG_CONFIG_VERSION "${REST_VOL_PACKAGE_VERSION}")
+set (_PKG_CONFIG_LIBNAME "${HDF5_VOL_REST_LIB_CORENAME}")
+set (_PKG_CONFIG_VERSION "${HDF5_VOL_REST_PACKAGE_VERSION}")
 
 foreach (libs ${LINK_LIBS} ${LINK_COMP_LIBS})
   set (_PKG_CONFIG_LIBS_PRIVATE "${_PKG_CONFIG_LIBS_PRIVATE} -l${libs}")
 endforeach ()
 
-set (_PKG_CONFIG_LIBS "${_PKG_CONFIG_LIBS} -l${REST_VOL_LIB_CORENAME}")
+set (_PKG_CONFIG_LIBS "${_PKG_CONFIG_LIBS} -l${HDF5_VOL_REST_LIB_CORENAME}")
 if (BUILD_SHARED_LIBS)
-  set (_PKG_CONFIG_SH_LIBS "${_PKG_CONFIG_SH_LIBS} -l${REST_VOL_LIB_CORENAME}")
+  set (_PKG_CONFIG_SH_LIBS "${_PKG_CONFIG_SH_LIBS} -l${HDF5_VOL_REST_LIB_CORENAME}")
 endif ()
 
 set (_PKG_CONFIG_REQUIRES "hdf5")
 set (_PKG_CONFIG_REQUIRES_PRIVATE "hdf5")
 
 configure_file (
-    ${REST_VOL_RESOURCES_DIR}/librestvol.pc.in
-    ${REST_VOL_BINARY_DIR}/CMakeFiles/${REST_VOL_LIB_CORENAME}-${REST_VOL_PACKAGE_VERSION}.pc
+    ${HDF5_VOL_REST_RESOURCES_DIR}/libhdf5_vol_rest.pc.in
+    ${HDF5_VOL_REST_BINARY_DIR}/CMakeFiles/${HDF5_VOL_REST_LIB_CORENAME}-${HDF5_VOL_REST_PACKAGE_VERSION}.pc
     @ONLY
 )
 install (
-    FILES ${REST_VOL_BINARY_DIR}/CMakeFiles/${REST_VOL_LIB_CORENAME}-${REST_VOL_PACKAGE_VERSION}.pc
-    DESTINATION ${REST_VOL_INSTALL_LIB_DIR}/pkgconfig
+    FILES ${HDF5_VOL_REST_BINARY_DIR}/CMakeFiles/${HDF5_VOL_REST_LIB_CORENAME}-${HDF5_VOL_REST_PACKAGE_VERSION}.pc
+    DESTINATION ${HDF5_VOL_REST_INSTALL_LIB_DIR}/pkgconfig
     COMPONENT libraries
 )
 
 if (NOT WIN32)
   set (_PKG_CONFIG_COMPILER ${CMAKE_C_COMPILER})
   configure_file (
-      ${REST_VOL_RESOURCES_DIR}/rvcc.in
-      ${REST_VOL_BINARY_DIR}/CMakeFiles/rvcc
+      ${HDF5_VOL_REST_RESOURCES_DIR}/rvcc.in
+      ${HDF5_VOL_REST_BINARY_DIR}/CMakeFiles/rvcc
       @ONLY
   )
   install (
-      FILES ${REST_VOL_BINARY_DIR}/CMakeFiles/rvcc
-      DESTINATION ${REST_VOL_INSTALL_BIN_DIR}
+      FILES ${HDF5_VOL_REST_BINARY_DIR}/CMakeFiles/rvcc
+      DESTINATION ${HDF5_VOL_REST_INSTALL_BIN_DIR}
       PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
       COMPONENT libraries
   )

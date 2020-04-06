@@ -1,10 +1,10 @@
 cmake_minimum_required (VERSION 3.1.0)
-PROJECT (REST_VOL_EXAMPLES)
+PROJECT (HDF5_VOL_REST_EXAMPLES)
 
 #-----------------------------------------------------------------------------
 # Apply Definitions to compiler in this directory and below
 #-----------------------------------------------------------------------------
-add_definitions (${REST_VOL_EXTRA_C_FLAGS})
+add_definitions (${HDF5_VOL_REST_EXTRA_C_FLAGS})
 
 #-----------------------------------------------------------------------------
 # Define Sources
@@ -28,40 +28,65 @@ set (examples
 )
 
 foreach (example ${examples})
-  add_executable (${example} ${REST_VOL_EXAMPLES_SOURCE_DIR}/${example}.c)
-  TARGET_C_PROPERTIES (${example} STATIC " " " ")
-  target_link_libraries (${example} PUBLIC ${REST_VOL_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
-  set_target_properties (${example} PROPERTIES FOLDER examples)
-  if (NOT PREBUILT_HDF5_DIR)
-    add_dependencies(${example} ${REST_VOL_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
-  endif ()
-  if (BUILD_SHARED_LIBS)
-    add_executable (${example}-shared ${REST_VOL_EXAMPLES_SOURCE_DIR}/${example}.c)
-    TARGET_C_PROPERTIES (${example}-shared SHARED " " " ")
-    target_link_libraries (${example}-shared PUBLIC ${REST_VOL_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
-    set_target_properties (${example}-shared PROPERTIES FOLDER examples)
-    if (NOT PREBUILT_HDF5_DIR)
-      add_dependencies(${example}-shared ${REST_VOL_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
+  if (BUILD_STATIC_LIBS)
+    add_executable (${example} ${HDF5_VOL_REST_EXAMPLES_SOURCE_DIR}/${example}.c)
+    TARGET_C_PROPERTIES (${example} STATIC " " " ")
+    target_link_libraries (${example} PUBLIC ${HDF5_VOL_REST_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
+    set_target_properties (${example} PROPERTIES FOLDER examples)
+    if (PREBUILT_HDF5_DIR)
+      target_include_directories (${example} PUBLIC ${HDF5_VOL_REST_INCLUDE_DIRECTORIES})
+    else ()
+      add_dependencies(${example} ${HDF5_VOL_REST_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
+
+      # TODO: setup all-at-once build of HDF5
+      # target_include_directories (${example} PUBLIC )
     endif ()
-  endif (BUILD_SHARED_LIBS)
+  endif ()
+
+  if (BUILD_SHARED_LIBS)
+    add_executable (${example}-shared ${HDF5_VOL_REST_EXAMPLES_SOURCE_DIR}/${example}.c)
+    TARGET_C_PROPERTIES (${example}-shared SHARED " " " ")
+    target_link_libraries (${example}-shared PUBLIC ${HDF5_VOL_REST_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
+    set_target_properties (${example}-shared PROPERTIES FOLDER examples)
+    if (PREBUILT_HDF5_DIR)
+      target_include_directories (${example}-shared PUBLIC ${HDF5_VOL_REST_INCLUDE_DIRECTORIES})
+    else ()
+      add_dependencies(${example}-shared ${HDF5_VOL_REST_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
+
+      # TODO: setup all-at-once build of HDF5
+      # target_include_directories (${example} PUBLIC )
+    endif ()
+  endif ()
 
   #-----------------------------------------------------------------------------
   # Add Target(s) to CMake Install for import into other projects
   #-----------------------------------------------------------------------------
-  if (REST_VOL_EXPORTED_TARGETS)
-    install (
-        TARGETS
-            ${example}
-        EXPORT
-            ${REST_VOL_EXPORTED_TARGETS}
-        DESTINATION
-            ${REST_VOL_INSTALL_DATA_DIR}/rest_vol_examples COMPONENT examples
-    )
+  if (HDF5_VOL_REST_EXPORTED_TARGETS)
+    if (BUILD_STATIC_LIBS)
+      install (
+          TARGETS
+              ${example}
+          EXPORT
+              ${HDF5_VOL_REST_EXPORTED_TARGETS}
+          DESTINATION
+              ${HDF5_VOL_REST_INSTALL_DATA_DIR}/rest_vol_examples COMPONENT examples
+      )
+    endif ()
+    if (BUILD_SHARED_LIBS)
+      install (
+          TARGETS
+              ${example}-shared
+          EXPORT
+              ${HDF5_VOL_REST_EXPORTED_TARGETS}
+          DESTINATION
+              ${HDF5_VOL_REST_INSTALL_DATA_DIR}/rest_vol_examples COMPONENT examples
+      )    
+    endif ()
   endif ()
 endforeach (example ${examples})
 
 add_subdirectory(hl ${PROJECT_BINARY_DIR}/examples)
 
 if (BUILD_TESTING)
-  include (${REST_VOL_EXAMPLES_SOURCE_DIR}/CMakeTests.cmake)
+  include (${HDF5_VOL_REST_EXAMPLES_SOURCE_DIR}/CMakeTests.cmake)
 endif (BUILD_TESTING)

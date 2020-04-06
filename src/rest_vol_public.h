@@ -1,38 +1,28 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Copyright by The HDF Group.                                               *
- * Copyright by the Board of Trustees of the University of Illinois.         *
  * All rights reserved.                                                      *
  *                                                                           *
- * This file is part of HDF5.  The full HDF5 copyright notice, including     *
- * terms governing use, modification, and redistribution, is contained in    *
- * the files COPYING and Copyright.html.  COPYING can be found at the root   *
- * of the source code distribution tree; Copyright.html can be found at the  *
- * root level of an installed copy of the electronic HDF5 document set and   *
- * is linked from the top-level documents page.  It can also be found at     *
- * http://hdfgroup.org/HDF5/doc/Copyright.html.  If you do not have          *
- * access to either file, you may request a copy from help@hdfgroup.org.     *
+ * This file is part of the HDF5 REST VOL connector. The full copyright      *
+ * notice, including terms governing use, modification, and redistribution,  *
+ * is contained in the COPYING file, which can be found at the root of the   *
+ * source code distribution tree.                                            *
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 /*
  * Programmer:  Jordan Henderson
  *              February, 2017
  *
- * Purpose: The public header file for the REST VOL plugin.
+ * Purpose: The public header file for the REST VOL connector.
  */
 
 #ifndef rest_vol_public_H
 #define rest_vol_public_H
 
-#include "H5public.h"
-#include "H5Rpublic.h"
+#include <hdf5.h>
 #include "H5PLextern.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Maximum length in characters of an addressable URL used in the server requests sent by
- * this VOL plugin. If the URLs used in operation are longer than this, the value will have
+ * this VOL connector. If the URLs used in operation are longer than this, the value will have
  * to be adjusted. Otherwise, the URLs will be truncated.
  */
 #define URL_MAX_LENGTH 2048
@@ -49,13 +39,13 @@ extern "C" {
  * of a Dataset. If the maximum length of a number value becomes larger
  * than this in the future (due to larger types), this value will need
  * to be adjusted slightly. Otherwise, numerical values sent by this
- * VOL plugin will likely be truncated. */
+ * VOL connector will likely be truncated. */
 #define MAX_NUM_LENGTH 20
 
 /* Maximum length of the name of a link used for an HDF5 object. This
  * is particularly important for performance by keeping locality of
  * reference for link names during H5Literate/visit calls. If it appears
- * that link names are being truncated by the plugin, this value should
+ * that link names are being truncated by the connector, this value should
  * be adjusted.
  */
 #define LINK_NAME_MAX_LENGTH 2048
@@ -63,7 +53,7 @@ extern "C" {
 /* Maximum length of the name of an HDF5 attribute. This is particularly
  * important for performance by keeping locality of reference for attribute
  * names during H5Aiterate calls. If it appears that attribute names are
- * being truncated by the plugin, this value should be adjusted.
+ * being truncated by the connector, this value should be adjusted.
  */
 #define ATTRIBUTE_NAME_MAX_LENGTH 2048
 
@@ -85,10 +75,14 @@ typedef struct rv_obj_ref_t {
     char       ref_obj_URI[URI_MAX_LENGTH];
 } rv_obj_ref_t;
 
-H5PLUGIN_DLL herr_t      RVinit(void);
-H5PLUGIN_DLL herr_t      RVterm(void);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+H5PLUGIN_DLL herr_t      H5rest_init(void);
+H5PLUGIN_DLL herr_t      H5rest_term(void);
 H5PLUGIN_DLL herr_t      H5Pset_fapl_rest_vol(hid_t fapl_id);
-H5PLUGIN_DLL const char *RVget_uri(hid_t);
+H5PLUGIN_DLL const char *H5rest_get_object_uri(hid_t);
 
 #ifdef __cplusplus
 }

@@ -40,25 +40,25 @@
 #cmakedefine RV_HAVE_SYS_TYPES_H @RV_HAVE_SYS_TYPES_H@
 
 /* Name of package */
-#define RV_PACKAGE "@REST_VOL_PACKAGE@"
+#define RV_PACKAGE "@HDF5_VOL_REST_PACKAGE@"
 
 /* Define to the address where bug reports for this package should be sent. */
-#define RV_PACKAGE_BUGREPORT "@REST_VOL_PACKAGE_BUGREPORT@"
+#define RV_PACKAGE_BUGREPORT "@HDF5_VOL_REST_PACKAGE_BUGREPORT@"
 
 /* Define to the full name of this package. */
-#define RV_PACKAGE_NAME "@REST_VOL_PACKAGE_NAME@"
+#define RV_PACKAGE_NAME "@HDF5_VOL_REST_PACKAGE_NAME@"
 
 /* Define to the full name and version of this package. */
-#define RV_PACKAGE_STRING "@REST_VOL_PACKAGE_STRING@"
+#define RV_PACKAGE_STRING "@HDF5_VOL_REST_PACKAGE_STRING@"
 
 /* Define to the one symbol short name of this package. */
-#define RV_PACKAGE_TARNAME "@REST_VOL_PACKAGE_TARNAME@"
+#define RV_PACKAGE_TARNAME "@HDF5_VOL_REST_PACKAGE_TARNAME@"
 
 /* Define to the home page for this package. */
-#define RV_PACKAGE_URL "@REST_VOL_PACKAGE_URL@"
+#define RV_PACKAGE_URL "@HDF5_VOL_REST_PACKAGE_URL@"
 
 /* Define to the version of this package. */
-#define RV_PACKAGE_VERSION "@REST_VOL_PACKAGE_VERSION_STRING@"
+#define RV_PACKAGE_VERSION "@HDF5_VOL_REST_PACKAGE_VERSION_STRING@"
 
 /* Define to 1 if you have the <stdbool.h> header file. */
 #cmakedefine H5_HAVE_STDBOOL_H @H5_HAVE_STDBOOL_H@
@@ -69,18 +69,18 @@
 /* Define to 1 if you have the ANSI C header files. */
 #cmakedefine H5_STDC_HEADERS @H5_STDC_HEADERS@
 
-/* Define if plugin debug output should be enabled */
-#cmakedefine RV_PLUGIN_DEBUG
+/* Define if connector debug output should be enabled */
+#cmakedefine RV_CONNECTOR_DEBUG
 
 /* Define if cURL debug output should be enabled */
 #cmakedefine RV_CURL_DEBUG
 
 /* Define if memory tracking should be enabled to
    track memory leaks and other memory errors within
-   the plugin. */
+   the connector. */
 #cmakedefine RV_TRACK_MEM_USAGE
 
 /* Version number of package */
-#cmakedefine RV_VERSION "@REST_VOL_PACKAGE_VERSION_STRING@"
+#cmakedefine RV_VERSION "@HDF5_VOL_REST_PACKAGE_VERSION_STRING@"
 
 #endif

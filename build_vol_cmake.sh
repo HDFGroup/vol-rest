@@ -1,20 +1,16 @@
 #!/bin/sh
 #
-# Copyright by The HDF Group.                                              
-# All rights reserved.                                                     
+# Copyright by The HDF Group.
+# All rights reserved.
 #
-# This file is part of HDF5. The full HDF5 copyright notice, including     
-# terms governing use, modification, and redistribution, is contained in   
-# the files COPYING and Copyright.html.  COPYING can be found at the root  
-# of the source code distribution tree; Copyright.html can be found at the 
-# root level of an installed copy of the electronic document set and is    
-# linked from the top-level documents page.  It can also be found at       
-# http://hdfgroup.org/HDF5/doc/Copyright.html.  If you do not have access  
-# to either file, you may request a copy from help@hdfgroup.org.           
+# This file is part of the HDF5 REST VOL connector. The full copyright
+# notice, including terms governing use, modification, and redistribution,
+# is contained in the COPYING file, which can be found at the root of the
+# source code distribution tree.
 #
 # A script used to first configure and build the HDF5 source distribution
-# included with the REST VOL plugin source code, and then use that built
-# HDF5 to build the REST VOL plugin itself.
+# included with the REST VOL connector source code, and then use that built
+# HDF5 to build the REST VOL connector itself.
 
 # Get the directory of the script itself
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -25,6 +21,10 @@ INSTALL_DIR="${SCRIPT_DIR}/rest_vol_build"
 # Set the default build directory
 BUILD_DIR="${SCRIPT_DIR}/rest_vol_cmake_build_files"
 
+# Default name of the directory for the included HDF5 source distribution,
+# as well as the default directory where it gets installed
+HDF5_DIR="src/hdf5"
+
 # By default, tell CMake to generate Unix Makefiles
 CMAKE_GENERATOR="Unix Makefiles"
 
@@ -32,24 +32,11 @@ CMAKE_GENERATOR="Unix Makefiles"
 # building in parallel with Autotools make
 NPROCS=0
 
-# Default is to not build tools due to circular dependency on VOL being
-# already built
-build_tools=false
-
-# Compiler flags for linking with cURL and YAJL
-CURL_DIR=""
-CURL_LINK="-lcurl"
-YAJL_DIR=""
-YAJL_LINK="-lyajl"
-
-# Compiler flag for linking with the built REST VOL
-REST_VOL_LINK="-lrestvol"
-
 # Extra compiler options passed to the various steps, such as -Wall
 COMP_OPTS="-Wall -pedantic -Wunused-macros"
 
 # Extra options passed to the REST VOLs CMake script
-PLUGIN_DEBUG_OPT=
+CONNECTOR_DEBUG_OPT=
 CURL_DEBUG_OPT=
 MEM_TRACK_OPT=
 PREBUILT_HDF5_OPT=
@@ -72,12 +59,6 @@ usage()
     echo "      -c      Enable cURL debugging output in the REST VOL."
     echo
     echo "      -m      Enable memory tracking in the REST VOL."
-    echo
-    echo "      -t      Build the tools with REST VOL support. Note"
-    echo "              that due to a circular build dependency, this"
-    echo "              option should not be chosen until after the"
-    echo "              included HDF5 source distribution and the"
-    echo "              REST VOL plugin have been built once."
     echo
     echo "      -G      Specify the CMake Generator to use for the build"
     echo "              files created. Default is 'Unix Makefiles'."
@@ -113,23 +94,18 @@ while getopts "$optspec" optchar; do
         exit 0
         ;;
     d)
-        PLUGIN_DEBUG_OPT="-DREST_VOL_ENABLE_DEBUG=ON"
-        echo "Enabled plugin debugging"
+        CONNECTOR_DEBUG_OPT="-DHDF5_VOL_REST_ENABLE_DEBUG=ON"
+        echo "Enabled connector debugging"
         echo
         ;;
     c)
-        CURL_DEBUG_OPT="-DREST_VOL_ENABLE_CURL_DEBUG=ON"
+        CURL_DEBUG_OPT="-DHDF5_VOL_REST_ENABLE_CURL_DEBUG=ON"
         echo "Enabled cURL debugging"
         echo
         ;;
     m)
-        MEM_TRACK_OPT="-DREST_VOL_ENABLE_MEM_TRACKING=ON"
-        echo "Enabled plugin memory tracking"
-        echo
-        ;;
-    t)
-        build_tools=true
-        echo "Building tools with REST VOL support"
+        MEM_TRACK_OPT="-DHDF5_VOL_REST_ENABLE_MEM_TRACKING=ON"
+        echo "Enabled connector memory tracking"
         echo
         ;;
     G)
@@ -189,9 +165,15 @@ if [ "$NPROCS" -eq "0" ]; then
     fi
 fi
 
-# Once HDF5 has been built, build the REST VOL plugin against HDF5.
+# Ensure that the HDF5 and VOL tests submodules get checked out
+if [ -z "$(ls -A ${SCRIPT_DIR}/${HDF5_DIR})" ]; then
+    git submodule init
+    git submodule update
+fi
+
+# Once HDF5 has been built, build the REST VOL connector against HDF5.
 echo "*******************************************"
-echo "* Building REST VOL plugin and test suite *"
+echo "* Building REST VOL connector and test suite *"
 echo "*******************************************"
 echo
 
@@ -203,7 +185,7 @@ rm -f "${BUILD_DIR}/CMakeCache.txt"
 
 cd "${BUILD_DIR}"
 
-cmake -G "${CMAKE_GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${PREBUILT_HDF5_OPT}" "${PLUGIN_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${SCRIPT_DIR}"
+cmake -G "${CMAKE_GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${PREBUILT_HDF5_OPT}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${SCRIPT_DIR}"
 
 echo "Build files have been generated for CMake generator '${CMAKE_GENERATOR}'"
 

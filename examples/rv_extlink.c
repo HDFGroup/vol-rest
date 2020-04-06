@@ -1,6 +1,5 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Copyright by The HDF Group.                                               *
- * Copyright by the Board of Trustees of the University of Illinois.         *
  * All rights reserved.                                                      *
  *                                                                           *
  * This file is part of HDF5.  The full HDF5 copyright notice, including     *
@@ -213,7 +212,7 @@ static void extlink_prefix_example(void)
  * that a path was supplied in the udata.
  */
 static hid_t UD_soft_traverse(const char *link_name, hid_t cur_group,
-    const void *udata, size_t udata_size, hid_t lapl_id);
+    const void *udata, size_t udata_size, hid_t lapl_id, hid_t dxpl_id);
 
 static void soft_link_example(void)
 {
@@ -282,7 +281,7 @@ static void soft_link_example(void)
  */
 
 static hid_t UD_soft_traverse(const char *link_name, hid_t cur_group,
-    const void *udata, size_t udata_size, hid_t lapl_id)
+    const void *udata, size_t udata_size, hid_t lapl_id, hid_t dxpl_id)
 {
     const char *target = (const char *) udata;
     hid_t ret_value;
@@ -315,13 +314,13 @@ static herr_t UD_hard_create(const char *link_name, hid_t loc_group,
 static herr_t UD_hard_delete(const char *link_name, hid_t loc_group,
     const void *udata, size_t udata_size);
 static hid_t UD_hard_traverse(const char *link_name, hid_t cur_group,
-    const void *udata, size_t udata_size, hid_t lapl_id);
+    const void *udata, size_t udata_size, hid_t lapl_id, hid_t dxpl_id);
 
 static void hard_link_example(void)
 {
     hid_t file_id;
     hid_t group_id;
-    H5L_info_t li;
+    H5L_info2_t li;
     /* Define the link class that we'll use to register "user-defined hard
      * links" using the callbacks we defined above.
      * A link class can have NULL for any callback except its traverse
@@ -366,13 +365,13 @@ static void hard_link_example(void)
      * the target group's address. We do this by calling H5Lget_info
      * on a hard link to the object.
      */
-    H5Lget_info(file_id, TARGET_GROUP, &li, H5P_DEFAULT);
+    H5Lget_info2(file_id, TARGET_GROUP, &li, H5P_DEFAULT);
 
     /* Now create a user-defined link.  We give it the group's address
      * as its udata.
      */
-    H5Lcreate_ud(file_id, UD_HARD_LINK_NAME, (H5L_type_t)UD_HARD_CLASS, &(li.u.address),
-                 sizeof(li.u.address), H5P_DEFAULT, H5P_DEFAULT);
+    H5Lcreate_ud(file_id, UD_HARD_LINK_NAME, (H5L_type_t)UD_HARD_CLASS, &(li.u.token),
+                 sizeof(li.u.token), H5P_DEFAULT, H5P_DEFAULT);
 
     /* The UD hard link has now incremented the group's reference count
      * like a normal hard link would.  This means that we can unlink the
@@ -495,7 +494,7 @@ done:
  * return its ID.
  */
 static hid_t UD_hard_traverse(const char *link_name, hid_t cur_group,
-    const void *udata, size_t udata_size, hid_t lapl_id)
+    const void *udata, size_t udata_size, hid_t lapl_id, hid_t dxpl_id)
 {
     haddr_t       addr;
     hid_t         ret_value = -1;
@@ -532,7 +531,7 @@ static hid_t UD_hard_traverse(const char *link_name, hid_t cur_group,
  * These links have no udata, so they don't need a query function.
  */
 static hid_t UD_plist_traverse(const char *link_name, hid_t cur_group,
-    const void *udata, size_t udata_size, hid_t lapl_id);
+    const void *udata, size_t udata_size, hid_t lapl_id, hid_t dxpl_id);
 
 static void plist_link_example(void)
 {
@@ -623,7 +622,7 @@ static void plist_link_example(void)
  * Open a path passed in through the property list.
  */
 static hid_t UD_plist_traverse(const char *link_name, hid_t cur_group,
-    const void *udata, size_t udata_size, hid_t lapl_id)
+    const void *udata, size_t udata_size, hid_t lapl_id, hid_t dxpl_id)
 {
     char *        path;
     hid_t         ret_value = -1;

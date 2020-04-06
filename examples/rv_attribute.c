@@ -1,6 +1,5 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Copyright by The HDF Group.                                               *
- * Copyright by the Board of Trustees of the University of Illinois.         *
  * All rights reserved.                                                      *
  *                                                                           *
  * This file is part of HDF5.  The full HDF5 copyright notice, including     *
@@ -66,7 +65,7 @@ main (void)
    float matrix[ADIM1][ADIM2]; /* Attribute data */
 
    herr_t  ret;                /* Return value */
-   H5O_info_t oinfo;           /* Object info */
+   H5O_info2_t oinfo;           /* Object info */
    unsigned i, j;              /* Counters */
    char    string_out[80];     /* Buffer to read string attribute back */
    int     point_out;          /* Buffer to read scalar attribute back */
@@ -86,7 +85,7 @@ main (void)
        matrix[i][j] = -1.;
    }
 
-   RVinit();
+   H5rest_init();
 
    fapl = H5Pcreate(H5P_FILE_ACCESS);
    H5Pset_fapl_rest_vol(fapl);
@@ -233,7 +232,7 @@ main (void)
    H5Pclose(fapl);
    H5Fclose(file);
 
-   RVterm();
+   H5rest_term();
 
    return 0;
 }
@@ -253,7 +252,7 @@ attr_info(hid_t loc_id, const char *name, const H5A_info_t *ainfo, void *opdata)
     float *float_array;         /* Pointer to the array attribute. */
 
     /* avoid warnings */
-    opdata = opdata;
+    (void)opdata;
 
     /*
      * Open the attribute using its name.
