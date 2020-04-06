@@ -169,14 +169,8 @@ do {                                                                            
     if (  (is_v2_err && err_func.err_func_v2) ||                                   \
          (!is_v2_err && err_func.err_func_v1) ) {                                  \
         if (H5_rest_err_stack_g >= 0 && H5_rest_err_class_g >= 0) {                \
-            if (is_v2_err) {                                                       \
-                H5Epush2(H5_rest_err_stack_g, __FILE__, FUNC, __LINE__,            \
+            H5Epush2(H5_rest_err_stack_g, __FILE__, FUNC, __LINE__,                \
                     H5_rest_err_class_g, err_major, err_minor, __VA_ARGS__);       \
-            }                                                                      \
-            else {                                                                 \
-                H5Epush1(__FILE__, FUNC, __LINE__, err_major,                      \
-                    err_minor, __VA_ARGS__);                                       \
-            }                                                                      \
         }                                                                          \
         else {                                                                     \
             fprintf(stderr, __VA_ARGS__);                                          \
@@ -216,14 +210,8 @@ do {                                                                            
     if (  (is_v2_err && err_func.err_func_v2) ||                                   \
          (!is_v2_err && err_func.err_func_v1) ) {                                  \
         if (H5_rest_err_stack_g >= 0 && H5_rest_err_class_g >= 0) {                \
-            if (is_v2_err) {                                                       \
-                H5Epush2(H5_rest_err_stack_g, __FILE__, FUNC, __LINE__,            \
+            H5Epush2(H5_rest_err_stack_g, __FILE__, FUNC, __LINE__,                \
                     H5_rest_err_class_g, err_major, err_minor, __VA_ARGS__);       \
-            }                                                                      \
-            else {                                                                 \
-                H5Epush1(__FILE__, FUNC, __LINE__, err_major,                      \
-                    err_minor, __VA_ARGS__);                                       \
-            }                                                                      \
         }                                                                          \
         else {                                                                     \
             fprintf(stderr, __VA_ARGS__);                                          \
@@ -258,14 +246,8 @@ do {                                                                            
     if (  (is_v2_err && err_func.err_func_v2) ||                                   \
          (!is_v2_err && err_func.err_func_v1) ) {                                  \
         if ((H5_rest_err_stack_g >= 0) && (H5Eget_num(H5_rest_err_stack_g) > 0)) { \
-            if (is_v2_err) {                                                       \
-                H5Eprint2(H5_rest_err_stack_g, NULL);                              \
-                H5Eclear2(H5_rest_err_stack_g);                                    \
-            }                                                                      \
-            else {                                                                 \
-                H5Eprint1(NULL);                                                   \
-                H5Eclear1();                                                       \
-            }                                                                      \
+            H5Eprint2(H5_rest_err_stack_g, NULL);                                  \
+            H5Eclear2(H5_rest_err_stack_g);                                        \
         }                                                                          \
     }                                                                              \
 } while(0)
