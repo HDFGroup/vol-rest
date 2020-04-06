@@ -370,8 +370,8 @@ static void hard_link_example(void)
     /* Now create a user-defined link.  We give it the group's address
      * as its udata.
      */
-    H5Lcreate_ud(file_id, UD_HARD_LINK_NAME, (H5L_type_t)UD_HARD_CLASS, &(li.u.address),
-                 sizeof(li.u.address), H5P_DEFAULT, H5P_DEFAULT);
+    H5Lcreate_ud(file_id, UD_HARD_LINK_NAME, (H5L_type_t)UD_HARD_CLASS, &(li.u.token),
+                 sizeof(li.u.token), H5P_DEFAULT, H5P_DEFAULT);
 
     /* The UD hard link has now incremented the group's reference count
      * like a normal hard link would.  This means that we can unlink the
