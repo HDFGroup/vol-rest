@@ -316,11 +316,8 @@ H5rest_init(void)
         } /* end else */
     } /* end if */
 
-#if 0 /* TODO: it is unclear whether explicitly calling H5_rest_init() is needed here */
-    /* Register the connector with the library */
-    if (H5_rest_init(H5P_VOL_INITIALIZE_DEFAULT) < 0)
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't initialize REST VOL connector");
-#endif
+    if (!H5_rest_initialized_g && H5_rest_init(H5P_VOL_INITIALIZE_DEFAULT) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "failed to initialize connector");
 
 done:
     /* Cleanup if REST VOL connector initialization failed */
@@ -450,6 +447,19 @@ done:
 
     /* Unregister from the HDF5 error API */
     if (H5_rest_err_class_g >= 0) {
+        if(H5_rest_obj_err_maj_g >= 0 && H5Eclose_msg(H5_rest_obj_err_maj_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister error message for object interface");
+        if(H5_rest_parse_err_min_g >= 0 && H5Eclose_msg(H5_rest_parse_err_min_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister error message for JSON parsing error");
+        if(H5_rest_link_table_err_min_g >= 0 && H5Eclose_msg(H5_rest_link_table_err_min_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister error message for building link table");
+        if(H5_rest_link_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_link_table_iter_err_min_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister error message for iterating over link table");
+        if(H5_rest_attr_table_err_min_g >= 0 && H5Eclose_msg(H5_rest_attr_table_err_min_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister error message for building attribute table");
+        if(H5_rest_attr_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_attr_table_iter_err_min_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister error message for iterating over attribute table");
+
         if (H5Eunregister_class(H5_rest_err_class_g) < 0)
             FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister from HDF5 error API");
 
@@ -518,20 +528,6 @@ H5_rest_term(void)
      * when it is closing the id, so no need to close it here.
      */
     H5_rest_id_g = -1;
-
-#if 0
-    /* Unregister the VOL */
-    if (H5_rest_id_g >= 0) {
-        if (H5VLunregister_driver(H5_rest_id_g) < 0) {
-            H5Epush2(H5E_DEFAULT, __FILE__, FUNC, __LINE__, H5E_ERR_CLS, H5E_VOL, H5E_CLOSEERROR, "can't unregister REST VOL connector");
-            H5Eprint2(H5E_DEFAULT, NULL);
-            H5Eclear2(H5E_DEFAULT);
-        } /* end if */
-
-        /* Reset ID */
-        H5_rest_id_g = H5I_INVALID_HID;
-    } /* end if */
-#endif
 
     /* No longer initialized */
     H5_rest_initialized_g = FALSE;

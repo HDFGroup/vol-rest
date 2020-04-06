@@ -14631,7 +14631,7 @@ test_object_visit(void)
     puts("Visiting objects with H5Ovisit\n");
 #endif
 
-        if (H5Ovisit2(container_group, H5_INDEX_NAME, H5_ITER_INC, object_visit_callback, NULL, H5O_INFO_ALL) >= 0) {
+        if (H5Ovisit3(container_group, H5_INDEX_NAME, H5_ITER_INC, object_visit_callback, NULL, H5O_INFO_ALL) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded\n");
             goto error;
@@ -14641,7 +14641,7 @@ test_object_visit(void)
     puts("Visiting objects with H5Ovisit_by_name\n");
 #endif
 
-        if (H5Ovisit_by_name2(file_id, "/" OBJECT_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, object_visit_callback, NULL, H5O_INFO_ALL, H5P_DEFAULT) >= 0) {
+        if (H5Ovisit_by_name3(file_id, "/" OBJECT_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, object_visit_callback, NULL, H5O_INFO_ALL, H5P_DEFAULT) >= 0) {
             H5_FAILED();
             printf("    unsupported API succeeded\n");
             goto error;
