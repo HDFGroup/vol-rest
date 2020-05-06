@@ -118,155 +118,139 @@ static size_t H5_rest_curl_write_data_callback(char *buffer, size_t size, size_t
 /* Helper function to URL-encode an entire pathname by URL-encoding each of its separate components */
 static char *H5_rest_url_encode_path(const char *path);
 
-/* REST VOL connector info class (currently unused) */
-const H5VL_info_class_t RV_info_callbacks_g = {
-    0,                         /* Connector info size                   */
-    NULL,                      /* Connector info copy function          */
-    NULL,                      /* Connector info compare function       */
-    NULL,                      /* Connector info free function          */
-    NULL,                      /* Connector info to string function     */
-    NULL,                      /* Connector string to info function     */
-};
-
-/* REST VOL connector object wrap class (currently unused) */
-const H5VL_wrap_class_t RV_wrap_callbacks_g = {
-    NULL,                      /* Connector get object function         */
-    NULL,                      /* Connector get wrap context function   */
-    NULL,                      /* Connector wrap object function        */
-    NULL,                      /* Connector unwrap object function      */
-    NULL,                      /* Connector free wrap context function  */
-};
-
-/* REST VOL connector attribute callbacks */
-const H5VL_attr_class_t RV_attribute_callbacks_g = {
-    RV_attr_create,
-    RV_attr_open,
-    RV_attr_read,
-    RV_attr_write,
-    RV_attr_get,
-    RV_attr_specific,
-    NULL,
-    RV_attr_close,
-};
-
-/* REST VOL connector dataset callbacks */
-const H5VL_dataset_class_t RV_dataset_callbacks_g = {
-    RV_dataset_create,
-    RV_dataset_open,
-    RV_dataset_read,
-    RV_dataset_write,
-    RV_dataset_get,
-    RV_dataset_specific,
-    NULL,
-    RV_dataset_close,
-};
-
-/* REST VOL connector datatype callbacks */
-const H5VL_datatype_class_t RV_datatype_callbacks_g = {
-    RV_datatype_commit,
-    RV_datatype_open,
-    RV_datatype_get,
-    NULL,
-    NULL,
-    RV_datatype_close,
-};
-
-/* REST VOL connector file callbacks */
-const H5VL_file_class_t RV_file_callbacks_g = {
-    RV_file_create,
-    RV_file_open,
-    RV_file_get,
-    RV_file_specific,
-    NULL,
-    RV_file_close,
-};
-
-/* REST VOL connector group callbacks */
-const H5VL_group_class_t RV_group_callbacks_g = {
-    RV_group_create,
-    RV_group_open,
-    RV_group_get,
-    NULL,
-    NULL,
-    RV_group_close,
-};
-
-/* REST VOL connector link callbacks */
-const H5VL_link_class_t RV_link_callbacks_g = {
-    RV_link_create,
-    RV_link_copy,
-    RV_link_move,
-    RV_link_get,
-    RV_link_specific,
-    NULL,
-};
-
-/* REST VOL connector object callbacks */
-const H5VL_object_class_t RV_object_callbacks_g = {
-    RV_object_open,
-    RV_object_copy,
-    RV_object_get,
-    RV_object_specific,
-    NULL,
-};
-
-/* REST VOL connector introspection class */
-const H5VL_introspect_class_t RV_introspect_callbacks_g = {
-    NULL,                      /* Connector introspect 'get class' function */
-    NULL,                      /* Connector introspect 'opt query' function */
-};
-
-/* REST VOL connector async request class (currently unused) */
-const H5VL_request_class_t RV_request_callbacks_g = {
-    NULL,                      /* Connector request 'wait' function      */
-    NULL,                      /* Connector request 'notify' function    */
-    NULL,                      /* Connector request 'cancel' function    */
-    NULL,                      /* Connector request 'specific' function  */
-    NULL,                      /* Connector request 'optional' function  */
-    NULL,                      /* Connector request 'free' function      */
-};
-
-/* REST VOL connector 'blob' class (currently unused) */
-const H5VL_blob_class_t RV_blob_callbacks_g = {
-    NULL,                      /* Connector blob 'put' function          */
-    NULL,                      /* Connector blob 'get' function          */
-    NULL,                      /* Connector blob 'specific' function     */
-    NULL,                      /* Connector blob 'optional' function     */
-};
-
-/* REST VOL connector object token class */
-const H5VL_token_class_t RV_token_callbacks_g = {
-    NULL,                      /* Connector token compare function       */
-    NULL,                      /* Connector token 'to string' function   */
-    NULL,                      /* Connector token 'from string' function */
-};
-
 /* The REST VOL connector's class structure. */
 static const H5VL_class_t H5VL_rest_g = {
-    HDF5_VOL_REST_VERSION,     /* Connector version number              */
-    HDF5_VOL_REST_CLS_VAL,     /* Connector value                       */
-    HDF5_VOL_REST_NAME,        /* Connector name                        */
-    H5VL_CAP_FLAG_NONE,        /* Connector capability flags            */
-    H5_rest_init,              /* Connector initialization function     */
-    H5_rest_term,              /* Connector termination function        */
+    HDF5_VOL_REST_VERSION,         /* Connector version number              */
+    HDF5_VOL_REST_CLS_VAL,         /* Connector value                       */
+    HDF5_VOL_REST_NAME,            /* Connector name                        */
+    H5VL_CAP_FLAG_NONE,            /* Connector capability flags            */
+    H5_rest_init,                  /* Connector initialization function     */
+    H5_rest_term,                  /* Connector termination function        */
 
-    RV_info_callbacks_g,       /* Connector info callbacks              */
-    RV_wrap_callbacks_g,       /* Connector 'wrap' callbacks            */
+    /* Connector info callbacks */
+    {
+        0,                         /* Connector info size                   */
+        NULL,                      /* Connector info copy function          */
+        NULL,                      /* Connector info compare function       */
+        NULL,                      /* Connector info free function          */
+        NULL,                      /* Connector info to string function     */
+        NULL,                      /* Connector string to info function     */
+    },
 
-    RV_attribute_callbacks_g,  /* Connector attribute callbacks         */
-    RV_dataset_callbacks_g,    /* Connector dataset callbacks           */
-    RV_datatype_callbacks_g,   /* Connector datatype callbacks          */
-    RV_file_callbacks_g,       /* Connector file callbacks              */
-    RV_group_callbacks_g,      /* Connector group callbacks             */
-    RV_link_callbacks_g,       /* Connector link callbacks              */
-    RV_object_callbacks_g,     /* Connect object callbacks              */
+    /* Connector 'wrap' callbacks */
+    {
+        NULL,                      /* Connector get object function         */
+        NULL,                      /* Connector get wrap context function   */
+        NULL,                      /* Connector wrap object function        */
+        NULL,                      /* Connector unwrap object function      */
+        NULL,                      /* Connector free wrap context function  */
+    },
 
-    RV_introspect_callbacks_g, /* Connector introspection callbacks     */
-    RV_request_callbacks_g,    /* Connector async request callbacks     */
-    RV_blob_callbacks_g,       /* Connector 'blob' callbacks            */
-    RV_token_callbacks_g,      /* Connector object token callbacks      */
+    /* Connector attribute callbacks */
+    {
+        RV_attr_create,
+        RV_attr_open,
+        RV_attr_read,
+        RV_attr_write,
+        RV_attr_get,
+        RV_attr_specific,
+        NULL,
+        RV_attr_close,
+    },
 
-    NULL,                      /* Connector 'catch-all' function        */
+    /* Connector dataset callbacks */
+    {
+        RV_dataset_create,
+        RV_dataset_open,
+        RV_dataset_read,
+        RV_dataset_write,
+        RV_dataset_get,
+        RV_dataset_specific,
+        NULL,
+        RV_dataset_close,
+    },
+
+    /* Connector datatype callbacks */
+    {
+        RV_datatype_commit,
+        RV_datatype_open,
+        RV_datatype_get,
+        NULL,
+        NULL,
+        RV_datatype_close,
+    },
+
+    /* Connector file callbacks */
+    {
+        RV_file_create,
+        RV_file_open,
+        RV_file_get,
+        RV_file_specific,
+        NULL,
+        RV_file_close,
+    },
+
+    /* Connector group callbacks */
+    {
+        RV_group_create,
+        RV_group_open,
+        RV_group_get,
+        NULL,
+        NULL,
+        RV_group_close,
+    },
+
+    /* Connector link callbacks */
+    {
+        RV_link_create,
+        RV_link_copy,
+        RV_link_move,
+        RV_link_get,
+        RV_link_specific,
+        NULL,
+    },
+
+    /* Connect object callbacks */
+    {
+        RV_object_open,
+        RV_object_copy,
+        RV_object_get,
+        RV_object_specific,
+        NULL,
+    },
+
+    /* Connector introspection callbacks */
+    {
+        NULL,                      /* Connector introspect 'get class' function */
+        NULL,                      /* Connector introspect 'opt query' function */
+    },
+
+    /* Connector async request callbacks */
+    {
+        NULL,                      /* Connector request 'wait' function      */
+        NULL,                      /* Connector request 'notify' function    */
+        NULL,                      /* Connector request 'cancel' function    */
+        NULL,                      /* Connector request 'specific' function  */
+        NULL,                      /* Connector request 'optional' function  */
+        NULL,                      /* Connector request 'free' function      */
+    },
+
+    /* Connector 'blob' callbacks */
+    {
+        NULL,                      /* Connector blob 'put' function          */
+        NULL,                      /* Connector blob 'get' function          */
+        NULL,                      /* Connector blob 'specific' function     */
+        NULL,                      /* Connector blob 'optional' function     */
+    },
+
+    /* Connector object token callbacks */
+    {
+        NULL,                      /* Connector token compare function       */
+        NULL,                      /* Connector token 'to string' function   */
+        NULL,                      /* Connector token 'from string' function */
+    },
+
+    NULL,                          /* Connector 'catch-all' function         */
 };
 
 
