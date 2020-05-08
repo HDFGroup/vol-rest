@@ -111,6 +111,10 @@ const char *dataspace_max_dims_keys[] = { "shape", "maxdims", (const char *) 0 }
 static herr_t H5_rest_init(hid_t vipl_id);
 static herr_t H5_rest_term(void);
 
+/* Introspection callbacks */
+static herr_t H5_rest_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const struct H5VL_class_t **conn_cls);
+static herr_t H5_rest_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported);
+
 /* cURL function callbacks */
 static size_t H5_rest_curl_read_data_callback(char *buffer, size_t size, size_t nmemb, void *inptr);
 static size_t H5_rest_curl_write_data_callback(char *buffer, size_t size, size_t nmemb, void *userp);
@@ -221,8 +225,8 @@ static const H5VL_class_t H5VL_rest_g = {
 
     /* Connector introspection callbacks */
     {
-        NULL,                      /* Connector introspect 'get class' function */
-        NULL,                      /* Connector introspect 'opt query' function */
+        H5_rest_get_conn_cls,      /* Connector introspect 'get class' function */
+        H5_rest_opt_query,         /* Connector introspect 'opt query' function */
     },
 
     /* Connector async request callbacks */
@@ -1020,6 +1024,55 @@ done:
 
     return ret_value;
 } /* end H5_rest_url_encode_path() */
+
+
+/*---------------------------------------------------------------------------
+ * Function:    H5_rest_get_conn_cls
+ *
+ * Purpose:     Query the connector class.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ *---------------------------------------------------------------------------
+ */
+static herr_t
+H5_rest_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const struct H5VL_class_t **conn_cls)
+{
+    herr_t ret_value = SUCCEED;
+
+    if (!conn_cls)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "conn_cls is NULL");
+
+    *conn_cls = &H5VL_rest_g;
+
+done:
+    return ret_value;
+} /* end H5_rest_get_conn_cls() */
+
+
+/*---------------------------------------------------------------------------
+ * Function:    H5_rest_opt_query
+ *
+ * Purpose:     Query if an optional operation is supported by this connector
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ *---------------------------------------------------------------------------
+ */
+static herr_t
+H5_rest_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported)
+{
+    herr_t ret_value = SUCCEED;
+
+    if (!supported)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "\"supported\" is NULL");
+
+    /* Advertise no current support for any optional operations that are queried. */
+    *supported = FALSE;
+
+done:
+    return ret_value;
+} /* end H5_rest_opt_query() */
 
 
 /*-------------------------------------------------------------------------
