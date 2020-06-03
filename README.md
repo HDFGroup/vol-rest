@@ -5,23 +5,25 @@ HDF5 REST VOL connector - currently under development
 
 ### Table of Contents:
 
-    I. Introduction
-    II. Installation
-        A. Prerequisites
-            i. External Libraries
-            ii. HDF5 REST API server access
-        B. Building the REST VOL connector
-            i. Obtaining the Source
-            ii. One-Step Build
-                a. Build Script Options
-            iii. Manual Build
-                a. Options for `configure`
-                b. Options for CMake
-            iv. Build Results
-    III. Using/Testing the REST VOL connector
-    IV. More Information
-
-
+- [HDF5 REST VOL connector](#hdf5-rest-vol-connector)
+    - [Table of Contents:](#table-of-contents)
+- [I. Introduction](#i-introduction)
+- [II. Installation](#ii-installation)
+  - [II.A. Prerequisites](#iia-prerequisites)
+    - [II.A.i. External Libraries](#iiai-external-libraries)
+    - [II.A.ii. HDF5 REST API server access](#iiaii-hdf5-rest-api-server-access)
+  - [II.B. Building the REST VOL connector](#iib-building-the-rest-vol-connector)
+    - [II.B.i. Obtaining the Source](#iibi-obtaining-the-source)
+    - [II.B.ii. One-step Build](#iibii-one-step-build)
+      - [II.B.ii.a. Build Script Options](#iibiia-build-script-options)
+    - [II.B.iii. Manual Build](#iibiii-manual-build)
+      - [Autotools](#autotools)
+      - [CMake](#cmake)
+      - [II.B.iii.a. Options for `configure`](#iibiiia-options-for-configure)
+      - [II.B.iii.b. Options for CMake](#iibiiib-options-for-cmake)
+    - [II.B.iv. Build Results](#iibiv-build-results)
+- [III. Using/Testing the REST VOL connector](#iii-usingtesting-the-rest-vol-connector)
+- [IV. More Information](#iv-more-information)
 
 # I. Introduction
 
@@ -63,7 +65,7 @@ To build the REST VOL connector, the following libraries are required:
             build process. If a pre-built HDF5 distribution is being used instead, it should
             be built as a shared library only for maximal compatibility with the REST VOL
             connector. Using statically-built HDF5 libraries can cause issues with the REST
-            VOL connector under certain circumstances.   
+            VOL connector under certain circumstances.
 
 + libcurl - networking support
     + https://curl.haxx.se/
@@ -184,7 +186,6 @@ Once you have a VOL-enabled HDF5 distribution available, follow the instructions
 respective build system in order to build the REST VOL connector against the HDF5 distribution.
 
 #### Autotools
----------
 
 ```bash
 $ cd rest-vol
@@ -196,7 +197,6 @@ $ make install
 ```
 
 #### CMake
------
 
 First, create a build directory within the source tree:
 
@@ -328,7 +328,7 @@ to the REST VOL User's Guide under `docs/users_guide.pdf`.
 
 --------------------------------------------------------------------------------
 
-# V. More Information
+# IV. More Information
 
 + HDF in the Cloud
     + https://www.hdfgroup.org/hdf-kita
