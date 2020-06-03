@@ -1,12 +1,10 @@
-# HDF5 REST VOL connector
+# HDF5 REST VOL connector <!-- omit in toc -->
 
 HDF5 REST VOL connector - currently under development
 
 
-### Table of Contents:
+### Table of Contents: <!-- omit in toc -->
 
-- [HDF5 REST VOL connector](#hdf5-rest-vol-connector)
-    - [Table of Contents:](#table-of-contents)
 - [I. Introduction](#i-introduction)
 - [II. Installation](#ii-installation)
   - [II.A. Prerequisites](#iia-prerequisites)
