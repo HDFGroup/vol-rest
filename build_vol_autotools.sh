@@ -122,6 +122,7 @@ while getopts "$optspec" optchar; do
         CURL_DIR="$OPTARG"
         CURL_LINK="-L${CURL_DIR}/lib ${CURL_LINK}"
         RV_OPTS="${RV_OPTS} --with-curl=${CURL_DIR}"
+        COMP_OPTS="${COMP_OPTS} ${CURL_LINK}"
         echo "Libcurl directory set to: ${CURL_DIR}"
         echo
         ;;
@@ -129,6 +130,7 @@ while getopts "$optspec" optchar; do
         YAJL_DIR="$OPTARG"
         YAJL_LINK="-L${YAJL_DIR}/lib ${YAJL_LINK}"
         RV_OPTS="${RV_OPTS} --with-yajl=${YAJL_DIR}"
+        COMP_OPTS="${COMP_OPTS} ${YAJL_LINK}"
         echo "Libyajl directory set to: ${YAJL_DIR}"
         echo
         ;;
