@@ -62,6 +62,8 @@ usage()
     echo
     echo "      -m      Enable memory tracking in the REST VOL."
     echo
+    echo "      -g      Enable symbolic debugging of the REST VOL code."
+    echo
     echo "      -P DIR  Similar to 'configure --prefix=DIR', specifies"
     echo "              where the REST VOL should be installed to. Default"
     echo "              is 'source directory/rest_vol_build'."
@@ -79,7 +81,7 @@ usage()
     echo
 }
 
-optspec=":hctdmH:C:Y:P:-"
+optspec=":hcgtdmH:C:Y:P:-"
 while getopts "$optspec" optchar; do
     case "${optchar}" in
     h)
@@ -101,12 +103,16 @@ while getopts "$optspec" optchar; do
         echo "Enabled connector memory tracking"
         echo
         ;;
+    g)
+        COMP_OPTS="-g ${COMP_OPTS}"
+        echo "Enabled symbolic debugging"
+        echo
+        ;;
     P)
         if [ "$HDF5_INSTALL_DIR" = "$INSTALL_DIR" ]; then
             HDF5_INSTALL_DIR="$OPTARG"
             echo "Set HDF5 install directory to: ${HDF5_INSTALL_DIR}"
         fi
-
         INSTALL_DIR="$OPTARG"
         echo "Prefix set to: ${INSTALL_DIR}"
         echo

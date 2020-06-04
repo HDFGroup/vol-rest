@@ -140,6 +140,9 @@ The following configuration options are available to all of the build scripts:
             mostly useful in helping to diagnose any possible memory leaks or other
             memory errors within the connector.
 
+    -g      Enables symbolic debugging of the REST VOL code. (Only available for
+            `build_vol_autotools.sh`)
+
     -P DIR  Specifies where the REST VOL connector should be installed. The default
             installation prefix is `rest_vol_build` inside the REST VOL connector source
             root directory.
