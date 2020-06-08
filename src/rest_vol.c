@@ -85,6 +85,17 @@ size_t H5_rest_curr_alloc_bytes;
   */
 struct response_buffer response_buffer;
 
+/* Authentication information for authenticating
+ * with Active Directory.
+ */
+typedef struct H5_rest_ad_info_t {
+    char clientID[128];
+    char tenantID[128];
+    char resourceID[128];
+    char client_secret[128];
+    hbool_t unattended;
+} H5_rest_ad_info_t;
+
 /* Host header string for specifying the host (Domain) for requests */
 const char * const host_string = "X-Hdf-domain: ";
 
@@ -110,6 +121,8 @@ const char *dataspace_max_dims_keys[] = { "shape", "maxdims", (const char *) 0 }
  * the public functions H5rest_init() and H5rest_term() */
 static herr_t H5_rest_init(hid_t vipl_id);
 static herr_t H5_rest_term(void);
+
+static herr_t H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info);
 
 /* Introspection callbacks */
 static herr_t H5_rest_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const struct H5VL_class_t **conn_cls);
@@ -598,10 +611,13 @@ done:
 herr_t
 H5_rest_set_connection_information(void)
 {
-    const char *URL;
-    size_t      URL_len = 0;
-    FILE       *config_file = NULL;
-    herr_t      ret_value = SUCCEED;
+    H5_rest_ad_info_t  ad_info;
+    const char        *URL;
+    size_t             URL_len = 0;
+    FILE              *config_file = NULL;
+    herr_t             ret_value = SUCCEED;
+
+    memset(&ad_info, 0, sizeof(ad_info));
 
     /*
      * Attempt to pull in configuration/authentication information from
@@ -623,15 +639,39 @@ H5_rest_set_connection_information(void)
         strncpy(base_URL, URL, URL_len);
         base_URL[URL_len] = '\0';
 
-        if (username && strlen(username)) {
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, username))
-                FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf);
-        } /* end if */
+        if (username || password) {
+            /* Attempt to set authentication information */
+            if (username && strlen(username)) {
+                if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, username))
+                    FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf);
+            } /* end if */
 
-        if (password && strlen(password)) {
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, password))
-                FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf);
+            if (password && strlen(password)) {
+                if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, password))
+                    FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf);
+            } /* end if */
         } /* end if */
+        else {
+            const char *clientID = getenv("HSDS_AD_CLIENT_ID");
+            const char *tenantID = getenv("HSDS_AD_TENANT_ID");
+            const char *resourceID = getenv("HSDS_AD_RESOURCE_ID");
+            const char *client_secret = getenv("HSDS_AD_CLIENT_SECRET");
+
+            if (clientID)
+                strncpy(ad_info.clientID, clientID, sizeof(ad_info.clientID) - 1);
+            if (tenantID)
+                strncpy(ad_info.tenantID, tenantID, sizeof(ad_info.tenantID) - 1);
+            if (resourceID)
+                strncpy(ad_info.resourceID, resourceID, sizeof(ad_info.resourceID) - 1);
+            if (client_secret) {
+                ad_info.unattended = TRUE;
+                strncpy(ad_info.client_secret, client_secret, sizeof(ad_info.client_secret) - 1);
+            } /* end if */
+
+            /* Attempt authentication with Active Directory */
+            if (H5_rest_authenticate_with_AD(&ad_info) < 0)
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't authenticate with Active Directory");
+        } /* end else */
     } /* end if */
     else {
         const char *cfg_file_name = ".hscfg";
@@ -717,7 +757,30 @@ H5_rest_set_connection_information(void)
                         FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf);
                 } /* end if */
             } /* end else if */
+            else if (!strcmp(key, "hs_ad_app_id")) {
+                if (val && strlen(val))
+                    strncpy(ad_info.clientID, val, sizeof(ad_info.clientID) - 1);
+            } /* end else */
+            else if (!strcmp(key, "hs_ad_tenant_id")) {
+                if (val && strlen(val))
+                    strncpy(ad_info.tenantID, val, sizeof(ad_info.tenantID) - 1);
+            } /* end else */
+            else if (!strcmp(key, "hs_ad_resource_id")) {
+                if (val && strlen(val))
+                    strncpy(ad_info.resourceID, val, sizeof(ad_info.resourceID) - 1);
+            } /* end else if */
+            else if (!strcmp(key, "hs_ad_client_secret")) {
+                if (val && strlen(val)) {
+                    ad_info.unattended = TRUE;
+                    strncpy(ad_info.client_secret, val, sizeof(ad_info.client_secret) - 1);
+                } /* end if */
+            } /* end else if */
         } /* end while */
+
+        /* Attempt authentication with Active Directory if ID values are present */
+        if (ad_info.clientID[0] != '\0' && ad_info.tenantID[0] != '\0' && ad_info.resourceID[0] != '\0')
+            if (H5_rest_authenticate_with_AD(&ad_info) < 0)
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't authenticate with Active Directory");
     } /* end else */
 
     if (!base_URL)
@@ -731,6 +794,238 @@ done:
 
     return ret_value;
 } /* end H5_rest_set_connection_information() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    H5_rest_authenticate_with_AD
+ *
+ * Purpose:     Given a client ID, tenant ID and resource ID, attempts to
+ *              authenticate with Active Directory. If client_secret is not
+ *              NULL, the authentication will be performed in an unattended
+ *              manner. Otherwise, the user will need to manually
+ *              authenticate according to instructions that get printed out
+ *              before the authentication process can complete.
+ *
+ *              TODO: if the authentication token expires, there should be
+ *                    logic for attempting a re-authentication.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ *-------------------------------------------------------------------------
+ */
+static herr_t
+H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
+{
+    const char *access_token_keys[] = { "access_token", (const char *) 0 };
+    const char *token_cfg_file_name = ".hstokencfg";
+    yajl_val    parse_tree = NULL, key_obj = NULL;
+    size_t      token_cfg_file_pathname_len = 0;
+    FILE       *token_cfg_file = NULL;
+    char       *token_cfg_file_pathname = NULL;
+    char       *home_dir = NULL;
+    char       *access_token = NULL;
+    char        tenant_string[1024];
+    char        data_string[1024];
+    herr_t      ret_value = SUCCEED;
+
+    if (!ad_info)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "Active Directory info structure is NULL");
+
+    /* Set up miscellaneous options */
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BEARER))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set HTTP authentication method: %s", curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL FOLLOWLOCATION opt.: %s", curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_DEFAULT_PROTOCOL, "https"))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set default protocol to HTTPS: %s", curl_err_buf);
+
+    curl_headers = curl_slist_append(curl_headers, "Content-Type: application/x-www-form-urlencoded");
+
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
+
+    /* Check if an access token config file exists in the user's home directory */
+#ifdef WIN32
+    {
+        char *home_drive = NULL;
+
+        if (NULL == (home_drive = getenv("HOMEDRIVE")))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "reading access token config file - unable to retrieve location of home directory");
+
+        if (NULL == (home_dir = getenv("HOMEPATH")))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "reading access token config file - unable to retrieve location of home directory");
+
+        token_cfg_file_pathname_len = strlen(home_drive) + strlen(home_dir) + strlen(token_cfg_file_name) + 3;
+        if (NULL == (token_cfg_file_pathname = RV_malloc(token_cfg_file_pathname_len)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "unable to allocate space for access token config file pathname");
+
+        if (snprintf(token_cfg_file_pathname, token_cfg_file_pathname_len, "%s\%s\%s", home_drive, home_dir, token_cfg_file_name) < 0)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "snprintf error");
+    }
+#else
+    if (NULL == (home_dir = getenv("HOME")))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "reading access token config file - unable to retrieve location of home directory");
+
+    token_cfg_file_pathname_len = strlen(home_dir) + strlen(token_cfg_file_name) + 2;
+    if (NULL == (token_cfg_file_pathname = RV_malloc(token_cfg_file_pathname_len)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "unable to allocate space for access token config file pathname");
+
+    if (snprintf(token_cfg_file_pathname, token_cfg_file_pathname_len, "%s/%s", home_dir, token_cfg_file_name) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
+#endif
+
+    if ((token_cfg_file = fopen(token_cfg_file_pathname, "r"))) {
+        /* TODO: parse access token config file */
+    } /* end if */
+    else {
+        if (ad_info->unattended) {
+            if (ad_info->client_secret[0] == '\0')
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "Active Directory authentication client secret is NULL");
+
+            /* Set cURL up to authenticate device with AD in unattended manner */
+
+            printf("Performing unattended authentication\n");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "GET"))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set HTTP GET operation: %s", curl_err_buf);
+
+            /* Form URL from tenant ID string */
+            if (snprintf(tenant_string, sizeof(tenant_string),
+                    "https://login.microsoftonline.com/%s/oauth2/v2.0/token", ad_info->tenantID) < 0)
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, tenant_string))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
+
+            /* Form token string */
+#if 0
+            if (snprintf(data_string, sizeof(data_string),
+                    "grant_type=client_credentials&client_id=%s&scope=https%%3A//graph.microsoft.com/.default&client_secret=%s",
+                    ad_info->clientID, ad_info->client_secret) < 0)
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
+#endif
+            if (snprintf(data_string, sizeof(data_string),
+                    "grant_type=client_credentials&client_id=%s&scope=%s/.default&client_secret=%s",
+                    ad_info->clientID, ad_info->resourceID, ad_info->client_secret) < 0)
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_string))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL POST data: %s", curl_err_buf);
+
+            CURL_PERFORM(curl, H5E_VOL, H5E_CANTGET, FAIL);
+        } /* end if */
+        else {
+            const char *ad_auth_message_keys[] = { "message", (const char *) 0 };
+            const char *device_code_keys[] = { "device_code", (const char *) 0 };
+            char       *device_code = NULL;
+            char       *instruction_string;
+
+            /* Set cURL up to authenticate device with AD in attended manner */
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST"))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set HTTP POST operation: %s", curl_err_buf);
+
+            /* Form URL from tenant ID string */
+            if (snprintf(tenant_string, sizeof(tenant_string),
+                    "https://login.microsoftonline.com/%s/oauth2/v2.0/devicecode", ad_info->tenantID) < 0)
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, tenant_string))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
+
+            /* Form client ID string */
+            if (snprintf(data_string, sizeof(data_string),
+                    "client_id=%s&scope=user.read%%20offline_access%%20openid%%20profile%%20email", ad_info->clientID) < 0)
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_string))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL POST data: %s", curl_err_buf);
+
+            CURL_PERFORM(curl, H5E_VOL, H5E_CANTGET, FAIL);
+
+            /* Retrieve and print out authentication instructions message to user and wait for
+             * their input after authenticating */
+            if (NULL == (parse_tree = yajl_tree_parse(response_buffer.buffer, NULL, 0)))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
+
+            /* Retrieve the Dataspace type */
+            if (NULL == (key_obj = yajl_tree_get(parse_tree, ad_auth_message_keys, yajl_t_string)))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve authentication instructions message");
+
+            if (NULL == (instruction_string = YAJL_GET_STRING(key_obj)))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve authentication instructions message");
+
+            printf("Please follow the instructions below\n %s\n\nHit Enter when completed", instruction_string);
+            getchar();
+
+            /* Assume that the user has now properly signed in - attempt to retrieve token */
+
+            if (NULL == (key_obj = yajl_tree_get(parse_tree, device_code_keys, yajl_t_string)))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve authentication device code");
+
+            if (NULL == (device_code = YAJL_GET_STRING(key_obj)))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve authentication device code");
+
+            /* Form URL from tenant ID string */
+            if (snprintf(tenant_string, sizeof(tenant_string),
+                    "https://login.microsoftonline.com/%s/oauth2/v2.0/token", ad_info->tenantID) < 0)
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, tenant_string))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
+
+            /* Form token string */
+            if (snprintf(data_string, sizeof(data_string),
+                    "grant_type=urn%%3Aietf%%3Aparams%%3Aoauth%%3Agrant-type%%3Adevice_code&device_code=%s&client_id=%s",
+                    device_code, ad_info->clientID) < 0)
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_string))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL POST data: %s", curl_err_buf);
+
+            CURL_PERFORM(curl, H5E_VOL, H5E_CANTGET, FAIL);
+
+            yajl_tree_free(parse_tree);
+            parse_tree = NULL;
+        } /* end else */
+    } /* end else */
+
+    /* Parse token from response */
+    if (NULL == (parse_tree = yajl_tree_parse(response_buffer.buffer, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
+
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, access_token_keys, yajl_t_string)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token");
+
+    if (NULL == (access_token = YAJL_GET_STRING(key_obj)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token");
+
+    /* Set token with cURL for future authentication */
+    if (CURLE_OK != (curl_easy_setopt(curl, CURLOPT_XOAUTH2_BEARER, access_token)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set OAuth access token: %s", curl_err_buf);
+
+done:
+    /* Reset custom request on cURL pointer */
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
+        FUNC_DONE_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf);
+
+    if (curl_headers) {
+        curl_slist_free_all(curl_headers);
+        curl_headers = NULL;
+    } /* end if */
+
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    if (token_cfg_file)
+        fclose(token_cfg_file);
+
+    /* Clear out memory */
+    memset(data_string, 0, sizeof(data_string));
+    memset(tenant_string, 0, sizeof(tenant_string));
+
+    return ret_value;
+} /* end H5_rest_authenticate_with_AD() */
 
 /************************************
  *         Helper functions         *

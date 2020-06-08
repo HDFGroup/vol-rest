@@ -98,43 +98,43 @@ do {                                                                            
         case 201:                                                                                                           \
             break;                                                                                                          \
         case 400:                                                                                                           \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "400 - Malformed/Bad request for resource\n");                 \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "400 - Malformed/Bad request for resource");                   \
             break;                                                                                                          \
         case 401:                                                                                                           \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "401 - Valid username/Password needed to access resource\n");  \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "401 - Valid authentication needed to access resource");       \
             break;                                                                                                          \
         case 403:                                                                                                           \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "403 - Unauthorized access to resource\n");                    \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "403 - Unauthorized access to resource");                      \
             break;                                                                                                          \
         case 404:                                                                                                           \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "404 - Resource not found\n");                                 \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "404 - Resource not found");                                   \
             break;                                                                                                          \
         case 405:                                                                                                           \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "405 - Method not allowed\n");                                 \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "405 - Method not allowed");                                   \
             break;                                                                                                          \
         case 409:                                                                                                           \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "409 - Resource already exists\n");                            \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "409 - Resource already exists");                              \
             break;                                                                                                          \
         case 410:                                                                                                           \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "410 - Resource has been deleted\n");                          \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "410 - Resource has been deleted");                            \
             break;                                                                                                          \
         case 413:                                                                                                           \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "413 - Selection too large\n");                                \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "413 - Selection too large");                                  \
             break;                                                                                                          \
         case 500:                                                                                                           \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "500 - An internal server error occurred\n");                  \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "500 - An internal server error occurred");                    \
             break;                                                                                                          \
         case 501:                                                                                                           \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "501 - Functionality not implemented\n");                      \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "501 - Functionality not implemented");                        \
             break;                                                                                                          \
         case 503:                                                                                                           \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "503 - Service unavailable\n");                                \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "503 - Service unavailable");                                  \
             break;                                                                                                          \
         case 504:                                                                                                           \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "504 - Gateway timeout\n");                                    \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "504 - Gateway timeout");                                      \
             break;                                                                                                          \
         default:                                                                                                            \
-            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Unknown error occurred\n");                                   \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "Unknown error occurred");                                     \
             break;                                                                                                          \
     } /* end switch */                                                                                                      \
 } while(0)
