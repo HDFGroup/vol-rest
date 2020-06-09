@@ -22,6 +22,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
+#include <time.h>
 
 #include <curl/curl.h>
 #include <yajl/yajl_tree.h>
