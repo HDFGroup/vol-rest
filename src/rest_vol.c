@@ -874,10 +874,19 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
 #endif
 
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Token config file location: %s\n", token_cfg_file_pathname);
+#endif
     if ((token_cfg_file = fopen(token_cfg_file_pathname, "r"))) {
+#ifdef RV_CONNECTOR_DEBUG
+        printf("-> Token config file %s found\n", token_cfg_file_pathname);
+#endif
         /* TODO: parse access token config file */
     } /* end if */
     else {
+#ifdef RV_CONNECTOR_DEBUG
+        printf("-> Token config file %s not found\n", token_cfg_file_pathname);
+#endif
         if (ad_info->unattended) {
             if (ad_info->client_secret[0] == '\0')
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "Active Directory authentication client secret is NULL");
@@ -948,10 +957,9 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
             if (NULL == (parse_tree = yajl_tree_parse(response_buffer.buffer, NULL, 0)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
 
-            /* Retrieve the Dataspace type */
+            /* Retrieve the authentication message */
             if (NULL == (key_obj = yajl_tree_get(parse_tree, ad_auth_message_keys, yajl_t_string)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve authentication instructions message");
-
             if (NULL == (instruction_string = YAJL_GET_STRING(key_obj)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve authentication instructions message");
 
@@ -990,6 +998,11 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
         } /* end else */
     } /* end else */
 
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Authentication successfully completed.\n");
+    printf("-> Authentication server response:\n-> %s\n", response_buffer.buffer);
+#endif
+
     /* Parse token from response */
     if (NULL == (parse_tree = yajl_tree_parse(response_buffer.buffer, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
@@ -999,6 +1012,10 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 
     if (NULL == (access_token = YAJL_GET_STRING(key_obj)))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token");
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Using this access token:\n-> \"%s\"\n");
+#endif
 
     /* Set token with cURL for future authentication */
     if (CURLE_OK != (curl_easy_setopt(curl, CURLOPT_XOAUTH2_BEARER, access_token)))
