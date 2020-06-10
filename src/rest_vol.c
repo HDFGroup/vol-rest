@@ -727,6 +727,7 @@ H5_rest_set_connection_information(void)
          * URL, username and password key-value pairs.
          */
         while (fgets(file_line, sizeof(file_line), config_file) != NULL) {
+            if ((file_line[0] == '#') || !strlen(file_line)) continue;
             const char *key = strtok(file_line, " =\n");
             const char *val = strtok(NULL, " =\n");
 
@@ -1033,14 +1034,19 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 #endif
     token_expires = time(NULL) + token_expires - 1;
 
-    /* Get refresh token */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, refresh_token_keys, yajl_t_string)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve refresh token");
-    if (NULL == (refresh_token = YAJL_GET_STRING(key_obj)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve refresh token");
+    /* Get refresh token (optional) */
+    if (NULL != (key_obj = yajl_tree_get(parse_tree, refresh_token_keys, yajl_t_string))) {
+        if (NULL == (refresh_token = YAJL_GET_STRING(key_obj)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve refresh token's string value");
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> Refresh token:\n-> \"%s\"\n", refresh_token);
+        printf("-> Refresh token:\n-> \"%s\"\n", refresh_token);
 #endif
+    }
+    else {
+#ifdef RV_CONNECTOR_DEBUG
+        printf("-> Refresh token NOT PROVIDED\n");
+#endif
+    }
 
     /* Set access token with cURL for future authentication */
     if (CURLE_OK != (curl_easy_setopt(curl, CURLOPT_XOAUTH2_BEARER, access_token)))
