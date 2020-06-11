@@ -699,7 +699,7 @@ H5_rest_set_connection_information(void)
         if (NULL == (pathname = RV_malloc(pathname_len)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "unable to allocate space for config file pathname");
 
-        if ((file_path_len = snprintf(pathname, pathname_len, "%s\%s\%s", home_drive, home_dir, cfg_file_name)) < 0)
+        if ((file_path_len = snprintf(pathname, pathname_len, "%s\\%s\\%s", home_drive, home_dir, cfg_file_name)) < 0)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "snprintf error");
 
         if (file_path_len >= pathname_len)
@@ -727,10 +727,12 @@ H5_rest_set_connection_information(void)
          * URL, username and password key-value pairs.
          */
         while (fgets(file_line, sizeof(file_line), config_file) != NULL) {
-            if ((file_line[0] == '#') || !strlen(file_line)) continue;
-            const char *key = strtok(file_line, " =\n");
-            const char *val = strtok(NULL, " =\n");
+            char *key;
+            char *val;
 
+            if ((file_line[0] == '#') || !strlen(file_line)) continue;
+            key = strtok(file_line, " =\n");
+            val = strtok(NULL, " =\n");
             if (!strcmp(key, "hs_endpoint")) {
                 if (val) {
                     /*
@@ -864,7 +866,7 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
         if (NULL == (token_cfg_file_pathname = RV_malloc(token_cfg_file_pathname_len)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "unable to allocate space for access token config file pathname");
 
-        if (snprintf(token_cfg_file_pathname, token_cfg_file_pathname_len, "%s\%s\%s", home_drive, home_dir, token_cfg_file_name) < 0)
+        if (snprintf(token_cfg_file_pathname, token_cfg_file_pathname_len, "%s\\%s\\%s", home_drive, home_dir, token_cfg_file_name) < 0)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "snprintf error");
     }
 #else
@@ -893,6 +895,7 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
         printf("-> Token config file %s found\n", token_cfg_file_pathname);
 #endif
 
+        /* Read entire token config file content */
         if (fseek(token_cfg_file, 0, SEEK_END) != 0)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_SEEKERROR, FAIL, "Failed to fseek() token config file");
         if ((file_size = (size_t)ftell(token_cfg_file)) < 0)
@@ -1067,13 +1070,12 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
             /* Request access token from the server */
             CURL_PERFORM(curl, H5E_VOL, H5E_CANTGET, FAIL);
 
-            yajl_tree_free(parse_tree);
-            parse_tree = NULL;
-
 #ifdef RV_CONNECTOR_DEBUG
-            printf("-> Authentication successfully completed.\n");
             printf("-> Authentication server response:\n-> %s\n", response_buffer.buffer);
 #endif
+
+            yajl_tree_free(parse_tree);
+            parse_tree = NULL;
 
             /* Parse response JSON */
             if (NULL == (parse_tree = yajl_tree_parse(response_buffer.buffer, NULL, 0)))
@@ -1115,6 +1117,10 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 
         } /* end else */
     } /* end else */
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Authentication successfully completed.\n");
+#endif
 
     /* Set access token with cURL for future authentication */
     if (CURLE_OK != (curl_easy_setopt(curl, CURLOPT_XOAUTH2_BEARER, access_token)))
