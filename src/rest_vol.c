@@ -968,12 +968,6 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
 
             /* Form token string */
-#if 0
-            if (snprintf(data_string, sizeof(data_string),
-                    "grant_type=client_credentials&client_id=%s&scope=https%%3A//graph.microsoft.com/.default&client_secret=%s",
-                    ad_info->clientID, ad_info->client_secret) < 0)
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
-#endif
             if (snprintf(data_string, sizeof(data_string),
                     "grant_type=client_credentials&client_id=%s&scope=%s/.default&client_secret=%s",
                     ad_info->clientID, ad_info->resourceID, ad_info->client_secret) < 0)
