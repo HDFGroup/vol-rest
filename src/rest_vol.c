@@ -883,10 +883,66 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
     printf("-> Token config file location: %s\n", token_cfg_file_pathname);
 #endif
     if ((token_cfg_file = fopen(token_cfg_file_pathname, "r"))) {
+        char *cfg_json = NULL; /* Buffer for token config file content */
+        size_t file_size;
+        const char *cfg_access_token[] = {base_URL, "accessToken", (const char *)0};
+        const char *cfg_refresh_token[] = {base_URL, "refreshToken", (const char *)0};
+        const char *cfg_token_expires[] = {base_URL, "expiresOn", (const char *)0};
+
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Token config file %s found\n", token_cfg_file_pathname);
 #endif
-        /* TODO: parse access token config file */
+
+        if (fseek(token_cfg_file, 0, SEEK_END) != 0)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_SEEKERROR, FAIL, "Failed to fseek() token config file");
+        if ((file_size = (size_t)ftell(token_cfg_file)) < 0)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGETSIZE, FAIL, "Failed to get token config file size");
+        if ((cfg_json = (char*)RV_malloc(file_size)) == NULL)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "Failed to allocate memory for token config file content");
+        if (fseek(token_cfg_file, 0, SEEK_SET) != 0)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_SEEKERROR, FAIL, "Failed to fseek() token config file");
+        if (fread((void *)cfg_json, sizeof(char), file_size, token_cfg_file) != file_size)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_READERROR, FAIL, "Failed to read token config file");
+        fclose(token_cfg_file);
+
+        /* Parse token config file */
+        if (NULL == (parse_tree = yajl_tree_parse(cfg_json, NULL, 0)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "Failed to parse token config JSON");
+
+        /* Get access token for the HSDS endpoint */
+        if (NULL == (key_obj = yajl_tree_get(parse_tree, cfg_access_token, yajl_t_string)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token");
+        if (NULL == (access_token = YAJL_GET_STRING(key_obj)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token's value");
+#ifdef RV_CONNECTOR_DEBUG
+        printf("-> Access token:\n-> \"%s\"\n", access_token);
+#endif
+
+        /* Get refresh token for the HSDS endpoint */
+        if (NULL == (key_obj = yajl_tree_get(parse_tree, cfg_refresh_token, yajl_t_string)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve refresh token");
+        if (NULL == (refresh_token = YAJL_GET_STRING(key_obj)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve refresh token's value");
+#ifdef RV_CONNECTOR_DEBUG
+        printf("-> Refresh token:\n-> \"%s\"\n", refresh_token);
+#endif
+
+        /* Get token expiration for the HSDS endpoint */
+        if (NULL == (key_obj = yajl_tree_get(parse_tree, cfg_token_expires, yajl_t_number)))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve token expiration");
+        if (!YAJL_IS_NUMBER(key_obj))
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "token expiration's value is not a number");
+        token_expires = (time_t)YAJL_GET_DOUBLE(key_obj);
+        if (time(NULL) > token_expires)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "Access token expired");
+#ifdef RV_CONNECTOR_DEBUG
+        printf("-> Access token expires on: %ld\n", token_expires);
+#endif
+
+        /* Clean up */
+        RV_free(cfg_json);
+        yajl_tree_free(parse_tree);
+        parse_tree = NULL;
     } /* end if */
     else {
 #ifdef RV_CONNECTOR_DEBUG
@@ -926,6 +982,10 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_string))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL POST data: %s", curl_err_buf);
 
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Authentication server URL: \"%s\"\n", tenant_string);
+            printf("-> Request payload: \"%s\"\n", data_string);
+#endif
             CURL_PERFORM(curl, H5E_VOL, H5E_CANTGET, FAIL);
         } /* end if */
         else {
@@ -955,10 +1015,17 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_string))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL POST data: %s", curl_err_buf);
 
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Authentication server URL: \"%s\"\n", tenant_string);
+            printf("-> Request payload: \"%s\"\n", data_string);
+#endif
             CURL_PERFORM(curl, H5E_VOL, H5E_CANTGET, FAIL);
 
             /* Retrieve and print out authentication instructions message to user and wait for
              * their input after authenticating */
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Authentication server response:\n\"%s\"\n", response_buffer.buffer);
+#endif
             if (NULL == (parse_tree = yajl_tree_parse(response_buffer.buffer, NULL, 0)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
 
@@ -978,6 +1045,9 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 
             if (NULL == (device_code = YAJL_GET_STRING(key_obj)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve authentication device code");
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Device code: \"%s\"\n", device_code);
+#endif
 
             /* Form URL from tenant ID string */
             if (snprintf(tenant_string, sizeof(tenant_string),
@@ -996,57 +1066,61 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_string))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL POST data: %s", curl_err_buf);
 
-            /* Request access token */
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Authentication server URL: \"%s\"\n", tenant_string);
+            printf("-> Request payload: \"%s\"\n", data_string);
+#endif
+            /* Request access token from the server */
             CURL_PERFORM(curl, H5E_VOL, H5E_CANTGET, FAIL);
 
             yajl_tree_free(parse_tree);
             parse_tree = NULL;
+
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Authentication successfully completed.\n");
+            printf("-> Authentication server response:\n-> %s\n", response_buffer.buffer);
+#endif
+
+            /* Parse response JSON */
+            if (NULL == (parse_tree = yajl_tree_parse(response_buffer.buffer, NULL, 0)))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
+
+            /* Get access token */
+            if (NULL == (key_obj = yajl_tree_get(parse_tree, access_token_keys, yajl_t_string)))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token");
+            if (NULL == (access_token = YAJL_GET_STRING(key_obj)))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token");
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Access token:\n-> \"%s\"\n", access_token);
+#endif
+
+            /* Get access token's validity period */
+            if (NULL == (key_obj = yajl_tree_get(parse_tree, expires_in_key, yajl_t_number)))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve expires_in key");
+            if (!YAJL_IS_INTEGER(key_obj))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned expires_in value is not an integer");
+            token_expires = YAJL_GET_INTEGER(key_obj);
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Access token expires after %ld (duration: %ld seconds)\n", time(NULL) + token_expires, token_expires);
+#endif
+            token_expires = time(NULL) + token_expires - 1;
+
+            /* Get refresh token (optional) */
+            if (NULL != (key_obj = yajl_tree_get(parse_tree, refresh_token_keys, yajl_t_string))) {
+                if (NULL == (refresh_token = YAJL_GET_STRING(key_obj)))
+                    FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve refresh token's string value");
+#ifdef RV_CONNECTOR_DEBUG
+                printf("-> Refresh token:\n-> \"%s\"\n", refresh_token);
+#endif
+            }
+            else {
+#ifdef RV_CONNECTOR_DEBUG
+                printf("-> Refresh token NOT PROVIDED\n");
+#endif
+            }
+
         } /* end else */
     } /* end else */
-
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Authentication successfully completed.\n");
-    printf("-> Authentication server response:\n-> %s\n", response_buffer.buffer);
-#endif
-
-    /* Parse response JSON */
-    if (NULL == (parse_tree = yajl_tree_parse(response_buffer.buffer, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
-
-    /* Get access token */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, access_token_keys, yajl_t_string)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token");
-    if (NULL == (access_token = YAJL_GET_STRING(key_obj)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token");
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Access token:\n-> \"%s\"\n", access_token);
-#endif
-
-    /* Get access token's validity period */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, expires_in_key, yajl_t_number)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve expires_in key");
-    if (!YAJL_IS_INTEGER(key_obj))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned expires_in value is not an integer");
-    if (NULL == (token_expires = YAJL_GET_INTEGER(key_obj)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve expires_in value");
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Access token expires after %ld (duration: %ld seconds)\n", time(NULL) + token_expires, token_expires);
-#endif
-    token_expires = time(NULL) + token_expires - 1;
-
-    /* Get refresh token (optional) */
-    if (NULL != (key_obj = yajl_tree_get(parse_tree, refresh_token_keys, yajl_t_string))) {
-        if (NULL == (refresh_token = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve refresh token's string value");
-#ifdef RV_CONNECTOR_DEBUG
-        printf("-> Refresh token:\n-> \"%s\"\n", refresh_token);
-#endif
-    }
-    else {
-#ifdef RV_CONNECTOR_DEBUG
-        printf("-> Refresh token NOT PROVIDED\n");
-#endif
-    }
 
     /* Set access token with cURL for future authentication */
     if (CURLE_OK != (curl_easy_setopt(curl, CURLOPT_XOAUTH2_BEARER, access_token)))
@@ -1064,9 +1138,6 @@ done:
 
     if (parse_tree)
         yajl_tree_free(parse_tree);
-
-    if (token_cfg_file)
-        fclose(token_cfg_file);
 
     /* Clear out memory */
     memset(data_string, 0, sizeof(data_string));

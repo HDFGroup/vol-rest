@@ -18,6 +18,7 @@
 #ifndef rest_vol_H
 #define rest_vol_H
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
