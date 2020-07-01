@@ -908,6 +908,11 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_READERROR, FAIL, "Failed to read token config file");
         fclose(token_cfg_file);
 
+#ifdef RV_CONNECTOR_DEBUG
+        printf("-> JSON read from \"%s\":\n-> BEGIN JSON>%s<END JSON\n",
+            token_cfg_file_pathname, cfg_json);
+#endif
+
         /* Parse token config file */
         if (NULL == (parse_tree = yajl_tree_parse(cfg_json, NULL, 0)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "Failed to parse token config JSON");
