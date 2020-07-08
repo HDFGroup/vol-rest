@@ -884,7 +884,7 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Token config file location: %s\n", token_cfg_file_pathname);
 #endif
-    if ((token_cfg_file = fopen(token_cfg_file_pathname, "r"))) {
+    if ((token_cfg_file = fopen(token_cfg_file_pathname, "rb"))) {
         char *cfg_json = NULL; /* Buffer for token config file content */
         size_t file_size;
         const char *cfg_access_token[] = {base_URL, "accessToken", (const char *)0};
