@@ -900,8 +900,9 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_SEEKERROR, FAIL, "Failed to fseek() token config file");
         if ((file_size = (size_t)ftell(token_cfg_file)) < 0)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGETSIZE, FAIL, "Failed to get token config file size");
-        if ((cfg_json = (char*)RV_malloc(file_size)) == NULL)
+        if ((cfg_json = (char*)RV_malloc(file_size + 1)) == NULL)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "Failed to allocate memory for token config file content");
+        cfg_json[file_size] = '\0';
         if (fseek(token_cfg_file, 0, SEEK_SET) != 0)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_SEEKERROR, FAIL, "Failed to fseek() token config file");
         if (fread((void *)cfg_json, sizeof(char), file_size, token_cfg_file) != file_size)
@@ -949,8 +950,6 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 
         /* Clean up */
         RV_free(cfg_json);
-        yajl_tree_free(parse_tree);
-        parse_tree = NULL;
     } /* end if */
     else {
 #ifdef RV_CONNECTOR_DEBUG
