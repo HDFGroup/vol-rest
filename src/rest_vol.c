@@ -897,14 +897,14 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 
         /* Read entire token config file content */
         if (fseek(token_cfg_file, 0, SEEK_END) != 0)
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_SEEKERROR, FAIL, "Failed to fseek() token config file");
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_SEEKERROR, FAIL, "Failed to fseek(0, SEEK_END) token config file");
         if ((file_size = (size_t)ftell(token_cfg_file)) < 0)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGETSIZE, FAIL, "Failed to get token config file size");
         if ((cfg_json = (char*)RV_malloc(file_size + 1)) == NULL)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "Failed to allocate memory for token config file content");
         cfg_json[file_size] = '\0';
         if (fseek(token_cfg_file, 0, SEEK_SET) != 0)
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_SEEKERROR, FAIL, "Failed to fseek() token config file");
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_SEEKERROR, FAIL, "Failed to fseek(0, SEEK_SET) token config file");
         if (fread((void *)cfg_json, sizeof(char), file_size, token_cfg_file) != file_size)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_READERROR, FAIL, "Failed to read token config file");
         fclose(token_cfg_file);
@@ -959,11 +959,12 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
             if (ad_info->client_secret[0] == '\0')
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "Active Directory authentication client secret is NULL");
 
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Performing unattended authentication\n");
+#endif
+
             /* Set cURL up to authenticate device with AD in unattended manner */
-
-            printf("Performing unattended authentication\n");
-
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "GET"))
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST"))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set HTTP GET operation: %s", curl_err_buf);
 
             /* Form URL from tenant ID string */
