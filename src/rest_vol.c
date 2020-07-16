@@ -989,6 +989,9 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
             printf("-> Request payload: \"%s\"\n", data_string);
 #endif
             CURL_PERFORM(curl, H5E_VOL, H5E_CANTGET, FAIL);
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Authentication server response:\n-> \"%s\"\n", response_buffer.buffer);
+#endif
         } /* end if */
         else {
             const char *ad_auth_message_keys[] = { "message", (const char *) 0 };
@@ -1026,7 +1029,7 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
             /* Retrieve and print out authentication instructions message to user and wait for
              * their input after authenticating */
 #ifdef RV_CONNECTOR_DEBUG
-            printf("-> Authentication server response:\n\"%s\"\n", response_buffer.buffer);
+            printf("-> Authentication server response:\n-> \"%s\"\n", response_buffer.buffer);
 #endif
             if (NULL == (parse_tree = yajl_tree_parse(response_buffer.buffer, NULL, 0)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
