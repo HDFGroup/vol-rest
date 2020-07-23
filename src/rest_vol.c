@@ -1014,7 +1014,7 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 
             /* Form client ID string */
             if (snprintf(data_string, sizeof(data_string),
-                    "client_id=%s&scope=user.read%%20offline_access%%20openid%%20profile%%20email", ad_info->clientID) < 0)
+                    "client_id=%s&scope=%s/.default", ad_info->clientID, ad_info->resourceID) < 0)
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_string))
