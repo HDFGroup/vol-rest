@@ -1137,6 +1137,8 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set OAuth access token: %s", curl_err_buf);
 
 done:
+    RV_free(token_cfg_file_pathname);
+
     /* Reset custom request on cURL pointer */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
         FUNC_DONE_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf);
