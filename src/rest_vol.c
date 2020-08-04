@@ -342,6 +342,8 @@ static herr_t
 H5_rest_init(hid_t vipl_id)
 {
     herr_t ret_value = SUCCEED;
+    curl_version_info_data *curl_ver = NULL;
+    char user_agent[128];
 
     /* Check if already initialized */
     if (H5_rest_initialized_g)
@@ -376,6 +378,21 @@ H5_rest_init(hid_t vipl_id)
     /* Set cURL read function for UPLOAD operations */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READFUNCTION, H5_rest_curl_read_data_callback))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL read function: %s", curl_err_buf);
+
+    /* Set user agent string */
+    curl_ver = curl_version_info(CURLVERSION_NOW);
+    if (snprintf(user_agent, sizeof(user_agent),
+                 "libhdf5/%d.%d.%d (%s) VOL-%s/%s libcurl/%s libyajl/%d.%d.%d",
+                 H5_VERS_MAJOR, H5_VERS_MINOR, H5_VERS_RELEASE,
+                 curl_ver->host,
+                 HDF5_VOL_REST_NAME, HDF5_VOL_REST_LIB_VER,
+                 curl_ver->version,
+                 YAJL_MAJOR, YAJL_MINOR, YAJL_MICRO) < 0)
+    {
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "error creating user agent string");
+    }
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent))
+        HGOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "error while setting CURL option (CURLOPT_USERAGENT)");
 
 #ifdef RV_CURL_DEBUG
     /* Enable cURL debugging output if desired */
@@ -415,7 +432,6 @@ done:
     return ret_value;
 } /* end H5_rest_init() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    H5rest_term
  *

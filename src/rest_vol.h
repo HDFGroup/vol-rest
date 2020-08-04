@@ -27,6 +27,7 @@
 
 #include <curl/curl.h>
 #include <yajl/yajl_tree.h>
+#include <yajl/yajl_version.h>
 
 /* Includes for HDF5 */
 #include "hdf5.h"
