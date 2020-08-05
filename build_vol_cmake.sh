@@ -39,6 +39,7 @@ COMP_OPTS="-Wall -pedantic -Wunused-macros"
 CONNECTOR_DEBUG_OPT=
 CURL_DEBUG_OPT=
 MEM_TRACK_OPT=
+THREAD_SAFE_OPT=
 PREBUILT_HDF5_OPT=
 
 
@@ -59,6 +60,8 @@ usage()
     echo "      -c      Enable cURL debugging output in the REST VOL."
     echo
     echo "      -m      Enable memory tracking in the REST VOL."
+    echo
+    echo "      -s      Enable linking to thread safe static hdf5 library."
     echo
     echo "      -G      Specify the CMake Generator to use for the build"
     echo "              files created. Default is 'Unix Makefiles'."
@@ -86,7 +89,7 @@ usage()
     echo
 }
 
-optspec=":hctdmG:H:C:Y:B:P:-"
+optspec=":hctdmsG:H:C:Y:B:P:-"
 while getopts "$optspec" optchar; do
     case "${optchar}" in
     h)
@@ -106,6 +109,11 @@ while getopts "$optspec" optchar; do
     m)
         MEM_TRACK_OPT="-DHDF5_VOL_REST_ENABLE_MEM_TRACKING=ON"
         echo "Enabled connector memory tracking"
+        echo
+        ;;
+    s)
+        THREAD_SAFE_OPT="-DHDF5_VOL_REST_THREAD_SAFE=ON"
+        echo "Enabled linking to static thread safe hdf5 library"
         echo
         ;;
     G)
@@ -185,7 +193,7 @@ rm -f "${BUILD_DIR}/CMakeCache.txt"
 
 cd "${BUILD_DIR}"
 
-cmake -G "${CMAKE_GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${PREBUILT_HDF5_OPT}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${SCRIPT_DIR}"
+cmake -G "${CMAKE_GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${PREBUILT_HDF5_OPT}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}"
 
 echo "Build files have been generated for CMake generator '${CMAKE_GENERATOR}'"
 
