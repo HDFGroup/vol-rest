@@ -91,13 +91,15 @@ https://www.hdfgroup.org/hdf-kita.
 
 The latest and most up-to-date REST VOL connector code can be viewed at:
 
-https://bitbucket.hdfgroup.org/projects/HDF5VOL/repos/rest/browse
+https://github.com/HDFGroup/vol-rest
 
 and can directly be obtained from:
 
-`git clone https://bitbucket.hdfgroup.org/scm/hdf5vol/rest.git`
+`git clone https://github.com/HDFGroup/vol-rest`
 
-A source distribution of HDF5 1.12.0 has been included in the REST VOL connector
+For building with the 1.12 or later version of the HDF5 library, use the hdf5_1_12_update branch of this repository. 
+
+A source distribution of the HDF5 library has been included in the REST VOL connector
 source in the `/src/hdf5` directory.
 
 ### II.B.ii. One-step Build
