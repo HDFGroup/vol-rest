@@ -1095,6 +1095,8 @@ test_get_file_info(void)
     hid_t       file_id = -1, fapl_id = -1;
 
     TESTING("retrieve file info")
+    SKIPPED()
+    return 0;
 
     if (H5rest_init() < 0)
         TEST_ERROR
@@ -6664,6 +6666,8 @@ test_create_dataset_creation_properties(void)
     hid_t   fspace_id = -1;
 
     TESTING("dataset creation properties")
+    SKIPPED()
+    return 0;
 
     if (H5rest_init() < 0)
         TEST_ERROR
@@ -14680,6 +14684,9 @@ test_create_obj_ref(void)
 
     TESTING("create an object reference")
 
+    SKIPPED()
+    return 0;
+
     if (H5rest_init() < 0)
         TEST_ERROR
 
@@ -14756,6 +14763,8 @@ test_get_ref_type(void)
     hid_t        space_id = -1;
 
     TESTING("retrieve type of object reference by an object/region reference")
+    SKIPPED()
+    return 0;
 
     if (H5rest_init() < 0)
         TEST_ERROR
@@ -14974,6 +14983,8 @@ test_write_dataset_w_obj_refs(void)
     hid_t         space_id = -1;
 
     TESTING("write to a dataset w/ object reference type")
+    SKIPPED()
+    return 0;
 
     if (H5rest_init() < 0)
         TEST_ERROR
@@ -15180,6 +15191,9 @@ test_read_dataset_w_obj_refs(void)
     hid_t         space_id = -1;
 
     TESTING("read from a dataset w/ object reference type")
+
+    SKIPPED()
+    return 0;
 
     if (H5rest_init() < 0)
         TEST_ERROR
@@ -15436,6 +15450,9 @@ test_write_dataset_w_obj_refs_empty_data(void)
     hid_t         space_id = -1;
 
     TESTING("write to a dataset w/ object reference type and some empty data")
+
+    SKIPPED()
+    return 0;
 
     if (H5rest_init() < 0)
         TEST_ERROR
