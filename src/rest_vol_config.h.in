@@ -1,17 +1,10 @@
-/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
- * Copyright by The HDF Group.                                               *
- * All rights reserved.                                                      *
- *                                                                           *
- * This file is part of the HDF5 REST VOL connector. The full copyright      *
- * notice, including terms governing use, modification, and redistribution,  *
- * is contained in the COPYING file, which can be found at the root of the   *
- * source code distribution tree.                                            *
- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-
 /* src/rest_vol_config.h.in.  Generated from configure.ac by autoheader.  */
 
 /* Define if building universal (internal helper macro) */
 #undef AC_APPLE_UNIVERSAL_BUILD
+
+/* Define to have the REST VOL print out debugging information. */
+#undef CONNECTOR_DEBUG
 
 /* Define to have cURL output debugging information. */
 #undef CURL_DEBUG
@@ -111,9 +104,6 @@
 
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
-
-/* Define to have the REST VOL print out debugging information. */
-#undef CONNECTOR_DEBUG
 
 /* The size of `bool', as computed by sizeof. */
 #undef SIZEOF_BOOL

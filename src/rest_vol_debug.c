@@ -240,7 +240,6 @@ dataset_get_type_to_string(H5VL_dataset_get_t get_type)
     switch (get_type) {
         case H5VL_DATASET_GET_DAPL:         return "H5VL_DATASET_GET_DAPL";
         case H5VL_DATASET_GET_DCPL:         return "H5VL_DATASET_GET_DCPL";
-        case H5VL_DATASET_GET_OFFSET:       return "H5VL_DATASET_GET_OFFSET";
         case H5VL_DATASET_GET_SPACE:        return "H5VL_DATASET_GET_SPACE";
         case H5VL_DATASET_GET_SPACE_STATUS: return "H5VL_DATASET_GET_SPACE_STATUS";
         case H5VL_DATASET_GET_STORAGE_SIZE: return "H5VL_DATASET_GET_STORAGE_SIZE";
