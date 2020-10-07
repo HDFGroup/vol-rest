@@ -1,0 +1,17 @@
+dist: xenial   # required for Python >= 3.7
+language: c
+notifications:
+  email: false
+compiler: gcc
+install:
+- sudo apt update -qq
+- sudo apt install -y libcurl4-openssl-dev
+- sudo apt install -y libssl-dev
+- sudo ./build_vol_cmake.sh -P /usr/
+script:
+- cd test
+- echo "Building test program"
+- ./build.sh
+- echo "Running test program"
+- ./test_rest_vol
+ 
