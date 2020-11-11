@@ -398,6 +398,15 @@ if (HDF5_VOL_REST_ENABLE_COVERAGE)
 endif ()
 
 #-----------------------------------------------------------------------------
+# Option to use code coverage
+#-----------------------------------------------------------------------------
+option (HDF5_VOL_REST_THREAD_SAFE "Enable linking to HDF5 statically compiled with thread safe option" OFF)
+if (HDF5_VOL_REST_THREAD_SAFE)
+	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread")
+	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread")
+endif()
+
+#-----------------------------------------------------------------------------
 # Option to build the examples
 #-----------------------------------------------------------------------------
 option (HDF5_VOL_REST_ENABLE_EXAMPLES "Indicate that building examples should be enabled" ON)
