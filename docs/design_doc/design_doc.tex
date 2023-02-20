@@ -1,0 +1,81 @@
+\documentclass[letterpaper,hyper]{THG}
+
+%% Extra packages
+
+
+% Code snippets
+\newcommand{\mintcinline}[1]{\mintinline[fontsize=\small, breaklines=true]{C}{#1}}
+
+% Document metadata: Title, author(s), etc
+\title{HDF5 REST VOL Connector Design}
+\author{Jordan Henderson}
+\date{Apr. 3, 2020}
+\rfcversion{v1.0}
+\organization{THG}
+\orglogo{THG_LOGO} % Add PDF with this name (i.e. 'THG_LOGO.pdf') to the images folder
+
+%% Note: If you rename this file (design_doc.tex), you'll need to
+%% change the line at the beginning of each file in the 'sections'
+%% and 'appendices' subdirectories to use the new name.
+
+% Revision History
+\input{support/revisions}
+
+% Glossary terms, for use in main document
+\input{support/glossary}
+
+% Index of terms, included in table of contents
+\makeindex[intoc]
+
+% Bibliography references, for use in main document
+% \addbibresource{support/rfc.bib}
+
+%% Start the main document
+\begin{document}
+
+%% Title
+\maketitle
+
+%% Abstract
+\subfile{sections/abstract}
+
+% Display revision history
+\makerevisions
+
+% Table of Contents
+\tableofcontents
+
+% List of Figures
+\newpage
+\addcontentsline{toc}{section}{List of Figures}
+\listoffigures
+
+% Glossaries of acronyms and terms
+\newpage
+\glsdisablehyper
+\printglossary[type=\acronymtype]
+\printglossary
+
+% Index of terms used
+%\newpage
+%\printindex
+
+% Main text of RFC
+\newpage
+%% Design section
+\subfile{sections/design}
+\newpage
+
+%\subfile{sections/recommendation}
+%\subfile{sections/acknowledgements}
+
+% Bibliography (list them in the TOC)
+%\newpage
+%\phantomsection
+%\addcontentsline{toc}{section}{References}
+%\printbibliography
+ 
+% Appendices (switch to letters for appendix sections)
+%\appendix
+
+\end{document}

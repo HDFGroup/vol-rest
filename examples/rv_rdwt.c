@@ -1,6 +1,5 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  * Copyright by The HDF Group.                                               *
- * Copyright by the Board of Trustees of the University of Illinois.         *
  * All rights reserved.                                                      *
  *                                                                           *
  * This file is part of HDF5.  The full HDF5 copyright notice, including     *
@@ -26,7 +25,7 @@
 #define FILE "dset.h5"
 #define FILE_NAME_MAX_LENGTH 256
 
-int main() {
+int main(void) {
 
    hid_t       file_id, dataset_id, fapl;  /* identifiers */
    const char *username;
@@ -34,10 +33,10 @@ int main() {
    herr_t      status;
    int         i, j, dset_data[4][6];
 
-   /* Initialize REST VOL plugin access */
-   RVinit();
+   /* Initialize REST VOL connector access */
+   H5rest_init();
 
-   /* Associate the REST VOL plugin with a FAPL and register
+   /* Associate the REST VOL connector with a FAPL and register
     * it with the library
     */
    fapl = H5Pcreate(H5P_FILE_ACCESS);
@@ -74,6 +73,6 @@ int main() {
    /* Close the file. */
    status = H5Fclose(file_id);
 
-   /* Terminate REST VOL plugin access */
-   status = RVterm();
+   /* Terminate REST VOL connector access */
+   status = H5rest_term();
 }

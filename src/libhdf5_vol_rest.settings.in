@@ -1,0 +1,51 @@
+	    SUMMARY OF THE REST VOL CONFIGURATION
+	    =====================================
+
+General Information:
+-------------------
+               REST VOL Version: @RV_VERSION@
+                  Configured on: @CONFIG_DATE@
+                  Configured by: @CONFIG_USER@
+                    Host system: @host_cpu@-@host_vendor@-@host_os@
+              Uname information: @UNAME_INFO@
+                       Byte sex: @BYTESEX@
+             Installation point: @prefix@
+
+Compiling Options:
+------------------
+                     Build Mode: @BUILD_MODE@
+              Debugging Symbols: @SYMBOLS@
+                        Asserts: @ASSERTS@
+                      Profiling: @PROFILING@
+             Optimization Level: @OPTIMIZATION@
+
+Linking Options:
+----------------
+                      Libraries: @STATIC_SHARED@
+  Statically Linked Executables: @LT_STATIC_EXEC@
+                        LDFLAGS: @LDFLAGS@
+                     RV_LDFLAGS: @RV_LDFLAGS@
+                     AM_LDFLAGS: @AM_LDFLAGS@
+                Extra libraries: @LIBS@
+                       Archiver: @AR@
+                         Ranlib: @RANLIB@
+
+Languages:
+----------
+                              C: yes
+                     C Compiler: @CC_VERSION@
+                       CPPFLAGS: @CPPFLAGS@
+                    RV_CPPFLAGS: @RV_CPPFLAGS@
+                    AM_CPPFLAGS: @AM_CPPFLAGS@
+                        C Flags: @CFLAGS@
+                     RV C Flags: @RV_CFLAGS@
+                     AM C Flags: @AM_CFLAGS@
+               Shared C Library: @enable_shared@
+               Static C Library: @enable_static@
+
+
+Features:
+---------
+     VOL connector debug output: @CONNECTOR_DEBUG@
+              cURL debug output: @CURL_DEBUG@
+           Using memory checker: @TRACK_MEM_USAGE@

@@ -3,6 +3,9 @@
 /* Define if building universal (internal helper macro) */
 #undef AC_APPLE_UNIVERSAL_BUILD
 
+/* Define to have the REST VOL print out debugging information. */
+#undef CONNECTOR_DEBUG
+
 /* Define to have cURL output debugging information. */
 #undef CURL_DEBUG
 
@@ -101,9 +104,6 @@
 
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
-
-/* Define to have the REST VOL print out debugging information. */
-#undef PLUGIN_DEBUG
 
 /* The size of `bool', as computed by sizeof. */
 #undef SIZEOF_BOOL

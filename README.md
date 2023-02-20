@@ -1,111 +1,106 @@
-# HDF5 REST VOL plugin
+# HDF5 REST VOL connector <!-- omit in toc -->
 
-HDF5 REST VOL plugin version 1.0.0 - currently under development
-
-
-### Table of Contents:
-
-    I. Introduction
-    II. Installation
-        A. Prerequisites
-            i. External Libraries
-            ii. HDF5 REST API server access
-        B. Building the REST VOL plugin
-            i. Obtaining the Source
-            ii. One-Step Build
-                a. Build Script Options
-            iii. Manual Build
-                a. Options for `configure`
-                b. Options for CMake
-            iv. Build Results
-        C. Testing the REST VOL plugin installation
-    III. Using the REST VOL plugin
-        A. Writing HDF5 REST VOL plugin applications
-            i. Skeleton Example
-        B. Building HDF5 REST VOL plugin applications
-        C. Running HDF5 REST VOL plugin applications
-            i. Runtime Environment
-            ii. Example applications
-    IV. Feature Support
-        A. Unsupported HDF5 API calls
-        B. Unsupported HDF5 Features
-        C. Problematic HDF5 Features
-    V. More Information
+HDF5 REST VOL connector - currently under development
 
 
+### Table of Contents: <!-- omit in toc -->
+
+- [I. Introduction](#i-introduction)
+- [II. Installation](#ii-installation)
+  - [II.A. Prerequisites](#iia-prerequisites)
+    - [II.A.i. External Libraries](#iiai-external-libraries)
+    - [II.A.ii. HDF5 REST API server access](#iiaii-hdf5-rest-api-server-access)
+  - [II.B. Building the REST VOL connector](#iib-building-the-rest-vol-connector)
+    - [II.B.i. Obtaining the Source](#iibi-obtaining-the-source)
+    - [II.B.ii. One-step Build](#iibii-one-step-build)
+      - [II.B.ii.a. Build Script Options](#iibiia-build-script-options)
+    - [II.B.iii. Manual Build](#iibiii-manual-build)
+      - [Autotools](#autotools)
+      - [CMake](#cmake)
+      - [II.B.iii.a. Options for `configure`](#iibiiia-options-for-configure)
+      - [II.B.iii.b. Options for CMake](#iibiiib-options-for-cmake)
+    - [II.B.iv. Build Results](#iibiv-build-results)
+- [III. Using/Testing the REST VOL connector](#iii-usingtesting-the-rest-vol-connector)
+- [IV. More Information](#iv-more-information)
 
 # I. Introduction
 
-The REST VOL plugin is a plugin for HDF5 designed with the goal of allowing
-HDF5 applications, both existing and future, to utilize web-based storage
-systems by translating HDF5 API calls into HTTP-based REST calls, as defined
-by the HDF5 REST API (See section V. for more information on RESTful HDF5).
+The HDF5 REST VOL connector is a plugin for HDF5 designed with the goal of
+allowing HDF5 applications to utilize web-based storage systems by translating
+HDF5 API calls into HTTP-based REST calls, as defined by the HDF5 REST API
+(See section V. for more information on RESTful HDF5).
 
-Using a VOL plugin allows an existing HDF5 application to interface with
-different storage systems with minimal changes necessary. The plugin accomplishes
+Using a VOL connector allows an existing HDF5 application to interface with
+different storage systems with minimal changes necessary. The connector accomplishes
 this by utilizing the HDF5 Virtual Object Layer in order to re-route HDF5's
-public API calls to specific callbacks in the plugin which handle all of the
+public API calls to specific callbacks in the connector which handle all of the
 usual HDF5 operations. The HDF5 Virtual Object Layer is an abstraction layer
 that sits directly between HDF5's public API and the underlying storage system.
 In this manner of operation, the mental data model of an HDF5 application can
 be preserved and transparently mapped onto storage systems that differ from a
 native filesystem, such as Amazon's S3.
 
-The REST VOL plugin is under active development, and details given here may
-change.
+The REST VOL connector is under development, and details given here may change.
 
 --------------------------------------------------------------------------------
 
 # II. Installation
 
 Notes and instructions related to obtaining, building and installing the REST VOL
-plugin and accompanying HDF5 library.
-
-
+connector.
 
 ## II.A. Prerequisites
 
-Before building and using the HDF5 REST VOL plugin, a few requirements must be met.
+Before building and using the HDF5 REST VOL connector, a few requirements must be met.
 
 ### II.A.i. External Libraries
 
-To build the REST VOL plugin, the following libraries are required:
+To build the REST VOL connector, the following libraries are required:
 
-+ cURL - networking support
++ libhdf5 - The [HDF5](https://www.hdfgroup.org/downloads/hdf5/) library. The HDF5 library
+            used must be at least version 1.12.0; for convenience, a source distribution of
+            HDF5 has been included with the REST VOL connector and can be used during the
+            build process. If a pre-built HDF5 distribution is being used instead, it should
+            be built as a shared library only for maximal compatibility with the REST VOL
+            connector. Using statically-built HDF5 libraries can cause issues with the REST
+            VOL connector under certain circumstances.
+
++ libcurl - networking support
     + https://curl.haxx.se/
 
-+ YAJL (ver. 2.0.4 or greater) - JSON parsing and construction
++ libyajl (ver. 2.0.4 or greater) - JSON parsing and construction
     + https://lloyd.github.io/yajl/
 
 Compiled libraries must either exist in the system's library paths or must be
-supplied to the REST VOL plugin's build scripts. Refer to section II.B.ii. below
-for more information.
+pointed to during the REST VOL connector build process. Refer to section II.B.ii.
+below for more information.
 
 
 ### II.A.ii. HDF5 REST API server access
 
-Additionally, the HDF5 REST VOL plugin requires access to a server which implements
+Additionally, the HDF5 REST VOL connector requires access to a server which implements
 the HDF5 REST API.
 
 For more information on The HDF Group's officially supported service, please see
 https://www.hdfgroup.org/hdf-kita.
 
 
-## II.B. Building the REST VOL plugin
+## II.B. Building the REST VOL connector
 
 ### II.B.i. Obtaining the Source
 
-The latest and most up-to-date REST VOL plugin code can be viewed at:
+The latest and most up-to-date REST VOL connector code can be viewed at:
 
-https://bitbucket.hdfgroup.org/projects/HDF5VOL/repos/rest/browse
+https://github.com/HDFGroup/vol-rest
 
 and can directly be obtained from:
 
-`git clone https://jhenderson@bitbucket.hdfgroup.org/scm/hdf5vol/rest.git`
+`git clone https://github.com/HDFGroup/vol-rest`
 
-A source distribution of HDF5 has been included in the REST VOL plugin source
-in the `/hdf5` directory. This version of HDF5 has been modified to support
-the REST VOL plugin.
+For building with the 1.12 or later version of the HDF5 library, use the hdf5_1_12_update branch of this repository. 
+
+A source distribution of the HDF5 library has been included in the REST VOL connector
+source in the `/src/hdf5` directory.
 
 ### II.B.ii. One-step Build
 
@@ -123,40 +118,35 @@ system support.
     See section II.B.ii.a for configuration options.
 
 
-By default, all of these build scripts will compile and link with the provided
-HDF5 source distribution. However, if you wish to use a manually built version of
-the HDF5 library, include the flag `-H <dir>` where `dir` is the path to the HDF5
-install prefix. Refer to the documentation in `hdf5/release_docs` (where `hdf5` is
-the HDF5 distribution root directory) for more information on building HDF5 manually.
-Note that if you wish to use a manually built version of the HDF5 library, it must be
-a version which contains the VOL abstraction layer; otherwise, the REST VOL plugin will
-not function correctly.
+By default, these build scripts will compile and link with the provided HDF5 source
+distribution. However, if you wish to use a manually built version of the HDF5 library,
+include the flag `-H <dir>` where `dir` is the path to the HDF5 install prefix.
 
 NOTE: For those who are capable of using both build systems, the autotools build currently
 does not support out-of-tree builds. If the REST VOL source directory is used for an autotools
 build, it is important not to re-use the source directory for a later build using CMake.
-This will causes build conflicts and result in strange and unexpected behavior.
+This can cause build conflicts and result in strange and unexpected behavior.
 
 
-### II.B.ii.a. Build Script Options
+#### II.B.ii.a. Build Script Options
 
 The following configuration options are available to all of the build scripts:
 
     -h      Prints out a help message indicating script usage and available options.
 
-    -d      Enables debugging information printouts within the REST VOL plugin.
+    -d      Enables debugging information printouts within the REST VOL connector.
 
-    -c      Enables debugging information printouts from cURL within the REST VOL plugin.
+    -c      Enables debugging information printouts from cURL within the REST VOL connector.
 
-    -m      Enables memory usage tracking within the REST VOL plugin. This option is
+    -m      Enables memory usage tracking within the REST VOL connector. This option is
             mostly useful in helping to diagnose any possible memory leaks or other
-            memory errors within the plugin.
+            memory errors within the connector.
 
-    -t      Build the HDF5 tools with REST VOL plugin support.
-            WARNING: This option is experimental and should not currently be used.
+    -g      Enables symbolic debugging of the REST VOL code. (Only available for
+            `build_vol_autotools.sh`)
 
-    -P DIR  Specifies where the REST VOL plugin should be installed. The default
-            installation prefix is `rest_vol_build` inside the REST VOL plugin source
+    -P DIR  Specifies where the REST VOL connector should be installed. The default
+            installation prefix is `rest_vol_build` inside the REST VOL connector source
             root directory.
 
     -H DIR  Prevents building of the provided HDF5 source. Instead, uses the compiled
@@ -169,11 +159,11 @@ The following configuration options are available to all of the build scripts:
     -Y DIR  Specifies the top-level directory where YAJL is installed. Used if YAJL is
             not installed to a system path or used to override
 
-Additionally, the CMake build scripts have the following configuration option:
+Additionally, the CMake build scripts have the following configuration options:
 
     -B DIR  Specifies the directory that CMake should use as the build tree location.
             The default build tree location is `rest_vol_cmake_build_files` inside the
-            REST VOL plugin source root directory. Note that the REST VOL does not
+            REST VOL connector source root directory. Note that the REST VOL does not
             support in-source CMake builds.
 
     -G DIR  Specifies the CMake Generator to use when generating the build files
@@ -185,44 +175,58 @@ Additionally, the CMake build scripts have the following configuration option:
 
 ### II.B.iii. Manual Build
 
-In general, the process for building the REST VOL plugin involves either obtaining a VOL-enabled
-HDF5 distribution or building one from source. Then, the REST VOL plugin is built using that
+In general, the process for building the REST VOL connector involves either obtaining a VOL-enabled
+HDF5 distribution or building one from source. Then, the REST VOL connector is built using that
 HDF5 distribution by including the appropriate header files and linking against the HDF5 library.
-
-Once you have a VOL-enabled HDF5 distribution available, follow the instructions below for your
-respective build system in order to build the REST VOL plugin against the HDF5 distribution.
-
-
-Autotools
----------
+If you wish to manually build HDF5 from the included source distribution, first run the following commands from the root directory of the REST VOL connector source code in order to checkout the git submodule and then proceed to build HDF5 as normal.
 
 ```bash
-$ autogen.sh
-$ configure --with-hdf5[=DIR] [options]
+$ git submodule init
+$ git submodule update
+```
+
+Once you have a VOL-enabled HDF5 distribution available, follow the instructions below for your
+respective build system in order to build the REST VOL connector against the HDF5 distribution.
+
+#### Autotools
+
+```bash
+$ cd rest-vol
+$ ./autogen.sh
+$ ./configure --prefix=INSTALL_DIR --with-hdf5=HDF5_DIR [options]
 $ make
 $ make check (requires HDF5 REST API server access -- see section II.A.ii.)
 $ make install
 ```
 
-CMake
------
+#### CMake
+
+First, create a build directory within the source tree:
 
 ```bash
-$ mkdir builddir
-$ cd builddir
-$ cmake -G "CMake Generator (Unix Makefiles, etc.)" -DPREBUILT_HDF5_DIR=built_hdf5_dir [options] rest_vol_src_dir
-$ build command (e.g. `make && make install` for CMake Generator "Unix Makefiles")
+$ cd rest-vol
+$ mkdir build
+$ cd build
 ```
 
-and optionally:
+Then, if all of the required components (HDF5, cURL and YAJL) are located within the system path, building the connector should be as simple as running the following two commands to first have CMake generate the build files to use and then to build the connector. If the required components are located somewhere other than the system path, refer to section II.B.iii.b. for information on how to point to their locations.
+
+```bash
+$ cmake -DPREBUILT_HDF5_DIR=HDF5_DIR [options] ..
+$ make && make install (command may differ depending on platform and cmake generator used)
+```
+
+and, optionally, run the following to generate a system package for the REST VOL connector:
 
 ```bash
 $ cpack
 ```
 
-### II.B.iii.a. Options for `configure`
+The options that can be specified to control the build process are covered in section II.B.iii.b. Note that by default CMake will generate Unix Makefiles for the build, but other build files can be generated by specifying the `-G` option for the `cmake` command; see [CMake Generators](https://cmake.org/cmake/help/v3.16/manual/cmake-generators.7.html) for more information.
 
-When building the REST VOL plugin manually using Autotools, the following options are
+#### II.B.iii.a. Options for `configure`
+
+When building the REST VOL connector manually using Autotools, the following options are
 available to `configure`.
 
 The options in the supplied Autotools build script are mapped to the corresponding options here:
@@ -235,31 +239,27 @@ The options in the supplied Autotools build script are mapped to the correspondi
 
     --enable-build-mode=(production|debug)
                     Sets the build mode to be used.
-                    Debug - enable debugging printouts within the REST VOL plugin.
+                    Debug - enable debugging printouts within the REST VOL connector.
                     Production - Focus more on optimization.
 
     --enable-curl-debug
                     Enables debugging information printouts from cURL within the
-                    REST VOL plugin.
+                    REST VOL connector.
 
     --enable-mem-tracking
-                    Enables memory tracking within the REST VOL plugin. This option is
+                    Enables memory tracking within the REST VOL connector. This option is
                     mostly useful in helping to diagnose any possible memory leaks or
-                    other memory errors within the plugin.
+                    other memory errors within the connector.
 
     --enable-tests
-                    Enables/Disables building of the REST VOL plugin tests.
+                    Enables/Disables building of the REST VOL connector tests.
 
     --enable-examples
                     Enables/Disables building of the REST VOL HDF5 examples.
 
-    --enable-tools
-                    Enables/Disables building of the HDF5 tools with REST VOL plugin
-                    support. (Currently experimental and should not be used)
-
     --with-hdf5=DIR Used to specify the directory where an HDF5 distribution that uses
                     the VOL layer has already been built. This is to help the REST VOL
-                    plugin locate the HDF5 header files that it needs to include.
+                    connector locate the HDF5 header files that it needs to include.
 
     --with-curl=DIR Used to specify the top-level directory where cURL is installed, if
                     cURL is not installed to a system path.
@@ -268,353 +268,75 @@ The options in the supplied Autotools build script are mapped to the correspondi
                     YAJL is not installed to a system path.
 
 
-### II.B.iii.b. Options for CMake
+#### II.B.iii.b. Options for CMake
 
-When building the REST VOL plugin manually using CMake, the following options are available.
+When building the REST VOL connector manually using CMake, the following CMake variables are
+available for controlling the build process. These can be supplied to the `cmake` command by
+prepending them with `-D`. Some of these options may be needed if, for example, the required
+components mentioned previously cannot be found within the system path.
 
-Some of the options in the supplied CMake build script are mapped to the corresponding options here:
+CMake-specific options:
 
-    CMAKE_INSTALL_PREFIX (Default: `rest_vol_build` in REST VOL plugin source root
-                          directory)
-                    Specifies the directory where CMake will install the resulting
-                    files to.
+  * `CMAKE_INSTALL_PREFIX` - This option controls the install directory that the resulting output files are written to. The default value is `/usr/local`.
+  * `CMAKE_BUILD_TYPE` - This option controls the type of build used for the VOL connector. Valid values are Release, Debug, RelWithDebInfo and MinSizeRel; the default build type is RelWithDebInfo.
 
-    PREBUILT_HDF5_DIR (Default: empty)
-                    Specifies a directory which contains a pre-built HDF5
-                    distribution which uses the VOL abstraction layer. By default,
-                    the REST VOL plugin's CMake build will attempt to build the
-                    included HDF5 source distribution, then use that to build the
-                    plugin itself. However, if a VOL-enabled HDF5 distribution
-                    is already available, this option can be set to point to the
-                    directory of the HDF5 distribution. In this case, CMake will
-                    use that HDF5 distribution to build the REST VOL plugin and
-                    will not attempt to build HDF5 again.
+REST VOL Connector-specific options:
 
-    BUILD_SHARED_LIBS (Default: ON)
-                    Enables/Disables building of the REST VOL as a shared library.
-
-    BUILD_STATIC_EXECS (Default: OFF)
-                    Enables/Disables building of REST VOL executables as static
-                    executables.
-
-    REST_VOL_ENABLE_DEBUG (Default: OFF)
-                    Enables/Disables debugging printouts within the REST VOL plugin.
-
-    REST_VOL_ENABLE_CURL_DEBUG (Default: OFF)
-                    Enables/Disables debugging information printouts from cURL within
-                    the REST VOL plugin.
-
-    REST_VOL_ENABLE_MEM_TRACKING (Default: OFF)
-                    Enables/Disables memory tracking withing the REST VOL plugin. This
-                    options is mostly useful in helping to diagnose any possible memory
-                    leaks or other memory errors within the plugin.
-
-    REST_VOL_ENABLE_EXAMPLES (Default: ON)
-                    Enables/Disables building of the REST VOL HDF5 examples.
-
-    BUILD_TESTING (Default: ON)
-                    Enables/Disables building of the REST VOL tests.
+  * `PREBUILT_HDF5_DIR` - Specifies a directory which contains a pre-built HDF5 distribution which uses the VOL abstraction layer. By default, the REST VOL connector's CMake build will attempt to build the included HDF5 source distribution, then use that to build the connector itself. However, if a VOL-enabled HDF5 distribution is already available, this option can be set to point to the directory of the HDF5 distribution. In this case, CMake will use that HDF5 distribution to build the REST VOL connector and will not attempt to build HDF5 again.
+  * `BUILD_TESTING` - This option is used to enable/disable building of the REST VOL connector's tests. The default value is `ON`.
+  * `BUILD_EXAMPLES` - This option is used to enable/disable building of the REST VOL connector's HDF5 examples. The default value is `ON`.
+  * `HDF5_VOL_REST_ENABLE_DEBUG` - Enables/Disables debugging printouts within the REST VOL connector. The default value is `OFF`.
+  * `HDF5_VOL_REST_ENABLE_CURL_DEBUG` - Enables/Disables debugging information printouts from cURL within the REST VOL connector. The default value is `OFF`.
+  * `HDF5_VOL_REST_ENABLE_MEM_TRACKING` - Enables/Disables memory tracking within the REST VOL connector. This option is mostly useful in helping to diagnose any possible memory leaks or other memory errors within the connector. The default value is `OFF`.
 
 ### II.B.iv. Build Results
 
-If the build is successful, files are written into an installation directory. By default,
-these files are placed in `rest_vol_build` in the REST VOL plugin source root directory.
-For Autotools, this default can be overridden with `build_vol_autotools.sh -P DIR`
-(when using the build script) or `configure --prefix=<DIR>` (when building manually).
-For CMake, the equivalent for overriding this default is `build_vol_cmake.sh/.bat -P DIR`
-(when using the build script) or `-DCMAKE_INSTALL_PREFIX=DIR` (when building manually).
+If the build is successful, the following files will be written into the installation directory:
 
-If the REST VOL plugin was built using one of the included build scripts, all of the usual files
+```
+bin/
+
+include/
+     rest_vol_config.h - The header file containing the configuration options for the built REST VOL connector
+     rest_vol_public.h - The REST VOL connector's public header file to include in HDF5 applications
+
+lib/
+    pkgconfig/
+        hdf5_vol_rest.pc - The REST VOL connector pkgconfig file
+
+    libhdf5_vol_rest.so - The REST VOL connector library
+
+share/
+    cmake/
+        hdf5_vol_rest/
+            hdf5_vol_rest-config.cmake
+            hdf5_vol_rest-config-version.cmake
+            hdf5_vol_rest-targets.cmake
+            hdf5_vol_rest-targets-relwithdebinfo.cmake
+```
+
+If the REST VOL connector was built using one of the included build scripts, all of the usual files
 from an HDF5 source build should appear in the respective `bin`, `include`, `lib` and `share`
-directories in the install directory. Notable among these is `bin/h5cc` (when built with
-Autotools), a special-purpose compiler wrapper script that streamlines the process of building
-HDF5 applications.
+directories in the install directory. Notable among these is `bin/h5cc`, a special-purpose compiler wrapper script that streamlines the process of building HDF5 applications.
 
-
-
-## II.C. Testing the REST VOL plugin installation
-
-The REST VOL plugin tests require access to an HDF5 REST API-aware server -- see section II.A.ii and III.C.
-
-After building the REST VOL plugin and obtaining access to a server which implements
-the HDF5 REST API according to the above reference, it is highly advised that you run
-`make check` (for Autotools builds) or `ctest .` (for CMake builds) to verify that
-the HDF5 library and REST VOL plugin are functioning correctly.
-
-Each of these commands will run the `test_rest_vol` executable, which is built by
-each of the REST VOL plugin's build systems and contains a set of tests to cover a
-moderate amount of the HDF5 public API. Alternatively, this executable can simply
-be run directly.
 
 --------------------------------------------------------------------------------
 
-# III. Using the REST VOL plugin
+# III. Using/Testing the REST VOL connector
 
-This section outlines the unique aspects of writing, building and running HDF5
-applications with the REST VOL plugin.
+For information on how to use the REST VOL connector with an HDF5 application,
+as well as how to test that the connector is functioning properly, please refer
+to the REST VOL User's Guide under `docs/users_guide.pdf`.
 
-
-
-## III.A. Writing HDF5 REST VOL plugin applications
-
-Any HDF5 application using the REST VOL plugin must:
-
-+ Include `rest_vol_public.h`, found in the `include` directory of the REST VOL
-  plugin installation directory.
-
-+ Link against `librestvol.a` (or similar), found in the `lib` directory of the
-  REST VOL plugin installation directory.
-
-An HDF5 REST VOL plugin application requires three new function calls in addition
-to those for an equivalent HDF5 application:
-
-+ `RVinit()` - Initializes the REST VOL plugin
-
-    Called upon application startup, before any file is accessed.
-
-
-+ `H5Pset_fapl_rest_vol()` - Set REST VOL plugin access on File Access Property List.
-
-    Called to prepare a FAPL to open a file through the REST VOL plugin. See
-    https://support.hdfgroup.org/HDF5/Tutor/property.html#fa for more information
-    about File Access Property Lists.
-
-
-+ `RVterm()` - Cleanly shutdown the REST VOL plugin
-
-    Called on application shutdown, after all files have been closed.
-
-
-### III.A.i. Skeleton Example
-
-Below is a no-op application that opens and closes a file using the REST VOL plugin.
-For clarity, no error-checking is performed.
-
-```c
-#include "hdf5.h"
-#include "rest_vol_public.h"
-
-int main(void)
-{
-    hid_t fapl_id;
-    hid_t file_id;
-
-    RVinit();
-
-    fapl_id = H5Pcreate(H5P_FILE_ACCESS);
-    H5Pset_fapl_rest_vol(fapl_id);
-    file_id = H5Fopen("my/file.h5");
-
-    /* operate on file */
-
-    H5Pclose(fapl_id);
-    H5Fclose(file_id);
-
-    RVterm();
-
-    return 0;
-}
-```
-
-
-## III.B. Building HDF5 REST VOL plugin applications
-
-Assuming an application has been written following the above instructions, the application
-must be built prior to running. In general, the application should be built as normal for
-any other HDF5 application.
-
-To link in the required libraries, the compiler will likely require the additional linker
-flags: `-lrestvol -lcurl -lyajl`
-
-However, these may vary depending on platform, compiler and installation location of the
-REST VOL plugin.
-
-If the REST VOL plugin was built using Autotools, it is highly recommended that compilation
-of HDF5 REST VOL plugin applications be done using the supplied `h5cc` script, as it will
-manage linking with the HDF5 library. `h5cc` may be found in the `/bin` directory of the
-installation. The above notice about additional libraries applies to usage of `h5cc`.
-For example:
-
-```bash
-h5cc -lrestvol -lcurl -lyajl my_restvol_application.c -o my_executable
-```
-
-
-## III.C. Running HDF5 REST VOL plugin applications
-
-Running applications that use the HDF5 REST VOL plugin requires access to a server which implements
-the [HDF5 REST API](http://hdf-rest-api.readthedocs.io/en/latest/); see section II.A.ii.
-
-### III.C.i. Runtime Environment
-
-For the REST VOL plugin to correctly interact with an HDF5 REST API-aware server instance, there are three
-environment variables (two optional and one required) which should first be set. These are:
-
-* `HSDS_USERNAME` - (optional) The username to use for authentication
-
-* `HSDS_PASSWORD` - (optional) The password to use for authentication
-
-* `HSDS_ENDPOINT` - The base URL of the instance (e.g. http://hsdshdflab.hdfgroup.org)
-
-Note that there are cases where authentication may not be required, such as when simply retrieving
-the information about a publicly-accessible HDF5 dataset or similar. In these cases, it may not be
-necessary to supply any authentication information and just the HSDS_ENDPOINT environment variable
-should be set.
-
-### III.C.ii. Example applications
-
-The file `test/test_rest_vol.c`, in addition to being the source for the REST VOL plugin
-test suite, serves double purpose with each test function being an example application
-in miniature, focused on a particular behavior. This application tests a moderate amount
-of HDF5's public API functionality with the REST VOL plugin and should be a good indicator
-of whether the REST VOL plugin is working correctly in conjunction with a running HDF5 REST
-API-aware instance.
-
-In addition to this file, some of the example C applications included with HDF5
-distributions have been adapted to work with the REST VOL plugin and are included
-under the top-level `examples` directory in the REST VOL plugin source root directory.
 
 --------------------------------------------------------------------------------
 
-# IV. Feature Support
+# IV. More Information
 
-Not all aspects of HDF5 are implemented by or are applicable to the REST VOL plugin.
-
-
-
-## IV.A. Unsupported HDF5 API calls
-
-Due to a combination of lack of server support and the complexity in implementing them,
-or due to a particular call not making sense from the server's perspective, the following
-HDF5 API calls are currently unsupported:
-
-+ H5A interface
-
-    + H5Aopen_by_idx
-    + H5Aget_info_by_idx
-    + H5Aget_name_by_idx
-    + H5Aget_storage_size
-    + H5Adelete_by_idx
-    + H5Arename
-    + H5Arename_by_name
-
-+ H5D interface
-
-    + H5Dget_offset
-    + H5Dget_space_status
-    + H5Dget_storage_size
-    + H5Dset_extent
-
-+ H5F interface
-
-    + H5Fget_obj_count
-    + H5Fget_obj_ids
-    + H5Fflush
-    + H5Fis_accessible
-    + H5Fmount
-    + H5Funmount
-    + H5Fclear_elink_file_cache
-    + H5Fget_file_image
-    + H5Fget_free_sections
-    + H5Fget_freespace
-    + H5Fget_mdc_config
-    + H5Fget_mdc_hit_rate
-    + H5Fget_mdc_size
-    + H5Fget_filesize
-    + H5Fget_vfd_handle
-    + H5Freset_mdc_hit_rate_stats
-    + H5Fset_mdc_config
-
-+ H5G interface
-
-    + H5Gget_info_by_idx
-
-+ H5L interface
-
-    + H5Lget_info_by_idx
-    + H5Lget_name_by_idx
-    + H5Lget_val_by_idx
-    + H5Ldelete_by_idx
-    + H5Lcopy
-    + H5Lmove
-
-+ H5O interface
-
-    + H5Oopen_by_idx
-    + H5Oopen_by_addr
-    + H5Oget_info_by_idx
-    + H5Oincr_refcount
-    + H5Odecr_refcount
-    + H5Oexists_by_name
-    + H5Ovisit
-    + H5Ovisit_by_name
-    + H5Ocopy
-
-+ H5R interface
-
-    + H5Rget_name
-    + H5Rget_region/Region references
-
-
-
-## IV.B. Unsupported HDF5 Features
-
-The following other features are currently unsupported:
-
-+ Dataset Fill Values
-+ Virtual Dataset layouts
-+ External Storage for contiguous dataset layouts
-
-+ Non-predefined integer and floating-point datatypes
-+ Variable-length, Opaque, Bitfield and Time datatypes
-+ Character sets other than `H5T_CSET_ASCII` for string datatypes
-+ String padding values other than `H5T_STR_NULLPAD` for fixed-length strings
-+ String padding values other than `H5T_STR_NULLTERM` for variable-length strings
-  (Note that variable-length string datatypes are currently unsupported by the
-  REST VOL plugin, but a dataset can still be created with a variable-length
-  string type)
-
-+ Non-regular hyperslab selections
-+ Non-contiguous hyperslab selections
-
-+ User-defined links
-+ External links
-
-+ `H5Pset_create_intermediate_group` property (the plugin will not currently
-  create intermediate groups in a path if they do not exist)
-
-
-
-## IV.C. Problematic HDF5 Features
-
-Due to underlying implementation details, the following circumstances are
-known to be problematic for the REST VOL plugin and will likely cause issues
-for the application if not avoided or taken into account:
-
-+ Trying to open an object in the file by using a pathname where one or more
-  components of the path on the way to the object in question are soft links.
-  For example, trying to open a dataset by the pathname
-  `/group/subgroup/soft_link_to_dataset`
-  should work. However, trying to open a dataset using a pathname like
-  `/group/soft_link_to_group/soft_link_to_dataset` will generally fail.
-
-+ Due to a simple `basename` function implementation which follows the GNU
-  behavior, using a trailing `/` on path names will likely confuse the plugin
-  and cause incorrect behavior.
-
-+ The use of point selections for dataset writes will generally incur an additional
-  memory overhead of approximately 4/3 the size of the original buffer used for
-  the `H5Dwrite` call. This is due to the fact that a temporary copy of the buffer
-  must be made and then base64-encoded for the server transfer and base64-encoding
-  generally imposes a 33% overhead.
-
-+ Due to the HDF5 public API call `H5Pset_external` using the `off_t` type, it is
-  possible that compilation of the REST VOL plugin on non-POSIX-compliant systems
-  may fail.
-
---------------------------------------------------------------------------------
-
-# V. More Information
++ HDF in the Cloud
+    + https://www.hdfgroup.org/hdf-kita
+    + https://www.hdfgroup.org/solutions/hdf-cloud
+    + https://www.slideshare.net/HDFEOS/hdf-cloud-services
 
 + RESTful HDF5 - A description of the HDF5 REST API
     + https://support.hdfgroup.org/pubs/papers/RESTful_HDF5.pdf
@@ -628,8 +350,3 @@ for the application if not avoided or taken into account:
     + https://github.com/HDFGroup/h5serv
     + https://support.hdfgroup.org/projects/hdfserver/
     + https://s3.amazonaws.com/hdfgroup/docs/HDFServer_SciPy2015.pdf
-
-+ HDF in the Cloud
-    + https://www.hdfgroup.org/hdf-kita
-    + https://www.hdfgroup.org/solutions/hdf-cloud
-    + https://www.slideshare.net/HDFEOS/hdf-cloud-services

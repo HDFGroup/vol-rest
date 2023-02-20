@@ -8,7 +8,7 @@
 # but only if the requested major.minor version is the same as the current one.
 # The variable HDF5_VERSION_STRING must be set before calling configure_file().
 
-set (PACKAGE_VERSION "@REST_VOL_VERSION_STRING@")
+set (PACKAGE_VERSION "@HDF5_VOL_REST_VERSION_STRING@")
 
 if("${PACKAGE_VERSION}" VERSION_LESS "${PACKAGE_FIND_VERSION}" )
   set(PACKAGE_VERSION_COMPATIBLE FALSE)

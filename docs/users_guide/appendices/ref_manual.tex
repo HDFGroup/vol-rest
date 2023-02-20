@@ -1,0 +1,107 @@
+\documentclass[../users_guide.tex]{subfiles}
+ 
+\begin{document}
+
+\section{Reference Manual}
+\label{apdx:ref_manual}
+
+\subsection{H5rest\_init}
+\label{ref:h5rest_init}
+
+\paragraph{Synopsis:}
+\begin{flushleft}%
+\begin{minted}[breaklines=true,fontsize=\small]{hdf5-c-lexer.py:HDF5CLexer -x}
+herr_t H5rest_init(void);
+\end{minted}
+\end{flushleft}%
+
+\paragraph{Purpose:}
+\begin{flushleft}%
+Initialize the REST VOL connector.
+\end{flushleft}%
+
+\paragraph{Description:}
+\begin{flushleft}%
+\texttt{H5rest\_init} initializes the VOL connector by registering the connector
+with the library, initializing libcurl, and then performing other internal
+setup.
+\end{flushleft}%
+
+\paragraph{Parameters:}
+\begin{flushleft}%
+None.
+\end{flushleft}%
+
+\paragraph{Returns:}
+\begin{flushleft}%
+Returns a non-negative value if successful; otherwise returns a negative value.
+\end{flushleft}%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\subsection{H5rest\_term}
+\label{ref:h5rest_term}
+
+\paragraph{Synopsis:}
+\begin{flushleft}%
+\begin{minted}[breaklines=true,fontsize=\small]{hdf5-c-lexer.py:HDF5CLexer -x}
+herr_t H5rest_term(void);
+\end{minted}
+\end{flushleft}%
+
+\paragraph{Purpose:}
+\begin{flushleft}%
+Terminate the REST VOL connector.
+\end{flushleft}%
+
+\paragraph{Description:}
+\begin{flushleft}%
+\texttt{H5rest\_term} terminates the REST VOL connector.
+\end{flushleft}%
+
+\paragraph{Parameters:}
+\begin{flushleft}%
+None.
+\end{flushleft}%
+
+\paragraph{Returns:}
+\begin{flushleft}%
+Returns a non-negative value if successful; otherwise returns a negative value.
+\end{flushleft}%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\subsection{H5Pset\_fapl\_rest\_vol}
+\label{ref:h5pset_fapl_rest_vol}
+
+\paragraph{Synopsis:}
+\begin{flushleft}%
+\begin{minted}[breaklines=true,fontsize=\small]{hdf5-c-lexer.py:HDF5CLexer -x}
+herr_t H5Pset_fapl_rest_vol(hid_t fapl_id);
+\end{minted}
+\end{flushleft}%
+
+\paragraph{Purpose:}
+\begin{flushleft}%
+Set the file access property list to use the REST VOL connector.
+\end{flushleft}%
+
+\paragraph{Description:}
+\begin{flushleft}%
+\texttt{H5Pset\_fapl\_rest\_vol} modifies the file access property list to use the
+REST VOL connector.
+\end{flushleft}%
+
+\paragraph{Parameters:}
+\begin{flushleft}%
+ \begin{tabular}{ll}%
+   \texttt{hid\_t fapl\_id} & IN: File access property list ID \\
+ \end{tabular}%
+\end{flushleft}%
+
+\paragraph{Returns:}
+\begin{flushleft}%
+Returns a non-negative value if successful; otherwise returns a negative value.
+\end{flushleft}%
+
+\end{document}

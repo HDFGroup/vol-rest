@@ -1,0 +1,45 @@
+\tikzstyle{trans} = [>=latex, thick, text centered, font=\small\sffamily]
+
+\tikzstyle{layer} = [draw, rectangle, minimum width=120pt, minimum height=30pt, thick, font=\sffamily]
+\tikzstyle{connector} = [draw, rectangle, minimum width=20pt, minimum height=60pt, thick, font=\sffamily]
+
+\tikzstyle{layer2} = [draw, rectangle, minimum width=50pt, minimum height=30pt, thick, font=\sffamily]
+
+\tikzstyle{storage} = [cylinder, draw, fill=white, aspect=0.3,
+  shape border rotate=90, minimum height=40pt, minimum width=40pt,
+  align=center, font=\sffamily]
+
+
+\begin{tikzpicture}
+
+\node[layer, fill=yellow] (app) {Application};
+\node[layer, below=10pt of app] (hdf5) {HDF5 API};
+\node[layer, below=10pt of hdf5] (vol) {HDF5 Virtual Object Layer (H5F, H5G, H5D, ...)};
+\node[draw=white, connector, below=10pt of vol] (vol_xxx) {\rotatebox{90}{...}};
+\node[connector, left=50pt of vol_xxx] (vol_native) {\rotatebox{90}{Native}};
+\node[connector, fill=rulecolor!30, right=50pt of vol_xxx] (vol_rest) {\rotatebox{90}{REST}};
+\node[layer2, below=20pt of vol_native] (mpio) {MPI I/O};
+\node[layer2, fill=rulecolor!30, below=20pt of vol_rest] (rest) {REST VOL Client};
+
+\node[storage, below=20pt of mpio] (fs) {File\\ System};
+\node[storage, fill=rulecolor!30, below=20pt of rest] (storage) {HDF5 REST\\ Server};
+
+
+\draw[trans, ->] (app) -- (hdf5);
+\draw[trans, ->] (hdf5) -- (vol);
+\draw[trans, ->] (vol) -- (vol_native);
+\draw[trans, ->] (vol) -- (vol_rest);
+\draw[trans, ->] (vol_native) -- (mpio);
+\draw[trans, ->] (vol_rest) -- (rest);
+\draw[trans, ->] (mpio) -- (fs);
+\draw[trans, ->] (mpio) -- (storage);
+\draw[trans, ->] (rest) -- (storage);
+
+\draw[dashed] ($(mpio.south west)+(-2,-0.3)$) -- node[right=160pt, font=\small\sffamily\itshape] {Network} ($(rest.south east)+(2,-0.3)$);
+\node[below=-15pt of vol_xxx, font=\small\sffamily] (connectors) {VOL connectors};
+
+\node[font=\small\sffamily\bfseries, text width=180pt, text centered, right=10pt of vol_rest] () {\texttt{H5Pset\_fapl\_rest\_vol()} \\or\\ \texttt{export HDF5\_VOL\_CONNECTOR=REST}};
+
+
+\end{tikzpicture}
+

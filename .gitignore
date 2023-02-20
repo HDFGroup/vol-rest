@@ -1,0 +1,78 @@
+# Specific for this repository
+src/stamp-h1
+aclocal.m4
+config.log
+config.lt
+config.status
+configure
+libtool
+Makefile
+Makefile.in
+test/test_rest_vol
+.deps/
+.libs/
+rest_vol_build/
+config/stamp?
+.dirstamp
+libhdf5_vol_rest.settings
+autom4te.cache/
+test/*.log
+m4/
+rest_vol_cmake_build_files/
+test_rest_vol.trs
+bin/
+examples/run-c-ex.sh
+src/rest_vol_config.h*
+
+# Prerequisites
+*.d
+
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Linker output
+*.ilk
+*.map
+*.exp
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Kernel Module Compile Results
+*.mod*
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf
