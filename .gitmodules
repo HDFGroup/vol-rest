@@ -1,6 +1,6 @@
 [submodule "src/hdf5"]
 	path = src/hdf5
-	url = https://bitbucket.hdfgroup.org/scm/hdffv/hdf5.git
+	url = https://github.com/HDFGroup/hdf5.git
 [submodule "test/vol-tests"]
 	path = test/vol-tests
-	url = https://bitbucket.hdfgroup.org/scm/hdf5vol/vol-tests.git
+	url = https://github.com/HDFGroup/vol-tests.git
