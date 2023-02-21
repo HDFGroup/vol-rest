@@ -1965,7 +1965,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
             } /* end else */
 
             if ((attr_iter_object_id = H5VLwrap_register(attr_iter_object, parent_obj_type)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "can't create ID for parent object for attribute iteration");
+                FUNC_GOTO_ERROR(H5E_ID, H5E_CANTREGISTER, FAIL, "can't create ID for parent object for attribute iteration");
             attr_iter_data.iter_obj_id = attr_iter_object_id;
 
             /* Make a GET request to the server to retrieve all of the attributes attached to the given object */

@@ -1116,7 +1116,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
 
             /* Register an hid_t for the group object */
             if ((link_iter_group_id = H5VLwrap_register(link_iter_group_object, H5I_GROUP)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "can't create ID for group to be iterated over");
+                FUNC_GOTO_ERROR(H5E_ID, H5E_CANTREGISTER, FAIL, "can't create ID for group to be iterated over");
             link_iter_data.iter_obj_id = link_iter_group_id;
 
             /* Make a GET request to the server to retrieve all of the links in the given group */

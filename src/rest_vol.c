@@ -301,16 +301,16 @@ H5rest_init(void)
         htri_t is_registered;
 
         if ((is_registered = H5VLis_connector_registered_by_name(H5VL_rest_g.name)) < 0)
-            FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTINIT, FAIL, "can't determine if REST VOL connector is registered");
+            FUNC_GOTO_ERROR(H5E_ID, H5E_CANTINIT, FAIL, "can't determine if REST VOL connector is registered");
 
         if (!is_registered) {
             /* Register connector */
             if ((H5_rest_id_g = H5VLregister_connector((const H5VL_class_t *)&H5VL_rest_g, H5P_DEFAULT)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTINSERT, FAIL, "can't create ID for REST VOL connector");
+                FUNC_GOTO_ERROR(H5E_ID, H5E_CANTINSERT, FAIL, "can't create ID for REST VOL connector");
         } /* end if */
         else {
             if ((H5_rest_id_g = H5VLget_connector_id_by_name(H5VL_rest_g.name)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTGET, FAIL, "unable to get registered ID for REST VOL connector");
+                FUNC_GOTO_ERROR(H5E_ID, H5E_CANTGET, FAIL, "unable to get registered ID for REST VOL connector");
         } /* end else */
     } /* end if */
 

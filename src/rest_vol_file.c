@@ -539,14 +539,18 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t dxpl_id,
         } /* H5VL_FILE_REOPEN */
 
         /* H5Fmount */
+        /*
         case H5VL_FILE_MOUNT:
             FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fmount is unsupported");
             break;
+        */
 
         /* H5Funmount */
+        /*
         case H5VL_FILE_UNMOUNT:
             FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Funmount is unsupported");
             break;
+        */
 
         /* H5Fis_accessible */
         case H5VL_FILE_IS_ACCESSIBLE:
