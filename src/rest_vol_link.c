@@ -73,7 +73,7 @@ const char *link_collection_keys2[] = { "collection", (const char *) 0 };
  *              July, 2017
  */
 herr_t
-RV_link_create(H5VL_link_create_type_t create_type, void *obj, const H5VL_loc_params_t *loc_params,
+RV_link_create(H5VL_link_create_t create_type, void *obj, const H5VL_loc_params_t *loc_params,
     hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, va_list arguments)
 {
     H5VL_loc_params_t *hard_link_target_obj_loc_params = NULL;;
