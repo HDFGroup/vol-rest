@@ -263,7 +263,7 @@ do {                                                                            
  * Print the current location on the standard output stream.
  */
 #define AT()     printf ("   at %s:%d in %s()...\n",                               \
-        __FILE__, __LINE__, FUNC);
+        __FILE__, __LINE__, __func__);
 
 
 /*
