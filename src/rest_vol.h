@@ -59,7 +59,7 @@
 #define HDF5_VOL_REST_VERSION 1
 
 /* Class value of the REST VOL connector, as defined in H5VLpublic.h */
-#define HDF5_VOL_REST_CLS_VAL (H5VL_class_value_t) (H5_VOL_RESERVED + 3)
+#define HDF5_VOL_REST_CLS_VAL (H5VL_class_value_t) (520)
 
 #define HDF5_VOL_REST_NAME "REST"
 

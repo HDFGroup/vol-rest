@@ -33,11 +33,10 @@
  * its responses into
  */
 #define CURL_RESPONSE_BUFFER_DEFAULT_SIZE             1024
-
 /*
  * The VOL connector identification number.
  */
-hid_t H5_rest_id_g = H5I_INVALID_HID;
+hid_t H5_rest_id_g = HDF5_VOL_REST_CLS_VAL;
 
 static hbool_t H5_rest_initialized_g = FALSE;
 
