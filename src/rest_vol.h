@@ -56,7 +56,7 @@
 #endif
 
 /* Version number of the REST VOL connector */
-#define HDF5_VOL_REST_VERSION 1
+#define HDF5_VOL_REST_VERSION 3
 
 /* Class value of the REST VOL connector, as defined in H5VLpublic.h */
 #define HDF5_VOL_REST_CLS_VAL (H5VL_class_value_t) (520)
@@ -280,6 +280,15 @@ do {                                                                            
  * macro is for silencing compiler warnings about those arguments.
  */
 #define UNUSED_VAR(arg) (void) arg;
+
+/* Macro to ensure H5_rest_id_g is initialized. */
+#define H5_REST_G_INIT(ERR)                                                                                  \
+    do {                                                                                                     \
+        if (H5_rest_id_g < 0)                                                                                   \
+            if ((H5_rest_id_g = H5VLpeek_connector_id_by_value(HDF5_VOL_REST_CLS_VAL)) < 0)                   \
+                FUNC_GOTO_ERROR(H5E_ID, H5E_CANTGET, ERR,                                                       \
+                             "unable to get registered ID for REST VOL connector");                          \
+    } while (0)
 
 /**********************************
  *                                *

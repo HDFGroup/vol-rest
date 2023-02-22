@@ -36,7 +36,7 @@
 /*
  * The VOL connector identification number.
  */
-hid_t H5_rest_id_g = HDF5_VOL_REST_CLS_VAL;
+hid_t H5_rest_id_g = H5I_UNINIT;
 
 static hbool_t H5_rest_initialized_g = FALSE;
 
@@ -292,9 +292,6 @@ H5rest_init(void)
     if (H5open() < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "HDF5 failed to initialize");
 
-    if (H5_rest_id_g >= 0 && (idType = H5Iget_type(H5_rest_id_g)) < 0)
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "failed to retrieve REST VOL connector's ID type");
-
     /* Register the REST VOL connector, if it isn't already registered */
     if (H5I_VOL != idType) {
         htri_t is_registered;
@@ -311,6 +308,9 @@ H5rest_init(void)
             if ((H5_rest_id_g = H5VLget_connector_id_by_name(H5VL_rest_g.name)) < 0)
                 FUNC_GOTO_ERROR(H5E_ID, H5E_CANTGET, FAIL, "unable to get registered ID for REST VOL connector");
         } /* end else */
+
+        if (H5_rest_id_g >= 0 && (idType = H5Iget_type(H5_rest_id_g)) < 0)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "failed to retrieve REST VOL connector's ID type");
     } /* end if */
 
     if (!H5_rest_initialized_g && H5_rest_init(H5P_VOL_INITIALIZE_DEFAULT) < 0)
