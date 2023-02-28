@@ -440,7 +440,7 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
         /* H5Fget_intent */
         case H5VL_FILE_GET_INTENT:
         {
-            unsigned *ret_intent = &args->args.get_intent.flags;
+            unsigned *ret_intent = args->args.get_intent.flags;
 
             *ret_intent = _obj->u.file.intent;
 

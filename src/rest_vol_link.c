@@ -73,8 +73,11 @@ const char *link_collection_keys2[] = { "collection", (const char *) 0 };
  *              July, 2017
  */
 herr_t
-RV_link_create(H5VL_link_create_t create_type, void *obj, const H5VL_loc_params_t *loc_params,
-    hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, va_list arguments)
+RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params,
+                  const H5VL_class_t *cls, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req)
+
+/* (H5VL_link_create_t create_type, void *obj, const H5VL_loc_params_t *loc_params,
+    hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, va_list arguments) */
 {
     H5VL_loc_params_t *hard_link_target_obj_loc_params = NULL;;
     RV_object_t       *new_link_loc_obj = (RV_object_t *) obj;
@@ -106,10 +109,10 @@ RV_link_create(H5VL_link_create_t create_type, void *obj, const H5VL_loc_params_
     /* Since the usage of the H5L_SAME_LOC macro for hard link creation may cause new_link_loc_obj to
      * be NULL, do some special-case handling for the Hard Link creation case
      */
-    if (H5VL_LINK_CREATE_HARD == create_type) {
+    if (H5VL_LINK_CREATE_HARD == args->op_type) {
         /* Pre-fetch the target object's relevant information in the case of hard link creation */
-        hard_link_target_obj = va_arg(arguments, void *);
-        hard_link_target_obj_loc_params = va_arg(arguments, H5VL_loc_params_t *);
+        hard_link_target_obj = args->args.hard.curr_obj;
+        hard_link_target_obj_loc_params = &args->args.hard.curr_loc_params;
 
         /* If link_loc_new_obj was NULL, H5L_SAME_LOC was specified as the new link's loc_id.
          * In this case, we use the target object's location as the new link's location.
@@ -127,7 +130,7 @@ RV_link_create(H5VL_link_create_t create_type, void *obj, const H5VL_loc_params_
     if (!(new_link_loc_obj->domain->u.file.intent & H5F_ACC_RDWR))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file");
 
-    switch (create_type) {
+    switch (args->op_type) {
         /* H5Lcreate_hard */
         case H5VL_LINK_CREATE_HARD:
         {
@@ -210,7 +213,7 @@ RV_link_create(H5VL_link_create_t create_type, void *obj, const H5VL_loc_params_
         /* H5Lcreate_soft */
         case H5VL_LINK_CREATE_SOFT:
         {
-            const char *link_target = va_arg(arguments, const char *);
+            const char *link_target = args->args.soft.target;
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Soft link target: %s\n\n", link_target);
@@ -241,9 +244,9 @@ RV_link_create(H5VL_link_create_t create_type, void *obj, const H5VL_loc_params_
         /* H5Lcreate_external and H5Lcreate_ud */
         case H5VL_LINK_CREATE_UD:
         {
-            H5L_type_t  link_type = (H5L_type_t) va_arg(arguments, int);
-            const void *udata_buf = va_arg(arguments, const void *);
-            size_t      udata_buf_size = va_arg(arguments, size_t);
+            H5L_type_t  link_type = args->args.ud.type;
+            const void *udata_buf = args->args.ud.buf;
+            size_t      udata_buf_size = args->args.ud.buf_size;
             const char *file_path, *link_target;
             unsigned    elink_flags;
 
@@ -447,9 +450,12 @@ done:
  *              July, 2017
  */
 herr_t
-RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_t get_type,
-    hid_t dxpl_id, void **req, va_list arguments)
-{
+RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, const H5VL_class_t *cls,
+               H5VL_link_get_args_t *args, hid_t dxpl_id, void **req)
+{               
+               /* (void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_t get_type,
+    hid_t dxpl_id, void **req, va_list arguments) */
+
     RV_object_t *loc_obj = (RV_object_t *) obj;
     hbool_t      empty_dirname;
     size_t       host_header_len = 0;
@@ -469,11 +475,11 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_t get_
     printf("     - Link loc_obj's domain path: %s\n\n", loc_obj->domain->u.file.filepath_name);
 #endif
 
-    switch (get_type) {
+    switch (args->op_type) {
         /* H5Lget_info */
         case H5VL_LINK_GET_INFO:
         {
-            H5L_info2_t *link_info = va_arg(arguments, H5L_info2_t *);
+            H5L_info2_t *link_info = args->args.get_info.linfo;
 
             switch (loc_params->type) {
                 /* H5Lget_info */
@@ -584,9 +590,9 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_t get_
             H5I_type_t             obj_type = H5I_GROUP;
             iter_data              by_idx_data;
             htri_t                 search_ret;
-            char                  *link_name_buf = va_arg(arguments, char *);
-            size_t                 link_name_buf_size = va_arg(arguments, size_t);
-            ssize_t               *ret_size = va_arg(arguments, ssize_t *);
+            char                  *link_name_buf = args->args.get_name.name;
+            size_t                 link_name_buf_size = args->args.get_name.name_size;
+            size_t                *ret_size = args->args.get_name.name_len;
 
             /*
              * NOTE: The current implementation of this function does not do any sort of caching.
@@ -672,8 +678,8 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_t get_
         /* H5Lget_val */
         case H5VL_LINK_GET_VAL:
         {
-            void   *out_buf = va_arg(arguments, void *);
-            size_t  buf_size = va_arg(arguments, size_t);
+            void   *out_buf = args->args.get_val.buf;
+            size_t  buf_size = args->args.get_val.buf_size;
 
             switch (loc_params->type) {
                 /* H5Lget_val */
@@ -816,8 +822,11 @@ done:
  *              July, 2017
  */
 herr_t
-RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_specific_t specific_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, const H5VL_class_t *cls,
+                    H5VL_link_specific_args_t *args, hid_t dxpl_id, void **req)
+                    
+                    /*(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_specific_t specific_type,
+    hid_t dxpl_id, void **req, va_list arguments) */
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
     hbool_t      empty_dirname;
@@ -843,7 +852,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file or group");
 
-    switch (specific_type) {
+    switch (args->op_type) {
         /* H5Ldelete */
         case H5VL_LINK_DELETE:
         {
@@ -942,7 +951,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
         /* H5Lexists */
         case H5VL_LINK_EXISTS:
         {
-            htri_t *ret = va_arg(arguments, htri_t *);
+            htri_t *ret = args->args.exists.exists;
             long    http_response;
 
             /* In case the user specified a path which contains multiple groups on the way to the
@@ -1026,12 +1035,12 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
         {
             iter_data link_iter_data;
 
-            link_iter_data.is_recursive               = va_arg(arguments, int);
-            link_iter_data.index_type                 = va_arg(arguments, H5_index_t);
-            link_iter_data.iter_order                 = va_arg(arguments, H5_iter_order_t);
-            link_iter_data.idx_p                      = va_arg(arguments, hsize_t *);
-            link_iter_data.iter_function.link_iter_op = va_arg(arguments, H5L_iterate_t);
-            link_iter_data.op_data                    = va_arg(arguments, void *);
+            link_iter_data.is_recursive               = args->args.iterate.recursive;
+            link_iter_data.index_type                 = args->args.iterate.idx_type;
+            link_iter_data.iter_order                 = args->args.iterate.order;
+            link_iter_data.idx_p                      = args->args.iterate.idx_p;
+            link_iter_data.iter_function.link_iter_op = args->args.iterate.op;
+            link_iter_data.op_data                    = args->args.iterate.op_data;
 
             if (!link_iter_data.iter_function.link_iter_op)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_LINKITERERROR, FAIL, "no link iteration function specified");
