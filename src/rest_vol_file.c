@@ -393,7 +393,6 @@ done:
 herr_t
 RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
 {
-    /*(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)*/
     RV_object_t *_obj = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
@@ -502,9 +501,7 @@ done:
  *              March, 2017
  */
 herr_t
-RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t dxpl_id,
-    void **req, va_list arguments)
-{
+RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void **req) {
     RV_object_t *file = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
@@ -515,13 +512,13 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t dxpl_id,
         printf("     - File's URI: %s\n", file->URI);
         printf("     - File's pathname: %s\n", file->domain->u.file.filepath_name);
     } /* end if */
-    printf("\n");
+    printf("\n");   
 #endif
 
     if (file && H5I_FILE != file->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file");
 
-    switch (specific_type) {
+    switch (args->op_type) {
         /* H5Fflush */
         case H5VL_FILE_FLUSH:
             FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fflush is unsupported");
@@ -530,7 +527,7 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t dxpl_id,
         /* H5Freopen */
         case H5VL_FILE_REOPEN:
         {
-            void **ret_file = va_arg(arguments, void **);
+            void **ret_file = args->args.reopen.file;
 
             if (NULL == (*ret_file = RV_file_open(file->u.file.filepath_name, file->u.file.intent, file->u.file.fapl_id, dxpl_id, NULL)))
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTOPENOBJ, FAIL, "can't re-open file");
