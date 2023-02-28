@@ -450,8 +450,8 @@ done:
  *              July, 2017
  */
 herr_t
-RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, const H5VL_class_t *cls,
-               H5VL_link_get_args_t *args, hid_t dxpl_id, void **req)
+RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t *args, hid_t dxpl_id,
+                  void **req)
 {               
                /* (void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_t get_type,
     hid_t dxpl_id, void **req, va_list arguments) */
@@ -822,12 +822,12 @@ done:
  *              July, 2017
  */
 herr_t
-RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, const H5VL_class_t *cls,
-                    H5VL_link_specific_args_t *args, hid_t dxpl_id, void **req)
+RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_specific_args_t *args,
+                       hid_t dxpl_id, void **req) { 
                     
                     /*(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_specific_t specific_type,
     hid_t dxpl_id, void **req, va_list arguments) */
-{
+  
     RV_object_t *loc_obj = (RV_object_t *) obj;
     hbool_t      empty_dirname;
     size_t       host_header_len = 0;
