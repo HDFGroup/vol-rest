@@ -55,8 +55,11 @@
 #include "rest_vol_debug.h"   /* REST VOL debugging functions */
 #endif
 
-/* Version number of the REST VOL connector */
+/* Version number of the REST VOL connector's struct */
 #define HDF5_VOL_REST_VERSION 3
+
+/* Version number of the REST VOL connector */
+#define HDF5_VOL_REST_CONN_VERSION 1
 
 /* Class value of the REST VOL connector, as defined in H5VLpublic.h */
 #define HDF5_VOL_REST_CLS_VAL (H5VL_class_value_t) (520)

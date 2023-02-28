@@ -136,9 +136,10 @@ static char *H5_rest_url_encode_path(const char *path);
 
 /* The REST VOL connector's class structure. */
 static const H5VL_class_t H5VL_rest_g = {
-    HDF5_VOL_REST_VERSION,         /* Connector version number              */
+    HDF5_VOL_REST_VERSION,         /* Connector struct version number       */
     HDF5_VOL_REST_CLS_VAL,         /* Connector value                       */
     HDF5_VOL_REST_NAME,            /* Connector name                        */
+    HDF5_VOL_REST_CONN_VERSION,    /* Conector version # */
     H5VL_CAP_FLAG_NONE,            /* Connector capability flags            */
     H5_rest_init,                  /* Connector initialization function     */
     H5_rest_term,                  /* Connector termination function        */
@@ -238,6 +239,7 @@ static const H5VL_class_t H5VL_rest_g = {
     /* Connector introspection callbacks */
     {
         H5_rest_get_conn_cls,      /* Connector introspect 'get class' function */
+        NULL,                        /* Capt flags */
         H5_rest_opt_query,         /* Connector introspect 'opt query' function */
     },
 

@@ -185,7 +185,6 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     printf("-> | Making PUT request to the server |\n");
     printf("   \\**********************************/\n\n");
 #endif
-
     CURL_PERFORM(curl, H5E_FILE, H5E_CANTCREATE, NULL);
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -392,8 +391,9 @@ done:
  *              March, 2017
  */
 herr_t
-RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
 {
+    /*(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)*/
     RV_object_t *_obj = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
@@ -407,7 +407,7 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_l
     if (H5I_FILE != _obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file");
 
-    switch (get_type) {
+    switch (args->op_type) {
         case H5VL_FILE_GET_CONT_INFO:
             FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "get container info is unsupported");
             break;
@@ -415,7 +415,7 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_l
         /* H5Fget_access_plist */
         case H5VL_FILE_GET_FAPL:
         {
-            hid_t *ret_id = va_arg(arguments, hid_t *);
+            hid_t *ret_id = args->args.get_fapl.fapl_id;
 
             if ((*ret_id = H5Pcopy(_obj->u.file.fapl_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy File FAPL");
@@ -426,7 +426,7 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_l
         /* H5Fget_create_plist */
         case H5VL_FILE_GET_FCPL:
         {
-            hid_t *ret_id = va_arg(arguments, hid_t *);
+            hid_t *ret_id = args->args.get_fcpl.fcpl_id;
 
             if ((*ret_id = H5Pcopy(_obj->u.file.fcpl_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy File FCPL");
@@ -441,7 +441,7 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_l
         /* H5Fget_intent */
         case H5VL_FILE_GET_INTENT:
         {
-            unsigned *ret_intent = va_arg(arguments, unsigned *);
+            unsigned *ret_intent = args->args.get_intent.flags;
 
             *ret_intent = _obj->u.file.intent;
 
@@ -451,10 +451,10 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_l
         /* H5Fget_name */
         case H5VL_FILE_GET_NAME:
         {
-            H5I_type_t  obj_type = va_arg(arguments, H5I_type_t);
-            size_t      name_buf_size = va_arg(arguments, size_t);
-            char       *name_buf = va_arg(arguments, char *);
-            ssize_t    *ret_size = va_arg(arguments, ssize_t *);
+            H5I_type_t  obj_type = args->args.get_name.type;
+            size_t      name_buf_size = args->args.get_name.buf_size;
+            char       *name_buf = args->args.get_name.buf;
+            ssize_t    *ret_size = args->args.get_name.file_name_len;
 
             /* Shut up compiler warnings */
             UNUSED_VAR(obj_type);
