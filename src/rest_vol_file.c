@@ -414,7 +414,7 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
         /* H5Fget_access_plist */
         case H5VL_FILE_GET_FAPL:
         {
-            hid_t *ret_id = args->args.get_fapl.fapl_id;
+            hid_t *ret_id = &args->args.get_fapl.fapl_id;
 
             if ((*ret_id = H5Pcopy(_obj->u.file.fapl_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy File FAPL");
@@ -425,7 +425,7 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
         /* H5Fget_create_plist */
         case H5VL_FILE_GET_FCPL:
         {
-            hid_t *ret_id = args->args.get_fcpl.fcpl_id;
+            hid_t *ret_id = &args->args.get_fcpl.fcpl_id;
 
             if ((*ret_id = H5Pcopy(_obj->u.file.fcpl_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy File FCPL");
@@ -440,7 +440,7 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
         /* H5Fget_intent */
         case H5VL_FILE_GET_INTENT:
         {
-            unsigned *ret_intent = args->args.get_intent.flags;
+            unsigned *ret_intent = &args->args.get_intent.flags;
 
             *ret_intent = _obj->u.file.intent;
 
