@@ -1070,7 +1070,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
         case H5VL_ATTR_GET_INFO:
         {
             H5VL_loc_params_t *loc_params = &args->args.get_info.loc_params;
-            H5A_info_t        *attr_info = args->args.get_info.attr_name;
+            H5A_info_t        *attr_info = args->args.get_info.ainfo;
 
             switch (loc_params->type) {
                 /* H5Aget_info */
@@ -1144,7 +1144,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                 /* H5Aget_info_by_name */
                 case H5VL_OBJECT_BY_NAME:
                 {
-                    const char *attr_name = args->args.get_name.buf;
+                    const char *attr_name = args->args.get_info.attr_name;
                     H5I_type_t  parent_obj_type = H5I_UNINIT;
                     hbool_t      search_ret;
                     char        parent_obj_URI[URI_MAX_LENGTH];
