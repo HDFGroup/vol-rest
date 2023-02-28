@@ -134,7 +134,7 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
         /* H5Lcreate_hard */
         case H5VL_LINK_CREATE_HARD:
         {
-            htri_t  search_ret;
+            hbool_t  search_ret;
             char    temp_URI[URI_MAX_LENGTH];
             char   *target_URI;
 
@@ -498,7 +498,7 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, const H5VL_class_t *
                      */
                     if (!empty_dirname) {
                         H5I_type_t obj_type = H5I_GROUP;
-                        htri_t     search_ret;
+                        hbool_t     search_ret;
 
                         search_ret = RV_find_object_by_path(loc_obj, link_dir_name, &obj_type,
                                 RV_copy_object_URI_callback, NULL, temp_URI);
@@ -589,7 +589,7 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, const H5VL_class_t *
             link_name_by_idx_data  link_name_data;
             H5I_type_t             obj_type = H5I_GROUP;
             iter_data              by_idx_data;
-            htri_t                 search_ret;
+            hbool_t                 search_ret;
             char                  *link_name_buf = args->args.get_name.name;
             size_t                 link_name_buf_size = args->args.get_name.name_size;
             size_t                *ret_size = args->args.get_name.name_len;
@@ -698,7 +698,7 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, const H5VL_class_t *
                      */
                     if (!empty_dirname) {
                         H5I_type_t obj_type = H5I_GROUP;
-                        htri_t     search_ret;
+                        hbool_t     search_ret;
 
                         search_ret = RV_find_object_by_path(loc_obj, link_dir_name, &obj_type,
                                 RV_copy_object_URI_callback, NULL, temp_URI);
@@ -872,7 +872,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, const H5VL_clas
                      */
                     if (!empty_dirname) {
                         H5I_type_t obj_type = H5I_GROUP;
-                        htri_t     search_ret;
+                        hbool_t     search_ret;
 
                         search_ret = RV_find_object_by_path(loc_obj, link_path_dirname, &obj_type,
                                 RV_copy_object_URI_callback, NULL, temp_URI);
@@ -951,7 +951,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, const H5VL_clas
         /* H5Lexists */
         case H5VL_LINK_EXISTS:
         {
-            htri_t *ret = args->args.exists.exists;
+            hbool_t *ret = args->args.exists.exists;
             long    http_response;
 
             /* In case the user specified a path which contains multiple groups on the way to the
@@ -966,7 +966,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, const H5VL_clas
              */
             if (!empty_dirname) {
                 H5I_type_t obj_type = H5I_GROUP;
-                htri_t     search_ret;
+                hbool_t     search_ret;
 
                 search_ret = RV_find_object_by_path(loc_obj, link_path_dirname, &obj_type,
                         RV_copy_object_URI_callback, NULL, temp_URI);
