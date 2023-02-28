@@ -70,7 +70,7 @@ RV_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opene
         /* H5Oopen */
         case H5VL_OBJECT_BY_NAME:
         {
-            htri_t search_ret;
+            hbool_t search_ret;
 
             /* Retrieve the type of object being dealt with by querying the server */
             search_ret = RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type, NULL, NULL, NULL);
@@ -236,8 +236,8 @@ done:
  *              December, 2017
  */
 herr_t
-RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t get_type,
-              hid_t dxpl_id, void **req, va_list arguments)
+RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_t *args, hid_t dxpl_id,
+                  void **req)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
     size_t       host_header_len = 0;
@@ -260,7 +260,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t 
         && H5I_DATASET != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file, group, dataset or committed datatype");
 
-    switch (get_type) {
+    switch (args->op_type) {
         case H5VL_OBJECT_GET_FILE:
         case H5VL_OBJECT_GET_NAME:
         case H5VL_OBJECT_GET_TYPE:
@@ -269,8 +269,8 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t 
 
         case H5VL_OBJECT_GET_INFO:
         {
-            H5O_info2_t *obj_info = va_arg(arguments, H5O_info2_t *);
-            unsigned     fields = va_arg(arguments, unsigned);
+            H5O_info2_t *obj_info = args->args.get_info.oinfo;
+            unsigned     fields = args->args.get_info.fields;
             H5I_type_t   obj_type;
 
             switch (loc_params->type) {
@@ -345,7 +345,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_t 
                 /* H5Oget_info_by_name */
                 case H5VL_OBJECT_BY_NAME:
                 {
-                    htri_t search_ret;
+                    hbool_t search_ret;
                     char   temp_URI[URI_MAX_LENGTH];
 
                     obj_type = H5I_UNINIT;
@@ -515,8 +515,8 @@ done:
  *              July, 2017
  */
 herr_t
-RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_t specific_type,
-                   hid_t dxpl_id, void **req, va_list arguments)
+RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_args_t *args,
+                       hid_t dxpl_id, void **req)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
@@ -529,7 +529,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
     printf("     - loc_id object's domain path: %s\n\n", loc_obj->domain->u.file.filepath_name);
 #endif
 
-    switch (specific_type) {
+    switch (args->op_type) {
         /* H5Oincr/decr_refcount */
         case H5VL_OBJECT_CHANGE_REF_COUNT:
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Oincr_refcount and H5Odecr_refcount are unsupported");
