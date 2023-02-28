@@ -21,10 +21,12 @@ extern "C" {
 void   *RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
     hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req);
 void   *RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id, hid_t dxpl_id, void **req);
-herr_t  RV_dataset_read(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t dxpl_id, void *buf, void **req);
-herr_t  RV_dataset_write(void *dset, hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, hid_t dxpl_id, const void *buf, void **req);
-herr_t  RV_dataset_get(void *dset, H5VL_dataset_get_t get_type, hid_t dxpl_id, void **req, va_list arguments);
-herr_t  RV_dataset_specific(void *dset, H5VL_dataset_specific_t specific_type, hid_t dxpl_id, void **req, va_list arguments);
+herr_t  RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space_id[],
+                   hid_t file_space_id[], hid_t dxpl_id, void *buf[], void **req);
+herr_t  RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space_id[],
+                    hid_t file_space_id[], hid_t dxpl_id, const void *buf[], void **req);
+herr_t  RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **req);
+herr_t  RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id, void **req);
 herr_t  RV_dataset_close(void *dset, hid_t dxpl_id, void **req);
 
 #ifdef __cplusplus
