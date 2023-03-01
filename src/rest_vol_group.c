@@ -369,7 +369,7 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received group get call with following parameters:\n");
-    printf("     - Group get call type: %s\n\n", group_get_type_to_string(get_type));
+    printf("     - Group get call type: %s\n\n", group_get_type_to_string(args->op_type));
 #endif
 
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type)

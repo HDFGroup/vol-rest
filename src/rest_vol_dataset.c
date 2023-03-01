@@ -943,7 +943,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset get call with following parameters:\n");
-    printf("     - Dataset get call type: %s\n", dataset_get_type_to_string(get_type));
+    printf("     - Dataset get call type: %s\n", dataset_get_type_to_string(args->op_type));
     printf("     - Dataset's URI: %s\n", dset->URI);
     printf("     - Dataset's object type: %s\n", object_type_to_string(dset->obj_type));
     printf("     - Dataset's domain path: %s\n\n", dset->domain->u.file.filepath_name);
@@ -1037,7 +1037,7 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset-specific call with following parameters:\n");
-    printf("     - Dataset-specific call type: %s\n", dataset_specific_type_to_string(specific_type));
+    printf("     - Dataset-specific call type: %s\n", dataset_specific_type_to_string(args->op_type));
     printf("     - Dataset's URI: %s\n", dset->URI);
     printf("     - Dataset's object type: %s\n", object_type_to_string(dset->obj_type));
     printf("     - Dataset's domain path: %s\n\n", dset->domain->u.file.filepath_name);

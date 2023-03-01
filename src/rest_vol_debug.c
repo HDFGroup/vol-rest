@@ -400,7 +400,7 @@ group_get_type_to_string(H5VL_group_get_t get_type)
  *              December, 2017
  */
 const char*
-link_create_type_to_string(H5VL_link_create_type_t link_create_type)
+link_create_type_to_string(H5VL_link_create_t link_create_type)
 {
     switch (link_create_type) {
         case H5VL_LINK_CREATE_HARD: return "H5VL_LINK_CREATE_HARD";

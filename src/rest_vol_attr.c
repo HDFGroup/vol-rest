@@ -1044,7 +1044,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received attribute get call with following parameters:\n");
-    printf("     - Attribute get call type: %s\n\n", attr_get_type_to_string(get_type));
+    printf("     - Attribute get call type: %s\n\n", attr_get_type_to_string(args->op_type));
 #endif
 
     if (   H5I_ATTR != loc_obj->obj_type
@@ -1398,7 +1398,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received attribute-specific call with following parameters:\n");
-    printf("     - Attribute-specific call type: %s\n\n", attr_specific_type_to_string(specific_type));
+    printf("     - Attribute-specific call type: %s\n\n", attr_specific_type_to_string(args->op_type));
 #endif
 
     if (   H5I_FILE != loc_obj->obj_type

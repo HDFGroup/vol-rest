@@ -93,7 +93,7 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received link create call with following parameters:\n");
     printf("     - Link Name: %s\n", loc_params->loc_data.loc_by_name.name);
-    printf("     - Link Type: %s\n", link_create_type_to_string(create_type));
+    printf("     - Link Type: %s\n", link_create_type_to_string(args->op_type));
     if (new_link_loc_obj) {
         printf("     - Link loc_obj's URI: %s\n", new_link_loc_obj->URI);
         printf("     - Link loc_obj's type: %s\n", object_type_to_string(new_link_loc_obj->obj_type));
@@ -463,7 +463,7 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received link get call with following parameters:\n");
-    printf("     - Link get call type: %s\n", link_get_type_to_string(get_type));
+    printf("     - Link get call type: %s\n", link_get_type_to_string(args->op_type));
     printf("     - Link loc_obj's URI: %s\n", loc_obj->URI);
     printf("     - Link loc_obj's object type: %s\n", object_type_to_string(loc_obj->obj_type));
     printf("     - Link loc_obj's domain path: %s\n\n", loc_obj->domain->u.file.filepath_name);
@@ -833,7 +833,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received link-specific call with following parameters:\n");
-    printf("     - Link-specific call type: %s\n", link_specific_type_to_string(specific_type));
+    printf("     - Link-specific call type: %s\n", link_specific_type_to_string(args->op_type));
     printf("     - Link loc_obj's URI: %s\n", loc_obj->URI);
     printf("     - Link loc_obj's object type: %s\n", object_type_to_string(loc_obj->obj_type));
     printf("     - Link loc_obj's domain path: %s\n\n", loc_obj->domain->u.file.filepath_name);

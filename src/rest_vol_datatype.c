@@ -424,7 +424,7 @@ RV_datatype_get(void *obj, H5VL_datatype_get_args_t *args, hid_t dxpl_id, void *
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received datatype get call with following parameters:\n");
-    printf("     - Datatype get call type: %s\n", datatype_get_type_to_string(get_type));
+    printf("     - Datatype get call type: %s\n", datatype_get_type_to_string(args->op_type));
     printf("     - Datatype's URI: %s\n", dtype->URI);
     printf("     - Datatype's object type: %s\n", object_type_to_string(dtype->obj_type));
     printf("     - Datatype's domain path: %s\n\n", dtype->domain->u.file.filepath_name);

@@ -248,7 +248,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received object get call with following parameters:\n");
-    printf("     - Object get call type: %s\n", object_get_type_to_string(get_type));
+    printf("     - Object get call type: %s\n", object_get_type_to_string(args->op_type));
     printf("     - loc_id object's URI: %s\n", loc_obj->URI);
     printf("     - loc_id object's type: %s\n", object_type_to_string(loc_obj->obj_type));
     printf("     - loc_id object's domain path: %s\n\n", loc_obj->domain->u.file.filepath_name);
@@ -523,7 +523,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received object-specific call with following parameters:\n");
-    printf("     - Object-specific call type: %s\n", object_specific_type_to_string(specific_type));
+    printf("     - Object-specific call type: %s\n", object_specific_type_to_string(args->op_type));
     printf("     - loc_id object's URI: %s\n", loc_obj->URI);
     printf("     - loc_id object's type: %s\n", object_type_to_string(loc_obj->obj_type));
     printf("     - loc_id object's domain path: %s\n\n", loc_obj->domain->u.file.filepath_name);

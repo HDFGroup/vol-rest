@@ -398,7 +398,7 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file get call with following parameters:\n");
-    printf("     - File get call type: %s\n", file_get_type_to_string(get_type));
+    printf("     - File get call type: %s\n", file_get_type_to_string(args->op_type));
     printf("     - File's URI: %s\n", _obj->URI);
     printf("     - File's pathname: %s\n\n", _obj->domain->u.file.filepath_name);
 #endif
@@ -507,7 +507,7 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file-specific call with following parameters:\n");
-    printf("     - File-specific call type: %s\n", file_specific_type_to_string(specific_type));
+    printf("     - File-specific call type: %s\n", file_specific_type_to_string(args->op_type));
     if (file) {
         printf("     - File's URI: %s\n", file->URI);
         printf("     - File's pathname: %s\n", file->domain->u.file.filepath_name);
