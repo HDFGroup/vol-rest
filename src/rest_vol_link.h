@@ -19,7 +19,7 @@ extern "C" {
 
 /* REST VOL Link callbacks */
 herr_t RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params,
-                  const H5VL_class_t *cls, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);
+                     hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req);;
 herr_t RV_link_copy(void *src_obj, const H5VL_loc_params_t *loc_params1,
     void *dst_obj, const H5VL_loc_params_t *loc_params2, hid_t lcpl_id,
     hid_t lapl_id, hid_t dxpl_id, void **req);

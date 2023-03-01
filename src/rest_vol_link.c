@@ -74,10 +74,7 @@ const char *link_collection_keys2[] = { "collection", (const char *) 0 };
  */
 herr_t
 RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t *loc_params,
-                  const H5VL_class_t *cls, hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req)
-
-/* (H5VL_link_create_t create_type, void *obj, const H5VL_loc_params_t *loc_params,
-    hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req, va_list arguments) */
+                     hid_t lcpl_id, hid_t lapl_id, hid_t dxpl_id, void **req)
 {
     H5VL_loc_params_t *hard_link_target_obj_loc_params = NULL;;
     RV_object_t       *new_link_loc_obj = (RV_object_t *) obj;
@@ -453,9 +450,6 @@ herr_t
 RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t *args, hid_t dxpl_id,
                   void **req)
 {               
-               /* (void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_t get_type,
-    hid_t dxpl_id, void **req, va_list arguments) */
-
     RV_object_t *loc_obj = (RV_object_t *) obj;
     hbool_t      empty_dirname;
     size_t       host_header_len = 0;
@@ -824,10 +818,6 @@ done:
 herr_t
 RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_specific_args_t *args,
                        hid_t dxpl_id, void **req) { 
-                    
-                    /*(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_specific_t specific_type,
-    hid_t dxpl_id, void **req, va_list arguments) */
-  
     RV_object_t *loc_obj = (RV_object_t *) obj;
     hbool_t      empty_dirname;
     size_t       host_header_len = 0;
