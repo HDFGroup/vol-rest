@@ -294,6 +294,9 @@ H5rest_init(void)
     if (H5open() < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "HDF5 failed to initialize");
 
+    if (H5_rest_id_g >= 0 && (idType = H5Iget_type(H5_rest_id_g)) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "failed to retrieve REST VOL connector's ID type");
+
     /* Register the REST VOL connector, if it isn't already registered */
     if (H5I_VOL != idType) {
         htri_t is_registered;

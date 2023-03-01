@@ -1323,7 +1323,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
         /* H5Aget_space */
         case H5VL_ATTR_GET_SPACE:
         {
-            hid_t *ret_id = args->args.get_space.space_id;
+            hid_t *ret_id = &args->args.get_space.space_id;
 
             if ((*ret_id = H5Scopy(loc_obj->u.attribute.space_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL, "can't copy attribute's dataspace");
