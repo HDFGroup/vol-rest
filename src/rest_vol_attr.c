@@ -114,7 +114,7 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
 
     /* If this is a call to H5Acreate_by_name, locate the real parent object */
     if (H5VL_OBJECT_BY_NAME == loc_params->type) {
-        hbool_t search_ret;
+        htri_t search_ret;
 
         new_attribute->u.attribute.parent_obj_type = H5I_UNINIT;
 
@@ -437,7 +437,7 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
         /* H5Aopen_by_name */
         case H5VL_OBJECT_BY_NAME:
         {
-            hbool_t search_ret;
+            htri_t search_ret;
 
             /* If this is a call to H5Aopen_by_name, locate the real object that the attribute
              * is attached to by searching the given path
@@ -652,7 +652,7 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
     H5T_class_t  dtype_class;
     hssize_t     file_select_npoints;
     hbool_t      is_transfer_binary = FALSE;
-    hbool_t       is_variable_str;
+    htri_t       is_variable_str;
     size_t       dtype_size;
     size_t       host_header_len = 0;
     char        *host_header = NULL;
@@ -834,7 +834,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
     upload_info  uinfo;
     curl_off_t   write_len;
     hssize_t     file_select_npoints;
-    hbool_t       is_variable_str;
+    htri_t       is_variable_str;
     size_t       dtype_size;
     size_t       write_body_len = 0;
     size_t       host_header_len = 0;
@@ -1146,7 +1146,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                 {
                     const char *attr_name = args->args.get_info.attr_name;
                     H5I_type_t  parent_obj_type = H5I_UNINIT;
-                    hbool_t      search_ret;
+                    htri_t      search_ret;
                     char        parent_obj_URI[URI_MAX_LENGTH];
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1437,7 +1437,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                 /* H5Adelete_by_name */
                 case H5VL_OBJECT_BY_NAME:
                 {
-                    hbool_t search_ret;
+                    htri_t search_ret;
 
                     attr_name = args->args.del.name;
 
@@ -1594,7 +1594,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                 /* H5Aexists_by_name */
                 case H5VL_OBJECT_BY_NAME:
                 {
-                    hbool_t search_ret;
+                    htri_t search_ret;
 
 #ifdef RV_CONNECTOR_DEBUG
                     printf("-> H5Aexists_by_name(): loc_id object type: %s\n", object_type_to_string(loc_obj->obj_type));
@@ -1813,7 +1813,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                 /* H5Aiterate_by_name */
                 case H5VL_OBJECT_BY_NAME:
                 {
-                    hbool_t search_ret;
+                    htri_t search_ret;
 
 #ifdef RV_CONNECTOR_DEBUG
                     printf("-> H5Aiterate_by_name(): loc_id object type: %s\n", object_type_to_string(loc_obj->obj_type));
