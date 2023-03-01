@@ -354,8 +354,6 @@ file_specific_type_to_string(H5VL_file_specific_t specific_type)
     switch (specific_type) {
         case H5VL_FILE_FLUSH:         return "H5VL_FILE_FLUSH";
         case H5VL_FILE_REOPEN:        return "H5VL_FILE_REOPEN";
-        case H5VL_FILE_MOUNT:         return "H5VL_FILE_MOUNT";
-        case H5VL_FILE_UNMOUNT:       return "H5VL_FILE_UNMOUNT";
         case H5VL_FILE_IS_ACCESSIBLE: return "H5VL_FILE_IS_ACCESSIBLE";
         case H5VL_FILE_DELETE:        return "H5VL_FILE_DELETE";
         case H5VL_FILE_IS_EQUAL:      return "H5VL_FILE_IS_EQUAL";
