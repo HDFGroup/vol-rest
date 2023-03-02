@@ -1105,7 +1105,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 
             /* Setup the shape of the array Datatype */
             for (i = 0; i < (size_t) ndims; i++) {
-                if ((bytes_printed = snprintf(array_shape_curr_pos, MAX_NUM_LENGTH, "%s%llu", i > 0 ? "," : "", array_dims[i])) < 0)
+                if ((bytes_printed = snprintf(array_shape_curr_pos, MAX_NUM_LENGTH, "%s%llu", i > 0 ? "," : "", (long long unsigned int) array_dims[i])) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                 if (bytes_printed >= MAX_NUM_LENGTH)

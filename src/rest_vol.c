@@ -2418,7 +2418,7 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
                     CHECKED_REALLOC(shape_out_string, shape_out_string_curr_len, (size_t) buf_ptrdiff + MAX_NUM_LENGTH + 1,
                                     shape_out_string_curr_pos, H5E_DATASPACE, FAIL);
 
-                    if ((bytes_printed = sprintf(shape_out_string_curr_pos, "%s%llu", i > 0 ? "," : "", dims[i])) < 0)
+                    if ((bytes_printed = sprintf(shape_out_string_curr_pos, "%s%llu", i > 0 ? "," : "", (long long unsigned int) dims[i])) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
                     shape_out_string_curr_pos += bytes_printed;
                 } /* end if */
@@ -2439,7 +2439,7 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
                         strcat(maxdims_out_string_curr_pos++, "0");
                     } /* end if */
                     else {
-                        if ((bytes_printed = sprintf(maxdims_out_string_curr_pos, "%s%llu", i > 0 ? "," : "", maxdims[i])) < 0)
+                        if ((bytes_printed = sprintf(maxdims_out_string_curr_pos, "%s%llu", i > 0 ? "," : "", (long long unsigned int) maxdims[i])) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
                         maxdims_out_string_curr_pos += bytes_printed;
                     } /* end else */

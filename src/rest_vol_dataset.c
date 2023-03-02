@@ -2540,7 +2540,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             strcat(chunk_dims_string_curr_pos++, "[");
 
             for (i = 0; i < (size_t) ndims; i++) {
-                if ((bytes_printed = snprintf(chunk_dims_string_curr_pos, MAX_NUM_LENGTH, "%s%llu", i > 0 ? "," : "", chunk_dims[i])) < 0)
+                if ((bytes_printed = snprintf(chunk_dims_string_curr_pos, MAX_NUM_LENGTH, "%s%llu", i > 0 ? "," : "", (long long unsigned int) chunk_dims[i])) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                 if (bytes_printed >= MAX_NUM_LENGTH)
@@ -2968,9 +2968,9 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                     if ((bytes_printed = sprintf(out_string_curr_pos,
                                                  "%s%llu:%llu:%llu",
                                                  i > 0 ? "," : "",
-                                                 start[i],
-                                                 start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1,
-                                                 (stride[i] / block[i])
+                                                 (long long unsigned int) start[i],
+                                                 (long long unsigned int) (start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1),
+                                                 (long long unsigned int) (stride[i] / block[i])
                                          )) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
 
@@ -3048,7 +3048,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                     if (ndims > 1) strcat(out_string_curr_pos++, "[");
 
                     for (j = 0; j < (size_t) ndims; j++) {
-                        if ((bytes_printed = sprintf(out_string_curr_pos, "%s%llu", j > 0 ? "," : "", point_list[(i * (size_t) ndims) + j])) < 0)
+                        if ((bytes_printed = sprintf(out_string_curr_pos, "%s%llu", j > 0 ? "," : "", (long long unsigned int) point_list[(i * (size_t) ndims) + j])) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
 
                         out_string_curr_pos += bytes_printed;
@@ -3116,15 +3116,16 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get regular hyperslab selection");
 
                 for (i = 0; i < (size_t) ndims; i++) {
-                    if ((bytes_printed = sprintf(start_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), start[i])) < 0)
+                    if ((bytes_printed = sprintf(start_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), (long long unsigned int) start[i])) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
                     start_body_curr_pos += bytes_printed;
 
-                    if ((bytes_printed = sprintf(stop_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1)) < 0)
+                    if ((bytes_printed = sprintf(stop_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), 
+                        (long long unsigned int) (start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1))) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
                     stop_body_curr_pos += bytes_printed;
 
-                    if ((bytes_printed = sprintf(step_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), (stride[i] / block[i]))) < 0)
+                    if ((bytes_printed = sprintf(step_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), (long long unsigned int) (stride[i] / block[i]))) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
                     step_body_curr_pos += bytes_printed;
                 } /* end for */
