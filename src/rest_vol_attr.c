@@ -1411,7 +1411,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
         /* H5Adelete (_by_name/_by_idx) */
         case H5VL_ATTR_DELETE:
         {
-            char *attr_name = NULL;
+            const char *attr_name = NULL;
 
             /* Check for write access */
             if (!(loc_obj->domain->u.file.intent & H5F_ACC_RDWR))
