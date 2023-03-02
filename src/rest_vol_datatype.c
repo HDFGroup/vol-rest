@@ -417,15 +417,14 @@ done:
  *              August, 2017
  */
 herr_t
-RV_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t dxpl_id,
-    void **req, va_list arguments)
+RV_datatype_get(void *obj, H5VL_datatype_get_args_t *args, hid_t dxpl_id, void **req)
 {
     RV_object_t *dtype = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received datatype get call with following parameters:\n");
-    printf("     - Datatype get call type: %s\n", datatype_get_type_to_string(get_type));
+    printf("     - Datatype get call type: %s\n", datatype_get_type_to_string(args->op_type));
     printf("     - Datatype's URI: %s\n", dtype->URI);
     printf("     - Datatype's object type: %s\n", object_type_to_string(dtype->obj_type));
     printf("     - Datatype's domain path: %s\n\n", dtype->domain->u.file.filepath_name);
@@ -434,17 +433,26 @@ RV_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t dxpl_id,
     if (H5I_DATATYPE != dtype->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a datatype");
 
-    switch (get_type) {
+    switch (args->op_type) {
+        case H5VL_DATATYPE_GET_BINARY_SIZE:
+        {
+            size_t *binary_size = args->args.get_binary_size.size;
+
+            if (H5Tencode(dtype->u.datatype.dtype_id, NULL, binary_size) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADTYPE, FAIL, "can't determine serialized length of datatype");
+                
+            break;
+        }
         case H5VL_DATATYPE_GET_BINARY:
         {
-            ssize_t *nalloc = va_arg(arguments, ssize_t *);
-            void    *buf = va_arg(arguments, void *);
-            size_t   size = va_arg(arguments, size_t);
+            /* ssize_t *nalloc = va_arg(arguments, ssize_t *); */
+            void    *buf = args->args.get_binary.buf;
+            size_t   size = args->args.get_binary.buf_size;
 
             if (H5Tencode(dtype->u.datatype.dtype_id, buf, &size) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADTYPE, FAIL, "can't determine serialized length of datatype");
 
-            *nalloc = (ssize_t) size;
+            /* *nalloc = (ssize_t) size; */
 
             break;
         } /* H5VL_DATATYPE_GET_BINARY */
@@ -452,7 +460,7 @@ RV_datatype_get(void *obj, H5VL_datatype_get_t get_type, hid_t dxpl_id,
         /* H5Tget_create_plist */
         case H5VL_DATATYPE_GET_TCPL:
         {
-            hid_t *plist_id = va_arg(arguments, hid_t *);
+            hid_t *plist_id = &args->args.get_tcpl.tcpl_id;
 
             /* Retrieve the datatype's creation property list */
             if ((*plist_id = H5Pcopy(dtype->u.datatype.tcpl_id)) < 0)
@@ -1097,7 +1105,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 
             /* Setup the shape of the array Datatype */
             for (i = 0; i < (size_t) ndims; i++) {
-                if ((bytes_printed = snprintf(array_shape_curr_pos, MAX_NUM_LENGTH, "%s%llu", i > 0 ? "," : "", array_dims[i])) < 0)
+                if ((bytes_printed = snprintf(array_shape_curr_pos, MAX_NUM_LENGTH, "%s%" PRIuHSIZE, i > 0 ? "," : "", array_dims[i])) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                 if (bytes_printed >= MAX_NUM_LENGTH)

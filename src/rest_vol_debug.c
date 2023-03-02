@@ -354,8 +354,6 @@ file_specific_type_to_string(H5VL_file_specific_t specific_type)
     switch (specific_type) {
         case H5VL_FILE_FLUSH:         return "H5VL_FILE_FLUSH";
         case H5VL_FILE_REOPEN:        return "H5VL_FILE_REOPEN";
-        case H5VL_FILE_MOUNT:         return "H5VL_FILE_MOUNT";
-        case H5VL_FILE_UNMOUNT:       return "H5VL_FILE_UNMOUNT";
         case H5VL_FILE_IS_ACCESSIBLE: return "H5VL_FILE_IS_ACCESSIBLE";
         case H5VL_FILE_DELETE:        return "H5VL_FILE_DELETE";
         case H5VL_FILE_IS_EQUAL:      return "H5VL_FILE_IS_EQUAL";
@@ -402,7 +400,7 @@ group_get_type_to_string(H5VL_group_get_t get_type)
  *              December, 2017
  */
 const char*
-link_create_type_to_string(H5VL_link_create_type_t link_create_type)
+link_create_type_to_string(H5VL_link_create_t link_create_type)
 {
     switch (link_create_type) {
         case H5VL_LINK_CREATE_HARD: return "H5VL_LINK_CREATE_HARD";

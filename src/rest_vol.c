@@ -33,11 +33,10 @@
  * its responses into
  */
 #define CURL_RESPONSE_BUFFER_DEFAULT_SIZE             1024
-
 /*
  * The VOL connector identification number.
  */
-hid_t H5_rest_id_g = H5I_INVALID_HID;
+hid_t H5_rest_id_g = H5I_UNINIT;
 
 static hbool_t H5_rest_initialized_g = FALSE;
 
@@ -126,7 +125,7 @@ static herr_t H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info);
 
 /* Introspection callbacks */
 static herr_t H5_rest_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const struct H5VL_class_t **conn_cls);
-static herr_t H5_rest_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported);
+static herr_t H5_rest_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, uint64_t *flags);
 
 /* cURL function callbacks */
 static size_t H5_rest_curl_read_data_callback(char *buffer, size_t size, size_t nmemb, void *inptr);
@@ -137,9 +136,10 @@ static char *H5_rest_url_encode_path(const char *path);
 
 /* The REST VOL connector's class structure. */
 static const H5VL_class_t H5VL_rest_g = {
-    HDF5_VOL_REST_VERSION,         /* Connector version number              */
+    HDF5_VOL_REST_VERSION,         /* Connector struct version number       */
     HDF5_VOL_REST_CLS_VAL,         /* Connector value                       */
     HDF5_VOL_REST_NAME,            /* Connector name                        */
+    HDF5_VOL_REST_CONN_VERSION,    /* Conector version # */
     H5VL_CAP_FLAG_NONE,            /* Connector capability flags            */
     H5_rest_init,                  /* Connector initialization function     */
     H5_rest_term,                  /* Connector termination function        */
@@ -239,6 +239,7 @@ static const H5VL_class_t H5VL_rest_g = {
     /* Connector introspection callbacks */
     {
         H5_rest_get_conn_cls,      /* Connector introspect 'get class' function */
+        NULL,                        /* Capt flags */
         H5_rest_opt_query,         /* Connector introspect 'opt query' function */
     },
 
@@ -301,17 +302,20 @@ H5rest_init(void)
         htri_t is_registered;
 
         if ((is_registered = H5VLis_connector_registered_by_name(H5VL_rest_g.name)) < 0)
-            FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTINIT, FAIL, "can't determine if REST VOL connector is registered");
+            FUNC_GOTO_ERROR(H5E_ID, H5E_CANTINIT, FAIL, "can't determine if REST VOL connector is registered");
 
         if (!is_registered) {
             /* Register connector */
             if ((H5_rest_id_g = H5VLregister_connector((const H5VL_class_t *)&H5VL_rest_g, H5P_DEFAULT)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTINSERT, FAIL, "can't create ID for REST VOL connector");
+                FUNC_GOTO_ERROR(H5E_ID, H5E_CANTINSERT, FAIL, "can't create ID for REST VOL connector");
         } /* end if */
         else {
             if ((H5_rest_id_g = H5VLget_connector_id_by_name(H5VL_rest_g.name)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTGET, FAIL, "unable to get registered ID for REST VOL connector");
+                FUNC_GOTO_ERROR(H5E_ID, H5E_CANTGET, FAIL, "unable to get registered ID for REST VOL connector");
         } /* end else */
+
+        if (H5_rest_id_g >= 0 && (idType = H5Iget_type(H5_rest_id_g)) < 0)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "failed to retrieve REST VOL connector's ID type");
     } /* end if */
 
     if (!H5_rest_initialized_g && H5_rest_init(H5P_VOL_INITIALIZE_DEFAULT) < 0)
@@ -1498,15 +1502,15 @@ done:
  *---------------------------------------------------------------------------
  */
 static herr_t
-H5_rest_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported)
+H5_rest_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, uint64_t *flags)
 {
     herr_t ret_value = SUCCEED;
 
-    if (!supported)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "\"supported\" is NULL");
+    if (!flags)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "\"flags\" is NULL");
 
     /* Advertise no current support for any optional operations that are queried. */
-    *supported = FALSE;
+    *flags = FALSE;
 
 done:
     return ret_value;
@@ -2414,7 +2418,7 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
                     CHECKED_REALLOC(shape_out_string, shape_out_string_curr_len, (size_t) buf_ptrdiff + MAX_NUM_LENGTH + 1,
                                     shape_out_string_curr_pos, H5E_DATASPACE, FAIL);
 
-                    if ((bytes_printed = sprintf(shape_out_string_curr_pos, "%s%llu", i > 0 ? "," : "", dims[i])) < 0)
+                    if ((bytes_printed = sprintf(shape_out_string_curr_pos, "%s%" PRIuHSIZE, i > 0 ? "," : "", dims[i])) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
                     shape_out_string_curr_pos += bytes_printed;
                 } /* end if */
@@ -2435,7 +2439,7 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
                         strcat(maxdims_out_string_curr_pos++, "0");
                     } /* end if */
                     else {
-                        if ((bytes_printed = sprintf(maxdims_out_string_curr_pos, "%s%llu", i > 0 ? "," : "", maxdims[i])) < 0)
+                        if ((bytes_printed = sprintf(maxdims_out_string_curr_pos, "%s%" PRIuHSIZE, i > 0 ? "," : "", maxdims[i])) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
                         maxdims_out_string_curr_pos += bytes_printed;
                     } /* end else */

@@ -59,16 +59,6 @@ extern hid_t H5_rest_attr_table_iter_err_min_g;
   #define TRUE true
 #endif
 
-/* Use FUNC to safely handle variations of C99 __func__ keyword handling */
-#ifdef H5_HAVE_C99_FUNC
-#define FUNC __func__
-#elif defined(H5_HAVE_FUNCTION)
-#define FUNC __FUNCTION__
-#else
-#error "We need __func__ or __FUNCTION__ to test function names!"
-#endif
-
-
 /* Error Macros */
 #ifdef H5_NO_DEPRECATED_SYMBOLS
 
@@ -85,7 +75,7 @@ do {                                                                            
     (void)H5Eget_auto2(H5E_DEFAULT, &err_func, NULL);                              \
     if (err_func) {                                                                \
         if (H5_rest_err_stack_g >= 0 && H5_rest_err_class_g >= 0) {                \
-            H5Epush2(H5_rest_err_stack_g, __FILE__, FUNC, __LINE__,                \
+            H5Epush2(H5_rest_err_stack_g, __FILE__,__func__, __LINE__,                \
                     H5_rest_err_class_g, err_major, err_minor, __VA_ARGS__);       \
         }                                                                          \
         else {                                                                     \
@@ -113,7 +103,7 @@ do {                                                                            
     (void)H5Eget_auto2(H5E_DEFAULT, &err_func, NULL);                              \
     if (err_func) {                                                                \
         if (H5_rest_err_stack_g >= 0 && H5_rest_err_class_g >= 0)                  \
-            H5Epush2(H5_rest_err_stack_g, __FILE__, FUNC, __LINE__,                \
+            H5Epush2(H5_rest_err_stack_g, __FILE__,__func__, __LINE__,                \
                     H5_rest_err_class_g, err_major, err_minor, __VA_ARGS__);       \
         else {                                                                     \
             fprintf(stderr, __VA_ARGS__);                                          \
@@ -169,7 +159,7 @@ do {                                                                            
     if (  (is_v2_err && err_func.err_func_v2) ||                                   \
          (!is_v2_err && err_func.err_func_v1) ) {                                  \
         if (H5_rest_err_stack_g >= 0 && H5_rest_err_class_g >= 0) {                \
-            H5Epush2(H5_rest_err_stack_g, __FILE__, FUNC, __LINE__,                \
+            H5Epush2(H5_rest_err_stack_g, __FILE__,__func__, __LINE__,                \
                     H5_rest_err_class_g, err_major, err_minor, __VA_ARGS__);       \
         }                                                                          \
         else {                                                                     \
@@ -210,7 +200,7 @@ do {                                                                            
     if (  (is_v2_err && err_func.err_func_v2) ||                                   \
          (!is_v2_err && err_func.err_func_v1) ) {                                  \
         if (H5_rest_err_stack_g >= 0 && H5_rest_err_class_g >= 0) {                \
-            H5Epush2(H5_rest_err_stack_g, __FILE__, FUNC, __LINE__,                \
+            H5Epush2(H5_rest_err_stack_g, __FILE__,__func__, __LINE__,                \
                     H5_rest_err_class_g, err_major, err_minor, __VA_ARGS__);       \
         }                                                                          \
         else {                                                                     \
@@ -273,7 +263,7 @@ do {                                                                            
  * Print the current location on the standard output stream.
  */
 #define AT()     printf ("   at %s:%d in %s()...\n",                               \
-        __FILE__, __LINE__, FUNC);
+        __FILE__, __LINE__, __func__);
 
 
 /*

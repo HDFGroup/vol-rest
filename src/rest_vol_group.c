@@ -358,7 +358,7 @@ done:
  *              March, 2017
  */
 herr_t
-RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
     size_t       host_header_len = 0;
@@ -369,17 +369,17 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received group get call with following parameters:\n");
-    printf("     - Group get call type: %s\n\n", group_get_type_to_string(get_type));
+    printf("     - Group get call type: %s\n\n", group_get_type_to_string(args->op_type));
 #endif
 
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a group");
 
-    switch (get_type) {
+    switch (args->op_type) {
         /* H5Gget_create_plist */
         case H5VL_GROUP_GET_GCPL:
         {
-            hid_t *ret_id = va_arg(arguments, hid_t *);
+            hid_t *ret_id = &args->args.get_gcpl.gcpl_id;
 
             if ((*ret_id = H5Pcopy(loc_obj->u.group.gcpl_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't get group's GCPL");
@@ -390,8 +390,8 @@ RV_group_get(void *obj, H5VL_group_get_t get_type, hid_t dxpl_id, void **req, va
         /* H5Gget_info */
         case H5VL_GROUP_GET_INFO:
         {
-            H5VL_loc_params_t *loc_params = va_arg(arguments, H5VL_loc_params_t *);
-            H5G_info_t        *group_info = va_arg(arguments, H5G_info_t *);
+            H5VL_loc_params_t *loc_params = &args->args.get_info.loc_params;
+            H5G_info_t        *group_info = args->args.get_info.ginfo;
 
             switch (loc_params->type) {
                 /* H5Gget_info */

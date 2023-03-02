@@ -389,11 +389,11 @@ done:
  *              March, 2017
  */
 herr_t
-RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
-    hid_t file_space_id, hid_t dxpl_id, void *buf, void **req)
+RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space_id[],
+                   hid_t file_space_id[], hid_t dxpl_id, void *buf[], void **req)
 {
     H5S_sel_type  sel_type = H5S_SEL_ALL;
-    RV_object_t  *dataset = (RV_object_t *) obj;
+    RV_object_t  *dataset = (RV_object_t *) dset[0];
     H5T_class_t   dtype_class;
     hssize_t      mem_select_npoints, file_select_npoints;
     hbool_t       is_transfer_binary = FALSE;
@@ -413,21 +413,23 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     printf("     - Dataset's URI: %s\n", dataset->URI);
     printf("     - Dataset's object type: %s\n", object_type_to_string(dataset->obj_type));
     printf("     - Dataset's domain path: %s\n", dataset->domain->u.file.filepath_name);
-    printf("     - Entire memory dataspace selected? %s\n", (mem_space_id == H5S_ALL) ? "yes" : "no");
-    printf("     - Entire file dataspace selected? %s\n", (file_space_id == H5S_ALL) ? "yes" : "no");
+    printf("     - Entire memory dataspace selected? %s\n", (mem_space_id[0] == H5S_ALL) ? "yes" : "no");
+    printf("     - Entire file dataspace selected? %s\n", (file_space_id[0] == H5S_ALL) ? "yes" : "no");
     printf("     - Default DXPL? %s\n\n", (dxpl_id == H5P_DATASET_XFER_DEFAULT) ? "yes" : "no");
 #endif
 
+    if (count > 1)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "multiple datasets are unsupported");
     if (H5I_DATASET != dataset->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a dataset");
-    if (!buf)
+    if (!buf[0])
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "read buffer was NULL");
 
     /* Determine whether it's possible to send the data as a binary blob instead of a JSON array */
-    if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id)))
+    if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id[0])))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
 
-    if ((is_variable_str = H5Tis_variable_str(mem_type_id)) < 0)
+    if ((is_variable_str = H5Tis_variable_str(mem_type_id[0])) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
 
     /* Only perform a binary transfer for fixed-length datatype datasets with an
@@ -437,22 +439,22 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
 
     /* Follow the semantics for the use of H5S_ALL */
-    if (H5S_ALL == mem_space_id && H5S_ALL == file_space_id) {
+    if (H5S_ALL == mem_space_id[0] && H5S_ALL == file_space_id[0]) {
         /* The file dataset's dataspace is used for the memory dataspace
          * and the selection within the memory dataspace is set to the
          * "all" selection. The selection within the file dataset's
          * dataspace is set to the "all" selection.
          */
-        mem_space_id = file_space_id = dataset->u.dataset.space_id;
-        H5Sselect_all(file_space_id);
+        mem_space_id[0] = file_space_id[0] = dataset->u.dataset.space_id;
+        H5Sselect_all(file_space_id[0]);
     } /* end if */
-    else if (H5S_ALL == file_space_id) {
+    else if (H5S_ALL == file_space_id[0]) {
         /* mem_space_id specifies the memory dataspace and the selection
          * within it. The selection within the file dataset's dataspace
          * is set to the "all" selection.
          */
-        file_space_id = dataset->u.dataset.space_id;
-        H5Sselect_all(file_space_id);
+        file_space_id[0] = dataset->u.dataset.space_id;
+        H5Sselect_all(file_space_id[0]);
     } /* end if */
     else {
         /* The file dataset's dataspace is used for the memory dataspace
@@ -461,11 +463,11 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
          * dataspace and the selection from file_space_id is used for
          * memory also.
          */
-        if (H5S_ALL == mem_space_id) {
-            mem_space_id = dataset->u.dataset.space_id;
+        if (H5S_ALL == mem_space_id[0]) {
+            mem_space_id[0] = dataset->u.dataset.space_id;
 
             /* Copy the selection from file_space_id into the mem_space_id. */
-            if (H5Sselect_copy(mem_space_id, file_space_id) < 0)
+            if (H5Sselect_copy(mem_space_id[0], file_space_id[0]) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL, "can't copy selection from file space to memory space");
         } /* end if */
 
@@ -473,18 +475,18 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
          * to "all", convert the selection into JSON */
 
         /* Retrieve the selection type to choose how to format the dataspace selection */
-        if (H5S_SEL_ERROR == (sel_type = H5Sget_select_type(file_space_id)))
+        if (H5S_SEL_ERROR == (sel_type = H5Sget_select_type(file_space_id[0])))
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type");
         is_transfer_binary = is_transfer_binary && (H5S_SEL_POINTS != sel_type);
 
-        if (RV_convert_dataspace_selection_to_string(file_space_id, &selection_body, &selection_body_len, is_transfer_binary) < 0)
+        if (RV_convert_dataspace_selection_to_string(file_space_id[0], &selection_body, &selection_body_len, is_transfer_binary) < 0)
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL, "can't convert dataspace selection to string representation");
     } /* end else */
 
     /* Verify that the number of selected points matches */
-    if ((mem_select_npoints = H5Sget_select_npoints(mem_space_id)) < 0)
+    if ((mem_select_npoints = H5Sget_select_npoints(mem_space_id[0])) < 0)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory dataspace is invalid");
-    if ((file_select_npoints = H5Sget_select_npoints(file_space_id)) < 0)
+    if ((file_select_npoints = H5Sget_select_npoints(file_space_id[0])) < 0)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "file dataspace is invalid");
     if (mem_select_npoints != file_select_npoints)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory selection num points != file selection num points");
@@ -594,23 +596,23 @@ RV_dataset_read(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     if ((H5T_REFERENCE != dtype_class) && (H5T_VLEN != dtype_class) && !is_variable_str) {
         size_t dtype_size;
 
-        if (0 == (dtype_size = H5Tget_size(mem_type_id)))
+        if (0 == (dtype_size = H5Tget_size(mem_type_id[0])))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
 
         /* Scatter the read data out to the supplied read buffer according to the mem_type_id
          * and mem_space_id given */
         read_data_size = (size_t) file_select_npoints * dtype_size;
-        if (H5Dscatter(dataset_read_scatter_op, &read_data_size, mem_type_id, mem_space_id, buf) < 0)
+        if (H5Dscatter(dataset_read_scatter_op, &read_data_size, mem_type_id[0], mem_space_id[0], buf[0]) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL, "can't scatter data to read buffer");
     } /* end if */
     else {
-        if (H5T_STD_REF_OBJ == mem_type_id) {
+        if (H5T_STD_REF_OBJ == mem_type_id[0]) {
             /* Convert the received binary buffer into a buffer of rest_obj_ref_t's */
             if (RV_convert_buffer_to_obj_refs(response_buffer.buffer, (size_t) file_select_npoints,
                     (rv_obj_ref_t **) &obj_ref_buf, &read_data_size) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert ref string/s to object ref array");
 
-            memcpy(buf, obj_ref_buf, read_data_size);
+            memcpy(buf[0], obj_ref_buf, read_data_size);
         } /* end if */
     } /* end else */
 
@@ -650,11 +652,11 @@ done:
  *              March, 2017
  */
 herr_t
-RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
-    hid_t file_space_id, hid_t dxpl_id, const void *buf, void **req)
+RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space_id[],
+                    hid_t file_space_id[], hid_t dxpl_id, const void *buf[], void **req)
 {
     H5S_sel_type  sel_type = H5S_SEL_ALL;
-    RV_object_t  *dataset = (RV_object_t *) obj;
+    RV_object_t  *dataset = (RV_object_t *) dset[0];
     upload_info   uinfo;
     H5T_class_t   dtype_class;
     curl_off_t    write_len;
@@ -677,14 +679,16 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     printf("     - Dataset's URI: %s\n", dataset->URI);
     printf("     - Dataset's object type: %s\n", object_type_to_string(dataset->obj_type));
     printf("     - Dataset's domain path: %s\n", dataset->domain->u.file.filepath_name);
-    printf("     - Entire memory dataspace selected? %s\n", (mem_space_id == H5S_ALL) ? "yes" : "no");
-    printf("     - Entire file dataspace selected? %s\n", (file_space_id == H5S_ALL) ? "yes" : "no");
+    printf("     - Entire memory dataspace selected? %s\n", (mem_space_id[0] == H5S_ALL) ? "yes" : "no");
+    printf("     - Entire file dataspace selected? %s\n", (file_space_id[0] == H5S_ALL) ? "yes" : "no");
     printf("     - Default DXPL? %s\n\n", (dxpl_id == H5P_DATASET_XFER_DEFAULT) ? "yes" : "no");
 #endif
 
+    if (count > 1) 
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "multiple datasets are unsupported");
     if (H5I_DATASET != dataset->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a dataset");
-    if (!buf)
+    if (!buf[0])
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "write buffer was NULL");
 
     /* Check for write access */
@@ -692,10 +696,10 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file");
 
     /* Determine whether it's possible to send the data as a binary blob instead of as JSON */
-    if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id)))
+    if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id[0])))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
 
-    if ((is_variable_str = H5Tis_variable_str(mem_type_id)) < 0)
+    if ((is_variable_str = H5Tis_variable_str(mem_type_id[0])) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
 
     /* Only perform a binary transfer for fixed-length datatype datasets with an
@@ -705,22 +709,22 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
 
     /* Follow the semantics for the use of H5S_ALL */
-    if (H5S_ALL == mem_space_id && H5S_ALL == file_space_id) {
+    if (H5S_ALL == mem_space_id[0] && H5S_ALL == file_space_id[0]) {
         /* The file dataset's dataspace is used for the memory dataspace
          * and the selection within the memory dataspace is set to the
          * "all" selection. The selection within the file dataset's
          * dataspace is set to the "all" selection.
          */
-        mem_space_id = file_space_id = dataset->u.dataset.space_id;
-        H5Sselect_all(file_space_id);
+        mem_space_id[0] = file_space_id[0] = dataset->u.dataset.space_id;
+        H5Sselect_all(file_space_id[0]);
     } /* end if */
-    else if (H5S_ALL == file_space_id) {
+    else if (H5S_ALL == file_space_id[0]) {
         /* mem_space_id specifies the memory dataspace and the selection
          * within it. The selection within the file dataset's dataspace
          * is set to the "all" selection.
          */
-        file_space_id = dataset->u.dataset.space_id;
-        H5Sselect_all(file_space_id);
+        file_space_id[0] = dataset->u.dataset.space_id;
+        H5Sselect_all(file_space_id[0]);
     } /* end if */
     else {
         /* The file dataset's dataspace is used for the memory dataspace
@@ -729,11 +733,11 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
          * dataspace and the selection from file_space_id is used for
          * memory also.
          */
-        if (H5S_ALL == mem_space_id) {
-            mem_space_id = dataset->u.dataset.space_id;
+        if (H5S_ALL == mem_space_id[0]) {
+            mem_space_id[0] = dataset->u.dataset.space_id;
 
             /* Copy the selection from file_space_id into the mem_space_id */
-            if (H5Sselect_copy(mem_space_id, file_space_id) < 0)
+            if (H5Sselect_copy(mem_space_id[0], file_space_id[0]) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL, "can't copy selection from file space to memory space");
         } /* end if */
 
@@ -741,18 +745,18 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
          * to "all", convert the selection into JSON */
 
         /* Retrieve the selection type here for later use */
-        if (H5S_SEL_ERROR == (sel_type = H5Sget_select_type(file_space_id)))
+        if (H5S_SEL_ERROR == (sel_type = H5Sget_select_type(file_space_id[0])))
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type");
         is_transfer_binary = is_transfer_binary && (H5S_SEL_POINTS != sel_type);
 
-        if (RV_convert_dataspace_selection_to_string(file_space_id, &selection_body, &selection_body_len, is_transfer_binary) < 0)
+        if (RV_convert_dataspace_selection_to_string(file_space_id[0], &selection_body, &selection_body_len, is_transfer_binary) < 0)
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL, "can't convert dataspace selection to string representation");
     } /* end else */
 
     /* Verify that the number of selected points matches */
-    if ((mem_select_npoints = H5Sget_select_npoints(mem_space_id)) < 0)
+    if ((mem_select_npoints = H5Sget_select_npoints(mem_space_id[0])) < 0)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory dataspace is invalid");
-    if ((file_select_npoints = H5Sget_select_npoints(file_space_id)) < 0)
+    if ((file_select_npoints = H5Sget_select_npoints(file_space_id[0])) < 0)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "file dataspace is invalid");
     if (mem_select_npoints != file_select_npoints)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory selection num points != file selection num points");
@@ -768,17 +772,17 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
     if ((H5T_REFERENCE != dtype_class) && (H5T_VLEN != dtype_class) && !is_variable_str) {
         size_t dtype_size;
 
-        if (0 == (dtype_size = H5Tget_size(mem_type_id)))
+        if (0 == (dtype_size = H5Tget_size(mem_type_id[0])))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
 
         write_body_len = (size_t) file_select_npoints * dtype_size;
     } /* end if */
     else {
-        if (H5T_STD_REF_OBJ == mem_type_id) {
+        if (H5T_STD_REF_OBJ == mem_type_id[0]) {
             /* Convert the buffer of rest_obj_ref_t's to a binary buffer */
-            if (RV_convert_obj_refs_to_buffer((const rv_obj_ref_t *) buf, (size_t) file_select_npoints, &write_body, &write_body_len) < 0)
+            if (RV_convert_obj_refs_to_buffer((const rv_obj_ref_t *) buf[0], (size_t) file_select_npoints, &write_body, &write_body_len) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert object ref/s to ref string/s");
-            buf = write_body;
+            buf[0] = write_body;
         } /* end if */
     } /* end else */
 
@@ -831,7 +835,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
         if (NULL == (base64_encoded_value = RV_malloc(value_body_len)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate temporary buffer for base64-encoded write buffer");
 
-        if (RV_base64_encode(buf, write_body_len, &base64_encoded_value, &value_body_len) < 0)
+        if (RV_base64_encode(buf[0], write_body_len, &base64_encoded_value, &value_body_len) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTENCODE, FAIL, "can't base64-encode write buffer");
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -859,7 +863,7 @@ RV_dataset_write(void *obj, hid_t mem_type_id, hid_t mem_space_id,
 #endif
     } /* end if */
 
-    uinfo.buffer = is_transfer_binary ? buf : write_body;
+    uinfo.buffer = is_transfer_binary ? buf[0] : write_body;
     uinfo.buffer_size = write_body_len;
 
     /* Check to make sure that the size of the write body can safely be cast to a curl_off_t */
@@ -932,15 +936,14 @@ done:
  *              March, 2017
  */
 herr_t
-RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t dxpl_id,
-    void **req, va_list arguments)
+RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **req)
 {
     RV_object_t *dset = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset get call with following parameters:\n");
-    printf("     - Dataset get call type: %s\n", dataset_get_type_to_string(get_type));
+    printf("     - Dataset get call type: %s\n", dataset_get_type_to_string(args->op_type));
     printf("     - Dataset's URI: %s\n", dset->URI);
     printf("     - Dataset's object type: %s\n", object_type_to_string(dset->obj_type));
     printf("     - Dataset's domain path: %s\n\n", dset->domain->u.file.filepath_name);
@@ -949,11 +952,11 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t dxpl_id,
     if (H5I_DATASET != dset->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a dataset");
 
-    switch (get_type) {
+    switch (args->op_type) {
         /* H5Dget_access_plist */
         case H5VL_DATASET_GET_DAPL:
         {
-            hid_t *ret_id = va_arg(arguments, hid_t *);
+            hid_t *ret_id = &args->args.get_dapl.dapl_id;
 
             if ((*ret_id = H5Pcopy(dset->u.dataset.dapl_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy Dataset DAPL");
@@ -964,7 +967,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t dxpl_id,
         /* H5Dget_create_plist */
         case H5VL_DATASET_GET_DCPL:
         {
-            hid_t *ret_id = va_arg(arguments, hid_t *);
+            hid_t *ret_id = &args->args.get_dcpl.dcpl_id;
 
             if ((*ret_id = H5Pcopy(dset->u.dataset.dcpl_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy Dataset DCPL");
@@ -975,7 +978,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t dxpl_id,
         /* H5Dget_space */
         case H5VL_DATASET_GET_SPACE:
         {
-            hid_t *ret_id = va_arg(arguments, hid_t *);
+            hid_t *ret_id = &args->args.get_space.space_id;
 
             if ((*ret_id = H5Scopy(dset->u.dataset.space_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace of dataset");
@@ -996,7 +999,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_t get_type, hid_t dxpl_id,
         /* H5Dget_type */
         case H5VL_DATASET_GET_TYPE:
         {
-            hid_t *ret_id = va_arg(arguments, hid_t *);
+            hid_t *ret_id = &args->args.get_type.type_id;
 
             if ((*ret_id = H5Tcopy(dset->u.dataset.dtype_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy dataset's datatype");
@@ -1027,15 +1030,14 @@ done:
  *              March, 2017
  */
 herr_t
-RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id, void **req)
 {
     RV_object_t *dset = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset-specific call with following parameters:\n");
-    printf("     - Dataset-specific call type: %s\n", dataset_specific_type_to_string(specific_type));
+    printf("     - Dataset-specific call type: %s\n", dataset_specific_type_to_string(args->op_type));
     printf("     - Dataset's URI: %s\n", dset->URI);
     printf("     - Dataset's object type: %s\n", object_type_to_string(dset->obj_type));
     printf("     - Dataset's domain path: %s\n\n", dset->domain->u.file.filepath_name);
@@ -1044,7 +1046,7 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_t specific_type,
     if (H5I_DATASET != dset->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a dataset");
 
-    switch (specific_type) {
+    switch (args->op_type) {
         /* H5Dset_extent */
         case H5VL_DATASET_SET_EXTENT:
             /* Check for write access */
@@ -2538,7 +2540,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             strcat(chunk_dims_string_curr_pos++, "[");
 
             for (i = 0; i < (size_t) ndims; i++) {
-                if ((bytes_printed = snprintf(chunk_dims_string_curr_pos, MAX_NUM_LENGTH, "%s%llu", i > 0 ? "," : "", chunk_dims[i])) < 0)
+                if ((bytes_printed = snprintf(chunk_dims_string_curr_pos, MAX_NUM_LENGTH, "%s%" PRIuHSIZE, i > 0 ? "," : "", chunk_dims[i])) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                 if (bytes_printed >= MAX_NUM_LENGTH)
@@ -2964,10 +2966,10 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                             out_string_curr_pos, H5E_DATASPACE, FAIL);
 
                     if ((bytes_printed = sprintf(out_string_curr_pos,
-                                                 "%s%llu:%llu:%llu",
+                                                 "%s%" PRIuHSIZE ":%" PRIuHSIZE ":%" PRIuHSIZE,
                                                  i > 0 ? "," : "",
                                                  start[i],
-                                                 start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1,
+                                                 (start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1),
                                                  (stride[i] / block[i])
                                          )) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
@@ -3046,7 +3048,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                     if (ndims > 1) strcat(out_string_curr_pos++, "[");
 
                     for (j = 0; j < (size_t) ndims; j++) {
-                        if ((bytes_printed = sprintf(out_string_curr_pos, "%s%llu", j > 0 ? "," : "", point_list[(i * (size_t) ndims) + j])) < 0)
+                        if ((bytes_printed = sprintf(out_string_curr_pos, "%s%" PRIuHSIZE, j > 0 ? "," : "", point_list[(i * (size_t) ndims) + j])) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
 
                         out_string_curr_pos += bytes_printed;
@@ -3114,15 +3116,15 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get regular hyperslab selection");
 
                 for (i = 0; i < (size_t) ndims; i++) {
-                    if ((bytes_printed = sprintf(start_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), start[i])) < 0)
+                    if ((bytes_printed = sprintf(start_body_curr_pos, "%s%" PRIuHSIZE, (i > 0 ? "," : ""), start[i])) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
                     start_body_curr_pos += bytes_printed;
 
-                    if ((bytes_printed = sprintf(stop_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1)) < 0)
+                    if ((bytes_printed = sprintf(stop_body_curr_pos, "%s%" PRIuHSIZE, (i > 0 ? "," : ""), (start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1))) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
                     stop_body_curr_pos += bytes_printed;
 
-                    if ((bytes_printed = sprintf(step_body_curr_pos, "%s%llu", (i > 0 ? "," : ""), (stride[i] / block[i]))) < 0)
+                    if ((bytes_printed = sprintf(step_body_curr_pos, "%s%" PRIuHSIZE, (i > 0 ? "," : ""), (stride[i] / block[i]))) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
                     step_body_curr_pos += bytes_printed;
                 } /* end for */

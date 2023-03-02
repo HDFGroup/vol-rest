@@ -185,7 +185,6 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     printf("-> | Making PUT request to the server |\n");
     printf("   \\**********************************/\n\n");
 #endif
-
     CURL_PERFORM(curl, H5E_FILE, H5E_CANTCREATE, NULL);
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -392,14 +391,14 @@ done:
  *              March, 2017
  */
 herr_t
-RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
 {
     RV_object_t *_obj = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file get call with following parameters:\n");
-    printf("     - File get call type: %s\n", file_get_type_to_string(get_type));
+    printf("     - File get call type: %s\n", file_get_type_to_string(args->op_type));
     printf("     - File's URI: %s\n", _obj->URI);
     printf("     - File's pathname: %s\n\n", _obj->domain->u.file.filepath_name);
 #endif
@@ -407,7 +406,7 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_l
     if (H5I_FILE != _obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file");
 
-    switch (get_type) {
+    switch (args->op_type) {
         case H5VL_FILE_GET_CONT_INFO:
             FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "get container info is unsupported");
             break;
@@ -415,7 +414,7 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_l
         /* H5Fget_access_plist */
         case H5VL_FILE_GET_FAPL:
         {
-            hid_t *ret_id = va_arg(arguments, hid_t *);
+            hid_t *ret_id = &args->args.get_fapl.fapl_id;
 
             if ((*ret_id = H5Pcopy(_obj->u.file.fapl_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy File FAPL");
@@ -426,7 +425,7 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_l
         /* H5Fget_create_plist */
         case H5VL_FILE_GET_FCPL:
         {
-            hid_t *ret_id = va_arg(arguments, hid_t *);
+            hid_t *ret_id = &args->args.get_fcpl.fcpl_id;
 
             if ((*ret_id = H5Pcopy(_obj->u.file.fcpl_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy File FCPL");
@@ -441,7 +440,7 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_l
         /* H5Fget_intent */
         case H5VL_FILE_GET_INTENT:
         {
-            unsigned *ret_intent = va_arg(arguments, unsigned *);
+            unsigned *ret_intent = args->args.get_intent.flags;
 
             *ret_intent = _obj->u.file.intent;
 
@@ -451,10 +450,10 @@ RV_file_get(void *obj, H5VL_file_get_t get_type, hid_t dxpl_id, void **req, va_l
         /* H5Fget_name */
         case H5VL_FILE_GET_NAME:
         {
-            H5I_type_t  obj_type = va_arg(arguments, H5I_type_t);
-            size_t      name_buf_size = va_arg(arguments, size_t);
-            char       *name_buf = va_arg(arguments, char *);
-            ssize_t    *ret_size = va_arg(arguments, ssize_t *);
+            H5I_type_t  obj_type = args->args.get_name.type;
+            size_t      name_buf_size = args->args.get_name.buf_size;
+            char       *name_buf = args->args.get_name.buf;
+            ssize_t    *ret_size = args->args.get_name.file_name_len;
 
             /* Shut up compiler warnings */
             UNUSED_VAR(obj_type);
@@ -502,26 +501,24 @@ done:
  *              March, 2017
  */
 herr_t
-RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t dxpl_id,
-    void **req, va_list arguments)
-{
+RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void **req) {
     RV_object_t *file = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file-specific call with following parameters:\n");
-    printf("     - File-specific call type: %s\n", file_specific_type_to_string(specific_type));
+    printf("     - File-specific call type: %s\n", file_specific_type_to_string(args->op_type));
     if (file) {
         printf("     - File's URI: %s\n", file->URI);
         printf("     - File's pathname: %s\n", file->domain->u.file.filepath_name);
     } /* end if */
-    printf("\n");
+    printf("\n");   
 #endif
 
     if (file && H5I_FILE != file->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file");
 
-    switch (specific_type) {
+    switch (args->op_type) {
         /* H5Fflush */
         case H5VL_FILE_FLUSH:
             FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fflush is unsupported");
@@ -530,23 +527,13 @@ RV_file_specific(void *obj, H5VL_file_specific_t specific_type, hid_t dxpl_id,
         /* H5Freopen */
         case H5VL_FILE_REOPEN:
         {
-            void **ret_file = va_arg(arguments, void **);
+            void **ret_file = args->args.reopen.file;
 
             if (NULL == (*ret_file = RV_file_open(file->u.file.filepath_name, file->u.file.intent, file->u.file.fapl_id, dxpl_id, NULL)))
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTOPENOBJ, FAIL, "can't re-open file");
 
             break;
         } /* H5VL_FILE_REOPEN */
-
-        /* H5Fmount */
-        case H5VL_FILE_MOUNT:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fmount is unsupported");
-            break;
-
-        /* H5Funmount */
-        case H5VL_FILE_UNMOUNT:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Funmount is unsupported");
-            break;
 
         /* H5Fis_accessible */
         case H5VL_FILE_IS_ACCESSIBLE:

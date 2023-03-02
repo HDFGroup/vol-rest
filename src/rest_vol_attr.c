@@ -1032,7 +1032,7 @@ done:
  *              November, 2017
  */
 herr_t
-RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_list arguments)
+RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
     size_t       host_header_len = 0;
@@ -1044,7 +1044,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received attribute get call with following parameters:\n");
-    printf("     - Attribute get call type: %s\n\n", attr_get_type_to_string(get_type));
+    printf("     - Attribute get call type: %s\n\n", attr_get_type_to_string(args->op_type));
 #endif
 
     if (   H5I_ATTR != loc_obj->obj_type
@@ -1054,11 +1054,11 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
         && H5I_DATASET != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not an attribute, file, group, datatype or dataset");
 
-    switch (get_type) {
+    switch (args->op_type) {
         /* H5Aget_create_plist */
         case H5VL_ATTR_GET_ACPL:
         {
-            hid_t *ret_id = va_arg(arguments, hid_t *);
+            hid_t *ret_id = &args->args.get_acpl.acpl_id;
 
             if ((*ret_id = H5Pcopy(loc_obj->u.attribute.acpl_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy attribute ACPL");
@@ -1069,8 +1069,8 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
         /* H5Aget_info (_by_name/_by_idx) */
         case H5VL_ATTR_GET_INFO:
         {
-            H5VL_loc_params_t *loc_params = va_arg(arguments, H5VL_loc_params_t *);
-            H5A_info_t        *attr_info = va_arg(arguments, H5A_info_t *);
+            H5VL_loc_params_t *loc_params = &args->args.get_info.loc_params;
+            H5A_info_t        *attr_info = args->args.get_info.ainfo;
 
             switch (loc_params->type) {
                 /* H5Aget_info */
@@ -1144,7 +1144,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
                 /* H5Aget_info_by_name */
                 case H5VL_OBJECT_BY_NAME:
                 {
-                    const char *attr_name = va_arg(arguments, const char *);
+                    const char *attr_name = args->args.get_info.attr_name;
                     H5I_type_t  parent_obj_type = H5I_UNINIT;
                     htri_t      search_ret;
                     char        parent_obj_URI[URI_MAX_LENGTH];
@@ -1280,10 +1280,10 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
         /* H5Aget_name (_by_idx) */
         case H5VL_ATTR_GET_NAME:
         {
-            H5VL_loc_params_t *loc_params = va_arg(arguments, H5VL_loc_params_t *);
-            size_t             name_buf_size = va_arg(arguments, size_t);
-            char              *name_buf = va_arg(arguments, char *);
-            ssize_t           *ret_size = va_arg(arguments, ssize_t *);
+            H5VL_loc_params_t *loc_params = &args->args.get_name.loc_params;
+            size_t             name_buf_size = args->args.get_name.buf_size;
+            char              *name_buf = args->args.get_name.buf;
+            size_t            *ret_size = args->args.get_name.attr_name_len;
 
             switch (loc_params->type) {
                 /* H5Aget_name */
@@ -1323,7 +1323,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
         /* H5Aget_space */
         case H5VL_ATTR_GET_SPACE:
         {
-            hid_t *ret_id = va_arg(arguments, hid_t *);
+            hid_t *ret_id = &args->args.get_space.space_id;
 
             if ((*ret_id = H5Scopy(loc_obj->u.attribute.space_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL, "can't copy attribute's dataspace");
@@ -1339,7 +1339,7 @@ RV_attr_get(void *obj, H5VL_attr_get_t get_type, hid_t dxpl_id, void **req, va_l
         /* H5Aget_type */
         case H5VL_ATTR_GET_TYPE:
         {
-            hid_t *ret_id = va_arg(arguments, hid_t *);
+            hid_t *ret_id = &args->args.get_type.type_id;
 
             if ((*ret_id = H5Tcopy(loc_obj->u.attribute.dtype_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy attribute's datatype");
@@ -1380,8 +1380,8 @@ done:
  *              November, 2017
  */
 herr_t
-RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_t specific_type,
-    hid_t dxpl_id, void **req, va_list arguments)
+RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_args_t *args,
+                       hid_t dxpl_id, void **req)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
     H5I_type_t   parent_obj_type = H5I_UNINIT;
@@ -1398,7 +1398,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received attribute-specific call with following parameters:\n");
-    printf("     - Attribute-specific call type: %s\n\n", attr_specific_type_to_string(specific_type));
+    printf("     - Attribute-specific call type: %s\n\n", attr_specific_type_to_string(args->op_type));
 #endif
 
     if (   H5I_FILE != loc_obj->obj_type
@@ -1407,11 +1407,11 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
         && H5I_DATASET != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file, group, datatype or dataset");
 
-    switch (specific_type) {
+    switch (args->op_type) {
         /* H5Adelete (_by_name/_by_idx) */
         case H5VL_ATTR_DELETE:
         {
-            char *attr_name = NULL;
+            const char *attr_name = NULL;
 
             /* Check for write access */
             if (!(loc_obj->domain->u.file.intent & H5F_ACC_RDWR))
@@ -1421,7 +1421,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                 /* H5Adelete */
                 case H5VL_OBJECT_BY_SELF:
                 {
-                    attr_name = va_arg(arguments, char *);
+                    attr_name = args->args.del.name;
                     obj_URI = loc_obj->URI;
                     parent_obj_type = loc_obj->obj_type;
 
@@ -1439,7 +1439,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                 {
                     htri_t search_ret;
 
-                    attr_name = va_arg(arguments, char *);
+                    attr_name = args->args.del.name;
 
 #ifdef RV_CONNECTOR_DEBUG
                     printf("-> H5Adelete_by_name(): loc_id object type: %s\n", object_type_to_string(loc_obj->obj_type));
@@ -1572,8 +1572,8 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
         /* H5Aexists (_by_name) */
         case H5VL_ATTR_EXISTS:
         {
-            const char *attr_name = va_arg(arguments, const char *);
-            htri_t     *ret = va_arg(arguments, htri_t *);
+            const char *attr_name = args->args.exists.name;
+            hbool_t     *ret = args->args.exists.exists;
             long        http_response;
 
             switch (loc_params->type) {
@@ -1734,11 +1734,11 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
             iter_data attr_iter_data;
 
             attr_iter_data.is_recursive               = FALSE;
-            attr_iter_data.index_type                 = va_arg(arguments, H5_index_t);
-            attr_iter_data.iter_order                 = va_arg(arguments, H5_iter_order_t);
-            attr_iter_data.idx_p                      = va_arg(arguments, hsize_t *);
-            attr_iter_data.iter_function.attr_iter_op = va_arg(arguments, H5A_operator2_t);
-            attr_iter_data.op_data                    = va_arg(arguments, void *);
+            attr_iter_data.index_type                 = args->args.iterate.idx_type;
+            attr_iter_data.iter_order                 = args->args.iterate.order;
+            attr_iter_data.idx_p                      = args->args.iterate.idx;
+            attr_iter_data.iter_function.attr_iter_op = args->args.iterate.op;
+            attr_iter_data.op_data                    = args->args.iterate.op_data;
 
             if (!attr_iter_data.iter_function.attr_iter_op)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_ATTRITERERROR, FAIL, "no attribute iteration function specified");
@@ -1965,7 +1965,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
             } /* end else */
 
             if ((attr_iter_object_id = H5VLwrap_register(attr_iter_object, parent_obj_type)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATOM, H5E_CANTREGISTER, FAIL, "can't create ID for parent object for attribute iteration");
+                FUNC_GOTO_ERROR(H5E_ID, H5E_CANTREGISTER, FAIL, "can't create ID for parent object for attribute iteration");
             attr_iter_data.iter_obj_id = attr_iter_object_id;
 
             /* Make a GET request to the server to retrieve all of the attributes attached to the given object */
