@@ -125,7 +125,7 @@ static herr_t H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info);
 
 /* Introspection callbacks */
 static herr_t H5_rest_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const struct H5VL_class_t **conn_cls);
-static herr_t H5_rest_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported);
+static herr_t H5_rest_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, uint64_t *flags);
 
 /* cURL function callbacks */
 static size_t H5_rest_curl_read_data_callback(char *buffer, size_t size, size_t nmemb, void *inptr);
@@ -1502,15 +1502,15 @@ done:
  *---------------------------------------------------------------------------
  */
 static herr_t
-H5_rest_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, hbool_t *supported)
+H5_rest_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, uint64_t *flags)
 {
     herr_t ret_value = SUCCEED;
 
-    if (!supported)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "\"supported\" is NULL");
+    if (!flags)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "\"flags\" is NULL");
 
     /* Advertise no current support for any optional operations that are queried. */
-    *supported = FALSE;
+    *flags = FALSE;
 
 done:
     return ret_value;
