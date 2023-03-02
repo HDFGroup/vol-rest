@@ -70,7 +70,7 @@ RV_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opene
         /* H5Oopen */
         case H5VL_OBJECT_BY_NAME:
         {
-            hbool_t search_ret;
+            htri_t search_ret;
 
             /* Retrieve the type of object being dealt with by querying the server */
             search_ret = RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type, NULL, NULL, NULL);
@@ -345,7 +345,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                 /* H5Oget_info_by_name */
                 case H5VL_OBJECT_BY_NAME:
                 {
-                    hbool_t search_ret;
+                    htri_t search_ret;
                     char   temp_URI[URI_MAX_LENGTH];
 
                     obj_type = H5I_UNINIT;

@@ -288,7 +288,7 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *dataset = NULL;
     H5I_type_t   obj_type = H5I_UNINIT;
-    hbool_t       search_ret;
+    htri_t       search_ret;
     void        *ret_value = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -397,7 +397,7 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space
     H5T_class_t   dtype_class;
     hssize_t      mem_select_npoints, file_select_npoints;
     hbool_t       is_transfer_binary = FALSE;
-    hbool_t        is_variable_str;
+    htri_t        is_variable_str;
     size_t        read_data_size;
     size_t        selection_body_len = 0;
     size_t        host_header_len = 0;
@@ -662,7 +662,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
     curl_off_t    write_len;
     hssize_t      mem_select_npoints, file_select_npoints;
     hbool_t       is_transfer_binary = FALSE;
-    hbool_t        is_variable_str;
+    htri_t        is_variable_str;
     size_t        host_header_len = 0;
     size_t        write_body_len = 0;
     size_t        selection_body_len = 0;
@@ -2754,7 +2754,7 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name,
          */
         if (!empty_dirname) {
             H5I_type_t obj_type = H5I_GROUP;
-            hbool_t     search_ret;
+            htri_t     search_ret;
 
             search_ret = RV_find_object_by_path(pobj, path_dirname, &obj_type,
                     RV_copy_object_URI_callback, NULL, target_URI);
