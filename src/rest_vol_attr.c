@@ -1339,7 +1339,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
         /* H5Aget_type */
         case H5VL_ATTR_GET_TYPE:
         {
-            hid_t *ret_id = &args->args.get_storage_size.data_size;
+            hid_t *ret_id = &args->args.get_type.type_id;
 
             if ((*ret_id = H5Tcopy(loc_obj->u.attribute.dtype_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy attribute's datatype");
