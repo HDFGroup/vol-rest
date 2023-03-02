@@ -1601,7 +1601,7 @@ RV_get_link_name_by_idx_callback(char *HTTP_response, void *callback_data_in, vo
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link index number larger than number of links");
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> Retrieving link name of link at index %llu\n\n", (long long unsigned int) *by_idx_data->idx_p);
+    printf("-> Retrieving link name of link at index %PRIuHSIZE\n\n", *by_idx_data->idx_p);
 #endif
 
     /* Retrieve the nth link name */
@@ -1622,7 +1622,7 @@ RV_get_link_name_by_idx_callback(char *HTTP_response, void *callback_data_in, vo
         link_name_data->link_name_len = strlen(selected_link_entry.link_name);
 
 #ifdef RV_CONNECTOR_DEBUG
-        printf("-> Returning link name length of %llu\n\n", (long long unsigned int) link_name_data->link_name_len);
+        printf("-> Returning link name length of %" PRIuHSIZE "\n\n", link_name_data->link_name_len);
 #endif
     }
 
