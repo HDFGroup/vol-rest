@@ -2415,11 +2415,14 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
                     if (buf_ptrdiff < 0)
                         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");
 
-                    CHECKED_REALLOC(shape_out_string, shape_out_string_curr_len, (size_t) buf_ptrdiff + MAX_NUM_LENGTH + 1,
+                    size_t shape_out_string_new_len = (size_t) buf_ptrdiff + MAX_NUM_LENGTH + 1;
+                    
+                    CHECKED_REALLOC(shape_out_string, shape_out_string_curr_len, shape_out_string_new_len,
                                     shape_out_string_curr_pos, H5E_DATASPACE, FAIL);
 
-                    if ((bytes_printed = sprintf(shape_out_string_curr_pos, "%s%" PRIuHSIZE, i > 0 ? "," : "", dims[i])) < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
+                    if ((bytes_printed = snprintf(shape_out_string_curr_pos, \
+                    shape_out_string_new_len - (size_t) buf_ptrdiff,"%s%" PRIuHSIZE, i > 0 ? "," : "", dims[i])) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
                     shape_out_string_curr_pos += bytes_printed;
                 } /* end if */
 
@@ -2428,7 +2431,9 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
                     if (buf_ptrdiff < 0)
                         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");
 
-                    CHECKED_REALLOC(maxdims_out_string, maxdims_out_string_curr_len, (size_t) buf_ptrdiff + MAX_NUM_LENGTH + 1,
+                    size_t maxdims_out_string_new_len = (size_t) buf_ptrdiff + MAX_NUM_LENGTH + 1;
+
+                    CHECKED_REALLOC(maxdims_out_string, maxdims_out_string_curr_len, maxdims_out_string_new_len,
                                     maxdims_out_string_curr_pos, H5E_DATASPACE, FAIL);
 
                     /* According to the server specification, unlimited dimension extents should be specified
@@ -2439,8 +2444,9 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
                         strcat(maxdims_out_string_curr_pos++, "0");
                     } /* end if */
                     else {
-                        if ((bytes_printed = sprintf(maxdims_out_string_curr_pos, "%s%" PRIuHSIZE, i > 0 ? "," : "", maxdims[i])) < 0)
-                            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
+                        if ((bytes_printed = snprintf(maxdims_out_string_curr_pos, \
+                        maxdims_out_string_new_len - (size_t) maxdims_out_string_curr_pos,"%s%" PRIuHSIZE, i > 0 ? "," : "", maxdims[i])) < 0)
+                            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
                         maxdims_out_string_curr_pos += bytes_printed;
                     } /* end else */
                 } /* end if */
