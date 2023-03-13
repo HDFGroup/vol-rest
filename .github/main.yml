@@ -1,6 +1,6 @@
 name: Test REST VOL with socket
 
-on: workflow_dispatch
+on: [workflow_dispatch, push]
 
 jobs:                              
   build_and_test_rest_vol:
