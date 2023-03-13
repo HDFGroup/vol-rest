@@ -140,7 +140,7 @@ static const H5VL_class_t H5VL_rest_g = {
     HDF5_VOL_REST_CLS_VAL,         /* Connector value                       */
     HDF5_VOL_REST_NAME,            /* Connector name                        */
     HDF5_VOL_REST_CONN_VERSION,    /* Conector version # */
-    H5VL_CAP_FLAG_NONE,            /* Connector capability flags            */
+    H5VL_VOL_REST_CAP_FLAGS,       /* Connector capability flags            */
     H5_rest_init,                  /* Connector initialization function     */
     H5_rest_term,                  /* Connector termination function        */
 
@@ -863,7 +863,7 @@ H5_rest_set_connection_information(void)
     } /* end else */
 
     #endif
-    
+
     if (!base_URL)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "must specify a base URL - please set HSDS_ENDPOINT environment variable or create a config file");
 
