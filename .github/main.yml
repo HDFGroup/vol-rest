@@ -1,4 +1,4 @@
-name: Test REST VOL
+name: Test REST VOL with socket
 
 on:
   workflow_dispatch:
