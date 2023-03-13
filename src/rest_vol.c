@@ -140,7 +140,7 @@ static const H5VL_class_t H5VL_rest_g = {
     HDF5_VOL_REST_CLS_VAL,         /* Connector value                       */
     HDF5_VOL_REST_NAME,            /* Connector name                        */
     HDF5_VOL_REST_CONN_VERSION,    /* Conector version # */
-    H5VL_VOL_REST_CAP_FLAGS,            /* Connector capability flags            */
+    H5VL_CAP_FLAG_NONE,            /* Connector capability flags            */
     H5_rest_init,                  /* Connector initialization function     */
     H5_rest_term,                  /* Connector termination function        */
 
@@ -394,6 +394,14 @@ H5_rest_init(hid_t vipl_id)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent))
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "error while setting CURL option (CURLOPT_USERAGENT)");
 
+
+    #ifdef RV_CURL_SOCKET
+    char* socket_path = "/tmp/hs/sn_1.sock";
+
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UNIX_SOCKET_PATH, socket_path))
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL socket path header: %s", curl_err_buf);
+    #endif RV_CURL_SOCKET
+
 #ifdef RV_CURL_DEBUG
     /* Enable cURL debugging output if desired */
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
@@ -639,6 +647,58 @@ H5_rest_set_connection_information(void)
      * Attempt to pull in configuration/authentication information from
      * the environment.
      */
+    #ifdef RV_CURL_SOCKET
+    
+      /* This is just a placeholder URL for curl's syntax, its specific value is unimportant */
+      URL = "0";
+      URL_len = 1; 
+
+      if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for placeholder base URL");
+    
+      strncpy(base_URL, URL, URL_len);
+      base_URL[URL_len] = '\0';
+
+      /* Get username/password and authenticate as normal in the env case*/
+      const char *username = getenv("HSDS_USERNAME");
+      const char *password = getenv("HSDS_PASSWORD");
+
+    if (username || password) {
+        /* Attempt to set authentication information */
+        if (username && strlen(username)) {
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, username))
+                FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf);
+        } /* end if */
+
+        if (password && strlen(password)) {
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, password))
+                FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf);
+        } /* end if */
+    } /* end if */
+    else {
+        const char *clientID = getenv("HSDS_AD_CLIENT_ID");
+        const char *tenantID = getenv("HSDS_AD_TENANT_ID");
+        const char *resourceID = getenv("HSDS_AD_RESOURCE_ID");
+        const char *client_secret = getenv("HSDS_AD_CLIENT_SECRET");
+
+        if (clientID)
+            strncpy(ad_info.clientID, clientID, sizeof(ad_info.clientID) - 1);
+        if (tenantID)
+            strncpy(ad_info.tenantID, tenantID, sizeof(ad_info.tenantID) - 1);
+        if (resourceID)
+            strncpy(ad_info.resourceID, resourceID, sizeof(ad_info.resourceID) - 1);
+        if (client_secret) {
+            ad_info.unattended = TRUE;
+            strncpy(ad_info.client_secret, client_secret, sizeof(ad_info.client_secret) - 1);
+        } /* end if */
+
+        /* Attempt authentication with Active Directory */
+        if (H5_rest_authenticate_with_AD(&ad_info) < 0)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't authenticate with Active Directory");
+    } /* end else */
+    #endif
+
+    #ifndef RV_CURL_SOCKET
     if ((URL = getenv("HSDS_ENDPOINT"))) {
         const char *username = getenv("HSDS_USERNAME");
         const char *password = getenv("HSDS_PASSWORD");
@@ -802,6 +862,8 @@ H5_rest_set_connection_information(void)
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't authenticate with Active Directory");
     } /* end else */
 
+    #endif
+    
     if (!base_URL)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "must specify a base URL - please set HSDS_ENDPOINT environment variable or create a config file");
 
