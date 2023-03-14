@@ -125,6 +125,7 @@ static herr_t H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info);
 
 /* Introspection callbacks */
 static herr_t H5_rest_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const struct H5VL_class_t **conn_cls);
+static herr_t H5_rest_get_cap_flags(const void *info, uint64_t *cap_flags);
 static herr_t H5_rest_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, uint64_t *flags);
 
 /* cURL function callbacks */
@@ -239,7 +240,7 @@ static const H5VL_class_t H5VL_rest_g = {
     /* Connector introspection callbacks */
     {
         H5_rest_get_conn_cls,      /* Connector introspect 'get class' function */
-        NULL,                        /* Capt flags */
+        H5_rest_get_cap_flags,     /* Capt flags */
         H5_rest_opt_query,         /* Connector introspect 'opt query' function */
     },
 
@@ -1552,6 +1553,29 @@ H5_rest_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const struct H5VL_class
 done:
     return ret_value;
 } /* end H5_rest_get_conn_cls() */
+
+/*---------------------------------------------------------------------------
+ * Function:    H5_rest_get_cap_flags
+ *
+ * Purpose:     Retrieves the capability flags for this VOL connector.
+ *
+ * Return:      Non-negative on Success/Negative on failure
+ *
+ *---------------------------------------------------------------------------
+ */
+static herr_t
+H5_rest_get_cap_flags(const void *info, uint64_t *cap_flags) {
+    herr_t ret_value = SUCCEED;
+
+    if (!cap_flags)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid cap_flags parameter");
+
+    /* Set the flags from the connector's capability flags field */
+    *cap_flags = H5VL_rest_g.cap_flags;
+
+done:
+
+} /* end H5_rest_get_cap_flags() */
 
 
 /*---------------------------------------------------------------------------

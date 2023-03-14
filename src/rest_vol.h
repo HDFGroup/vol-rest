@@ -295,23 +295,23 @@ do {                                                                            
 
 /* Capability flags for the VOL REST connector */
 #define H5VL_VOL_REST_CAP_FLAGS     H5VL_CAP_FLAG_FILE_BASIC \
-                                  & H5VL_CAP_FLAG_ATTR_BASIC \
-                                  & H5VL_CAP_FLAG_ATTR_MORE \
-                                  & H5VL_CAP_FLAG_DATASET_BASIC \
-                                  & H5VL_CAP_FLAG_GROUP_BASIC \
-                                  & H5VL_CAP_FLAG_GROUP_MORE \
-                                  & H5VL_CAP_FLAG_LINK_BASIC \
-                                  & H5VL_CAP_FLAG_OBJECT_BASIC \
-                                  & H5VL_CAP_FLAG_OBJECT_MORE \
-                                  & H5VL_CAP_FLAG_CREATION_ORDER \
-                                  & H5VL_CAP_FLAG_ITERATE \
-                                  & H5VL_CAP_FLAG_BY_IDX \
-                                  & H5VL_CAP_FLAG_GET_PLIST \
-                                  & H5VL_CAP_FLAG_EXTERNAL_LINKS \
-                                  & H5VL_CAP_FLAG_HARD_LINKS \
-                                  & H5VL_CAP_FLAG_SOFT_LINKS \
-                                  & H5VL_CAP_FLAG_TRACK_TIMES \
-                                  & H5VL_CAP_FLAG_FILTERS
+                                  | H5VL_CAP_FLAG_ATTR_BASIC \
+                                  | H5VL_CAP_FLAG_ATTR_MORE \
+                                  | H5VL_CAP_FLAG_DATASET_BASIC \
+                                  | H5VL_CAP_FLAG_GROUP_BASIC \
+                                  | H5VL_CAP_FLAG_GROUP_MORE \
+                                  | H5VL_CAP_FLAG_LINK_BASIC \
+                                  | H5VL_CAP_FLAG_OBJECT_BASIC \
+                                  | H5VL_CAP_FLAG_OBJECT_MORE \
+                                  | H5VL_CAP_FLAG_CREATION_ORDER \
+                                  | H5VL_CAP_FLAG_ITERATE \
+                                  | H5VL_CAP_FLAG_BY_IDX \
+                                  | H5VL_CAP_FLAG_GET_PLIST \
+                                  | H5VL_CAP_FLAG_EXTERNAL_LINKS \
+                                  | H5VL_CAP_FLAG_HARD_LINKS \
+                                  | H5VL_CAP_FLAG_SOFT_LINKS \
+                                  | H5VL_CAP_FLAG_TRACK_TIMES \
+                                  | H5VL_CAP_FLAG_FILTERS
 /**********************************
  *                                *
  *        Global Variables        *
