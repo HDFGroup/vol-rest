@@ -97,13 +97,15 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
      */
     new_file->domain = new_file;
 
-    /* Copy the path name into the new file object */
+    /* Copy the path name into the new file object */ 
     name_length = strlen(name);
+
     if (NULL == (new_file->u.file.filepath_name = (char *) RV_malloc(name_length + 1)))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath name");
 
     strncpy(new_file->u.file.filepath_name, name, name_length);
     new_file->u.file.filepath_name[name_length] = '\0';
+   
 
     /* Setup the host header */
     host_header_len = name_length + strlen(host_string) + 1;
@@ -537,7 +539,20 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
         /* H5Fis_accessible */
         case H5VL_FILE_IS_ACCESSIBLE:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fis_accessible is unsupported");
+            hbool_t *ret_is_accessible = args->args.is_accessible.accessible;
+            const char *filename = args->args.is_accessible.filename;
+            hid_t fapl_id = args->args.is_accessible.fapl_id;
+
+            /* Initialize in case of failure */
+            *ret_is_accessible = FALSE;
+
+            void *ret_file;
+
+            if (NULL != (ret_file = RV_file_open(filename, 0, fapl_id, dxpl_id, NULL))) {
+                *ret_is_accessible = TRUE;
+                RV_file_close(ret_file, dxpl_id, NULL);
+            }
+
             break;
 
         /* H5Fdelete */
