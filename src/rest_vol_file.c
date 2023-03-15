@@ -557,7 +557,51 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
         /* H5Fdelete */
         case H5VL_FILE_DELETE:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fdelete is unsupported");
+            char  *host_header;
+            size_t host_header_len;
+            size_t name_length;
+
+            long http_response;
+            filename = args->args.del.filename;
+
+            name_length = strlen(filename);
+
+            /* Setup the host header */
+            host_header_len = name_length + strlen(host_string) + 1;
+
+            if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header");
+
+            strcpy(host_header, host_string);
+
+            curl_headers = curl_slist_append(curl_headers, strncat(host_header, filename, name_length));
+
+            /* Disable use of Expect: 100 Continue HTTP response */
+            curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
+
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);                            
+
+            CURL_PERFORM(curl, H5E_FILE, H5E_CLOSEERROR, NULL);
+
+            if (curl_headers) {
+                curl_slist_free_all(curl_headers);
+                curl_headers = NULL;
+            } /* end if */
+
+            /* Restore CUSTOMREQUEST to internal default */
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);                            
+
+
+            free(host_header);
+
             break;
 
         case H5VL_FILE_IS_EQUAL:
