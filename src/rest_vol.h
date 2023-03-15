@@ -299,7 +299,6 @@ do {                                                                            
                                   | H5VL_CAP_FLAG_ATTR_MORE \
                                   | H5VL_CAP_FLAG_DATASET_BASIC \
                                   | H5VL_CAP_FLAG_GROUP_BASIC \
-                                  | H5VL_CAP_FLAG_GROUP_MORE \
                                   | H5VL_CAP_FLAG_LINK_BASIC \
                                   | H5VL_CAP_FLAG_OBJECT_BASIC \
                                   | H5VL_CAP_FLAG_OBJECT_MORE \
