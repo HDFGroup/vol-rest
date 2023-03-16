@@ -395,13 +395,14 @@ H5_rest_init(hid_t vipl_id)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent))
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "error while setting CURL option (CURLOPT_USERAGENT)");
 
+    const char *URL = getenv("HSDS_ENDPOINT");
+    
+    if (!strncmp(URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
+        char* socket_path = "/tmp/hs/sn_1.sock";
 
-    #ifdef RV_CURL_SOCKET
-    char* socket_path = "/tmp/hs/sn_1.sock";
-
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UNIX_SOCKET_PATH, socket_path))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL socket path header: %s", curl_err_buf);
-    #endif RV_CURL_SOCKET
+        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UNIX_SOCKET_PATH, socket_path))
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL socket path header: %s", curl_err_buf);
+    }
 
 #ifdef RV_CURL_DEBUG
     /* Enable cURL debugging output if desired */
@@ -648,42 +649,36 @@ H5_rest_set_connection_information(void)
      * Attempt to pull in configuration/authentication information from
      * the environment.
      */
-    #ifdef RV_CURL_SOCKET
     
-      /* This is just a placeholder URL for curl's syntax, its specific value is unimportant */
-      URL = "0";
-      URL_len = 1; 
-
-      if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for placeholder base URL");
-    
-      strncpy(base_URL, URL, URL_len);
-      base_URL[URL_len] = '\0';
-    
-    if ((getenv("HSDS_ENDPOINT"))) {
-    #endif
-
-    #ifndef RV_CURL_SOCKET
     if ((URL = getenv("HSDS_ENDPOINT"))) {
-    #endif 
+
+        if (!strncmp(URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
+            /* This is just a placeholder URL for curl's syntax, its specific value is unimportant */
+            URL = "0";
+            URL_len = 1; 
+
+            if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for placeholder base URL");
+            
+            strncpy(base_URL, URL, URL_len);
+            base_URL[URL_len] = '\0';
+        } else {
+            /*
+            * Save a copy of the base URL being worked on so that operations like
+            * creating a Group can be redirected to "base URL"/groups by building
+            * off of the base URL supplied.
+            */
+            URL_len = strlen(URL);
+            if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for base URL");
+
+            strncpy(base_URL, URL, URL_len);
+            base_URL[URL_len] = '\0';
+        }
 
         const char *username = getenv("HSDS_USERNAME");
         const char *password = getenv("HSDS_PASSWORD");
 
-        #ifndef RV_CURL_SOCKET
-        /*
-         * Save a copy of the base URL being worked on so that operations like
-         * creating a Group can be redirected to "base URL"/groups by building
-         * off of the base URL supplied.
-         */
-        URL_len = strlen(URL);
-        if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for base URL");
-
-        strncpy(base_URL, URL, URL_len);
-        base_URL[URL_len] = '\0';
-        #endif
-        
         if (username || password) {
             /* Attempt to set authentication information */
             if (username && strlen(username)) {
@@ -779,7 +774,6 @@ H5_rest_set_connection_information(void)
             key = strtok(file_line, " =\n");
             val = strtok(NULL, " =\n");
             
-            #ifndef RV_CURL_SOCKET
             if (!strcmp(key, "hs_endpoint")) {
                 if (val) {
                     /*
@@ -796,11 +790,6 @@ H5_rest_set_connection_information(void)
                 } /* end if */
             } /* end if */
             else if (!strcmp(key, "hs_username")) {
-            #endif
-
-            #ifdef RV_CURL_SOCKET
-            if (!strcmp(key, "hs_username")) {
-            #endif
                 if (val && strlen(val)) {
                     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, val))
                         FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf);

@@ -650,38 +650,6 @@ case "X-$CURL_DEBUG" in
 esac
 
 ## ----------------------------------------------------------------------
-## Check if cURL connection should go to a unix socket
-##
-AC_MSG_CHECKING([enable cURL to socket])
-AC_ARG_ENABLE([curl-socket],
-              [AS_HELP_STRING([--enable-curl-socket],
-                              [Enable cURL to socket.
-                               [default=no]
-                               ])],
-              [CURL_SOCKET=$enableval])
-
-## Set default
-if test "X-$CURL_SOCKET" = X- ; then
-  CURL_SOCKET=no
-fi
-
-## Allow this variable to be substituted in other files
-AC_SUBST([CURL_SOCKET])
-
-case "X-$CURL_SOCKET" in
-  X-yes)
-    AC_DEFINE([CURL_SOCKET], , [Define to have cURL connect to socket.])
-    AC_MSG_RESULT([yes])
-    ;;
-  X-no)
-    AC_MSG_RESULT([no])
-    ;;
-  *)
-    AC_MSG_ERROR([Unrecognized curl socket option: $CURL_SOCKET.])
-    ;;
-esac
-
-## ----------------------------------------------------------------------
 ## Check if REST VOL memory tracking should be enabled
 ##
 AC_MSG_CHECKING([enable memory tracking])
