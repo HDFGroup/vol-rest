@@ -135,6 +135,8 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
                 hid_t intmd_group_id = H5I_INVALID_HID;
                 RV_object_t *intmd_group;
 
+                hid_t new_lcpl_id;
+
                 if (H5Pget_create_intermediate_group(lcpl_id, &crt_intmd_group))
                     FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get flag value in lcpl");
                 
@@ -144,8 +146,17 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
                     if (path_dirname[strlen(path_dirname) - 1] == '/')
                         path_dirname[strlen(path_dirname) - 1] = '\0';
 
-                    // TODO: Should probably duplicate these plists to avoid modification to parent/child modifying both
-                    if (NULL == (intmd_group = RV_group_create(obj, loc_params, path_dirname, lcpl_id, gcpl_id, gapl_id, dxpl_id, req)))
+                    /* Copy the LCPL if it wasn't H5P_DEFAULT, else set up a default one so that
+                    * H5Gget_create_plist() will function correctly
+                    */
+                    if (H5P_LINK_CREATE_DEFAULT != lcpl_id) {
+                        if ((new_lcpl_id = H5Pcopy(lcpl_id)) < 0)
+                            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy LCPL");
+                    } /* end if */
+                    else
+                        new_lcpl_id = H5P_LINK_CREATE_DEFAULT;
+
+                    if (NULL == (intmd_group = RV_group_create(obj, loc_params, path_dirname, new_lcpl_id, gcpl_id, gapl_id, dxpl_id, req)))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTOPENOBJ, NULL, "can't create intermediate group automatically");
                     
                     /* Get URI of final group now that it has been created */
