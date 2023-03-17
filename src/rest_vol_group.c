@@ -135,32 +135,21 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
                 hid_t intmd_group_id = H5I_INVALID_HID;
                 RV_object_t *intmd_group;
 
-                hid_t new_lcpl_id;
-
                 if (H5Pget_create_intermediate_group(lcpl_id, &crt_intmd_group))
                     FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get flag value in lcpl");
                 
                 if (crt_intmd_group) {
-                    
                     /* Remove trailing slash to avoid infinite loop due to H5_dirname */
                     if (path_dirname[strlen(path_dirname) - 1] == '/')
                         path_dirname[strlen(path_dirname) - 1] = '\0';
 
-                    /* Copy the LCPL if it wasn't H5P_DEFAULT, else set up a default one so that
-                    * H5Gget_create_plist() will function correctly
-                    */
-                    if (H5P_LINK_CREATE_DEFAULT != lcpl_id) {
-                        if ((new_lcpl_id = H5Pcopy(lcpl_id)) < 0)
-                            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy LCPL");
-                    } /* end if */
-                    else
-                        new_lcpl_id = H5P_LINK_CREATE_DEFAULT;
-
-                    if (NULL == (intmd_group = RV_group_create(obj, loc_params, path_dirname, new_lcpl_id, gcpl_id, gapl_id, dxpl_id, req)))
+                    if (NULL == (intmd_group = RV_group_create(obj, loc_params, path_dirname, lcpl_id, gcpl_id, gapl_id, dxpl_id, req)))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTOPENOBJ, NULL, "can't create intermediate group automatically");
                     
                     /* Get URI of final group now that it has been created */
                     search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
+                
+                    RV_free(intmd_group);
                 } else 
                     FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate target for group link");
             }
@@ -350,7 +339,8 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
         group->u.group.gapl_id = H5P_GROUP_ACCESS_DEFAULT;
 
     /* Set up a GCPL for the group so that H5Gget_create_plist() will function correctly */
-    /* XXX: Set any properties necessary */
+    /* XXX: Because the HDF5 REST API does not support storing creationProperties for groups, 
+     * the GCPL on re-open must be default.*/
     if ((group->u.group.gcpl_id = H5Pcreate(H5P_GROUP_CREATE)) < 0)
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create GCPL for group");
 
