@@ -119,7 +119,7 @@ jobs:
         run: |
               cd ${{github.workspace}}/rest-vol
               sudo ./autogen.sh
-              sudo ./configure --enable-curl-socket=yes --prefix=${{github.workspace}}/rest-vol-build --with-hdf5=${{github.workspace}}/hdf5install
+              sudo ./configure --prefix=${{github.workspace}}/rest-vol-build --with-hdf5=${{github.workspace}}/hdf5install
               sudo make
               sudo make install
               
@@ -140,6 +140,7 @@ jobs:
               echo "USER2_PASSWORD=test" >> $GITHUB_ENV &&
               echo "HSDS_USERNAME=test_user1" >> $GITHUB_ENV &&
               echo "HSDS_PASSWORD=test" >> $GITHUB_ENV &&
+              echo "HSDS_ENDPOINT=http+unix://%2Ftmp%2Fhs%2Fsn_1.sock" >> $GITHUB_ENV &&
               hsds --root_dir data --host localhost --port 5101 --password_file admin/config/passwd.txt --logfile hs.log  --loglevel DEBUG  --config_dir=admin/config --count=4 &
               sleep 10
               export ADMIN_PASSWORD=admin
@@ -148,7 +149,7 @@ jobs:
               export USER_PASSWORD=test
               export USER2_NAME=test_user2
               export USER2_PASSWORD=test
-              export HSDS_ENDPOINT=http://127.0.0.1:5101
+              export HSDS_ENDPOINT=http+unix://%2Ftmp%2Fhs%2Fsn_1.sock
               export HSDS_USERNAME=test_user1
               export HSDS_PASSWORD=test
               ${{github.workspace}}/rest-vol-build/bin/test_rest_vol
