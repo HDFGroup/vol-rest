@@ -657,11 +657,22 @@ H5_rest_set_connection_information(void)
             URL = "0";
             URL_len = 1; 
 
-            if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for placeholder base URL");
+            if (!base_URL || (0 != (strncmp(base_URL, URL, strlen(URL))))) {
+
+                /* If previous value is incorrect, reassign */
+                if (base_URL) {
+                    free(base_URL);
+                    base_URL = NULL;
+                }
+
+                if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
+                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for placeholder base URL");
+                        
+                strncpy(base_URL, URL, URL_len);
+                base_URL[URL_len] = '\0';
+            }
             
-            strncpy(base_URL, URL, URL_len);
-            base_URL[URL_len] = '\0';
+
         } else {
             /*
             * Save a copy of the base URL being worked on so that operations like
@@ -669,11 +680,21 @@ H5_rest_set_connection_information(void)
             * off of the base URL supplied.
             */
             URL_len = strlen(URL);
-            if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for base URL");
 
-            strncpy(base_URL, URL, URL_len);
-            base_URL[URL_len] = '\0';
+            if (!base_URL || (0 != (strncmp(base_URL, URL, strlen(URL))))) {
+
+                /* If previous value is incorrect, reassign */
+                if (base_URL) {
+                    free(base_URL);
+                    base_URL = NULL;
+                }
+
+                if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
+                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for placeholder base URL");
+                        
+                strncpy(base_URL, URL, URL_len);
+                base_URL[URL_len] = '\0';
+            }
         }
 
         const char *username = getenv("HSDS_USERNAME");
@@ -782,11 +803,22 @@ H5_rest_set_connection_information(void)
                      * off of the base URL supplied.
                      */
                     URL_len = strlen(val);
-                    if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
-                        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for base URL");
+                    
+                    if (!base_URL || (0 != (strncmp(base_URL, val, URL_len)))) {
 
-                    strncpy(base_URL, val, URL_len);
-                    base_URL[URL_len] = '\0';
+                        /* If previous value is incorrect, reassign */
+                        if (base_URL) {
+                            free(base_URL);
+                            base_URL = NULL;
+                        }
+
+                        if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
+                            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for placeholder base URL");
+                                
+                        strncpy(base_URL, val, URL_len);
+                        base_URL[URL_len] = '\0';
+                    }
+
                 } /* end if */
             } /* end if */
             else if (!strcmp(key, "hs_username")) {
