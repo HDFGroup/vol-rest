@@ -1763,6 +1763,19 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                      */
                     switch (parent_obj_type) {
                         case H5I_FILE:
+                            /* Copy fapl, fcpl, and filepath name to new object */
+                            RV_object_t *attr_iter_obj = (RV_object_t*) attr_iter_object;
+                            if (H5I_INVALID_HID == (attr_iter_obj->u.file.fapl_id = H5Pcopy(loc_obj->u.file.fapl_id)))
+                                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FAPL");
+                            if (H5I_INVALID_HID == (attr_iter_obj->u.file.fcpl_id = H5Pcopy(loc_obj->u.file.fcpl_id)))
+                                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FCPL");
+                            if (NULL == (attr_iter_obj->u.file.filepath_name = RV_malloc(strlen(loc_obj->u.file.filepath_name) + 1)))
+                                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for copied filepath_name object");
+
+                            strncpy(attr_iter_obj->u.file.filepath_name, \
+                                    loc_obj->u.file.filepath_name, \
+                                    strlen(loc_obj->u.file.filepath_name) + 1);
+                            break;
                         case H5I_GROUP:
                             if (H5Iinc_ref(loc_obj->u.group.gcpl_id) < 0)
                                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL, "can't increment field's ref. count for copy of attribute's parent group");
@@ -1964,8 +1977,11 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                 } H5E_END_TRY;
             } /* end else */
 
+        
             if ((attr_iter_object_id = H5VLwrap_register(attr_iter_object, parent_obj_type)) < 0)
                 FUNC_GOTO_ERROR(H5E_ID, H5E_CANTREGISTER, FAIL, "can't create ID for parent object for attribute iteration");
+        
+              
             attr_iter_data.iter_obj_id = attr_iter_object_id;
 
             /* Make a GET request to the server to retrieve all of the attributes attached to the given object */
@@ -2019,7 +2035,25 @@ done:
         RV_free(host_header);
 
     if (attr_iter_object_id >= 0) {
-        if (H5I_GROUP == parent_obj_type) {
+        if (H5I_FILE == parent_obj_type) {
+            /* Free copied fapl, fcpl, filepath, and object struct. */
+            /*
+            RV_object_t *attr_iter_obj = (RV_object_t*) attr_iter_object;
+
+            if (H5Pclose(attr_iter_obj->u.file.fapl_id) < 0)
+                FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FAPL");
+            if (H5Pclose(attr_iter_obj->u.file.fcpl_id) < 0)
+                FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FCPL");
+
+            if (attr_iter_obj->u.file.filepath_name)
+                RV_free(attr_iter_obj->u.file.filepath_name);
+            
+            RV_free(attr_iter_obj);
+            */
+            if (H5Fclose(attr_iter_object_id) < 0)
+                FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close attribute iteration parent file");
+        }
+        else if (H5I_GROUP == parent_obj_type) {
             if (H5Gclose(attr_iter_object_id) < 0)
                 FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close attribute iteration parent group");
         }
