@@ -506,6 +506,9 @@ herr_t
 RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void **req) {
     RV_object_t *file = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
+    char  *host_header = NULL;
+    size_t host_header_len;
+    size_t name_length;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file-specific call with following parameters:\n");
@@ -557,10 +560,6 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
         /* H5Fdelete */
         case H5VL_FILE_DELETE:
-            char  *host_header;
-            size_t host_header_len;
-            size_t name_length;
-
             long http_response;
             filename = args->args.del.filename;
 
@@ -590,18 +589,6 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
             CURL_PERFORM(curl, H5E_FILE, H5E_CLOSEERROR, NULL);
 
-            if (curl_headers) {
-                curl_slist_free_all(curl_headers);
-                curl_headers = NULL;
-            } /* end if */
-
-            /* Restore CUSTOMREQUEST to internal default */
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);                            
-
-
-            free(host_header);
-
             break;
 
         case H5VL_FILE_IS_EQUAL:
@@ -614,6 +601,19 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
 done:
     PRINT_ERROR_STACK;
+
+    if (curl_headers) {
+        curl_slist_free_all(curl_headers);
+        curl_headers = NULL;
+    } /* end if */
+
+    /* Restore CUSTOMREQUEST to internal default */
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);                            
+
+    if (host_header) {
+        RV_free(host_header);
+    }
 
     return ret_value;
 } /* end RV_file_specific() */
