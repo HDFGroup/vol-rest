@@ -542,6 +542,7 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
         /* H5Fis_accessible */
         case H5VL_FILE_IS_ACCESSIBLE:
+        {
             hbool_t *ret_is_accessible = args->args.is_accessible.accessible;
             const char *filename = args->args.is_accessible.filename;
             hid_t fapl_id = args->args.is_accessible.fapl_id;
@@ -557,11 +558,13 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             }
 
             break;
+        } /* H5VL_FILE_IS_ACCESSIBLE */
 
         /* H5Fdelete */
         case H5VL_FILE_DELETE:
+        {
             long http_response;
-            filename = args->args.del.filename;
+            char *filename = args->args.del.filename;
 
             name_length = strlen(filename);
 
@@ -590,6 +593,7 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             CURL_PERFORM(curl, H5E_FILE, H5E_CLOSEERROR, NULL);
 
             break;
+        } /* H5VL_FILE_DELETE */
 
         case H5VL_FILE_IS_EQUAL:
             FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "checking of file equality is unsupported");
