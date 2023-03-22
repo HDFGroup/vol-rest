@@ -1568,7 +1568,7 @@ H5_rest_get_cap_flags(const void *info, uint64_t *cap_flags) {
     *cap_flags = H5VL_rest_g.cap_flags;
 
 done:
-
+    return ret_value;
 } /* end H5_rest_get_cap_flags() */
 
 
