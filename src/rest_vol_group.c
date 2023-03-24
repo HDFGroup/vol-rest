@@ -129,31 +129,53 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
             htri_t     search_ret;
 
             search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
-            if (!search_ret || search_ret < 0)
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate target for group link");
+
+            if (!search_ret || search_ret < 0) {
+                unsigned crt_intmd_group;
+                hid_t intmd_group_id = H5I_INVALID_HID;
+                RV_object_t *intmd_group;
+
+                if (H5Pget_create_intermediate_group(lcpl_id, &crt_intmd_group))
+                    FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get flag value in lcpl");
+                
+                if (crt_intmd_group) {
+                    /* Remove trailing slash to avoid infinite loop due to H5_dirname */
+                    if (path_dirname[strlen(path_dirname) - 1] == '/')
+                        path_dirname[strlen(path_dirname) - 1] = '\0';
+
+                    if (NULL == (intmd_group = RV_group_create(obj, loc_params, path_dirname, lcpl_id, gcpl_id, gapl_id, dxpl_id, req)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTOPENOBJ, NULL, "can't create intermediate group automatically");
+                    
+                    /* Get URI of final group now that it has been created */
+                    search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
+                
+                    RV_free(intmd_group);
+                } else 
+                    FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate target for group link");
+            }
+                
+                
         } /* end if */
 
-        {
-            const char * const fmt_string = "{"
-                                                "\"link\": {"
-                                                    "\"id\": \"%s\", "
-                                                    "\"name\": \"%s\""
-                                                "}"
-                                            "}";
+        const char * const fmt_string = "{"
+                                            "\"link\": {"
+                                                "\"id\": \"%s\", "
+                                                "\"name\": \"%s\""
+                                            "}"
+                                        "}";
 
-            /* Form the request body to link the new group to the parent object */
-            create_request_nalloc = strlen(fmt_string) + strlen(path_basename) + (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
-            if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group create request body");
+        /* Form the request body to link the new group to the parent object */
+        create_request_nalloc = strlen(fmt_string) + strlen(path_basename) + (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
+        if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group create request body");
 
-            if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string,
-                    empty_dirname ? parent->URI : target_URI, path_basename)
-                ) < 0)
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error");
+        if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string,
+                empty_dirname ? parent->URI : target_URI, path_basename)
+            ) < 0)
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error");
 
-            if ((size_t) create_request_body_len >= create_request_nalloc)
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "group link create request body size exceeded allocated buffer size");
-        }
+        if ((size_t) create_request_body_len >= create_request_nalloc)
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "group link create request body size exceeded allocated buffer size");
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Group create request body:\n%s\n\n", create_request_body);
@@ -317,7 +339,8 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
         group->u.group.gapl_id = H5P_GROUP_ACCESS_DEFAULT;
 
     /* Set up a GCPL for the group so that H5Gget_create_plist() will function correctly */
-    /* XXX: Set any properties necessary */
+    /* XXX: Because the HDF5 REST API does not support storing creationProperties for groups, 
+     * the GCPL on re-open must be default.*/
     if ((group->u.group.gcpl_id = H5Pcreate(H5P_GROUP_CREATE)) < 0)
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create GCPL for group");
 

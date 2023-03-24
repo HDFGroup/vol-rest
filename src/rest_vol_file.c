@@ -97,13 +97,15 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
      */
     new_file->domain = new_file;
 
-    /* Copy the path name into the new file object */
+    /* Copy the path name into the new file object */ 
     name_length = strlen(name);
+
     if (NULL == (new_file->u.file.filepath_name = (char *) RV_malloc(name_length + 1)))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath name");
 
     strncpy(new_file->u.file.filepath_name, name, name_length);
     new_file->u.file.filepath_name[name_length] = '\0';
+   
 
     /* Setup the host header */
     host_header_len = name_length + strlen(host_string) + 1;
@@ -504,6 +506,9 @@ herr_t
 RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void **req) {
     RV_object_t *file = (RV_object_t *) obj;
     herr_t       ret_value = SUCCEED;
+    char  *host_header = NULL;
+    size_t host_header_len;
+    size_t name_length;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file-specific call with following parameters:\n");
@@ -537,13 +542,58 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
         /* H5Fis_accessible */
         case H5VL_FILE_IS_ACCESSIBLE:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fis_accessible is unsupported");
+        {
+            hbool_t *ret_is_accessible = args->args.is_accessible.accessible;
+            const char *filename = args->args.is_accessible.filename;
+            hid_t fapl_id = args->args.is_accessible.fapl_id;
+
+            /* Initialize in case of failure */
+            *ret_is_accessible = FALSE;
+
+            void *ret_file;
+
+            if (NULL != (ret_file = RV_file_open(filename, 0, fapl_id, dxpl_id, NULL))) {
+                *ret_is_accessible = TRUE;
+                RV_file_close(ret_file, dxpl_id, NULL);
+            }
+
             break;
+        } /* H5VL_FILE_IS_ACCESSIBLE */
 
         /* H5Fdelete */
         case H5VL_FILE_DELETE:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fdelete is unsupported");
+        {
+            long http_response;
+            char *filename = args->args.del.filename;
+
+            name_length = strlen(filename);
+
+            /* Setup the host header */
+            host_header_len = name_length + strlen(host_string) + 1;
+
+            if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header");
+
+            strcpy(host_header, host_string);
+
+            curl_headers = curl_slist_append(curl_headers, strncat(host_header, filename, name_length));
+
+            /* Disable use of Expect: 100 Continue HTTP response */
+            curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
+
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);                            
+
+            CURL_PERFORM(curl, H5E_FILE, H5E_CLOSEERROR, NULL);
+
             break;
+        } /* H5VL_FILE_DELETE */
 
         case H5VL_FILE_IS_EQUAL:
             FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "checking of file equality is unsupported");
@@ -555,6 +605,19 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
 done:
     PRINT_ERROR_STACK;
+
+    if (curl_headers) {
+        curl_slist_free_all(curl_headers);
+        curl_headers = NULL;
+    } /* end if */
+
+    /* Restore CUSTOMREQUEST to internal default */
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);                            
+
+    if (host_header) {
+        RV_free(host_header);
+    }
 
     return ret_value;
 } /* end RV_file_specific() */

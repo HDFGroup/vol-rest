@@ -2962,17 +2962,20 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                     if (buf_ptrdiff < 0)
                         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");
 
-                    CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + (3 * MAX_NUM_LENGTH) + 4,
+                    size_t out_string_new_len = (size_t) buf_ptrdiff + (3 * MAX_NUM_LENGTH) + 4;
+
+                    CHECKED_REALLOC(out_string, out_string_len, out_string_new_len,
                             out_string_curr_pos, H5E_DATASPACE, FAIL);
 
-                    if ((bytes_printed = sprintf(out_string_curr_pos,
+                    if ((bytes_printed = snprintf(out_string_curr_pos,
+                                                out_string_new_len,
                                                  "%s%" PRIuHSIZE ":%" PRIuHSIZE ":%" PRIuHSIZE,
                                                  i > 0 ? "," : "",
                                                  start[i],
                                                  (start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1),
                                                  (stride[i] / block[i])
                                          )) < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
+                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     out_string_curr_pos += bytes_printed;
                 } /* end for */
@@ -3038,8 +3041,9 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                     if (buf_ptrdiff < 0)
                         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");
 
-                    CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + ((size_t) ((ndims * MAX_NUM_LENGTH) + (ndims) + (ndims > 1 ? 3 : 1))),
-                            out_string_curr_pos, H5E_DATASPACE, FAIL);
+                    size_t out_string_new_len = buf_ptrdiff + ((size_t) ((ndims * MAX_NUM_LENGTH) + (ndims) + (ndims > 1 ? 3 : 1)));
+                    
+                    CHECKED_REALLOC(out_string, out_string_len, out_string_new_len, out_string_curr_pos, H5E_DATASPACE, FAIL);
 
                     /* Add the delimiter between individual points */
                     if (i > 0) strcat(out_string_curr_pos++, ",");
@@ -3048,8 +3052,9 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                     if (ndims > 1) strcat(out_string_curr_pos++, "[");
 
                     for (j = 0; j < (size_t) ndims; j++) {
-                        if ((bytes_printed = sprintf(out_string_curr_pos, "%s%" PRIuHSIZE, j > 0 ? "," : "", point_list[(i * (size_t) ndims) + j])) < 0)
-                            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
+                        if ((bytes_printed = snprintf(out_string_curr_pos, \
+                        out_string_new_len - (size_t) buf_ptrdiff,"%s%" PRIuHSIZE, j > 0 ? "," : "", point_list[(i * (size_t) ndims) + j])) < 0)
+                            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                         out_string_curr_pos += bytes_printed;
                     } /* end for */
@@ -3096,15 +3101,17 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                 if (NULL == (block = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*block))))
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'block' values");
 
-                if (NULL == (start_body = (char *) RV_calloc((size_t) (ndims * MAX_NUM_LENGTH + ndims))))
+                size_t body_size = ndims * MAX_NUM_LENGTH + ndims;
+
+                if (NULL == (start_body = (char *) RV_calloc(body_size)))
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'start' values string representation");
                 start_body_curr_pos = start_body;
 
-                if (NULL == (stop_body = (char *) RV_calloc((size_t) (ndims * MAX_NUM_LENGTH + ndims))))
+                if (NULL == (stop_body = (char *) RV_calloc(body_size)))
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'stop' values string representation");
                 stop_body_curr_pos = stop_body;
 
-                if (NULL == (step_body = (char *) RV_calloc((size_t) (ndims * MAX_NUM_LENGTH + ndims))))
+                if (NULL == (step_body = (char *) RV_calloc(body_size)))
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'step' values string representation");
                 step_body_curr_pos = step_body;
 
@@ -3116,16 +3123,19 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get regular hyperslab selection");
 
                 for (i = 0; i < (size_t) ndims; i++) {
-                    if ((bytes_printed = sprintf(start_body_curr_pos, "%s%" PRIuHSIZE, (i > 0 ? "," : ""), start[i])) < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
+                    if ((bytes_printed = snprintf(start_body_curr_pos, \
+                    body_size - (size_t) (start_body_curr_pos - start_body),"%s%" PRIuHSIZE, (i > 0 ? "," : ""), start[i])) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
                     start_body_curr_pos += bytes_printed;
 
-                    if ((bytes_printed = sprintf(stop_body_curr_pos, "%s%" PRIuHSIZE, (i > 0 ? "," : ""), (start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1))) < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
+                    if ((bytes_printed = snprintf(stop_body_curr_pos, \
+                    body_size - (size_t) (stop_body_curr_pos - stop_body),"%s%" PRIuHSIZE, (i > 0 ? "," : ""), (start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1))) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
                     stop_body_curr_pos += bytes_printed;
 
-                    if ((bytes_printed = sprintf(step_body_curr_pos, "%s%" PRIuHSIZE, (i > 0 ? "," : ""), (stride[i] / block[i]))) < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
+                    if ((bytes_printed = snprintf(step_body_curr_pos, \
+                    body_size - (size_t) (step_body_curr_pos - step_body), "%s%" PRIuHSIZE, (i > 0 ? "," : ""), (stride[i] / block[i]))) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
                     step_body_curr_pos += bytes_printed;
                 } /* end for */
 

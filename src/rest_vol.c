@@ -125,6 +125,7 @@ static herr_t H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info);
 
 /* Introspection callbacks */
 static herr_t H5_rest_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const struct H5VL_class_t **conn_cls);
+static herr_t H5_rest_get_cap_flags(const void *info, uint64_t *cap_flags);
 static herr_t H5_rest_opt_query(void *obj, H5VL_subclass_t cls, int opt_type, uint64_t *flags);
 
 /* cURL function callbacks */
@@ -140,7 +141,7 @@ static const H5VL_class_t H5VL_rest_g = {
     HDF5_VOL_REST_CLS_VAL,         /* Connector value                       */
     HDF5_VOL_REST_NAME,            /* Connector name                        */
     HDF5_VOL_REST_CONN_VERSION,    /* Conector version # */
-    H5VL_CAP_FLAG_NONE,            /* Connector capability flags            */
+    H5VL_VOL_REST_CAP_FLAGS,       /* Connector capability flags            */
     H5_rest_init,                  /* Connector initialization function     */
     H5_rest_term,                  /* Connector termination function        */
 
@@ -239,7 +240,7 @@ static const H5VL_class_t H5VL_rest_g = {
     /* Connector introspection callbacks */
     {
         H5_rest_get_conn_cls,      /* Connector introspect 'get class' function */
-        NULL,                        /* Capt flags */
+        H5_rest_get_cap_flags,     /* Capt flags */
         H5_rest_opt_query,         /* Connector introspect 'opt query' function */
     },
 
@@ -393,6 +394,15 @@ H5_rest_init(hid_t vipl_id)
     }
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent))
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "error while setting CURL option (CURLOPT_USERAGENT)");
+
+    const char *URL = getenv("HSDS_ENDPOINT");
+    
+    if (!strncmp(URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
+        char* socket_path = "/tmp/hs/sn_1.sock";
+
+        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UNIX_SOCKET_PATH, socket_path))
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL socket path header: %s", curl_err_buf);
+    }
 
 #ifdef RV_CURL_DEBUG
     /* Enable cURL debugging output if desired */
@@ -639,21 +649,56 @@ H5_rest_set_connection_information(void)
      * Attempt to pull in configuration/authentication information from
      * the environment.
      */
+    
     if ((URL = getenv("HSDS_ENDPOINT"))) {
+
+        if (!strncmp(URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
+            /* This is just a placeholder URL for curl's syntax, its specific value is unimportant */
+            URL = "0";
+            URL_len = 1; 
+
+            if (!base_URL || (0 != (strncmp(base_URL, URL, strlen(URL))))) {
+
+                /* If previous value is incorrect, reassign */
+                if (base_URL) {
+                    free(base_URL);
+                    base_URL = NULL;
+                }
+
+                if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
+                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for placeholder base URL");
+                        
+                strncpy(base_URL, URL, URL_len);
+                base_URL[URL_len] = '\0';
+            }
+            
+
+        } else {
+            /*
+            * Save a copy of the base URL being worked on so that operations like
+            * creating a Group can be redirected to "base URL"/groups by building
+            * off of the base URL supplied.
+            */
+            URL_len = strlen(URL);
+
+            if (!base_URL || (0 != (strncmp(base_URL, URL, strlen(URL))))) {
+
+                /* If previous value is incorrect, reassign */
+                if (base_URL) {
+                    free(base_URL);
+                    base_URL = NULL;
+                }
+
+                if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
+                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for placeholder base URL");
+                        
+                strncpy(base_URL, URL, URL_len);
+                base_URL[URL_len] = '\0';
+            }
+        }
+
         const char *username = getenv("HSDS_USERNAME");
         const char *password = getenv("HSDS_PASSWORD");
-
-        /*
-         * Save a copy of the base URL being worked on so that operations like
-         * creating a Group can be redirected to "base URL"/groups by building
-         * off of the base URL supplied.
-         */
-        URL_len = strlen(URL);
-        if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for base URL");
-
-        strncpy(base_URL, URL, URL_len);
-        base_URL[URL_len] = '\0';
 
         if (username || password) {
             /* Attempt to set authentication information */
@@ -749,6 +794,7 @@ H5_rest_set_connection_information(void)
             if ((file_line[0] == '#') || !strlen(file_line)) continue;
             key = strtok(file_line, " =\n");
             val = strtok(NULL, " =\n");
+            
             if (!strcmp(key, "hs_endpoint")) {
                 if (val) {
                     /*
@@ -757,11 +803,22 @@ H5_rest_set_connection_information(void)
                      * off of the base URL supplied.
                      */
                     URL_len = strlen(val);
-                    if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
-                        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for base URL");
+                    
+                    if (!base_URL || (0 != (strncmp(base_URL, val, URL_len)))) {
 
-                    strncpy(base_URL, val, URL_len);
-                    base_URL[URL_len] = '\0';
+                        /* If previous value is incorrect, reassign */
+                        if (base_URL) {
+                            free(base_URL);
+                            base_URL = NULL;
+                        }
+
+                        if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
+                            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for placeholder base URL");
+                                
+                        strncpy(base_URL, val, URL_len);
+                        base_URL[URL_len] = '\0';
+                    }
+
                 } /* end if */
             } /* end if */
             else if (!strcmp(key, "hs_username")) {
@@ -1490,6 +1547,29 @@ H5_rest_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const struct H5VL_class
 done:
     return ret_value;
 } /* end H5_rest_get_conn_cls() */
+
+/*---------------------------------------------------------------------------
+ * Function:    H5_rest_get_cap_flags
+ *
+ * Purpose:     Retrieves the capability flags for this VOL connector.
+ *
+ * Return:      Non-negative on Success/Negative on failure
+ *
+ *---------------------------------------------------------------------------
+ */
+static herr_t
+H5_rest_get_cap_flags(const void *info, uint64_t *cap_flags) {
+    herr_t ret_value = SUCCEED;
+
+    if (!cap_flags)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid cap_flags parameter");
+
+    /* Set the flags from the connector's capability flags field */
+    *cap_flags = H5VL_rest_g.cap_flags;
+
+done:
+    return ret_value;
+} /* end H5_rest_get_cap_flags() */
 
 
 /*---------------------------------------------------------------------------
@@ -2415,11 +2495,14 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
                     if (buf_ptrdiff < 0)
                         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");
 
-                    CHECKED_REALLOC(shape_out_string, shape_out_string_curr_len, (size_t) buf_ptrdiff + MAX_NUM_LENGTH + 1,
+                    size_t shape_out_string_new_len = (size_t) buf_ptrdiff + MAX_NUM_LENGTH + 1;
+                    
+                    CHECKED_REALLOC(shape_out_string, shape_out_string_curr_len, shape_out_string_new_len,
                                     shape_out_string_curr_pos, H5E_DATASPACE, FAIL);
 
-                    if ((bytes_printed = sprintf(shape_out_string_curr_pos, "%s%" PRIuHSIZE, i > 0 ? "," : "", dims[i])) < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
+                    if ((bytes_printed = snprintf(shape_out_string_curr_pos, \
+                    shape_out_string_new_len - (size_t) buf_ptrdiff,"%s%" PRIuHSIZE, i > 0 ? "," : "", dims[i])) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
                     shape_out_string_curr_pos += bytes_printed;
                 } /* end if */
 
@@ -2428,7 +2511,9 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
                     if (buf_ptrdiff < 0)
                         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");
 
-                    CHECKED_REALLOC(maxdims_out_string, maxdims_out_string_curr_len, (size_t) buf_ptrdiff + MAX_NUM_LENGTH + 1,
+                    size_t maxdims_out_string_new_len = (size_t) buf_ptrdiff + MAX_NUM_LENGTH + 1;
+
+                    CHECKED_REALLOC(maxdims_out_string, maxdims_out_string_curr_len, maxdims_out_string_new_len,
                                     maxdims_out_string_curr_pos, H5E_DATASPACE, FAIL);
 
                     /* According to the server specification, unlimited dimension extents should be specified
@@ -2439,8 +2524,9 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
                         strcat(maxdims_out_string_curr_pos++, "0");
                     } /* end if */
                     else {
-                        if ((bytes_printed = sprintf(maxdims_out_string_curr_pos, "%s%" PRIuHSIZE, i > 0 ? "," : "", maxdims[i])) < 0)
-                            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "sprintf error");
+                        if ((bytes_printed = snprintf(maxdims_out_string_curr_pos, \
+                        maxdims_out_string_new_len - (size_t) maxdims_out_string_curr_pos,"%s%" PRIuHSIZE, i > 0 ? "," : "", maxdims[i])) < 0)
+                            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
                         maxdims_out_string_curr_pos += bytes_printed;
                     } /* end else */
                 } /* end if */
