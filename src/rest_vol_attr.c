@@ -2036,20 +2036,6 @@ done:
 
     if (attr_iter_object_id >= 0) {
         if (H5I_FILE == parent_obj_type) {
-            /* Free copied fapl, fcpl, filepath, and object struct. */
-            /*
-            RV_object_t *attr_iter_obj = (RV_object_t*) attr_iter_object;
-
-            if (H5Pclose(attr_iter_obj->u.file.fapl_id) < 0)
-                FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FAPL");
-            if (H5Pclose(attr_iter_obj->u.file.fcpl_id) < 0)
-                FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FCPL");
-
-            if (attr_iter_obj->u.file.filepath_name)
-                RV_free(attr_iter_obj->u.file.filepath_name);
-            
-            RV_free(attr_iter_obj);
-            */
             if (H5Fclose(attr_iter_object_id) < 0)
                 FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close attribute iteration parent file");
         }
