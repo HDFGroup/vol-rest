@@ -83,7 +83,7 @@ jobs:
           export HSDS_USERNAME=test_user1
           export HSDS_PASSWORD=test
           export HDF5_VOL_CONNECTOR=REST 
-          export HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol-build
+          export HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol/build/bin/
           export ROOT_DIR=${{github.workspace}}/hsds/data
           export BUCKET_NAME=hsdstest
           export HSDS_PATH=/home/test_user1
@@ -121,6 +121,7 @@ jobs:
         run: |
               sudo apt-get install libcurl4-openssl-dev
               sudo apt-get install libyajl-dev
+              
       - name: Autotools Configure HDF5
         if: ${{!steps.hdf5-restore.outputs.cache-hit}}
         run: |
@@ -149,8 +150,9 @@ jobs:
       - name: Build REST VOL (Autotools)
         run: |
               cd ${{github.workspace}}/rest-vol
-              sudo ./autogen.sh
-              sudo ./configure --prefix=${{github.workspace}}/rest-vol-build --with-hdf5=${{github.workspace}}/hdf5install
+              mkdir ${{github.workspace}}/rest-vol/build
+              cd ${{github.workspace}}/rest-vol/build
+              sudo cmake -DPREBUILT_HDF5_DIR=${{github.workspace}}/hdf5install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/rest-vol/build/install ..
               sudo make
               sudo make install
               
@@ -166,7 +168,7 @@ jobs:
               export HSDS_USERNAME=test_user1
               export HSDS_PASSWORD=test
               export HDF5_VOL_CONNECTOR=REST 
-              export HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol-build
+              export HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol/build/bin/
               export ROOT_DIR=${{github.workspace}}/hsds/data
               export BUCKET_NAME=hsdstest
               export HSDS_PATH=/home/test_user1
@@ -183,7 +185,7 @@ jobs:
               export HSDS_USERNAME=test_user1
               export HSDS_PASSWORD=test
               export HDF5_VOL_CONNECTOR=REST 
-              export HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol-build
+              export HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol/build/bin/
               export ROOT_DIR=${{github.workspace}}/hsds/data
               export BUCKET_NAME=hsdstest
               export HSDS_PATH=/home/test_user1
