@@ -151,7 +151,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           path: ${{github.workspace}}/rest-vol/test/vol-tests/
-          repository: HDFGroup/vol-tests
+          repository: mattjala/vol-tests
            
       - name: Prepare directory contents
         run: |
