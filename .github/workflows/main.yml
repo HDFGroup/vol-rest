@@ -52,6 +52,12 @@ jobs:
           cd ${{github.workspace}}/hsds
           pytest
           
+      - name: Start HSDS
+        shell: bash
+        run: |
+          ./runall --no-docker
+          
+        working-directory: ${{github.workspace}}/hsds
       - name: Install Autotools Dependencies (Linux, serial)
         run: |
            sudo apt update
