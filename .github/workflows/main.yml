@@ -55,8 +55,8 @@ jobs:
       - name: Start HSDS
         shell: bash
         run: |
-          mkdir data &&
-          mkdir data/hsdstest &&
+          mkdir ${{github.workspace}}/hsds/data &&
+          mkdir ${{github.workspace}}/hsdsdata/hsdstest &&
           cp admin/config/groups.default admin/config/groups.txt &&
           cp admin/config/passwd.default admin/config/passwd.txt &&
           cp admin/config/groups.default admin/config/groups.txt &&
@@ -71,6 +71,8 @@ jobs:
           echo "HSDS_PASSWORD=test" >> $GITHUB_ENV &&
           echo "HSDS_PATH=/home/test_user1" >> $GITHUB_ENV &&
           echo "HSDS_ENDPOINT=http+unix://%2Ftmp%2Fhs%2Fsn_1.sock" >> $GITHUB_ENV &&
+          echo "ROOT_DIR=${{github.workspace}}/hsds/data" >> $GITHUB_ENV &&
+          echo "BUCKET_NAME=hsdstest" >> $GITHUB_ENV
           export ADMIN_PASSWORD=admin
           export ADMIN_USERNAME=admin
           export USER_NAME=test_user1
@@ -81,7 +83,9 @@ jobs:
           export HSDS_USERNAME=test_user1
           export HSDS_PASSWORD=test
           export HDF5_VOL_CONNECTOR=REST 
-          export HDF5_PLUGIN_PATH=${{github.workspace}}/hdf5install 
+          export HDF5_PLUGIN_PATH=${{github.workspace}}/hdf5install
+          export ROOT_DIR=${{github.workspace}}/hsds/data
+          export BUCKET_NAME=hsdstest
           export HSDS_PATH=/home/test_user1
           ./runall.sh --no-docker &
         working-directory: ${{github.workspace}}/hsds
