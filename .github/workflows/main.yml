@@ -192,7 +192,7 @@ jobs:
               export ROOT_DIR=${{github.workspace}}/hsds/data
               export BUCKET_NAME=hsdstest
               export HSDS_PATH=/home/test_user1
-              ${{github.workspace}}/rest-vol-build/bin/test_rest_vol
+              ${{github.workspace}}/rest-vol-build/install/bin/test_rest_vol
       - name: Run new vol-tests
         run: | 
               export ADMIN_PASSWORD=admin
@@ -209,4 +209,4 @@ jobs:
               export ROOT_DIR=${{github.workspace}}/hsds/data
               export BUCKET_NAME=hsdstest
               export HSDS_PATH=/home/test_user1
-              ${{github.workspace}}/rest-vol-build/bin/h5vl_test
+              ${{github.workspace}}/rest-vol-build/install/bin/h5vl_test
