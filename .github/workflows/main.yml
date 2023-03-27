@@ -83,7 +83,7 @@ jobs:
           export HSDS_USERNAME=test_user1
           export HSDS_PASSWORD=test
           export HDF5_VOL_CONNECTOR=REST 
-          export HDF5_PLUGIN_PATH=${{github.workspace}}/hdf5install
+          export HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol-build
           export ROOT_DIR=${{github.workspace}}/hsds/data
           export BUCKET_NAME=hsdstest
           export HSDS_PATH=/home/test_user1
@@ -166,7 +166,7 @@ jobs:
               export HSDS_USERNAME=test_user1
               export HSDS_PASSWORD=test
               export HDF5_VOL_CONNECTOR=REST 
-              export HDF5_PLUGIN_PATH=${{github.workspace}}/hdf5install
+              export HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol-build
               export ROOT_DIR=${{github.workspace}}/hsds/data
               export BUCKET_NAME=hsdstest
               export HSDS_PATH=/home/test_user1
@@ -183,7 +183,7 @@ jobs:
               export HSDS_USERNAME=test_user1
               export HSDS_PASSWORD=test
               export HDF5_VOL_CONNECTOR=REST 
-              export HDF5_PLUGIN_PATH=${{github.workspace}}/hdf5install
+              export HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol-build
               export ROOT_DIR=${{github.workspace}}/hsds/data
               export BUCKET_NAME=hsdstest
               export HSDS_PATH=/home/test_user1
