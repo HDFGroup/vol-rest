@@ -405,7 +405,7 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
     printf("     - File's pathname: %s\n\n", _obj->domain->u.file.filepath_name);
 #endif
 
-    if (H5I_FILE != _obj->obj_type)
+    if ((args->op_type != H5VL_FILE_GET_NAME) && (H5I_FILE != _obj->obj_type))
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file");
 
     switch (args->op_type) {
@@ -457,13 +457,10 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
             char       *name_buf = args->args.get_name.buf;
             ssize_t    *ret_size = args->args.get_name.file_name_len;
 
-            /* Shut up compiler warnings */
-            UNUSED_VAR(obj_type);
-
             *ret_size = (ssize_t) strlen(_obj->domain->u.file.filepath_name);
 
             if (name_buf && name_buf_size) {
-                strncpy(name_buf, _obj->u.file.filepath_name, name_buf_size - 1);
+                strncpy(name_buf, _obj->domain->u.file.filepath_name, name_buf_size - 1);
                 name_buf[name_buf_size - 1] = '\0';
             } /* end if */
 
