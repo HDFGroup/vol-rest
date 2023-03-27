@@ -55,7 +55,7 @@ jobs:
       - name: Start HSDS
         shell: bash
         run: |
-          ./runall --no-docker
+          ./runall.sh --no-docker
           
         working-directory: ${{github.workspace}}/hsds
       - name: Install Autotools Dependencies (Linux, serial)
