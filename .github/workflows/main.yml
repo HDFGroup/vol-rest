@@ -151,14 +151,25 @@ jobs:
         uses: actions/checkout@v3
         with:
           path: ${{github.workspace}}/rest-vol/test/vol-tests/
-            
-      - name: Build REST VOL (Autotools)
+           
+      - name: Prepare directory contents
         run: |
               cd ${{github.workspace}}/rest-vol
               mkdir ${{github.workspace}}/rest-vol/build
               cd ${{github.workspace}}/rest-vol/src/hdf5
               cp -r ${{github.workspace}}/hdf5install/* .
               cd ${{github.workspace}}/rest-vol/build
+              
+      - name: Check src/hdf5 directory contents
+        run: |
+              ls ${{github.workspace}}/rest-vol/src/hdf5
+              
+      - name: Check vol-tests directory contents
+        run: |
+              ls ${{github.workspace}}/rest-vol/test/vol-tests/
+      
+      - name: Build REST VOL (Cmake)
+        run: |
               sudo cmake -DPREBUILT_HDF5_DIR=${{github.workspace}}/hdf5install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/rest-vol/build/install ..
               sudo make
               sudo make install
