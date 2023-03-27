@@ -152,9 +152,9 @@ jobs:
               cd ${{github.workspace}}/rest-vol
               mkdir ${{github.workspace}}/rest-vol/build
               cd ${{github.workspace}}/rest-vol/src/hdf5
-              cp -r ${{github.workspace}}/hdf5install/* .
               cd ${{github.workspace}}/rest-vol/build
               sudo cmake -DPREBUILT_HDF5_DIR=${{github.workspace}}/hdf5install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/rest-vol/build/install ..
+              cp -r ${{github.workspace}}/hdf5install/* .
               sudo make
               sudo make install
               
