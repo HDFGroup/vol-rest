@@ -156,7 +156,35 @@ jobs:
               
       - name: Run old REST VOL tests
         run: |
+              export ADMIN_PASSWORD=admin
+              export ADMIN_USERNAME=admin
+              export USER_NAME=test_user1
+              export USER_PASSWORD=test
+              export USER2_NAME=test_user2
+              export USER2_PASSWORD=test
+              export HSDS_ENDPOINT=http+unix://%2Ftmp%2Fhs%2Fsn_1.sock
+              export HSDS_USERNAME=test_user1
+              export HSDS_PASSWORD=test
+              export HDF5_VOL_CONNECTOR=REST 
+              export HDF5_PLUGIN_PATH=${{github.workspace}}/hdf5install
+              export ROOT_DIR=${{github.workspace}}/hsds/data
+              export BUCKET_NAME=hsdstest
+              export HSDS_PATH=/home/test_user1
               ${{github.workspace}}/rest-vol-build/bin/test_rest_vol
       - name: Run new vol-tests
         run: | 
+              export ADMIN_PASSWORD=admin
+              export ADMIN_USERNAME=admin
+              export USER_NAME=test_user1
+              export USER_PASSWORD=test
+              export USER2_NAME=test_user2
+              export USER2_PASSWORD=test
+              export HSDS_ENDPOINT=http+unix://%2Ftmp%2Fhs%2Fsn_1.sock
+              export HSDS_USERNAME=test_user1
+              export HSDS_PASSWORD=test
+              export HDF5_VOL_CONNECTOR=REST 
+              export HDF5_PLUGIN_PATH=${{github.workspace}}/hdf5install
+              export ROOT_DIR=${{github.workspace}}/hsds/data
+              export BUCKET_NAME=hsdstest
+              export HSDS_PATH=/home/test_user1
               ${{github.workspace}}/rest-vol-build/bin/h5vl_test
