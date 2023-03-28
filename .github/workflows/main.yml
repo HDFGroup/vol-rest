@@ -164,7 +164,33 @@ jobs:
               sudo make -j
               sudo make install
         
-      - name: Start HSDS
+      - name: Get docker
+        if: ${{ ${{matrix.endpoint}} == ${{'http://127.0.0.1:5101'}} }}
+        run: |
+              sudo apt-get update
+              sudo apt install docker.io
+              sudo systemctl start docker
+              sudo systemctl enable docker
+              sudo groupadd docker
+              sudo gpasswd -a $USER docker
+              
+      - name: Verify docker installation
+        if: ${{ ${{matrix.endpoint}} == ${{'http://127.0.0.1:5101'}} }}
+        run: |
+              sudo docker ps
+              
+      - name: Get docker-compose
+        if: ${{ ${{matrix.endpoint}} == ${{'http://127.0.0.1:5101'}} }}
+        run: |
+              sudo apt-get install docker-compose-plugin
+              
+      - name: Verify docker-compose installation
+        if: ${{ ${{matrix.endpoint}} == ${{'http://127.0.0.1:5101'}} }}
+        run: |
+              sudo docker compose version
+            
+      - name: Start HSDS with no docker
+        if: ${{ !(${{matrix.endpoint}} == ${{'http://127.0.0.1:5101'}}) }}
         run: | 
               mkdir ${{github.workspace}}/hsdsdata &&
               mkdir ${{github.workspace}}/hsdsdata/hsdstest &&
@@ -178,6 +204,20 @@ jobs:
               sleep 10
         working-directory: ${{github.workspace}}/hsds
         
+      - name: Start HSDS with docker
+        if: ${{ ${{matrix.endpoint}} == ${{'http://127.0.0.1:5101'}} }}
+        run: |
+              mkdir ${{github.workspace}}/hsdsdata &&
+              mkdir ${{github.workspace}}/hsdsdata/hsdstest &&
+              cp admin/config/groups.default admin/config/groups.txt &&
+              cp admin/config/passwd.default admin/config/passwd.txt &&
+              cp admin/config/groups.default admin/config/groups.txt &&
+              cp admin/config/passwd.default admin/config/passwd.txt &&
+              ${{github.workspace}}/setup_env_vars.sh
+              cd ${{github.workspace}}/hsds
+              ./runall.sh 1
+              sleep 10
+              
       - name: Test HSDS
         run: |
               ${{github.workspace}}/setup_env_vars.sh
