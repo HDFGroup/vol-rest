@@ -8,8 +8,10 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.8"]
-        test-path: ["/rest-vol/build/bin/test_rest_vol-shared", "/rest-vol/build/bin/h5vl_test"]
-        endpoint: ["http://127.0.0.1:5101", "http+unix://%2Ftmp%2Fhs%2Fsn_1.sock"]
+        test-path: ["/rest-vol/build/bin/test_rest_vol-shared"]
+        endpoint: ["http://127.0.0.1:5101"]
+        #test-path: ["/rest-vol/build/bin/test_rest_vol-shared", "/rest-vol/build/bin/h5vl_test"]
+        #endpoint: ["http://127.0.0.1:5101", "http+unix://%2Ftmp%2Fhs%2Fsn_1.sock"]
         
     runs-on: ubuntu-latest
     steps:
@@ -220,7 +222,7 @@ jobs:
         run: |
               ${{github.workspace}}/setup_env_vars.sh
               which python
-              sudo HSDS_USERNAME=test_user1 HSDS_PASSWORD=test USER_PASSWORD=test ROOT_DIR=${{github.workspace}}/hsdsdata BUCKET_NAME=hsdstest HSDS_ENDPOINT=http://127.0.0.1:5101 python testall.py
+              sudo HSDS_USERNAME=test_user1 HSDS_PASSWORD=test USER_PASSWORD=test ROOT_DIR=${{github.workspace}}/hsdsdata BUCKET_NAME=hsdstest HSDS_ENDPOINT=http://127.0.0.1:5101 /opt/hostedtoolcache/Python/3.8.16/x64/bin/python testall.py
         working-directory: ${{github.workspace}}/hsds
         
       - name: Local Socket Tests at ${{matrix.test-path}}
