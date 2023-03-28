@@ -170,7 +170,7 @@ jobs:
       - name: Check directory structure
         run: |
               sudo apt install tree
-              cd ${{github.workspace}}/rest-vol-build
+              cd ${{github.workspace}}/rest-vol/build
               tree
         
       - name: Run old REST VOL tests
@@ -189,7 +189,7 @@ jobs:
               export ROOT_DIR=${{github.workspace}}/hsds/data
               export BUCKET_NAME=hsdstest
               export HSDS_PATH=/home/test_user1
-              ${{github.workspace}}/rest-vol-build/bin/test_rest_vol-shared
+              ${{github.workspace}}/rest-vol/build/bin/test_rest_vol-shared
       - name: Run new vol-tests
         run: | 
               export ADMIN_PASSWORD=admin
@@ -206,4 +206,4 @@ jobs:
               export ROOT_DIR=${{github.workspace}}/hsds/data
               export BUCKET_NAME=hsdstest
               export HSDS_PATH=/home/test_user1
-              ${{github.workspace}}/rest-vol-build/bin/h5vl_test
+              ${{github.workspace}}/rest-vol/build/bin/h5vl_test
