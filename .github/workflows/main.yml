@@ -163,7 +163,9 @@ jobs:
       - name: Update docker permissions
         if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
         run: |
+              echo "User = $USER"
               sudo gpasswd -a $USER docker
+              newgrp docker
               docker ps
     
       - name: Clone vol-tests repo
