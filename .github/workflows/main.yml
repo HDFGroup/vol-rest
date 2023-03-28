@@ -9,6 +9,7 @@ jobs:
       matrix:
         python-version: ["3.8"]
         test-path: ["/rest-vol/build/bin/test_rest_vol-shared", "/rest-vol/build/bin/h5vl_test"]
+        endpoint: ["http://127.0.0.1:5101", "http+unix://%2Ftmp%2Fhs%2Fsn_1.sock"]
         
     runs-on: ubuntu-latest
     steps:
@@ -126,8 +127,8 @@ jobs:
       - name: Build REST VOL (Cmake)
         run: |
               cd ${{github.workspace}}/rest-vol/build
-              sudo cmake -DHDF5_VOL_REST_ENABLE_CURL_DEBUG=ON -DPREBUILT_HDF5_DIR=${{github.workspace}}/hdf5install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/rest-vol/build/install ..
-              sudo make
+              sudo cmake -DPREBUILT_HDF5_DIR=${{github.workspace}}/hdf5install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/rest-vol/build/install ..
+              sudo make -j
               sudo make install
         
       - name: Start HSDS
@@ -147,7 +148,7 @@ jobs:
               echo "HSDS_USERNAME=test_user1" >> $GITHUB_ENV &&
               echo "HSDS_PASSWORD=test" >> $GITHUB_ENV &&
               echo "HSDS_PATH=/home/test_user1/" >> $GITHUB_ENV &&
-              echo "HSDS_ENDPOINT=http+unix://%2Ftmp%2Fhs%2Fsn_1.sock" >> $GITHUB_ENV &&
+              echo "HSDS_ENDPOINT=${{matrix.endpoint}}" >> $GITHUB_ENV &&
               echo "HDF5_VOL_CONNECTOR=REST" >> $GITHUB_ENV &&
               echo "HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol/build/bin/" >> $GITHUB_ENV &&
               echo "ROOT_DIR=${{github.workspace}}/hsdsdata" >> $GITHUB_ENV &&
@@ -158,7 +159,7 @@ jobs:
               export USER_PASSWORD=test
               export USER2_NAME=test_user2
               export USER2_PASSWORD=test
-              export HSDS_ENDPOINT=http+unix://%2Ftmp%2Fhs%2Fsn_1.sock
+              export HSDS_ENDPOINT=${{matrix.endpoint}}
               export HSDS_USERNAME=test_user1
               export HSDS_PASSWORD=test
               export HDF5_VOL_CONNECTOR=REST 
@@ -182,7 +183,7 @@ jobs:
               echo "HSDS_USERNAME=test_user1" >> $GITHUB_ENV &&
               echo "HSDS_PASSWORD=test" >> $GITHUB_ENV &&
               echo "HSDS_PATH=/home/test_user1/" >> $GITHUB_ENV &&
-              echo "HSDS_ENDPOINT=http+unix://%2Ftmp%2Fhs%2Fsn_1.sock" >> $GITHUB_ENV &&
+              echo "HSDS_ENDPOINT=${{matrix.endpoint}}" >> $GITHUB_ENV &&
               echo "HDF5_VOL_CONNECTOR=REST" >> $GITHUB_ENV &&
               echo "HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol/build/bin/" >> $GITHUB_ENV &&
               echo "ROOT_DIR=${{github.workspace}}/hsdsdata" >> $GITHUB_ENV &&
@@ -193,7 +194,7 @@ jobs:
               export USER_PASSWORD=test
               export USER2_NAME=test_user2
               export USER2_PASSWORD=test
-              export HSDS_ENDPOINT=http+unix://%2Ftmp%2Fhs%2Fsn_1.sock
+              export HSDS_ENDPOINT=${{matrix.endpoint}}
               export HSDS_USERNAME=test_user1
               export HSDS_PASSWORD=test
               export HDF5_VOL_CONNECTOR=REST 
