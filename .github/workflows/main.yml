@@ -239,4 +239,5 @@ jobs:
               newgrp docker
               docker ps
               ${{github.workspace}}/setup_env_vars.sh
+              curl http://127.0.0.1:5101/about
               ${{github.workspace}}${{matrix.test-path}}
