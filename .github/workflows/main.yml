@@ -222,16 +222,17 @@ jobs:
       - name: Test HSDS with docker
         if: ${{matrix.endpoint == 'http://127.0.0.1:5101'}}
         run: |
-              newgrp docker
+              docker logout
+              docker login $USER
               ${{github.workspace}}/setup_env_vars.sh
-              python testall.py
+              pytest 
         working-directory: ${{github.workspace}}/hsds
       
       - name: Test HSDS without docker
         if: ${{matrix.endpoint != 'http://127.0.0.1:5101'}}
         run: |
               ${{github.workspace}}/setup_env_vars.sh
-              python testall.py
+              python tests/integ/setup_test.py
         working-directory: ${{github.workspace}}/hsds
         
       - name: Local Socket Tests at ${{matrix.test-path}}
