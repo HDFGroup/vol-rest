@@ -165,7 +165,7 @@ jobs:
               sudo make install
         
       - name: Get docker
-        if: ${{ ${{matrix.endpoint}} == ${{'http://127.0.0.1:5101'}} }}
+        if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
         run: |
               sudo apt-get update
               sudo apt install docker.io
@@ -175,22 +175,22 @@ jobs:
               sudo gpasswd -a $USER docker
               
       - name: Verify docker installation
-        if: ${{ ${{matrix.endpoint}} == ${{'http://127.0.0.1:5101'}} }}
+        if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
         run: |
               sudo docker ps
               
       - name: Get docker-compose
-        if: ${{ ${{matrix.endpoint}} == ${{'http://127.0.0.1:5101'}} }}
+        if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
         run: |
               sudo apt-get install docker-compose-plugin
               
       - name: Verify docker-compose installation
-        if: ${{ ${{matrix.endpoint}} == ${{'http://127.0.0.1:5101'}} }}
+        if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
         run: |
               sudo docker compose version
             
       - name: Start HSDS with no docker
-        if: ${{ !(${{matrix.endpoint}} == ${{'http://127.0.0.1:5101'}}) }}
+        if: ${{ matrix.endpoint != 'http://127.0.0.1:5101'}}
         run: | 
               mkdir ${{github.workspace}}/hsdsdata &&
               mkdir ${{github.workspace}}/hsdsdata/hsdstest &&
@@ -205,7 +205,7 @@ jobs:
         working-directory: ${{github.workspace}}/hsds
         
       - name: Start HSDS with docker
-        if: ${{ ${{matrix.endpoint}} == ${{'http://127.0.0.1:5101'}} }}
+        if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
         run: |
               mkdir ${{github.workspace}}/hsdsdata &&
               mkdir ${{github.workspace}}/hsdsdata/hsdstest &&
