@@ -128,10 +128,6 @@ jobs:
               sudo cmake -DHDF5_VOL_REST_ENABLE_CURL_DEBUG=ON -DPREBUILT_HDF5_DIR=${{github.workspace}}/hdf5install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/rest-vol/build/install ..
               sudo make
               sudo make install
-              
-      - name: Check directory structure
-        run: |
-              ls /tmp/hs
         
       - name: Run old REST VOL tests
         run: |
