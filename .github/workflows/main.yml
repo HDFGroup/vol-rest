@@ -88,6 +88,7 @@ jobs:
           export BUCKET_NAME=hsdstest
           export HSDS_PATH=/home/test_user1
           ./runall.sh --no-docker &
+          sleep 10
         working-directory: ${{github.workspace}}/hsds
         
       - name: Install Autotools Dependencies (Linux, serial)
@@ -169,9 +170,7 @@ jobs:
               
       - name: Check directory structure
         run: |
-              sudo apt install tree
-              cd ${{github.workspace}}/rest-vol/build
-              tree
+              ls /tmp/hs
         
       - name: Run old REST VOL tests
         run: |
