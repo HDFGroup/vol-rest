@@ -238,4 +238,5 @@ jobs:
               sudo gpasswd -a $USER docker
               newgrp docker
               docker ps
+              ${{github.workspace}}/setup_env_vars.sh
               ${{github.workspace}}${{matrix.test-path}}
