@@ -165,7 +165,7 @@ jobs:
               export HSDS_PATH=/home/test_user1
               cd ${{github.workspace}}/hsds
               ./runall.sh --no-docker &
-              sleep 10
+              sleep 600
               ${{github.workspace}}/rest-vol/build/bin/test_rest_vol-shared
       - name: Run new vol-tests
         run: | 
