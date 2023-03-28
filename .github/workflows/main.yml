@@ -166,7 +166,7 @@ jobs:
       - name: Verify docker-compose installation
         if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
         run: |
-              sudo docker compose version
+              sudo docker-compose version
               
       - name: Clone vol-tests repo
         uses: actions/checkout@v3
