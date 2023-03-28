@@ -240,4 +240,5 @@ jobs:
               docker ps
               ${{github.workspace}}/setup_env_vars.sh
               curl http://127.0.0.1:5101/about
+              docker network ls
               ${{github.workspace}}${{matrix.test-path}}
