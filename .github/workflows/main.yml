@@ -8,6 +8,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.8"]
+        test-path: ["/rest-vol/build/bin/test_rest_vol-shared", "/rest-vol/build/bin/h5vl_test"]
         
     runs-on: ubuntu-latest
     steps:
@@ -203,6 +204,6 @@ jobs:
               python testall.py
         working-directory: ${{github.workspace}}/hsds
         
-      - name: Run old REST VOL tests (Local Endpoint)
+      - name: Local Socket Tests at ${{matrix.test-path}}
         run: |
-              ${{github.workspace}}/rest-vol/build/bin/test_rest_vol-shared
+              ${{github.workspace}}${{matrix.test-path}}
