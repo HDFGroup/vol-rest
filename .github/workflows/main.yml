@@ -129,7 +129,7 @@ jobs:
               sudo make
               sudo make install
         
-      - name: Run old REST VOL tests
+      - name: Run old REST VOL tests (Local Endpoint)
         run: |
               mkdir ${{github.workspace}}/hsdsdata &&
               mkdir ${{github.workspace}}/hsdsdata/hsdstest &&
@@ -164,10 +164,12 @@ jobs:
               export BUCKET_NAME=hsdstest
               export HSDS_PATH=/home/test_user1
               cd ${{github.workspace}}/hsds
-              ./runall.sh --no-docker &
-              sleep 600
-              ${{github.workspace}}/rest-vol/build/bin/test_rest_vol-shared
-      - name: Run new vol-tests
+              ./runall.sh --no-docker 1 &
+              sleep 10
+              python testall.py
+              cd ${{github.workspace}}/rest-vol/
+              ./build/bin/test_rest_vol-shared
+      - name: Run new vol-tests (Local Endpoint)
         run: | 
               export ADMIN_PASSWORD=admin
               export ADMIN_USERNAME=admin
