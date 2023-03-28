@@ -163,7 +163,6 @@ jobs:
       - name: Update docker permissions
         if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
         run: |
-              echo "User = $USER"
               sudo gpasswd -a $USER docker
               newgrp docker
               docker ps
@@ -220,7 +219,8 @@ jobs:
       - name: Test HSDS
         run: |
               ${{github.workspace}}/setup_env_vars.sh
-              USER_PASSWORD=test python testall.py
+              which python
+              sudo HSDS_USERNAME=test_user1 HSDS_PASSWORD=test USER_PASSWORD=test ROOT_DIR=${{github.workspace}}/hsdsdata BUCKET_NAME=hsdstest HSDS_ENDPOINT=http://127.0.0.1:5101 python testall.py
         working-directory: ${{github.workspace}}/hsds
         
       - name: Local Socket Tests at ${{matrix.test-path}}
