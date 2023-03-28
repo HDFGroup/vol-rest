@@ -192,6 +192,7 @@ jobs:
       - name: Start HSDS with no docker
         if: ${{ matrix.endpoint != 'http://127.0.0.1:5101'}}
         run: | 
+              cd ${{github.workspace}}/hsds
               mkdir ${{github.workspace}}/hsdsdata &&
               mkdir ${{github.workspace}}/hsdsdata/hsdstest &&
               cp admin/config/groups.default admin/config/groups.txt &&
@@ -199,8 +200,7 @@ jobs:
               cp admin/config/groups.default admin/config/groups.txt &&
               cp admin/config/passwd.default admin/config/passwd.txt &&
               ${{github.workspace}}/setup_env_vars.sh
-              cd ${{github.workspace}}/hsds
-              ./runall.sh --no-docker 1 &
+              ROOT_DIR=${{github.workspace}}/hsdadata ./runall.sh --no-docker 1 &
               sleep 10
         working-directory: ${{github.workspace}}/hsds
         
