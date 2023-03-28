@@ -170,8 +170,8 @@ jobs:
       - name: Check directory structure
         run: |
               sudo apt install tree
+              cd ${{github.workspace}}/rest-vol-build
               tree
-        working-directory: ${{github.workspace}}/rest-vol-build
         
       - name: Run old REST VOL tests
         run: |
