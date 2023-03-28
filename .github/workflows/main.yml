@@ -51,45 +51,6 @@ jobs:
         run: |
           cd ${{github.workspace}}/hsds
           pytest
-          
-      - name: Start HSDS
-        shell: bash
-        run: |
-          mkdir ${{github.workspace}}/hsdsdata &&
-          mkdir ${{github.workspace}}/hsdsdata/hsdstest &&
-          cp admin/config/groups.default admin/config/groups.txt &&
-          cp admin/config/passwd.default admin/config/passwd.txt &&
-          cp admin/config/groups.default admin/config/groups.txt &&
-          cp admin/config/passwd.default admin/config/passwd.txt &&
-          echo "ADMIN_PASSWORD=admin" >> $GITHUB_ENV &&
-          echo "ADMIN_USERNAME=admin" >> $GITHUB_ENV &&
-          echo "USER_NAME=test_user1" >> $GITHUB_ENV &&
-          echo "USER_PASSWORD=test" >> $GITHUB_ENV &&
-          echo "USER2_NAME=test_user2" >> $GITHUB_ENV &&
-          echo "USER2_PASSWORD=test" >> $GITHUB_ENV &&
-          echo "HSDS_USERNAME=test_user1" >> $GITHUB_ENV &&
-          echo "HSDS_PASSWORD=test" >> $GITHUB_ENV &&
-          echo "HSDS_PATH=/home/test_user1" >> $GITHUB_ENV &&
-          echo "HSDS_ENDPOINT=http+unix://%2Ftmp%2Fhs%2Fsn_1.sock" >> $GITHUB_ENV &&
-          echo "ROOT_DIR=${{github.workspace}}/hsdsdata" >> $GITHUB_ENV &&
-          echo "BUCKET_NAME=hsdstest" >> $GITHUB_ENV
-          export ADMIN_PASSWORD=admin
-          export ADMIN_USERNAME=admin
-          export USER_NAME=test_user1
-          export USER_PASSWORD=test
-          export USER2_NAME=test_user2
-          export USER2_PASSWORD=test
-          export HSDS_ENDPOINT=http+unix://%2Ftmp%2Fhs%2Fsn_1.sock
-          export HSDS_USERNAME=test_user1
-          export HSDS_PASSWORD=test
-          export HDF5_VOL_CONNECTOR=REST 
-          export HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol/build/bin/
-          export ROOT_DIR=${{github.workspace}}/hsdsdata
-          export BUCKET_NAME=hsdstest
-          export HSDS_PATH=/home/test_user1
-          ./runall.sh --no-docker &
-          sleep 10
-        working-directory: ${{github.workspace}}/hsds
         
       - name: Install Autotools Dependencies (Linux, serial)
         run: |
@@ -164,7 +125,7 @@ jobs:
       - name: Build REST VOL (Cmake)
         run: |
               cd ${{github.workspace}}/rest-vol/build
-              sudo cmake -DPREBUILT_HDF5_DIR=${{github.workspace}}/hdf5install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/rest-vol/build/install ..
+              sudo cmake -DHDF5_VOL_REST_ENABLE_CURL_DEBUG=ON -DPREBUILT_HDF5_DIR=${{github.workspace}}/hdf5install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/rest-vol/build/install ..
               sudo make
               sudo make install
               
@@ -174,6 +135,24 @@ jobs:
         
       - name: Run old REST VOL tests
         run: |
+              mkdir ${{github.workspace}}/hsdsdata &&
+              mkdir ${{github.workspace}}/hsdsdata/hsdstest &&
+              cp admin/config/groups.default admin/config/groups.txt &&
+              cp admin/config/passwd.default admin/config/passwd.txt &&
+              cp admin/config/groups.default admin/config/groups.txt &&
+              cp admin/config/passwd.default admin/config/passwd.txt &&
+              echo "ADMIN_PASSWORD=admin" >> $GITHUB_ENV &&
+              echo "ADMIN_USERNAME=admin" >> $GITHUB_ENV &&
+              echo "USER_NAME=test_user1" >> $GITHUB_ENV &&
+              echo "USER_PASSWORD=test" >> $GITHUB_ENV &&
+              echo "USER2_NAME=test_user2" >> $GITHUB_ENV &&
+              echo "USER2_PASSWORD=test" >> $GITHUB_ENV &&
+              echo "HSDS_USERNAME=test_user1" >> $GITHUB_ENV &&
+              echo "HSDS_PASSWORD=test" >> $GITHUB_ENV &&
+              echo "HSDS_PATH=/home/test_user1" >> $GITHUB_ENV &&
+              echo "HSDS_ENDPOINT=http+unix://%2Ftmp%2Fhs%2Fsn_1.sock" >> $GITHUB_ENV &&
+              echo "ROOT_DIR=${{github.workspace}}/hsdsdata" >> $GITHUB_ENV &&
+              echo "BUCKET_NAME=hsdstest" >> $GITHUB_ENV
               export ADMIN_PASSWORD=admin
               export ADMIN_USERNAME=admin
               export USER_NAME=test_user1
@@ -188,6 +167,9 @@ jobs:
               export ROOT_DIR=${{github.workspace}}/hsdsdata
               export BUCKET_NAME=hsdstest
               export HSDS_PATH=/home/test_user1
+              cd ${{github.workspace}}/hsds
+              ./runall.sh --no-docker &
+              sleep 10
               ${{github.workspace}}/rest-vol/build/bin/test_rest_vol-shared
       - name: Run new vol-tests
         run: | 
