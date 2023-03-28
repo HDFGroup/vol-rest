@@ -235,4 +235,7 @@ jobs:
               
       - name: Local Socket Tests at ${{matrix.test-path}}
         run: |
+              sudo gpasswd -a $USER docker
+              newgrp docker
+              docker ps
               ${{github.workspace}}${{matrix.test-path}}
