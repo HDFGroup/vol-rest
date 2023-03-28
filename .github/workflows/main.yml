@@ -161,7 +161,7 @@ jobs:
       - name: Get docker-compose
         if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
         run: |
-              sudo apt-get install docker-compose-plugin
+              sudo apt-get install docker-compose
               
       - name: Verify docker-compose installation
         if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
