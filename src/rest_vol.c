@@ -397,7 +397,7 @@ H5_rest_init(hid_t vipl_id)
 
     const char *URL = getenv("HSDS_ENDPOINT");
     
-    if (!strncmp(URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
+    if (URL && !strncmp(URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
         char* socket_path = "/tmp/hs/sn_1.sock";
 
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UNIX_SOCKET_PATH, socket_path))
