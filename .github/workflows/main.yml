@@ -137,20 +137,20 @@ jobs:
               cp admin/config/passwd.default admin/config/passwd.txt &&
               cp admin/config/groups.default admin/config/groups.txt &&
               cp admin/config/passwd.default admin/config/passwd.txt &&
-              echo "ADMIN_PASSWORD=admin" >> $GITHUB_ENV &&
-              echo "ADMIN_USERNAME=admin" >> $GITHUB_ENV &&
-              echo "USER_NAME=test_user1" >> $GITHUB_ENV &&
-              echo "USER_PASSWORD=test" >> $GITHUB_ENV &&
-              echo "USER2_NAME=test_user2" >> $GITHUB_ENV &&
-              echo "USER2_PASSWORD=test" >> $GITHUB_ENV &&
-              echo "HSDS_USERNAME=test_user1" >> $GITHUB_ENV &&
-              echo "HSDS_PASSWORD=test" >> $GITHUB_ENV &&
-              echo "HSDS_PATH=/home/test_user1/" >> $GITHUB_ENV &&
-              echo "HSDS_ENDPOINT=http+unix://%2Ftmp%2Fhs%2Fsn_1.sock" >> $GITHUB_ENV &&
-              echo "HDF5_VOL_CONNECTOR=REST" >> $GITHUB_ENV &&
-              echo "HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol/build/bin/" >> $GITHUB_ENV &&
-              echo "ROOT_DIR=${{github.workspace}}/hsdsdata" >> $GITHUB_ENV &&
-              echo "BUCKET_NAME=hsdstest" >> $GITHUB_ENV
+              export ADMIN_PASSWORD=admin
+              export ADMIN_USERNAME=admin
+              export USER_NAME=test_user1
+              export USER_PASSWORD=test
+              export USER2_NAME=test_user2
+              export USER2_PASSWORD=test
+              export HSDS_ENDPOINT=http+unix://%2Ftmp%2Fhs%2Fsn_1.sock
+              export HSDS_USERNAME=test_user1
+              export HSDS_PASSWORD=test
+              export HDF5_VOL_CONNECTOR=REST 
+              export HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol/build/bin/
+              export ROOT_DIR=${{github.workspace}}/hsdsdata
+              export BUCKET_NAME=hsdstest
+              export HSDS_PATH=/home/test_user1/
               cd ${{github.workspace}}/hsds
               ./runall.sh --no-docker 1 &
               sleep 10
