@@ -220,7 +220,7 @@ jobs:
       - name: Test HSDS
         run: |
               ${{github.workspace}}/setup_env_vars.sh
-              python testall.py
+              USER_PASSWORD=test python testall.py
         working-directory: ${{github.workspace}}/hsds
         
       - name: Local Socket Tests at ${{matrix.test-path}}
