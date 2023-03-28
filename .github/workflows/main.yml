@@ -158,16 +158,7 @@ jobs:
               cd ${{github.workspace}}/rest-vol
               mkdir ${{github.workspace}}/rest-vol/build
               cd ${{github.workspace}}/rest-vol/src/hdf5
-              cp -r ${{github.workspace}}/hdf5install/* .
-              
-              
-      - name: Check src/hdf5 directory contents
-        run: |
-              ls ${{github.workspace}}/rest-vol/src/hdf5
-              
-      - name: Check vol-tests directory contents
-        run: |
-              ls ${{github.workspace}}/rest-vol/test/vol-tests/
+              cp -r ${{github.workspace}}/hdf5install/* .           
       
       - name: Build REST VOL (Cmake)
         run: |
@@ -176,6 +167,12 @@ jobs:
               sudo make
               sudo make install
               
+      - name: Check directory structure
+        run: |
+              sudo apt install tree
+              tree
+        working-directory: ${{github.workspace}}/rest-vol-build
+        
       - name: Run old REST VOL tests
         run: |
               export ADMIN_PASSWORD=admin
