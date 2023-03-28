@@ -167,7 +167,6 @@ jobs:
       - name: Get docker
         if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
         run: |
-              sudo apt-get update
               sudo apt install docker.io
               sudo systemctl start docker
               sudo systemctl enable docker
