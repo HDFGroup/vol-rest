@@ -152,8 +152,6 @@ jobs:
               sudo apt install docker.io
               sudo systemctl start docker
               sudo systemctl enable docker
-              sudo groupadd docker
-              sudo gpasswd -a $USER docker
               
       - name: Verify docker installation
         if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
