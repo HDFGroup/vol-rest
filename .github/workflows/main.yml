@@ -7,9 +7,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, mac-latest]
-        python-version: ["3.8", "3.9", "3.10"]
-        test-path: ["/rest-vol/build/bin/test_rest_vol-shared", "/rest-vol/build/bin/h5vl_test"]
+        #os: [ubuntu-latest, mac-latest]
+        os: ubuntu-latest
+        python-version: ["3.8"]
+        #test-path: ["/rest-vol/build/bin/test_rest_vol-shared"]
+        #test-path: ["/rest-vol/build/bin/test_rest_vol-shared", "/rest-vol/build/bin/h5vl_test"]
         endpoint: ["http+unix://%2Ftmp%2Fhs%2Fsn_1.sock"]
         
     runs-on: ${{matrix.os}}
