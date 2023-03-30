@@ -7,13 +7,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8"]
-        test-path: ["/rest-vol/build/bin/test_rest_vol-shared"]
-        endpoint: ["http://127.0.0.1:5101"]
-        #test-path: ["/rest-vol/build/bin/test_rest_vol-shared", "/rest-vol/build/bin/h5vl_test"]
-        #endpoint: ["http://127.0.0.1:5101", "http+unix://%2Ftmp%2Fhs%2Fsn_1.sock"]
+        os: [ubuntu-latest, mac-latest]
+        python-version: ["3.8", "3.9", "3.10"]
+        test-path: ["/rest-vol/build/bin/test_rest_vol-shared", "/rest-vol/build/bin/h5vl_test"]
+        endpoint: ["http+unix://%2Ftmp%2Fhs%2Fsn_1.sock"]
         
-    runs-on: ubuntu-latest
+    runs-on: ${{matrix.os}}
     steps:
       - name: Create environment variable setup script
         working-directory: ${{github.workspace}}
@@ -146,29 +145,6 @@ jobs:
           key: hdf5
           path: ${{github.workspace}}/hdf5install
           
-      - name: Get docker
-        if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
-        run: |
-              sudo apt purge moby-containerd
-              sudo apt purge moby-runc
-              sudo apt install docker.io
-              sudo systemctl start docker
-              sudo systemctl enable docker
-              sudo docker ps      
-              
-      - name: Get docker-compose
-        if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
-        run: |
-              sudo apt-get install docker-compose
-              sudo docker-compose version
-              
-      - name: Update docker permissions
-        if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
-        run: |
-              sudo gpasswd -a $USER docker
-              newgrp docker
-              docker ps
-    
       - name: Clone vol-tests repo
         uses: actions/checkout@v3
         with:
@@ -182,7 +158,7 @@ jobs:
               cd ${{github.workspace}}/rest-vol/src/hdf5
               cp -r ${{github.workspace}}/hdf5install/* .           
             
-      - name: Start HSDS with no docker
+      - name: Start HSDS
         if: ${{ matrix.endpoint != 'http://127.0.0.1:5101'}}
         run: | 
               cd ${{github.workspace}}/hsds
@@ -197,29 +173,7 @@ jobs:
               sleep 10
         working-directory: ${{github.workspace}}/hsds
         
-      - name: Start HSDS with docker
-        if: ${{ matrix.endpoint == 'http://127.0.0.1:5101'}}
-        run: |
-              mkdir ${{github.workspace}}/hsdsdata &&
-              mkdir ${{github.workspace}}/hsdsdata/hsdstest &&
-              cp admin/config/groups.default admin/config/groups.txt &&
-              cp admin/config/passwd.default admin/config/passwd.txt &&
-              cp admin/config/groups.default admin/config/groups.txt &&
-              cp admin/config/passwd.default admin/config/passwd.txt &&
-              ${{github.workspace}}/setup_env_vars.sh
-              cd ${{github.workspace}}/hsds
-              newgrp docker
-              ./runall.sh 1
-              sleep 10
-              
-      - name: Test HSDS with docker
-        if: ${{matrix.endpoint == 'http://127.0.0.1:5101'}}
-        run: |
-              ${{github.workspace}}/setup_env_vars.sh
-              pytest 
-        working-directory: ${{github.workspace}}/hsds
-      
-      - name: Test HSDS without docker
+      - name: Test HSDS
         if: ${{matrix.endpoint != 'http://127.0.0.1:5101'}}
         run: |
               ${{github.workspace}}/setup_env_vars.sh
@@ -233,12 +187,7 @@ jobs:
               sudo make -j
               sudo make install
               
-      - name: Local Socket Tests at ${{matrix.test-path}}
+      - name: Tests at ${{matrix.test-path}}
         run: |
-              sudo gpasswd -a $USER docker
-              newgrp docker
-              docker ps
               ${{github.workspace}}/setup_env_vars.sh
-              curl http://127.0.0.1:5101/about
-              docker network ls
               ${{github.workspace}}${{matrix.test-path}}
