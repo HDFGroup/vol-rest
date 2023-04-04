@@ -893,7 +893,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
     printf("   \\**********************************/\n\n");
 #endif
 
-    CURL_PERFORM(curl, H5E_DATASET, H5E_WRITEERROR, FAIL);
+    if (write_len > 0)
+        CURL_PERFORM(curl, H5E_DATASET, H5E_WRITEERROR, FAIL);
 
 done:
 #ifdef RV_CONNECTOR_DEBUG
