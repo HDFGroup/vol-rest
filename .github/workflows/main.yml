@@ -185,7 +185,7 @@ jobs:
       - name: Build REST VOL (Cmake)
         run: |
               cd ${{github.workspace}}/rest-vol/build
-              sudo cmake -DPREBUILT_HDF5_DIR=${{github.workspace}}/hdf5install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/rest-vol/build/install ..
+              sudo CFLAGS="-D_POSIX_C_SOURCE=199506L" cmake -DPREBUILT_HDF5_DIR=${{github.workspace}}/hdf5install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/rest-vol/build/install ..
               sudo make -j
               sudo make install
               
