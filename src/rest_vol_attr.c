@@ -281,6 +281,7 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
 
     uinfo.buffer = create_request_body;
     uinfo.buffer_size = (size_t) create_request_body_len;
+    uinfo.bytes_sent = 0;
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
@@ -973,6 +974,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
 
     uinfo.buffer = buf;
     uinfo.buffer_size = write_body_len;
+    uinfo.bytes_sent = 0;
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);

@@ -1243,9 +1243,8 @@ done:
  *              buffer into cURL's internal buffer when making an HTTP PUT
  *              call to the server.
  *
- * Return:      Amount of bytes equal to the amount given in the upload
- *              info struct on success/0 on failure or if NULL data buffer
- *              is given
+ * Return:      Amount of bytes uploaded, 0 if transfer finished or
+ *              NULL data buffer is given
  *
  * Programmer:  Jordan Henderson
  *              January, 2018
@@ -1258,9 +1257,19 @@ H5_rest_curl_read_data_callback(char *buffer, size_t size, size_t nmemb, void *i
     size_t       data_size = 0;
 
     if (inptr) {
-        data_size = (uinfo->buffer_size > max_buf_size) ? max_buf_size : uinfo->buffer_size;
+        size_t bytes_left = 0;
 
-        memcpy(buffer, uinfo->buffer, data_size);
+        /* If all bytes sent, indicate transfer is finished */
+        if (uinfo->bytes_sent >= uinfo->buffer_size) {
+            return 0;
+        }
+
+        bytes_left = uinfo->buffer_size - uinfo->bytes_sent;
+        data_size = (bytes_left > max_buf_size) ? max_buf_size : bytes_left;
+
+        memcpy(buffer, uinfo->buffer + uinfo->bytes_sent, data_size);
+
+        uinfo->bytes_sent += data_size;
     } /* end if */
 
     return data_size;

@@ -445,6 +445,7 @@ typedef struct attr_table_entry {
 typedef struct {
     const void *buffer;
     size_t      buffer_size;
+    size_t      bytes_sent;
 } upload_info;
 
 /*
