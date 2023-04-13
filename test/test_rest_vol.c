@@ -8215,7 +8215,6 @@ test_read_dataset_large_point_selection(void)
 {
     hsize_t *points = NULL;
     hsize_t  dims[DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK] = { 600, 600, 600 };
-    size_t   i, data_size;
     hid_t    file_id = -1, fapl_id = -1;
     hid_t    container_group = -1;
     hid_t    dset_id = -1;
@@ -8254,23 +8253,24 @@ test_read_dataset_large_point_selection(void)
         goto error;
     }
 
-    for (i = 0, data_size = 1; i < DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK; i++)
-        data_size *= dims[i];
-    data_size = DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPESIZE;
+    size_t num_elems = 1;
 
-    if (NULL == (data = malloc(data_size)))
+    for (size_t i = 0; i < DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK; i++)
+        num_elems *= dims[i];
+
+    if (NULL == (data = calloc(num_elems, DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPESIZE)))
         TEST_ERROR
-    if (NULL == (points = malloc(data_size / DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPESIZE)))
+    if (NULL == (points = calloc(3 * num_elems, sizeof(hsize_t))))
         TEST_ERROR
 
     /* Select the entire dataspace */
-    for (i = 0; i < data_size / DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPESIZE; i++) {
+    for (size_t i = 0; i < num_elems; i += 3) {
         points[(i * DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK)] = (i % (dims[0] * dims[1])) % dims[1];
         points[(i * DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK) + 1] = (i % (dims[0] * dims[1])) / dims[0];
         points[(i * DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_SPACE_RANK) + 2] = (i / (dims[0] * dims[1]));
     }
 
-    if (H5Sselect_elements(fspace_id, H5S_SELECT_SET, data_size / DATASET_LARGE_READ_TEST_POINT_SELECTION_DSET_DTYPESIZE, points) < 0) {
+    if (H5Sselect_elements(fspace_id, H5S_SELECT_SET, num_elems, points) < 0) {
         H5_FAILED();
         printf("    couldn't select points\n");
         goto error;

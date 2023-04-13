@@ -865,6 +865,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
 
     uinfo.buffer = is_transfer_binary ? buf[0] : write_body;
     uinfo.buffer_size = write_body_len;
+    uinfo.bytes_sent = 0;
 
     /* Check to make sure that the size of the write body can safely be cast to a curl_off_t */
     if (sizeof(curl_off_t) < sizeof(size_t))
