@@ -2,6 +2,7 @@
 
 HDF5 REST VOL connector - currently under development
 
+[![build status](https://img.shields.io/github/actions/workflow/status/HDFGroup/vol-rest/main.yml?branch=master&label=build%20and%20test)](https://github.com/HDFGroup/vol-rest/actions?query=branch%3Amaster)
 
 ### Table of Contents: <!-- omit in toc -->
 
