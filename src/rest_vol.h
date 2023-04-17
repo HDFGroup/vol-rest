@@ -531,6 +531,9 @@ herr_t RV_parse_response(char *HTTP_response, void *callback_data_in, void *call
 /* Callback for RV_parse_response() to capture an object's URI */
 herr_t RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 
+/* Callback for RV_parse_response() to capture an object's URI and domain, for external links */
+herr_t RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+
 /* Helper function to find an object given a starting object to search from and a path */
 htri_t RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
        herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in, void *callback_data_out);

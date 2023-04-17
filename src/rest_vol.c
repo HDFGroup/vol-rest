@@ -1637,6 +1637,61 @@ done:
     return ret_value;
 } /* end RV_parse_response() */
 
+/*-------------------------------------------------------------------------
+ * Function:    RV_copy_object_URI_and_domain_callback
+ *
+ * Purpose:     Copies information from response to provided buffers.
+ * 
+ *              This function should be used in place of 
+ *              RV_copy_object_URI_callback wherever the object
+ *              may be an external link, whose domain is different
+ *              from the domain of its parent object.
+ * 
+ *              callback_data_out is expected to be a pointer to an array
+ *              of two pointers, the first pointing to a buffer for the URI,
+ *              and the second pointing to a buffer for the domain/parent object. 
+ * 
+ *              
+ *              callback_data_is provided inside RV_find_object_by_path.
+ *              This function expects callback_data_in to be a pointer to a valid parent
+ *              object, with its struct and filepath_name in heap memory. 
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              April, 2023
+ */
+herr_t RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out) {
+
+    herr_t ret_value = SUCCEED;
+    RV_object_t *parent_object = (RV_object_t*) callback_data_in;
+    RV_object_t *domain_buffer = NULL;
+    void  *URI_domain_ptrs[2];
+    void  *URI_buffer = NULL;
+
+    memcpy(URI_domain_ptrs, callback_data_out, sizeof(void*) * 2);
+    
+    URI_buffer = URI_domain_ptrs[0];
+    domain_buffer = (RV_object_t*) URI_domain_ptrs[1];
+
+    if (parent_object) {
+        /* Free previous filepath memory */
+        RV_free(domain_buffer->u.file.filepath_name);
+        memcpy(domain_buffer, parent_object, sizeof(*parent_object));
+
+        domain_buffer->u.file.filepath_name = RV_malloc(strlen(parent_object->domain->u.file.filepath_name) + 1);
+
+        memcpy(domain_buffer->u.file.filepath_name, \
+                parent_object->domain->u.file.filepath_name, \
+                strlen(parent_object->domain->u.file.filepath_name) + 1);
+
+        ret_value = RV_copy_object_URI_callback(HTTP_response, NULL, URI_buffer);
+    } else {
+        ret_value = FAIL;
+    }
+
+    return ret_value;
+}
 
 /*-------------------------------------------------------------------------
  * Function:    RV_copy_object_URI_callback
@@ -2219,9 +2274,14 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
 #endif
 
         if (ret_value > 0) {
-            if (obj_found_callback && RV_parse_response(response_buffer.buffer,
-                    callback_data_in, callback_data_out, obj_found_callback) < 0)
+            if (obj_found_callback == RV_copy_object_URI_and_domain_callback) {
+                if (RV_parse_response(response_buffer.buffer, parent_obj, callback_data_out, obj_found_callback) < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "can't perform callback operation");
+            } else if (obj_found_callback && RV_parse_response(response_buffer.buffer,
+                    callback_data_in, callback_data_out, obj_found_callback) < 0) {
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "can't perform callback operation");
+            }
+                
         } /* end if */
     } /* end else */
 

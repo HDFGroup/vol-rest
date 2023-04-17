@@ -1386,6 +1386,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                        hid_t dxpl_id, void **req)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
+    RV_object_t *attr_iter_obj_typed = NULL;
     H5I_type_t   parent_obj_type = H5I_UNINIT;
     size_t       host_header_len = 0;
     hid_t        attr_iter_object_id = H5I_INVALID_HID;
@@ -1757,33 +1758,54 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
                     memcpy(attr_iter_object, loc_obj, sizeof(RV_object_t));
 
+                    attr_iter_obj_typed = (RV_object_t*) attr_iter_object;
+
                     /* Since we already have the attribute's parent object, but still need an hid_t for it
                      * to pass to the user's object, we will just copy the current object, making sure to
                      * increment the ref. counts for the object's fields so that closing it at the end of
                      * this function does not close the fields themselves in the real object, such as a
                      * dataset's dataspace.
                      */
+
+                    if ((parent_obj_type == H5I_GROUP) || (parent_obj_type == H5I_DATASET) || (parent_obj_type == H5I_DATATYPE)) {
+                         /* These objects normally allocates space for domain/filename 
+                          * in their open/create calls, but those are circumvented here. 
+                          * Copy directly instead. */
+
+                        if (NULL == (attr_iter_obj_typed->domain = RV_malloc(sizeof(RV_object_t))))
+                            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for copied object");
+                        memcpy(attr_iter_obj_typed->domain, loc_obj->domain, sizeof(RV_object_t));
+
+                        if (NULL == (attr_iter_obj_typed->domain->u.file.filepath_name = RV_malloc(strlen(loc_obj->domain->u.file.filepath_name) + 1)))
+                            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for copied filepath_name object");
+                        strncpy(attr_iter_obj_typed->domain->u.file.filepath_name, loc_obj->domain->u.file.filepath_name, \
+                            strlen(loc_obj->domain->u.file.filepath_name) + 1);
+                    }
+
                     switch (parent_obj_type) {
                         case H5I_FILE:
                             /* Copy fapl, fcpl, and filepath name to new object */
-                            RV_object_t *attr_iter_obj = (RV_object_t*) attr_iter_object;
-                            if (H5I_INVALID_HID == (attr_iter_obj->u.file.fapl_id = H5Pcopy(loc_obj->u.file.fapl_id)))
+                           
+                            if (H5I_INVALID_HID == (attr_iter_obj_typed->u.file.fapl_id = H5Pcopy(loc_obj->u.file.fapl_id)))
                                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FAPL");
-                            if (H5I_INVALID_HID == (attr_iter_obj->u.file.fcpl_id = H5Pcopy(loc_obj->u.file.fcpl_id)))
+                            if (H5I_INVALID_HID == (attr_iter_obj_typed->u.file.fcpl_id = H5Pcopy(loc_obj->u.file.fcpl_id)))
                                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FCPL");
-                            if (NULL == (attr_iter_obj->u.file.filepath_name = RV_malloc(strlen(loc_obj->u.file.filepath_name) + 1)))
+                            if (NULL == (attr_iter_obj_typed->u.file.filepath_name = RV_malloc(strlen(loc_obj->u.file.filepath_name) + 1)))
                                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for copied filepath_name object");
 
-                            strncpy(attr_iter_obj->u.file.filepath_name, \
+                            strncpy(attr_iter_obj_typed->u.file.filepath_name, \
                                     loc_obj->u.file.filepath_name, \
                                     strlen(loc_obj->u.file.filepath_name) + 1);
                             break;
                         case H5I_GROUP:
+                
                             if (H5Iinc_ref(loc_obj->u.group.gcpl_id) < 0)
                                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL, "can't increment field's ref. count for copy of attribute's parent group");
+
                             break;
 
                         case H5I_DATATYPE:
+
                             if (H5Iinc_ref(loc_obj->u.datatype.dtype_id) < 0)
                                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL, "can't increment field's ref. count for copy of attribute's parent datatype");
                             if (H5Iinc_ref(loc_obj->u.datatype.tcpl_id) < 0)
@@ -1791,6 +1813,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                             break;
 
                         case H5I_DATASET:
+ 
                             if (H5Iinc_ref(loc_obj->u.dataset.dtype_id) < 0)
                                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL, "can't increment field's ref. count for copy of attribute's parent dataset");
                             if (H5Iinc_ref(loc_obj->u.dataset.space_id) < 0)
