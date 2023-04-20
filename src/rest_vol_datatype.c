@@ -1577,6 +1577,9 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
         /* Retrieve the length if the datatype is a fixed-length string */
+        if (NULL == (key_obj = yajl_tree_get(parse_tree, str_length_keys, yajl_t_any)))
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's length");
+
         if (!is_variable_str) fixed_length = YAJL_GET_INTEGER(key_obj);
         if (fixed_length < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype length");
