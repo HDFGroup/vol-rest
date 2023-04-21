@@ -134,13 +134,18 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
     new_dataset->u.dataset.space_id = FAIL;
     new_dataset->u.dataset.dapl_id = FAIL;
     new_dataset->u.dataset.dcpl_id = FAIL;
+    
+    if (RV_file_create_new_reference(parent->domain, &new_dataset->domain) < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy dataset domain");
 
     /* Copy information about file that the newly-created dataset is in */
+    /*
     new_dataset->domain = RV_malloc(sizeof(*parent->domain));
     memcpy(new_dataset->domain, parent->domain, sizeof(*parent->domain));
 
     new_dataset->domain->u.file.filepath_name = RV_malloc(strlen(parent->domain->u.file.filepath_name) + 1);
     strncpy(new_dataset->domain->u.file.filepath_name, parent->domain->u.file.filepath_name, strlen(parent->domain->u.file.filepath_name) + 1);
+    */
 
     /* Copy the DAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Dget_access_plist() will function correctly
@@ -321,8 +326,10 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     dataset->u.dataset.dcpl_id = FAIL;
 
     /* Copy information about file that the newly-created dataset is in */
-    dataset->domain = RV_malloc(sizeof(*parent->domain));
-    dataset->domain->u.file.filepath_name = RV_malloc(strlen(parent->domain->u.file.filepath_name) + 1);
+    if (RV_file_create_new_reference(parent->domain, &dataset->domain) < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy dataset domain");
+
+    
 
     /* Buffer to hold URI and domain ptrs */
     void *URI_domain_ptrs[2];
@@ -335,6 +342,8 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate dataset by path");
 
+    dataset->domain = URI_domain_ptrs[1];
+    
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Found dataset by given path\n\n");
 #endif
@@ -1142,10 +1151,10 @@ RV_dataset_close(void *dset, hid_t dxpl_id, void **req)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close DCPL");
     } /* end if */
 
-    if (_dset->domain)
-        RV_free(_dset->domain->u.file.filepath_name);
+    if (RV_file_close(_dset->domain, H5P_DEFAULT, NULL)) {
+        FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");
+    }
 
-    RV_free(_dset->domain);
     RV_free(_dset);
     _dset = NULL;
 

@@ -458,6 +458,7 @@ typedef struct RV_object_t RV_object_t;
 
 typedef struct RV_file_t {
     unsigned  intent;
+    unsigned  ref_count;
     char     *filepath_name;
     hid_t     fcpl_id;
     hid_t     fapl_id;

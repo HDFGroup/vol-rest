@@ -23,6 +23,7 @@ void   *RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl
 herr_t  RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req);
 herr_t  RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void **req);
 herr_t  RV_file_close(void *file, hid_t dxpl_id, void **req);
+herr_t  RV_file_create_new_reference(void *file, void **new_file);
 
 #ifdef __cplusplus
 }

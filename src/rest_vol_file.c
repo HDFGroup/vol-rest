@@ -68,6 +68,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     new_file->u.file.filepath_name = NULL;
     new_file->u.file.fapl_id = FAIL;
     new_file->u.file.fcpl_id = FAIL;
+    new_file->u.file.ref_count = 1;
 
     /* Copy the FAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Fget_access_plist() will function correctly. Note that due to the nature
@@ -286,6 +287,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     file->u.file.filepath_name = NULL;
     file->u.file.fapl_id = FAIL;
     file->u.file.fcpl_id = FAIL;
+    file->u.file.ref_count = 1;
 
     /* Store self-referential pointer in the domain field for this object
      * to simplify code for other types of objects
@@ -635,6 +637,7 @@ done:
 herr_t
 RV_file_close(void *file, hid_t dxpl_id, void **req)
 {
+
     RV_object_t *_file = (RV_object_t *) file;
     herr_t       ret_value = SUCCEED;
 
@@ -653,10 +656,7 @@ RV_file_close(void *file, hid_t dxpl_id, void **req)
     if (H5I_FILE != _file->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file");
 
-    if (_file->u.file.filepath_name) {
-        RV_free(_file->u.file.filepath_name);
-        _file->u.file.filepath_name = NULL;
-    }
+    _file->u.file.ref_count--;
 
     if (_file->u.file.fapl_id >= 0) {
         if (_file->u.file.fapl_id != H5P_FILE_ACCESS_DEFAULT && H5Pclose(_file->u.file.fapl_id) < 0)
@@ -667,7 +667,15 @@ RV_file_close(void *file, hid_t dxpl_id, void **req)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FCPL");
     } /* end if */
 
-    RV_free(_file);
+    if (_file->u.file.ref_count == 0) {
+        if (_file->u.file.filepath_name) {
+            RV_free(_file->u.file.filepath_name);
+            _file->u.file.filepath_name = NULL;
+        }
+
+        RV_free(_file);
+    }
+
     _file = NULL;
 
 done:
@@ -675,3 +683,52 @@ done:
 
     return ret_value;
 } /* end RV_file_close() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_file_create_new_reference
+ *
+ * Purpose:     This function handles increasing the reference count of 
+ *              a top-level file's object struct. 
+ * 
+ *              original_domain should be the address of a top-level file
+ *              which is being referred to by a newly opened or created child object,
+ *              
+ *              new_domain_ptr should be the address of a pointer
+ *              that will be used by that child object to point at the file.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              April, 2023
+ */
+herr_t
+RV_file_create_new_reference(void *original_domain, void** new_domain_ptr) {
+    herr_t ret_value = SUCCEED;
+    *new_domain_ptr = original_domain;
+    RV_object_t *_original_domain = (RV_object_t*) original_domain;
+
+    if (_original_domain) {
+        _original_domain->u.file.ref_count++;
+
+        if (_original_domain->u.file.fapl_id >= 0) {
+            if ((_original_domain->u.file.fapl_id != H5P_FILE_ACCESS_DEFAULT) && (H5Iinc_ref(_original_domain->u.file.fapl_id) < 0))
+                FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't increase ref count of FAPL");
+        } /* end if */
+
+        if (_original_domain->u.file.fcpl_id >= 0) {
+            if ((_original_domain->u.file.fcpl_id != H5P_FILE_CREATE_DEFAULT) && (H5Iinc_ref(_original_domain->u.file.fcpl_id) < 0))
+                FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't increase ref count of FCPL");
+        } /* end if */
+
+    } else {
+        FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "unable to create new reference to file");
+    }
+
+
+done:
+    return ret_value;
+}
+
+
+

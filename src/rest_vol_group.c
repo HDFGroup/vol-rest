@@ -80,12 +80,10 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     new_group->obj_type = H5I_GROUP;
     new_group->u.group.gapl_id = FAIL;
     new_group->u.group.gcpl_id = FAIL;
-    /* Copy parent's domain information */
-    new_group->domain = (RV_object_t *) RV_malloc(sizeof(*parent->domain));
-    memcpy(new_group->domain, parent->domain, sizeof(RV_object_t));
 
-    new_group->domain->u.file.filepath_name = RV_malloc(strlen(parent->domain->u.file.filepath_name) + 1);
-    memcpy(new_group->domain->u.file.filepath_name, parent->domain->u.file.filepath_name, strlen(parent->domain->u.file.filepath_name) + 1);
+    /* Copy information about file the newly-created group is in */
+    if (RV_file_create_new_reference(parent->domain, &new_group->domain) < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy group domain");
 
     /* Copy the GAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * group access property list functions will function correctly
@@ -322,9 +320,10 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
     group->obj_type = H5I_GROUP;
     group->u.group.gapl_id = FAIL;
     group->u.group.gcpl_id = FAIL;
-    /* If this is accessed through an external link, its domain will be different than parent's */
-    group->domain = (RV_object_t *) RV_malloc(sizeof(*group));
-    group->domain->u.file.filepath_name = RV_malloc(strlen(parent->domain->u.file.filepath_name) + 1);
+
+    /* Copy information about file the group is in */
+    if (RV_file_create_new_reference(parent->domain, &group->domain) < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy group domain");
 
     /* Buffer to hold URI and domain ptrs */
     void *URI_domain_ptrs[2];
@@ -336,6 +335,8 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
     search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL, &URI_domain_ptrs);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate group by path");
+
+    group->domain = URI_domain_ptrs[1];
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Found group by given path\n\n");
@@ -598,11 +599,10 @@ RV_group_close(void *grp, hid_t dxpl_id, void **req)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close GCPL");
     } /* end if */
 
-    if (_grp->domain) {
-        RV_free(_grp->domain->u.file.filepath_name);
+    if (RV_file_close(_grp->domain, H5P_DEFAULT, NULL) < 0) {
+        FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");
     }
 
-    RV_free(_grp->domain);
     RV_free(_grp);
     _grp = NULL;
 

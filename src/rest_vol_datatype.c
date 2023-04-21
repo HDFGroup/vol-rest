@@ -114,13 +114,12 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     new_datatype->u.datatype.dtype_id = FAIL;
     new_datatype->u.datatype.tapl_id = FAIL;
     new_datatype->u.datatype.tcpl_id = FAIL;
-
+    
     /* Copy information about file that the newly-created datatype is in */
-    new_datatype->domain = RV_malloc(sizeof(*parent->domain));
-    memcpy(new_datatype->domain, parent->domain, sizeof(*parent->domain));
+    if (RV_file_create_new_reference(parent->domain, &new_datatype->domain) < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy datatype domain");
 
-    new_datatype->domain->u.file.filepath_name = RV_malloc(strlen(parent->domain->u.file.filepath_name) + 1);
-    strncpy(new_datatype->domain->u.file.filepath_name, parent->domain->u.file.filepath_name, strlen(parent->domain->u.file.filepath_name) + 1);
+    
 
     /* Copy the TAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * datatype access property list functions will function correctly
@@ -354,10 +353,10 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
     datatype->u.datatype.dtype_id = FAIL;
     datatype->u.datatype.tapl_id = FAIL;
     datatype->u.datatype.tcpl_id = FAIL;
-
-    /* Copy information about file that the newly-created datatype is in */
-    datatype->domain = RV_malloc(sizeof(*parent->domain));
-    datatype->domain->u.file.filepath_name = RV_malloc(strlen(parent->domain->u.file.filepath_name) + 1);
+    
+    /* Copy information about file that the datatype is in */
+    if (RV_file_create_new_reference(parent->domain, &datatype->domain) < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy datatype domain");
 
     /* Buffer to hold URI and domain ptrs */
     void *URI_domain_ptrs[2];
@@ -370,6 +369,8 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't locate datatype by path");
 
+    datatype->domain = URI_domain_ptrs[1];
+    
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Found datatype by given path\n\n");
 #endif
@@ -541,10 +542,9 @@ RV_datatype_close(void *dt, hid_t dxpl_id, void **req)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close TCPL");
     } /* end if */
 
-    if (_dtype->domain)
-        RV_free(_dtype->domain->u.file.filepath_name);
+    if(RV_file_close(_dtype->domain, H5P_DEFAULT, NULL) < 0)
+        FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");
 
-    RV_free(_dtype->domain);
     RV_free(_dtype);
     _dtype = NULL;
 

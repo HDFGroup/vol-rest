@@ -1267,7 +1267,7 @@ H5_rest_curl_read_data_callback(char *buffer, size_t size, size_t nmemb, void *i
         bytes_left = uinfo->buffer_size - uinfo->bytes_sent;
         data_size = (bytes_left > max_buf_size) ? max_buf_size : bytes_left;
 
-        memcpy(buffer, uinfo->buffer + uinfo->bytes_sent, data_size);
+        memcpy(buffer, (const char*) uinfo->buffer + uinfo->bytes_sent, data_size);
 
         uinfo->bytes_sent += data_size;
     } /* end if */
@@ -1648,13 +1648,10 @@ done:
  *              from the domain of its parent object.
  * 
  *              callback_data_out is expected to be a pointer to an array
- *              of two pointers, the first pointing to a buffer for the URI,
- *              and the second pointing to a buffer for the domain/parent object. 
+ *              of two pointers, the first being the address of a buffer for the URI,
+ *              and the second being the address of a pointer to a domain buffer of the target object.
  * 
- *              
  *              callback_data_is provided inside RV_find_object_by_path.
- *              This function expects callback_data_in to be a pointer to a valid parent
- *              object, with its struct and filepath_name in heap memory. 
  *
  * Return:      Non-negative on success/Negative on failure
  *
@@ -1662,34 +1659,29 @@ done:
  *              April, 2023
  */
 herr_t RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out) {
-
     herr_t ret_value = SUCCEED;
     RV_object_t *parent_object = (RV_object_t*) callback_data_in;
-    RV_object_t *domain_buffer = NULL;
     void  *URI_domain_ptrs[2];
     void  *URI_buffer = NULL;
 
     memcpy(URI_domain_ptrs, callback_data_out, sizeof(void*) * 2);
     
     URI_buffer = URI_domain_ptrs[0];
-    domain_buffer = (RV_object_t*) URI_domain_ptrs[1];
 
     if (parent_object) {
-        /* Free previous filepath memory */
-        RV_free(domain_buffer->u.file.filepath_name);
-        memcpy(domain_buffer, parent_object, sizeof(*parent_object));
-
-        domain_buffer->u.file.filepath_name = RV_malloc(strlen(parent_object->domain->u.file.filepath_name) + 1);
-
-        memcpy(domain_buffer->u.file.filepath_name, \
-                parent_object->domain->u.file.filepath_name, \
-                strlen(parent_object->domain->u.file.filepath_name) + 1);
+        /* Close reference to previous domain */
+        void **domain_buffer_ptr = (((char*) callback_data_out) + sizeof(void*));
+        RV_file_close(*domain_buffer_ptr, H5P_DEFAULT, NULL);
+        
+        if (RV_file_create_new_reference(parent_object, domain_buffer_ptr) < 0)
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy object domain");
 
         ret_value = RV_copy_object_URI_callback(HTTP_response, NULL, URI_buffer);
     } else {
         ret_value = FAIL;
     }
 
+done:
     return ret_value;
 }
 
@@ -2275,7 +2267,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
 
         if (ret_value > 0) {
             if (obj_found_callback == RV_copy_object_URI_and_domain_callback) {
-                if (RV_parse_response(response_buffer.buffer, parent_obj, callback_data_out, obj_found_callback) < 0)
+                if (RV_parse_response(response_buffer.buffer, parent_obj->domain, callback_data_out, obj_found_callback) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "can't perform callback operation");
             } else if (obj_found_callback && RV_parse_response(response_buffer.buffer,
                     callback_data_in, callback_data_out, obj_found_callback) < 0) {
