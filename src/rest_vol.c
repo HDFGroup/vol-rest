@@ -1667,8 +1667,8 @@ herr_t RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callbac
         /* Close reference to previous domain */
         RV_file_close(loc_info_out->domain, H5P_DEFAULT, NULL);
         
-        if (RV_file_create_new_reference(parent_object, &loc_info_out->domain) < 0)
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy object domain");
+        loc_info_out->domain = parent_object;
+        parent_object->u.file.ref_count++;
 
         ret_value = RV_copy_object_URI_callback(HTTP_response, NULL, loc_info_out->URI);
     } else {

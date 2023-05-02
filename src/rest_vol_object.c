@@ -247,9 +247,9 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
     herr_t       ret_value = SUCCEED;
     loc_info     loc_info;
     
-    if (RV_file_create_new_reference(loc_obj->domain, &loc_info.domain) < 0)
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy object domain");
-
+    loc_info.domain = loc_obj->domain;
+    loc_obj->domain->u.file.ref_count++;
+    
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received object get call with following parameters:\n");
     printf("     - Object get call type: %s\n", object_get_type_to_string(args->op_type));

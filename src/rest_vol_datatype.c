@@ -115,12 +115,9 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     new_datatype->u.datatype.tapl_id = FAIL;
     new_datatype->u.datatype.tcpl_id = FAIL;
     
-    /* Copy information about file that the newly-created datatype is in */
-    if (RV_file_create_new_reference(parent->domain, &new_datatype->domain) < 0)
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy datatype domain");
-
+    new_datatype->domain = parent->domain;
+    parent->domain->u.file.ref_count++;
     
-
     /* Copy the TAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * datatype access property list functions will function correctly
      */
@@ -355,10 +352,9 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
     datatype->u.datatype.tapl_id = FAIL;
     datatype->u.datatype.tcpl_id = FAIL;
     
-    /* Copy information about file that the datatype is in */
-    if (RV_file_create_new_reference(parent->domain, &datatype->domain) < 0)
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy datatype domain");
-
+    datatype->domain = parent->domain;
+    parent->domain->u.file.ref_count++;
+    
     loc_info.URI = datatype->URI;
     loc_info.domain = datatype->domain;
 

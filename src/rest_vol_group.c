@@ -81,10 +81,9 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     new_group->u.group.gapl_id = FAIL;
     new_group->u.group.gcpl_id = FAIL;
 
-    /* Copy information about file the newly-created group is in */
-    if (RV_file_create_new_reference(parent->domain, &new_group->domain) < 0)
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy group domain");
-
+    new_group->domain = parent->domain;
+    parent->domain->u.file.ref_count++;
+    
     /* Copy the GAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * group access property list functions will function correctly
      */
@@ -323,9 +322,9 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
     group->u.group.gcpl_id = FAIL;
 
     /* Copy information about file the group is in */
-    if (RV_file_create_new_reference(parent->domain, &group->domain) < 0)
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy group domain");
-
+    group->domain = parent->domain;
+    parent->domain->u.file.ref_count++;
+    
     loc_info.URI = group->URI;
     loc_info.domain = group->domain;
 

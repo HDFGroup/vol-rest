@@ -135,18 +135,9 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
     new_dataset->u.dataset.dapl_id = FAIL;
     new_dataset->u.dataset.dcpl_id = FAIL;
     
-    if (RV_file_create_new_reference(parent->domain, &new_dataset->domain) < 0)
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy dataset domain");
-
-    /* Copy information about file that the newly-created dataset is in */
-    /*
-    new_dataset->domain = RV_malloc(sizeof(*parent->domain));
-    memcpy(new_dataset->domain, parent->domain, sizeof(*parent->domain));
-
-    new_dataset->domain->u.file.filepath_name = RV_malloc(strlen(parent->domain->u.file.filepath_name) + 1);
-    strncpy(new_dataset->domain->u.file.filepath_name, parent->domain->u.file.filepath_name, strlen(parent->domain->u.file.filepath_name) + 1);
-    */
-
+    new_dataset->domain = parent->domain;
+    parent->domain->u.file.ref_count++;
+    
     /* Copy the DAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Dget_access_plist() will function correctly
      */
@@ -327,9 +318,9 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     dataset->u.dataset.dcpl_id = FAIL;
 
     /* Copy information about file that the newly-created dataset is in */
-    if (RV_file_create_new_reference(parent->domain, &dataset->domain) < 0)
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy dataset domain");
-
+    dataset->domain = parent->domain;
+    parent->domain->u.file.ref_count++;
+    
     loc_info.URI = dataset->URI;
     loc_info.domain = dataset->domain;
 

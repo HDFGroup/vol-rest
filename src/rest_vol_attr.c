@@ -111,8 +111,8 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
     new_attribute->u.attribute.acpl_id = FAIL;
     new_attribute->u.attribute.attr_name = NULL;
     
-    if (RV_file_create_new_reference(parent->domain, &new_attribute->domain) < 0)
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy attr domain");
+    new_attribute->domain = parent->domain;
+    parent->domain->u.file.ref_count++;
 
     /* If this is a call to H5Acreate_by_name, locate the real parent object */
     if (H5VL_OBJECT_BY_NAME == loc_params->type) {
@@ -426,9 +426,8 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
     attribute->u.attribute.acpl_id = FAIL;
     attribute->u.attribute.attr_name = NULL;
 
-    if (RV_file_create_new_reference(parent->domain, &attribute->domain) < 0)
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy attr domain");
-
+    attribute->domain = parent->domain;
+    parent->domain->u.file.ref_count++;
 
     /* Set the parent object's type and URI in the attribute's appropriate fields */
     switch (loc_params->type) {
