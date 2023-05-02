@@ -1661,22 +1661,16 @@ done:
 herr_t RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out) {
     herr_t ret_value = SUCCEED;
     RV_object_t *parent_object = (RV_object_t*) callback_data_in;
-    void  *URI_domain_ptrs[2];
-    void  *URI_buffer = NULL;
-
-    memcpy(URI_domain_ptrs, callback_data_out, sizeof(void*) * 2);
-    
-    URI_buffer = URI_domain_ptrs[0];
+    loc_info    *loc_info_out = (loc_info*) callback_data_out;
 
     if (parent_object) {
         /* Close reference to previous domain */
-        void **domain_buffer_ptr = (((char*) callback_data_out) + sizeof(void*));
-        RV_file_close(*domain_buffer_ptr, H5P_DEFAULT, NULL);
+        RV_file_close(loc_info_out->domain, H5P_DEFAULT, NULL);
         
-        if (RV_file_create_new_reference(parent_object, domain_buffer_ptr) < 0)
+        if (RV_file_create_new_reference(parent_object, &loc_info_out->domain) < 0)
             FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy object domain");
 
-        ret_value = RV_copy_object_URI_callback(HTTP_response, NULL, URI_buffer);
+        ret_value = RV_copy_object_URI_callback(HTTP_response, NULL, loc_info_out->URI);
     } else {
         ret_value = FAIL;
     }

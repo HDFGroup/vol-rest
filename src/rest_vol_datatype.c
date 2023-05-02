@@ -329,6 +329,7 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *datatype = NULL;
     H5I_type_t   obj_type = H5I_UNINIT;
+    loc_info     loc_info;
     htri_t       search_ret;
     void        *ret_value = NULL;
 
@@ -358,18 +359,15 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
     if (RV_file_create_new_reference(parent->domain, &datatype->domain) < 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy datatype domain");
 
-    /* Buffer to hold URI and domain ptrs */
-    void *URI_domain_ptrs[2];
-
-    URI_domain_ptrs[0] = datatype->URI;
-    URI_domain_ptrs[1] = datatype->domain;
+    loc_info.URI = datatype->URI;
+    loc_info.domain = datatype->domain;
 
     /* Locate datatype and set domain */
-    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL, &URI_domain_ptrs);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL, &loc_info);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't locate datatype by path");
 
-    datatype->domain = URI_domain_ptrs[1];
+    datatype->domain = loc_info.domain;
     
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Found datatype by given path\n\n");

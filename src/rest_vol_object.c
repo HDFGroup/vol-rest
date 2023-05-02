@@ -245,9 +245,9 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
     char         request_url[URL_MAX_LENGTH];
     int          url_len = 0;
     herr_t       ret_value = SUCCEED;
-    RV_object_t *domain = NULL;
+    loc_info     loc_info;
     
-    if (RV_file_create_new_reference(loc_obj->domain, &domain) < 0)
+    if (RV_file_create_new_reference(loc_obj->domain, &loc_info.domain) < 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy object domain");
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -358,18 +358,14 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                     printf("-> H5Oget_info_by_name(): locating object by given path\n\n");
 #endif
 
-                    void *URI_domain_ptrs[2];
-
-                    URI_domain_ptrs[0] = temp_URI;
-                    URI_domain_ptrs[1] = domain;
+                    loc_info.URI = temp_URI;
+                    /* loc_info.domain was copied at function start */
 
                     /* Locate group and set domain */
                     search_ret = RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, \
-                        &obj_type, RV_copy_object_URI_and_domain_callback, NULL, &URI_domain_ptrs);
+                        &obj_type, RV_copy_object_URI_and_domain_callback, NULL, &loc_info);
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, NULL, "can't locate object by path");
-
-                    domain = URI_domain_ptrs[1];
 
 #ifdef RV_CONNECTOR_DEBUG
                     printf("-> H5Oget_info_by_name(): found object by given path\n");
@@ -451,13 +447,13 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
             /* Make a GET request to the server to retrieve the number of attributes attached to the object */
 
             /* Setup the host header */
-            host_header_len = strlen(domain->u.file.filepath_name) + strlen(host_string) + 1;
+            host_header_len = strlen(loc_info.domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
 
             strcpy(host_header, host_string);
 
-            curl_headers = curl_slist_append(curl_headers, strncat(host_header, domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+            curl_headers = curl_slist_append(curl_headers, strncat(host_header, loc_info.domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
 
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
@@ -509,7 +505,7 @@ done:
         curl_headers = NULL;
     } /* end if */
 
-    RV_file_close(domain, H5P_DEFAULT, NULL);
+    RV_file_close(loc_info.domain, H5P_DEFAULT, NULL);
     
     PRINT_ERROR_STACK;
 

@@ -299,6 +299,7 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *dataset = NULL;
     H5I_type_t   obj_type = H5I_UNINIT;
+    loc_info     loc_info;
     htri_t       search_ret;
     void        *ret_value = NULL;
 
@@ -329,20 +330,15 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     if (RV_file_create_new_reference(parent->domain, &dataset->domain) < 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCOPY, FAIL, "couldn't copy dataset domain");
 
-    
-
-    /* Buffer to hold URI and domain ptrs */
-    void *URI_domain_ptrs[2];
-
-    URI_domain_ptrs[0] = dataset->URI;
-    URI_domain_ptrs[1] = dataset->domain;
+    loc_info.URI = dataset->URI;
+    loc_info.domain = dataset->domain;
 
     /* Locate dataset and set domain */
-    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL, &URI_domain_ptrs);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL, &loc_info);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate dataset by path");
 
-    dataset->domain = URI_domain_ptrs[1];
+    dataset->domain = loc_info.domain;
     
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Found dataset by given path\n\n");
