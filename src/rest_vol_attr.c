@@ -1780,17 +1780,6 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                         parent_obj_type == H5I_DATATYPE) {
                             
                         loc_obj->domain->u.file.ref_count++;
-
-                        if (loc_obj->domain->u.file.fapl_id >= 0) {
-                            if ((loc_obj->domain->u.file.fapl_id != H5P_FILE_ACCESS_DEFAULT) && (H5Iinc_ref(loc_obj->domain->u.file.fapl_id) < 0))
-                                FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't increase ref count of FAPL");
-                        } /* end if */
-
-                        if (loc_obj->domain->u.file.fcpl_id >= 0) {
-                            if ((loc_obj->domain->u.file.fcpl_id != H5P_FILE_CREATE_DEFAULT) && (H5Iinc_ref(loc_obj->domain->u.file.fcpl_id) < 0))
-                                FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't increase ref count of FCPL");
-                        } /* end if */
-
                     }
 
                     /* Increment refs for specific type */
