@@ -28,95 +28,97 @@
 #include "hdf5.h"
 #include "rest_vol_public.h"
 
-#define H5FILE_NAME "Select.h5"
+#define H5FILE_NAME          "Select.h5"
 #define FILE_NAME_MAX_LENGTH 256
 
-#define MSPACE1_RANK     1          /* Rank of the first dataset in memory */
-#define MSPACE1_DIM      50         /* Dataset size in memory */
+#define MSPACE1_RANK 1  /* Rank of the first dataset in memory */
+#define MSPACE1_DIM  50 /* Dataset size in memory */
 
-#define MSPACE2_RANK     1          /* Rank of the second dataset in memory */
-#define MSPACE2_DIM      4          /* Dataset size in memory */
+#define MSPACE2_RANK 1 /* Rank of the second dataset in memory */
+#define MSPACE2_DIM  4 /* Dataset size in memory */
 
-#define FSPACE_RANK      2          /* Dataset rank as it is stored in the file */
-#define FSPACE_DIM1      8          /* Dimension sizes of the dataset as it is
-                                       stored in the file */
-#define FSPACE_DIM2      12
+#define FSPACE_RANK 2 /* Dataset rank as it is stored in the file */
+#define FSPACE_DIM1                                                                                          \
+    8 /* Dimension sizes of the dataset as it is                                                             \
+         stored in the file */
+#define FSPACE_DIM2 12
 
-                                    /* We will read dataset back from the file
-                                       to the dataset in memory with these
-                                       dataspace parameters. */
-#define MSPACE_RANK      2
-#define MSPACE_DIM1      8
-#define MSPACE_DIM2      9
+/* We will read dataset back from the file
+   to the dataset in memory with these
+   dataspace parameters. */
+#define MSPACE_RANK 2
+#define MSPACE_DIM1 8
+#define MSPACE_DIM2 9
 
-#define NPOINTS          4          /* Number of points that will be selected
-                                       and overwritten */
+#define NPOINTS                                                                                              \
+    4 /* Number of points that will be selected                                                              \
+         and overwritten */
 
 int
-main (void)
+main(void)
 {
 
-   hid_t   file, dataset;           /* File and dataset identifiers */
-   hid_t   mid1, mid2, mid, fid;    /* Dataspace identifiers */
-   hid_t   fapl;
-   hid_t   plist;                   /* Dataset property list identifier */
+    hid_t file, dataset;        /* File and dataset identifiers */
+    hid_t mid1, mid2, mid, fid; /* Dataspace identifiers */
+    hid_t fapl;
+    hid_t plist; /* Dataset property list identifier */
 
-   hsize_t dim1[] = {MSPACE1_DIM};  /* Dimension size of the first dataset
+    hsize_t dim1[] = {MSPACE1_DIM}; /* Dimension size of the first dataset
                                        (in memory) */
-   hsize_t dim2[] = {MSPACE2_DIM};  /* Dimension size of the second dataset
+    hsize_t dim2[] = {MSPACE2_DIM}; /* Dimension size of the second dataset
                                        (in memory */
-   hsize_t fdim[] = {FSPACE_DIM1, FSPACE_DIM2};
-                                    /* Dimension sizes of the dataset (on disk) */
-   hsize_t mdim[] = {MSPACE_DIM1, MSPACE_DIM2}; /* Dimension sizes of the
-                                                   dataset in memory when we
-                                                   read selection from the
-                                                   dataset on the disk */
+    hsize_t fdim[] = {FSPACE_DIM1, FSPACE_DIM2};
+    /* Dimension sizes of the dataset (on disk) */
+    hsize_t mdim[] = {MSPACE_DIM1, MSPACE_DIM2}; /* Dimension sizes of the
+                                                    dataset in memory when we
+                                                    read selection from the
+                                                    dataset on the disk */
 
-   hsize_t start[2];  /* Start of hyperslab */
-   hsize_t stride[2]; /* Stride of hyperslab */
-   hsize_t count[2];  /* Block count */
-   hsize_t block[2];  /* Block sizes */
+    hsize_t start[2];  /* Start of hyperslab */
+    hsize_t stride[2]; /* Stride of hyperslab */
+    hsize_t count[2];  /* Block count */
+    hsize_t block[2];  /* Block sizes */
 
-   hsize_t coord[NPOINTS][FSPACE_RANK]; /* Array to store selected points
-                                            from the file dataspace */
-   herr_t ret;
-   unsigned i,j;
-   int fillvalue = 0;   /* Fill value for the dataset */
+    hsize_t coord[NPOINTS][FSPACE_RANK]; /* Array to store selected points
+                                             from the file dataspace */
+    herr_t   ret;
+    unsigned i, j;
+    int      fillvalue = 0; /* Fill value for the dataset */
 
-   int    matrix_out[MSPACE_DIM1][MSPACE_DIM2]; /* Buffer to read from the
-                                                   dataset */
-   int    vector[MSPACE1_DIM];
-   int    values[] = {53, 59, 61, 67};  /* New values to be written */
+    int matrix_out[MSPACE_DIM1][MSPACE_DIM2]; /* Buffer to read from the
+                                                 dataset */
+    int vector[MSPACE1_DIM];
+    int values[] = {53, 59, 61, 67}; /* New values to be written */
 
-   const char *username;
-   char        filename[FILE_NAME_MAX_LENGTH];
+    const char *username;
+    char        filename[FILE_NAME_MAX_LENGTH];
 
-   H5rest_init();
+    H5rest_init();
 
-   fapl = H5Pcreate(H5P_FILE_ACCESS);
-   H5Pset_fapl_rest_vol(fapl);
+    fapl = H5Pcreate(H5P_FILE_ACCESS);
+    H5Pset_fapl_rest_vol(fapl);
 
-   /*
-    * Buffers' initialization.
-    */
-   vector[0] = vector[MSPACE1_DIM - 1] = -1;
-   for(i = 1; i < MSPACE1_DIM - 1; i++)
-       vector[i] = i;
+    /*
+     * Buffers' initialization.
+     */
+    vector[0] = vector[MSPACE1_DIM - 1] = -1;
+    for (i = 1; i < MSPACE1_DIM - 1; i++)
+        vector[i] = i;
 
-   username = getenv("HSDS_USERNAME");
+    username = getenv("HSDS_USERNAME");
 
-   snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" H5FILE_NAME, username);
+    snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" H5FILE_NAME, username);
 
-   /*
-    * Create a file.
-    */
-   file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
+    /*
+     * Create a file.
+     */
+    file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl);
 
-   /*
-    * Create property list for a dataset and set up fill values.
-    */
-   plist = H5Pcreate(H5P_DATASET_CREATE);
-   ret   = H5Pset_fill_value(plist, H5T_NATIVE_INT, &fillvalue);
+    /*
+     * Create property list for a dataset and set up fill values.
+     */
+    plist = H5Pcreate(H5P_DATASET_CREATE);
+    ret   = H5Pset_fill_value(plist, H5T_NATIVE_INT, &fillvalue);
 
     /*
      * Create dataspace for the dataset in the file.
@@ -133,11 +135,15 @@ main (void)
      * Select hyperslab for the dataset in the file, using 3x2 blocks,
      * (4,3) stride and (2,4) count starting at the position (0,1).
      */
-    start[0]  = 0; start[1]  = 1;
-    stride[0] = 4; stride[1] = 3;
-    count[0]  = 2; count[1]  = 4;
-    block[0]  = 3; block[1]  = 2;
-    ret = H5Sselect_hyperslab(fid, H5S_SELECT_SET, start, stride, count, block);
+    start[0]  = 0;
+    start[1]  = 1;
+    stride[0] = 4;
+    stride[1] = 3;
+    count[0]  = 2;
+    count[1]  = 4;
+    block[0]  = 3;
+    block[1]  = 2;
+    ret       = H5Sselect_hyperslab(fid, H5S_SELECT_SET, start, stride, count, block);
 
     /*
      * Create dataspace for the first dataset.
@@ -153,7 +159,7 @@ main (void)
     stride[0] = 1;
     count[0]  = 48;
     block[0]  = 1;
-    ret = H5Sselect_hyperslab(mid1, H5S_SELECT_SET, start, stride, count, block);
+    ret       = H5Sselect_hyperslab(mid1, H5S_SELECT_SET, start, stride, count, block);
 
     /*
      * Write selection from the vector buffer to the dataset in the file.
@@ -168,7 +174,7 @@ main (void)
      *                    0 41 42  0 43 44  0 45 46  0 47 48
      *                    0  0  0  0  0  0  0  0  0  0  0  0
      */
-     ret = H5Dwrite(dataset, H5T_NATIVE_INT, mid1, fid, H5P_DEFAULT, vector);
+    ret = H5Dwrite(dataset, H5T_NATIVE_INT, mid1, fid, H5P_DEFAULT, vector);
 
     /*
      * Reset the selection for the file dataspace fid.
@@ -183,10 +189,14 @@ main (void)
     /*
      * Select sequence of NPOINTS points in the file dataspace.
      */
-    coord[0][0] = 0; coord[0][1] = 0;
-    coord[1][0] = 3; coord[1][1] = 3;
-    coord[2][0] = 3; coord[2][1] = 5;
-    coord[3][0] = 5; coord[3][1] = 6;
+    coord[0][0] = 0;
+    coord[0][1] = 0;
+    coord[1][0] = 3;
+    coord[1][1] = 3;
+    coord[2][0] = 3;
+    coord[2][1] = 5;
+    coord[3][0] = 5;
+    coord[3][1] = 6;
 
     ret = H5Sselect_elements(fid, H5S_SELECT_SET, NPOINTS, (const hsize_t *)coord);
 
@@ -248,11 +258,15 @@ main (void)
      *                      0 59  0 61
      *
      */
-    start[0] = 1; start[1] = 2;
-    block[0] = 1; block[1] = 1;
-    stride[0] = 1; stride[1] = 1;
-    count[0]  = 3; count[1]  = 4;
-    ret = H5Sselect_hyperslab(fid, H5S_SELECT_SET, start, stride, count, block);
+    start[0]  = 1;
+    start[1]  = 2;
+    block[0]  = 1;
+    block[1]  = 1;
+    stride[0] = 1;
+    stride[1] = 1;
+    count[0]  = 3;
+    count[1]  = 4;
+    ret       = H5Sselect_hyperslab(fid, H5S_SELECT_SET, start, stride, count, block);
 
     /*
      * Add second selected hyperslab to the selection.
@@ -267,11 +281,15 @@ main (void)
      *                                              19 20
      *                                               0 61
      */
-    start[0] = 2; start[1] = 4;
-    block[0] = 1; block[1] = 1;
-    stride[0] = 1; stride[1] = 1;
-    count[0]  = 6; count[1]  = 5;
-    ret = H5Sselect_hyperslab(fid, H5S_SELECT_OR, start, stride, count, block);
+    start[0]  = 2;
+    start[1]  = 4;
+    block[0]  = 1;
+    block[1]  = 1;
+    stride[0] = 1;
+    stride[1] = 1;
+    count[0]  = 6;
+    count[1]  = 5;
+    ret       = H5Sselect_hyperslab(fid, H5S_SELECT_OR, start, stride, count, block);
 
     /*
      * Create memory dataspace.
@@ -282,30 +300,37 @@ main (void)
      * Select two hyperslabs in memory. Hyperslabs has the same
      * size and shape as the selected hyperslabs for the file dataspace.
      */
-    start[0] = 0; start[1] = 0;
-    block[0] = 1; block[1] = 1;
-    stride[0] = 1; stride[1] = 1;
-    count[0]  = 3; count[1]  = 4;
-    ret = H5Sselect_hyperslab(mid, H5S_SELECT_SET, start, stride, count, block);
+    start[0]  = 0;
+    start[1]  = 0;
+    block[0]  = 1;
+    block[1]  = 1;
+    stride[0] = 1;
+    stride[1] = 1;
+    count[0]  = 3;
+    count[1]  = 4;
+    ret       = H5Sselect_hyperslab(mid, H5S_SELECT_SET, start, stride, count, block);
 
-    start[0] = 1; start[1] = 2;
-    block[0] = 1; block[1] = 1;
-    stride[0] = 1; stride[1] = 1;
-    count[0]  = 6; count[1]  = 5;
-    ret = H5Sselect_hyperslab(mid, H5S_SELECT_OR, start, stride, count, block);
+    start[0]  = 1;
+    start[1]  = 2;
+    block[0]  = 1;
+    block[1]  = 1;
+    stride[0] = 1;
+    stride[1] = 1;
+    count[0]  = 6;
+    count[1]  = 5;
+    ret       = H5Sselect_hyperslab(mid, H5S_SELECT_OR, start, stride, count, block);
 
     /*
      * Initialize data buffer.
      */
     for (i = 0; i < MSPACE_DIM1; i++) {
-       for (j = 0; j < MSPACE_DIM2; j++)
+        for (j = 0; j < MSPACE_DIM2; j++)
             matrix_out[i][j] = 0;
     }
     /*
      * Read data back to the buffer matrix_out.
      */
-    ret = H5Dread(dataset, H5T_NATIVE_INT, mid, fid,
-                  H5P_DEFAULT, matrix_out);
+    ret = H5Dread(dataset, H5T_NATIVE_INT, mid, fid, H5P_DEFAULT, matrix_out);
 
     /*
      * Display the result. Memory dataset is:
@@ -319,8 +344,8 @@ main (void)
      *                     0  0  0  0  0  0  0  0  0
      *                     0  0  0  0  0  0  0  0  0
      */
-    for(i = 0; i < MSPACE_DIM1; i++) {
-        for(j = 0; j < MSPACE_DIM2; j++)
+    for (i = 0; i < MSPACE_DIM1; i++) {
+        for (j = 0; j < MSPACE_DIM2; j++)
             printf("%3d  ", matrix_out[i][j]);
         printf("\n");
     }
@@ -355,4 +380,3 @@ main (void)
 
     return 0;
 }
-

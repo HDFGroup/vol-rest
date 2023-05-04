@@ -28,15 +28,15 @@ void *RV_calloc_debug(size_t size);
 void *RV_realloc_debug(void *mem, size_t size);
 void *RV_free_debug(void *mem);
 
-#define RV_malloc(size) RV_malloc_debug(size)
-#define RV_calloc(size) RV_malloc_debug(size)
+#define RV_malloc(size)       RV_malloc_debug(size)
+#define RV_calloc(size)       RV_malloc_debug(size)
 #define RV_realloc(mem, size) RV_realloc_debug(mem, size)
-#define RV_free(mem) RV_free_debug(mem)
+#define RV_free(mem)          RV_free_debug(mem)
 #else
-#define RV_malloc(size) malloc(size)
-#define RV_calloc(size) calloc(1, size)
+#define RV_malloc(size)       malloc(size)
+#define RV_calloc(size)       calloc(1, size)
 #define RV_realloc(mem, size) realloc(mem, size)
-#define RV_free(mem) free(mem)
+#define RV_free(mem)          free(mem)
 #endif
 
 /* Macro to check whether the size of a buffer matches the given target size
@@ -46,29 +46,31 @@ void *RV_free_debug(void *mem);
  * incremented so that the next print operation can continue where the
  * last one left off, and not overwrite the current contents of the buffer.
  */
-#define CHECKED_REALLOC(buffer, buffer_len, target_size, ptr_to_buffer, ERR_MAJOR, ret_value)                               \
-while (target_size > buffer_len) {                                                                                          \
-    char *tmp_realloc;                                                                                                      \
-                                                                                                                            \
-    if (NULL == (tmp_realloc = (char *) RV_realloc(buffer, 2 * buffer_len))) {                                              \
-        RV_free(buffer); buffer = NULL;                                                                                     \
-        FUNC_GOTO_ERROR(ERR_MAJOR, H5E_CANTALLOC, ret_value, "can't allocate space");                                       \
-    } /* end if */                                                                                                          \
-                                                                                                                            \
-    /* Place the "current position" pointer at the correct spot in the new buffer */                                        \
-    if (ptr_to_buffer) ptr_to_buffer = tmp_realloc + ((char *) ptr_to_buffer - buffer);                                     \
-    buffer = tmp_realloc;                                                                                                   \
-    buffer_len *= 2;                                                                                                        \
-}
+#define CHECKED_REALLOC(buffer, buffer_len, target_size, ptr_to_buffer, ERR_MAJOR, ret_value)                \
+    while (target_size > buffer_len) {                                                                       \
+        char *tmp_realloc;                                                                                   \
+                                                                                                             \
+        if (NULL == (tmp_realloc = (char *)RV_realloc(buffer, 2 * buffer_len))) {                            \
+            RV_free(buffer);                                                                                 \
+            buffer = NULL;                                                                                   \
+            FUNC_GOTO_ERROR(ERR_MAJOR, H5E_CANTALLOC, ret_value, "can't allocate space");                    \
+        } /* end if */                                                                                       \
+                                                                                                             \
+        /* Place the "current position" pointer at the correct spot in the new buffer */                     \
+        if (ptr_to_buffer)                                                                                   \
+            ptr_to_buffer = tmp_realloc + ((char *)ptr_to_buffer - buffer);                                  \
+        buffer = tmp_realloc;                                                                                \
+        buffer_len *= 2;                                                                                     \
+    }
 
 /* Helper macro to call the above with a temporary useless variable, since directly passing
  * NULL to the macro generates invalid code
  */
-#define CHECKED_REALLOC_NO_PTR(buffer, buffer_len, target_size, ERR_MAJOR, ret_value)                                       \
-do {                                                                                                                        \
-    char *tmp = NULL;                                                                                                       \
-    CHECKED_REALLOC(buffer, buffer_len, target_size, tmp, ERR_MAJOR, ret_value);                                            \
-} while (0)
+#define CHECKED_REALLOC_NO_PTR(buffer, buffer_len, target_size, ERR_MAJOR, ret_value)                        \
+    do {                                                                                                     \
+        char *tmp = NULL;                                                                                    \
+        CHECKED_REALLOC(buffer, buffer_len, target_size, tmp, ERR_MAJOR, ret_value);                         \
+    } while (0)
 
 #ifdef __cplusplus
 }

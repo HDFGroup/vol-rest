@@ -18,13 +18,13 @@
 #include "rest_vol_object.h"
 
 /* Set of callbacks for RV_parse_response() */
-static herr_t  RV_get_object_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_get_object_info_callback(char *HTTP_response, void *callback_data_in,
+                                          void *callback_data_out);
 
 /* JSON keys to retrieve relevant information for H5Oget_info */
-const char *attribute_count_keys[] = { "attributeCount", (const char *) 0 };
-const char *hrefs_keys[] = { "hrefs" , (const char *) 0 };
+const char *attribute_count_keys[] = {"attributeCount", (const char *)0};
+const char *hrefs_keys[]           = {"hrefs", (const char *)0};
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_object_open
  *
@@ -40,10 +40,10 @@ const char *hrefs_keys[] = { "hrefs" , (const char *) 0 };
  *              July, 2017
  */
 void *
-RV_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type,
-               hid_t dxpl_id, void **req)
+RV_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opened_type, hid_t dxpl_id,
+               void **req)
 {
-    RV_object_t *loc_obj = (RV_object_t *) obj;
+    RV_object_t *loc_obj  = (RV_object_t *)obj;
     H5I_type_t   obj_type = H5I_UNINIT;
     hid_t        lapl_id;
     void        *ret_value = NULL;
@@ -57,7 +57,8 @@ RV_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opene
         printf("     - H5Oopen variant: H5Oopen_by_idx\n");
     } /* end else if */
 
-    if (loc_params->loc_data.loc_by_name.name) printf("     - Path to object: %s\n", loc_params->loc_data.loc_by_name.name);
+    if (loc_params->loc_data.loc_by_name.name)
+        printf("     - Path to object: %s\n", loc_params->loc_data.loc_by_name.name);
     printf("     - loc_id object's URI: %s\n", loc_obj->URI);
     printf("     - loc_id object's type: %s\n", object_type_to_string(loc_obj->obj_type));
     printf("     - loc_id object's domain path: %s\n\n", loc_obj->domain->u.file.filepath_name);
@@ -68,12 +69,12 @@ RV_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opene
 
     switch (loc_params->type) {
         /* H5Oopen */
-        case H5VL_OBJECT_BY_NAME:
-        {
+        case H5VL_OBJECT_BY_NAME: {
             htri_t search_ret;
 
             /* Retrieve the type of object being dealt with by querying the server */
-            search_ret = RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type, NULL, NULL, NULL);
+            search_ret = RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type,
+                                                NULL, NULL, NULL);
             if (!search_ret || search_ret < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_PATH, NULL, "can't find object by name");
 
@@ -85,8 +86,7 @@ RV_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opene
         } /* H5VL_OBJECT_BY_NAME */
 
         /* H5Oopen_by_idx */
-        case H5VL_OBJECT_BY_IDX:
-        {
+        case H5VL_OBJECT_BY_IDX: {
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, NULL, "H5Oopen_by_idx is unsupported");
             break;
         } /* H5VL_OBJECT_BY_IDX */
@@ -104,21 +104,24 @@ RV_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opene
             printf("-> Opening datatype\n\n");
 #endif
 
-            /* Setup the correct lapl_id. Note that if H5P_DEFAULT was specified for the LAPL in the H5Oopen(_by_name) call,
-             * HDF5 will actually pass H5P_LINK_ACCESS_DEFAULT down to this layer */
+            /* Setup the correct lapl_id. Note that if H5P_DEFAULT was specified for the LAPL in the
+             * H5Oopen(_by_name) call, HDF5 will actually pass H5P_LINK_ACCESS_DEFAULT down to this layer */
             if (H5VL_OBJECT_BY_NAME == loc_params->type) {
                 lapl_id = (loc_params->loc_data.loc_by_name.lapl_id != H5P_LINK_ACCESS_DEFAULT)
-                        ? loc_params->loc_data.loc_by_name.lapl_id : H5P_DATATYPE_ACCESS_DEFAULT;
+                              ? loc_params->loc_data.loc_by_name.lapl_id
+                              : H5P_DATATYPE_ACCESS_DEFAULT;
             } /* end if */
             else if (H5VL_OBJECT_BY_IDX == loc_params->type) {
                 lapl_id = (loc_params->loc_data.loc_by_idx.lapl_id != H5P_LINK_ACCESS_DEFAULT)
-                        ? loc_params->loc_data.loc_by_idx.lapl_id : H5P_DATATYPE_ACCESS_DEFAULT;
+                              ? loc_params->loc_data.loc_by_idx.lapl_id
+                              : H5P_DATATYPE_ACCESS_DEFAULT;
             } /* end else if */
             else
                 lapl_id = H5P_DATATYPE_ACCESS_DEFAULT;
 
-            if (NULL == (ret_value = RV_datatype_open(loc_obj, loc_params, loc_params->loc_data.loc_by_name.name,
-                    lapl_id, dxpl_id, req)))
+            if (NULL ==
+                (ret_value = RV_datatype_open(loc_obj, loc_params, loc_params->loc_data.loc_by_name.name,
+                                              lapl_id, dxpl_id, req)))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTOPENOBJ, NULL, "can't open datatype");
             break;
 
@@ -127,21 +130,24 @@ RV_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opene
             printf("-> Opening dataset\n\n");
 #endif
 
-            /* Setup the correct lapl_id. Note that if H5P_DEFAULT was specified for the LAPL in the H5Oopen(_by_name) call,
-             * HDF5 will actually pass H5P_LINK_ACCESS_DEFAULT down to this layer */
+            /* Setup the correct lapl_id. Note that if H5P_DEFAULT was specified for the LAPL in the
+             * H5Oopen(_by_name) call, HDF5 will actually pass H5P_LINK_ACCESS_DEFAULT down to this layer */
             if (H5VL_OBJECT_BY_NAME == loc_params->type) {
                 lapl_id = (loc_params->loc_data.loc_by_name.lapl_id != H5P_LINK_ACCESS_DEFAULT)
-                        ? loc_params->loc_data.loc_by_name.lapl_id : H5P_DATASET_ACCESS_DEFAULT;
+                              ? loc_params->loc_data.loc_by_name.lapl_id
+                              : H5P_DATASET_ACCESS_DEFAULT;
             } /* end if */
             else if (H5VL_OBJECT_BY_IDX == loc_params->type) {
                 lapl_id = (loc_params->loc_data.loc_by_idx.lapl_id != H5P_LINK_ACCESS_DEFAULT)
-                        ? loc_params->loc_data.loc_by_idx.lapl_id : H5P_DATASET_ACCESS_DEFAULT;
+                              ? loc_params->loc_data.loc_by_idx.lapl_id
+                              : H5P_DATASET_ACCESS_DEFAULT;
             } /* end else if */
             else
                 lapl_id = H5P_DATASET_ACCESS_DEFAULT;
 
-            if (NULL == (ret_value = RV_dataset_open(loc_obj, loc_params, loc_params->loc_data.loc_by_name.name,
-                    lapl_id, dxpl_id, req)))
+            if (NULL ==
+                (ret_value = RV_dataset_open(loc_obj, loc_params, loc_params->loc_data.loc_by_name.name,
+                                             lapl_id, dxpl_id, req)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTOPENOBJ, NULL, "can't open dataset");
             break;
 
@@ -150,21 +156,23 @@ RV_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opene
             printf("-> Opening group\n\n");
 #endif
 
-            /* Setup the correct lapl_id. Note that if H5P_DEFAULT was specified for the LAPL in the H5Oopen(_by_name) call,
-             * HDF5 will actually pass H5P_LINK_ACCESS_DEFAULT down to this layer */
+            /* Setup the correct lapl_id. Note that if H5P_DEFAULT was specified for the LAPL in the
+             * H5Oopen(_by_name) call, HDF5 will actually pass H5P_LINK_ACCESS_DEFAULT down to this layer */
             if (H5VL_OBJECT_BY_NAME == loc_params->type) {
                 lapl_id = (loc_params->loc_data.loc_by_name.lapl_id != H5P_LINK_ACCESS_DEFAULT)
-                        ? loc_params->loc_data.loc_by_name.lapl_id : H5P_GROUP_ACCESS_DEFAULT;
+                              ? loc_params->loc_data.loc_by_name.lapl_id
+                              : H5P_GROUP_ACCESS_DEFAULT;
             } /* end if */
             else if (H5VL_OBJECT_BY_IDX == loc_params->type) {
                 lapl_id = (loc_params->loc_data.loc_by_idx.lapl_id != H5P_LINK_ACCESS_DEFAULT)
-                        ? loc_params->loc_data.loc_by_idx.lapl_id : H5P_GROUP_ACCESS_DEFAULT;
+                              ? loc_params->loc_data.loc_by_idx.lapl_id
+                              : H5P_GROUP_ACCESS_DEFAULT;
             } /* end else if */
             else
                 lapl_id = H5P_GROUP_ACCESS_DEFAULT;
 
             if (NULL == (ret_value = RV_group_open(loc_obj, loc_params, loc_params->loc_data.loc_by_name.name,
-                    lapl_id, dxpl_id, req)))
+                                                   lapl_id, dxpl_id, req)))
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, NULL, "can't open group");
             break;
 
@@ -194,7 +202,6 @@ done:
     return ret_value;
 } /* end RV_object_open() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_object_copy
  *
@@ -209,9 +216,9 @@ done:
  *              July, 2017
  */
 herr_t
-RV_object_copy(void *src_obj, const H5VL_loc_params_t *loc_params1, const char *src_name,
-               void *dst_obj, const H5VL_loc_params_t *loc_params2, const char *dst_name,
-               hid_t ocpypl_id, hid_t lcpl_id, hid_t dxpl_id, void **req)
+RV_object_copy(void *src_obj, const H5VL_loc_params_t *loc_params1, const char *src_name, void *dst_obj,
+               const H5VL_loc_params_t *loc_params2, const char *dst_name, hid_t ocpypl_id, hid_t lcpl_id,
+               hid_t dxpl_id, void **req)
 {
     herr_t ret_value = SUCCEED;
 
@@ -223,7 +230,6 @@ done:
     return ret_value;
 } /* end RV_object_copy() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_object_get
  *
@@ -237,19 +243,19 @@ done:
  */
 herr_t
 RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_t *args, hid_t dxpl_id,
-                  void **req)
+              void **req)
 {
-    RV_object_t *loc_obj = (RV_object_t *) obj;
+    RV_object_t *loc_obj         = (RV_object_t *)obj;
     size_t       host_header_len = 0;
-    char        *host_header = NULL;
+    char        *host_header     = NULL;
     char         request_url[URL_MAX_LENGTH];
-    int          url_len = 0;
+    int          url_len   = 0;
     herr_t       ret_value = SUCCEED;
     loc_info     loc_info;
-    
+
     loc_info.domain = loc_obj->domain;
     loc_obj->domain->u.file.ref_count++;
-    
+
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received object get call with following parameters:\n");
     printf("     - Object get call type: %s\n", object_get_type_to_string(args->op_type));
@@ -258,10 +264,8 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
     printf("     - loc_id object's domain path: %s\n\n", loc_obj->domain->u.file.filepath_name);
 #endif
 
-    if (   H5I_FILE != loc_obj->obj_type
-        && H5I_GROUP != loc_obj->obj_type
-        && H5I_DATATYPE != loc_obj->obj_type
-        && H5I_DATASET != loc_obj->obj_type)
+    if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type &&
+        H5I_DATATYPE != loc_obj->obj_type && H5I_DATASET != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file, group, dataset or committed datatype");
 
     switch (args->op_type) {
@@ -271,16 +275,14 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "unsupported object operation");
             break;
 
-        case H5VL_OBJECT_GET_INFO:
-        {
+        case H5VL_OBJECT_GET_INFO: {
             H5O_info2_t *obj_info = args->args.get_info.oinfo;
-            unsigned     fields = args->args.get_info.fields;
+            unsigned     fields   = args->args.get_info.fields;
             H5I_type_t   obj_type;
 
             switch (loc_params->type) {
                 /* H5Oget_info */
-                case H5VL_OBJECT_BY_SELF:
-                {
+                case H5VL_OBJECT_BY_SELF: {
                     obj_type = loc_obj->obj_type;
 
                     /* Redirect cURL from the base URL to
@@ -290,35 +292,38 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                      */
                     switch (obj_type) {
                         case H5I_FILE:
-                        case H5I_GROUP:
-                        {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, loc_obj->URI)) < 0)
+                        case H5I_GROUP: {
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL,
+                                                    loc_obj->URI)) < 0)
                                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                             if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "H5Oget_info request URL size exceeded maximum URL size");
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
+                                                "H5Oget_info request URL size exceeded maximum URL size");
 
                             break;
                         } /* H5I_FILE H5I_GROUP */
 
-                        case H5I_DATATYPE:
-                        {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL, loc_obj->URI)) < 0)
+                        case H5I_DATATYPE: {
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL,
+                                                    loc_obj->URI)) < 0)
                                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                             if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "H5Oget_info request URL size exceeded maximum URL size");
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
+                                                "H5Oget_info request URL size exceeded maximum URL size");
 
                             break;
                         } /* H5I_DATATYPE */
 
-                        case H5I_DATASET:
-                        {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL, loc_obj->URI)) < 0)
+                        case H5I_DATASET: {
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL,
+                                                    loc_obj->URI)) < 0)
                                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                             if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "H5Oget_info request URL size exceeded maximum URL size");
+                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
+                                                "H5Oget_info request URL size exceeded maximum URL size");
 
                             break;
                         } /* H5I_DATASET */
@@ -336,7 +341,8 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                         case H5I_ERROR_STACK:
                         case H5I_NTYPES:
                         default:
-                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "loc_id object is not a group, datatype or dataset");
+                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL,
+                                            "loc_id object is not a group, datatype or dataset");
                     } /* end switch */
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -347,8 +353,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                 } /* H5VL_OBJECT_BY_SELF */
 
                 /* H5Oget_info_by_name */
-                case H5VL_OBJECT_BY_NAME:
-                {
+                case H5VL_OBJECT_BY_NAME: {
                     htri_t search_ret;
                     char   temp_URI[URI_MAX_LENGTH];
 
@@ -362,15 +367,17 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                     /* loc_info.domain was copied at function start */
 
                     /* Locate group and set domain */
-                    search_ret = RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, \
-                        &obj_type, RV_copy_object_URI_and_domain_callback, NULL, &loc_info);
+                    search_ret =
+                        RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type,
+                                               RV_copy_object_URI_and_domain_callback, NULL, &loc_info);
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, NULL, "can't locate object by path");
 
 #ifdef RV_CONNECTOR_DEBUG
                     printf("-> H5Oget_info_by_name(): found object by given path\n");
                     printf("-> H5Oget_info_by_name(): object's URI: %s\n", temp_URI);
-                    printf("-> H5Oget_info_by_name(): object's type: %s\n\n", object_type_to_string(obj_type));
+                    printf("-> H5Oget_info_by_name(): object's type: %s\n\n",
+                           object_type_to_string(obj_type));
 #endif
 
                     /* Redirect cURL from the base URL to
@@ -380,35 +387,41 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                      */
                     switch (obj_type) {
                         case H5I_FILE:
-                        case H5I_GROUP:
-                        {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, temp_URI)) < 0)
+                        case H5I_GROUP: {
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL,
+                                                    temp_URI)) < 0)
                                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                             if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "H5Oget_info_by_name request URL size exceeded maximum URL size");
+                                FUNC_GOTO_ERROR(
+                                    H5E_OBJECT, H5E_SYSERRSTR, FAIL,
+                                    "H5Oget_info_by_name request URL size exceeded maximum URL size");
 
                             break;
                         } /* H5I_FILE H5I_GROUP */
 
-                        case H5I_DATATYPE:
-                        {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL, temp_URI)) < 0)
+                        case H5I_DATATYPE: {
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL,
+                                                    temp_URI)) < 0)
                                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                             if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "H5Oget_info_by_name request URL size exceeded maximum URL size");
+                                FUNC_GOTO_ERROR(
+                                    H5E_OBJECT, H5E_SYSERRSTR, FAIL,
+                                    "H5Oget_info_by_name request URL size exceeded maximum URL size");
 
                             break;
                         } /* H5I_DATATYPE */
 
-                        case H5I_DATASET:
-                        {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL, temp_URI)) < 0)
+                        case H5I_DATASET: {
+                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL,
+                                                    temp_URI)) < 0)
                                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                             if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "H5Oget_info_by_name request URL size exceeded maximum URL size");
+                                FUNC_GOTO_ERROR(
+                                    H5E_OBJECT, H5E_SYSERRSTR, FAIL,
+                                    "H5Oget_info_by_name request URL size exceeded maximum URL size");
 
                             break;
                         } /* H5I_DATASET */
@@ -426,15 +439,15 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                         case H5I_ERROR_STACK:
                         case H5I_NTYPES:
                         default:
-                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "loc_id object is not a group, datatype or dataset");
+                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL,
+                                            "loc_id object is not a group, datatype or dataset");
                     } /* end switch */
 
                     break;
                 } /* H5VL_OBJECT_BY_NAME */
 
                 /* H5Oget_info_by_idx */
-                case H5VL_OBJECT_BY_IDX:
-                {
+                case H5VL_OBJECT_BY_IDX: {
                     FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Oget_info_by_idx is unsupported");
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
@@ -448,22 +461,28 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
             /* Setup the host header */
             host_header_len = strlen(loc_info.domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
+            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for request Host header");
 
             strcpy(host_header, host_string);
 
-            curl_headers = curl_slist_append(curl_headers, strncat(host_header, loc_info.domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+            curl_headers =
+                curl_slist_append(curl_headers, strncat(host_header, loc_info.domain->u.file.filepath_name,
+                                                        host_header_len - strlen(host_string) - 1));
 
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
+                                curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL,
+                                "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
+                                curl_err_buf);
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Retrieving object info using URL: %s\n\n", request_url);
@@ -487,7 +506,8 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
             else if (H5I_DATASET == obj_type)
                 obj_info->type = H5O_TYPE_DATASET;
             else
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "object type is not group, datatype or dataset");
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL,
+                                "object type is not group, datatype or dataset");
 
             break;
         } /* H5VL_OBJECT_GET_INFO */
@@ -506,12 +526,11 @@ done:
     } /* end if */
 
     RV_file_close(loc_info.domain, H5P_DEFAULT, NULL);
-    
+
     PRINT_ERROR_STACK;
 
     return ret_value;
 } /* end RV_object_get() */
-
 
 /*-------------------------------------------------------------------------
  * Function:    RV_object_specific
@@ -526,9 +545,9 @@ done:
  */
 herr_t
 RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_args_t *args,
-                       hid_t dxpl_id, void **req)
+                   hid_t dxpl_id, void **req)
 {
-    RV_object_t *loc_obj = (RV_object_t *) obj;
+    RV_object_t *loc_obj   = (RV_object_t *)obj;
     herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -542,7 +561,8 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
     switch (args->op_type) {
         /* H5Oincr/decr_refcount */
         case H5VL_OBJECT_CHANGE_REF_COUNT:
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Oincr_refcount and H5Odecr_refcount are unsupported");
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL,
+                            "H5Oincr_refcount and H5Odecr_refcount are unsupported");
             break;
 
         /* H5Oexists_by_name */
@@ -557,7 +577,8 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
 
         /* H5Ovisit(_by_name) */
         case H5VL_OBJECT_VISIT:
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Ovisit and H5Ovisit_by_name are unsupported");
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL,
+                            "H5Ovisit and H5Ovisit_by_name are unsupported");
             break;
 
         /* H5Oflush */
@@ -580,7 +601,6 @@ done:
     return ret_value;
 } /* end RV_object_specific() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_get_object_info_callback
  *
@@ -599,10 +619,9 @@ done:
  *              November, 2017
  */
 static herr_t
-RV_get_object_info_callback(char *HTTP_response,
-    void *callback_data_in, void *callback_data_out)
+RV_get_object_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
-    H5O_info2_t *obj_info = (H5O_info2_t *) callback_data_out;
+    H5O_info2_t *obj_info   = (H5O_info2_t *)callback_data_out;
     yajl_val     parse_tree = NULL, key_obj;
     size_t       i;
     char        *object_id, *domain_path = NULL;
@@ -661,12 +680,13 @@ RV_get_object_info_callback(char *HTTP_response,
     } /* end for */
 
     if (!domain_path)
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "unable to determine a value for object info file number field");
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL,
+                        "unable to determine a value for object info file number field");
 
-    obj_info->fileno = (unsigned long) rv_hash_string(domain_path);
+    obj_info->fileno = (unsigned long)rv_hash_string(domain_path);
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> Object's file number: %lu\n", (unsigned long) obj_info->fileno);
+    printf("-> Object's file number: %lu\n", (unsigned long)obj_info->fileno);
 #endif
 
     if (NULL == (key_obj = yajl_tree_get(parse_tree, object_id_keys, yajl_t_string)))
@@ -692,7 +712,7 @@ RV_get_object_info_callback(char *HTTP_response,
     if (YAJL_GET_INTEGER(key_obj) < 0)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned object attribute count was negative");
 
-    obj_info->num_attrs = (hsize_t) YAJL_GET_INTEGER(key_obj);
+    obj_info->num_attrs = (hsize_t)YAJL_GET_INTEGER(key_obj);
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Object had %llu attributes attached to it\n\n", obj_info->num_attrs);
@@ -704,4 +724,3 @@ done:
 
     return ret_value;
 } /* end RV_get_object_info_callback() */
-

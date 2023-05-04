@@ -25,32 +25,32 @@
 #include "hdf5.h"
 #include "rest_vol_public.h"
 
-#define H5FILE_NAME    "group.h5"
+#define H5FILE_NAME          "group.h5"
 #define FILE_NAME_MAX_LENGTH 256
-#define RANK    2
+#define RANK                 2
 
 static herr_t file_info(hid_t loc_id, const char *name, const H5L_info2_t *linfo,
-    void *opdata);              /* Link iteration operator function */
+                        void *opdata); /* Link iteration operator function */
 static herr_t group_info(hid_t loc_id, const char *name, const H5L_info2_t *linfo,
-    void *opdata);              /* Link iteration operator function */
+                         void *opdata); /* Link iteration operator function */
 int
 main(void)
 {
 
-    hid_t    file;
-    hid_t    grp;
-    hid_t    dataset, dataspace;
-    hid_t    plist;
-    hid_t    fapl;
+    hid_t file;
+    hid_t grp;
+    hid_t dataset, dataspace;
+    hid_t plist;
+    hid_t fapl;
 
     const char *username;
     char        filename[FILE_NAME_MAX_LENGTH];
 
-    herr_t   status;
-    hsize_t  dims[2];
-    hsize_t  cdims[2];
+    herr_t  status;
+    hsize_t dims[2];
+    hsize_t cdims[2];
 
-    int      idx_f, idx_g;
+    int idx_f, idx_g;
 
     H5rest_init();
 
@@ -77,16 +77,16 @@ main(void)
      * GZIP compression with the compression effort set to 6.
      * Note that compression can be used only when dataset is chunked.
      */
-    dims[0] = 1000;
-    dims[1] = 20;
-    cdims[0] = 20;
-    cdims[1] = 20;
+    dims[0]   = 1000;
+    dims[1]   = 20;
+    cdims[0]  = 20;
+    cdims[1]  = 20;
     dataspace = H5Screate_simple(RANK, dims, NULL);
     plist     = H5Pcreate(H5P_DATASET_CREATE);
-                H5Pset_chunk(plist, 2, cdims);
-                H5Pset_deflate( plist, 6);
-    dataset = H5Dcreate2(file, "/Data/Compressed_Data", H5T_NATIVE_INT,
-                        dataspace, H5P_DEFAULT, plist, H5P_DEFAULT);
+    H5Pset_chunk(plist, 2, cdims);
+    H5Pset_deflate(plist, 6);
+    dataset =
+        H5Dcreate2(file, "/Data/Compressed_Data", H5T_NATIVE_INT, dataspace, H5P_DEFAULT, plist, H5P_DEFAULT);
     /*
      * Close the first dataset .
      */
@@ -96,11 +96,11 @@ main(void)
     /*
      * Create the second dataset.
      */
-    dims[0] = 500;
-    dims[1] = 20;
+    dims[0]   = 500;
+    dims[1]   = 20;
     dataspace = H5Screate_simple(RANK, dims, NULL);
-    dataset = H5Dcreate2(file, "/Data/Float_Data", H5T_NATIVE_FLOAT,
-			dataspace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    dataset   = H5Dcreate2(file, "/Data/Float_Data", H5T_NATIVE_FLOAT, dataspace, H5P_DEFAULT, H5P_DEFAULT,
+                           H5P_DEFAULT);
 
     /*
      *Close the second dataset and file.
@@ -121,7 +121,8 @@ main(void)
      * Access "Compressed_Data" dataset in the group.
      */
     dataset = H5Dopen2(grp, "Compressed_Data", H5P_DEFAULT);
-    if( dataset < 0) printf(" Dataset 'Compressed-Data' is not found. \n");
+    if (dataset < 0)
+        printf(" Dataset 'Compressed-Data' is not found. \n");
     printf("\"/Data/Compressed_Data\" dataset is open \n");
 
     /*
@@ -139,14 +140,14 @@ main(void)
      * hard link "Data_new".
      */
     dataset = H5Dopen2(file, "/Data_new/Compressed_Data", H5P_DEFAULT);
-    if( dataset < 0) printf(" Dataset is not found. \n");
+    if (dataset < 0)
+        printf(" Dataset is not found. \n");
     printf("\"/Data_new/Compressed_Data\" dataset is open \n");
 
     /*
      * Close the dataset.
      */
     status = H5Dclose(dataset);
-
 
     /*
      * Use iterator to see the names of the objects in the root group.
@@ -157,10 +158,10 @@ main(void)
      * Unlink  name "Data" and use iterator to see the names
      * of the objects in the file root direvtory.
      */
-    if(H5Ldelete(file, "Data", H5P_DEFAULT) < 0)
-      printf(" H5Ldelete failed \n");
+    if (H5Ldelete(file, "Data", H5P_DEFAULT) < 0)
+        printf(" H5Ldelete failed \n");
     else
-      printf("\"Data\" is unlinked \n");
+        printf("\"Data\" is unlinked \n");
 
     idx_f = H5Literate(file, H5_INDEX_NAME, H5_ITER_INC, NULL, file_info, NULL);
 
@@ -168,7 +169,8 @@ main(void)
      * Use iterator to see the names of the objects in the group
      * /Data_new.
      */
-    idx_g = H5Literate_by_name(grp, "/Data_new", H5_INDEX_NAME, H5_ITER_INC, NULL, group_info, NULL, H5P_DEFAULT);
+    idx_g =
+        H5Literate_by_name(grp, "/Data_new", H5_INDEX_NAME, H5_ITER_INC, NULL, group_info, NULL, H5P_DEFAULT);
 
     /*
      * Close the file.
@@ -203,19 +205,18 @@ file_info(hid_t loc_id, const char *name, const H5L_info2_t *linfo, void *opdata
     return 0;
 }
 
-
 /*
  * Operator function.
  */
 static herr_t
 group_info(hid_t loc_id, const char *name, const H5L_info2_t *linfo, void *opdata)
 {
-    hid_t did;  /* dataset identifier  */
-    hid_t tid;  /* datatype identifier */
+    hid_t       did; /* dataset identifier  */
+    hid_t       tid; /* datatype identifier */
     H5T_class_t t_class;
-    hid_t pid;  /* data_property identifier */
-    hsize_t chunk_dims_out[2];
-    int  rank_chunk;
+    hid_t       pid; /* data_property identifier */
+    hsize_t     chunk_dims_out[2];
+    int         rank_chunk;
 
     /* avoid warnings */
     (void)opdata;
@@ -234,38 +235,37 @@ group_info(hid_t loc_id, const char *name, const H5L_info2_t *linfo, void *opdat
     /*
      * Display dataset information.
      */
-    tid = H5Dget_type(did);  /* get datatype*/
+    tid = H5Dget_type(did);         /* get datatype*/
     pid = H5Dget_create_plist(did); /* get creation property list */
 
     /*
      * Check if dataset is chunked.
      */
-    if(H5D_CHUNKED == H5Pget_layout(pid)) {
+    if (H5D_CHUNKED == H5Pget_layout(pid)) {
         /*
          * get chunking information: rank and dimensions.
          */
         rank_chunk = H5Pget_chunk(pid, 2, chunk_dims_out);
-        printf("chunk rank %d, dimensions %lu x %lu\n", rank_chunk,
-            (unsigned long)(chunk_dims_out[0]),
-            (unsigned long)(chunk_dims_out[1]));
+        printf("chunk rank %d, dimensions %lu x %lu\n", rank_chunk, (unsigned long)(chunk_dims_out[0]),
+               (unsigned long)(chunk_dims_out[1]));
     }
     else {
         t_class = H5Tget_class(tid);
-        if(t_class < 0) {
+        if (t_class < 0) {
             puts(" Invalid datatype.\n");
         }
         else {
-            if(t_class == H5T_INTEGER)
+            if (t_class == H5T_INTEGER)
                 puts(" Datatype is 'H5T_NATIVE_INTEGER'.\n");
-            if(t_class == H5T_FLOAT)
+            if (t_class == H5T_FLOAT)
                 puts(" Datatype is 'H5T_NATIVE_FLOAT'.\n");
-            if(t_class == H5T_STRING)
+            if (t_class == H5T_STRING)
                 puts(" Datatype is 'H5T_NATIVE_STRING'.\n");
-            if(t_class == H5T_BITFIELD)
+            if (t_class == H5T_BITFIELD)
                 puts(" Datatype is 'H5T_NATIVE_BITFIELD'.\n");
-            if(t_class == H5T_OPAQUE)
+            if (t_class == H5T_OPAQUE)
                 puts(" Datatype is 'H5T_NATIVE_OPAQUE'.\n");
-            if(t_class == H5T_COMPOUND)
+            if (t_class == H5T_COMPOUND)
                 puts(" Datatype is 'H5T_NATIVE_COMPOUND'.\n");
         }
     }
@@ -275,4 +275,3 @@ group_info(hid_t loc_id, const char *name, const H5L_info2_t *linfo, void *opdat
     H5Tclose(tid);
     return 0;
 }
-

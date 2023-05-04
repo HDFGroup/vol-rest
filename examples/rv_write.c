@@ -22,23 +22,23 @@
 #include "hdf5.h"
 #include "rest_vol_public.h"
 
-#define H5FILE_NAME        "SDS.h5"
+#define H5FILE_NAME          "SDS.h5"
 #define FILE_NAME_MAX_LENGTH 256
-#define DATASETNAME "IntArray"
-#define NX     5                      /* dataset dimensions */
-#define NY     6
-#define RANK   2
+#define DATASETNAME          "IntArray"
+#define NX                   5 /* dataset dimensions */
+#define NY                   6
+#define RANK                 2
 
 int
-main (void)
+main(void)
 {
-    hid_t       file, dataset;         /* file and dataset handles */
-    hid_t       datatype, dataspace;   /* handles */
-    hid_t       fapl;
-    hsize_t     dimsf[2];              /* dataset dimensions */
-    herr_t      status;
-    int         data[NX][NY];          /* data to write */
-    int         i, j;
+    hid_t   file, dataset;       /* file and dataset handles */
+    hid_t   datatype, dataspace; /* handles */
+    hid_t   fapl;
+    hsize_t dimsf[2]; /* dataset dimensions */
+    herr_t  status;
+    int     data[NX][NY]; /* data to write */
+    int     i, j;
 
     const char *username;
     char        filename[FILE_NAME_MAX_LENGTH];
@@ -51,9 +51,9 @@ main (void)
     /*
      * Data  and output buffer initialization.
      */
-    for(j = 0; j < NX; j++)
-	for(i = 0; i < NY; i++)
-	    data[j][i] = i + j;
+    for (j = 0; j < NX; j++)
+        for (i = 0; i < NY; i++)
+            data[j][i] = i + j;
     /*
      * 0 1 2 3 4 5
      * 1 2 3 4 5 6
@@ -77,8 +77,8 @@ main (void)
      * Describe the size of the array and create the data space for fixed
      * size dataset.
      */
-    dimsf[0] = NX;
-    dimsf[1] = NY;
+    dimsf[0]  = NX;
+    dimsf[1]  = NY;
     dataspace = H5Screate_simple(RANK, dimsf, NULL);
 
     /*
@@ -86,14 +86,13 @@ main (void)
      * We will store little endian INT numbers.
      */
     datatype = H5Tcopy(H5T_NATIVE_INT);
-    status = H5Tset_order(datatype, H5T_ORDER_LE);
+    status   = H5Tset_order(datatype, H5T_ORDER_LE);
 
     /*
      * Create a new dataset within the file using defined dataspace and
      * datatype and default dataset creation properties.
      */
-    dataset = H5Dcreate2(file, DATASETNAME, datatype, dataspace,
-			H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    dataset = H5Dcreate2(file, DATASETNAME, datatype, dataspace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
     /*
      * Write the data to the dataset using default transfer properties.
@@ -113,4 +112,3 @@ main (void)
 
     return 0;
 }
-

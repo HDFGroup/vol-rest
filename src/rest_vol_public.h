@@ -66,8 +66,8 @@
  * of the supplemental filter options array that can be specified along
  * with the filter.
  */
-#define FILTER_NAME_MAX_LENGTH                        256
-#define FILTER_MAX_CD_VALUES                          32
+#define FILTER_NAME_MAX_LENGTH 256
+#define FILTER_MAX_CD_VALUES   32
 
 typedef struct rv_obj_ref_t {
     H5R_type_t ref_type;

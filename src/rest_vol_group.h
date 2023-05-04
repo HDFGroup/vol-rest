@@ -18,10 +18,12 @@ extern "C" {
 #endif
 
 /* REST VOL Group callbacks */
-void   *RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
-void   *RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id, void **req);
-herr_t  RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req);
-herr_t  RV_group_close(void *grp, hid_t dxpl_id, void **req);
+void  *RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id,
+                       hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req);
+void  *RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id,
+                     hid_t dxpl_id, void **req);
+herr_t RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req);
+herr_t RV_group_close(void *grp, hid_t dxpl_id, void **req);
 
 #ifdef __cplusplus
 }

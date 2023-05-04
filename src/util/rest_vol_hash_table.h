@@ -2,19 +2,19 @@
 
 Copyright (c) 2005-2008, Simon Howard
 
-Permission to use, copy, modify, and/or distribute this software 
-for any purpose with or without fee is hereby granted, provided 
-that the above copyright notice and this permission notice appear 
-in all copies. 
+Permission to use, copy, modify, and/or distribute this software
+for any purpose with or without fee is hereby granted, provided
+that the above copyright notice and this permission notice appear
+in all copies.
 
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL 
-WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED 
-WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE 
-AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR 
-CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM 
-LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, 
-NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN      
-CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
+WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
+AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR
+CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
+NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
  */
 
@@ -42,7 +42,6 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  * \ref rv_hash_table_iter_next and \ref rv_hash_table_iter_has_more.
  */
 
-
 #ifndef RV_HASH_TABLE_H
 #define RV_HASH_TABLE_H
 
@@ -50,7 +49,7 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 extern "C" {
 #endif
 
-/** 
+/**
  * A hash table structure.
  */
 
@@ -85,16 +84,16 @@ typedef void *rv_hash_table_value_t;
  */
 
 struct rv_hash_table_iter {
-    rv_hash_table_t *hash_table;
+    rv_hash_table_t       *hash_table;
     rv_hash_table_entry_t *next_entry;
-	unsigned int next_chain;
+    unsigned int           next_chain;
 };
 
 /**
  * A null \ref HashTableValue.
  */
 
-#define RV_HASH_TABLE_NULL ((void *) 0)
+#define RV_HASH_TABLE_NULL ((void *)0)
 
 /**
  * Hash function used to generate hash values for keys used in a hash
@@ -116,14 +115,14 @@ typedef unsigned int (*rv_hash_table_hash_func_t)(rv_hash_table_key_t value);
 typedef int (*rv_hash_table_equal_func_t)(rv_hash_table_key_t value1, rv_hash_table_key_t value2);
 
 /**
- * Type of function used to free keys when entries are removed from a 
+ * Type of function used to free keys when entries are removed from a
  * hash table.
  */
 
 typedef void (*rv_hash_table_key_free_func_t)(rv_hash_table_key_t value);
 
 /**
- * Type of function used to free values when entries are removed from a 
+ * Type of function used to free values when entries are removed from a
  * hash table.
  */
 
@@ -140,17 +139,15 @@ typedef void (*rv_hash_table_value_free_func_t)(rv_hash_table_value_t value);
  *                             was not possible to allocate the new hash
  *                             table.
  */
-rv_hash_table_t *
-rv_hash_table_new(rv_hash_table_hash_func_t hash_func,
-        rv_hash_table_equal_func_t equal_func);
+rv_hash_table_t *rv_hash_table_new(rv_hash_table_hash_func_t  hash_func,
+                                   rv_hash_table_equal_func_t equal_func);
 
 /**
  * Destroy a hash table.
  *
  * \param hash_table           The hash table to destroy.
  */
-void
-rv_hash_table_free(rv_hash_table_t *hash_table);
+void rv_hash_table_free(rv_hash_table_t *hash_table);
 
 /**
  * Register functions used to free the key and value when an entry is
@@ -160,13 +157,12 @@ rv_hash_table_free(rv_hash_table_t *hash_table);
  * \param key_free_func        Function used to free keys.
  * \param value_free_func      Function used to free values.
  */
-void
-rv_hash_table_register_free_functions(rv_hash_table_t *hash_table,
-        rv_hash_table_key_free_func_t key_free_func,
-        rv_hash_table_value_free_func_t value_free_func);
+void rv_hash_table_register_free_functions(rv_hash_table_t                *hash_table,
+                                           rv_hash_table_key_free_func_t   key_free_func,
+                                           rv_hash_table_value_free_func_t value_free_func);
 
 /**
- * Insert a value into a hash table, overwriting any existing entry 
+ * Insert a value into a hash table, overwriting any existing entry
  * using the same key.
  *
  * \param hash_table           The hash table.
@@ -176,10 +172,7 @@ rv_hash_table_register_free_functions(rv_hash_table_t *hash_table,
  *                             or zero if it was not possible to allocate
  *                             memory for the new entry.
  */
-int
-rv_hash_table_insert(rv_hash_table_t *hash_table,
-        rv_hash_table_key_t key,
-        rv_hash_table_value_t value);
+int rv_hash_table_insert(rv_hash_table_t *hash_table, rv_hash_table_key_t key, rv_hash_table_value_t value);
 
 /**
  * Look up a value in a hash table by key.
@@ -189,9 +182,7 @@ rv_hash_table_insert(rv_hash_table_t *hash_table,
  * \return                    The value, or \ref HASH_TABLE_NULL if there
  *                            is no value with that key in the hash table.
  */
-rv_hash_table_value_t
-rv_hash_table_lookup(rv_hash_table_t *hash_table,
-        rv_hash_table_key_t key);
+rv_hash_table_value_t rv_hash_table_lookup(rv_hash_table_t *hash_table, rv_hash_table_key_t key);
 
 /**
  * Remove a value from a hash table.
@@ -201,17 +192,15 @@ rv_hash_table_lookup(rv_hash_table_t *hash_table,
  * \return                    Non-zero if a key was removed, or zero if the
  *                            specified key was not found in the hash table.
  */
-int
-rv_hash_table_remove(rv_hash_table_t *hash_table, rv_hash_table_key_t key);
+int rv_hash_table_remove(rv_hash_table_t *hash_table, rv_hash_table_key_t key);
 
-/** 
+/**
  * Retrieve the number of entries in a hash table.
  *
  * \param hash_table          The hash table.
  * \return                    The number of entries in the hash table.
  */
-unsigned int
-rv_hash_table_num_entries(rv_hash_table_t *hash_table);
+unsigned int rv_hash_table_num_entries(rv_hash_table_t *hash_table);
 
 /**
  * Initialise a \ref HashTableIterator to iterate over a hash table.
@@ -220,20 +209,18 @@ rv_hash_table_num_entries(rv_hash_table_t *hash_table);
  * \param iter                Pointer to an iterator structure to
  *                            initialise.
  */
-void
-rv_hash_table_iterate(rv_hash_table_t *hash_table, rv_hash_table_iter_t *iter);
+void rv_hash_table_iterate(rv_hash_table_t *hash_table, rv_hash_table_iter_t *iter);
 
 /**
  * Determine if there are more keys in the hash table to iterate
- * over. 
+ * over.
  *
  * \param iterator            The hash table iterator.
  * \return                    Zero if there are no more values to iterate
- *                            over, non-zero if there are more values to 
+ *                            over, non-zero if there are more values to
  *                            iterate over.
  */
-int
-rv_hash_table_iter_has_more(rv_hash_table_iter_t *iterator);
+int rv_hash_table_iter_has_more(rv_hash_table_iter_t *iterator);
 
 /**
  * Using a hash table iterator, retrieve the next key.
@@ -243,12 +230,10 @@ rv_hash_table_iter_has_more(rv_hash_table_iter_t *iterator);
  *                            \ref rv_HASH_TABLE_NULL if there are no more
  *                            keys to iterate over.
  */
-rv_hash_table_value_t
-rv_hash_table_iter_next(rv_hash_table_iter_t *iterator);
+rv_hash_table_value_t rv_hash_table_iter_next(rv_hash_table_iter_t *iterator);
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* RV_HASH_TABLE_H */
-

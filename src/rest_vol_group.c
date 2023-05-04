@@ -18,12 +18,12 @@
 #include "rest_vol_group.h"
 
 /* Set of callbacks for RV_parse_response() */
-static herr_t RV_get_group_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_get_group_info_callback(char *HTTP_response, void *callback_data_in,
+                                         void *callback_data_out);
 
 /* JSON keys to retrieve the number of links in a group */
-const char *group_link_count_keys[] = { "linkCount", (const char *) 0 };
+const char *group_link_count_keys[] = {"linkCount", (const char *)0};
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_group_create
  *
@@ -39,25 +39,26 @@ const char *group_link_count_keys[] = { "linkCount", (const char *) 0 };
  */
 void *
 RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id,
-    hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req)
+                hid_t gcpl_id, hid_t gapl_id, hid_t dxpl_id, void **req)
 {
-    RV_object_t *parent = (RV_object_t *) obj;
-    RV_object_t *new_group = NULL;
+    RV_object_t *parent                = (RV_object_t *)obj;
+    RV_object_t *new_group             = NULL;
     size_t       create_request_nalloc = 0;
-    size_t       host_header_len = 0;
-    char        *host_header = NULL;
-    char        *create_request_body = NULL;
-    char        *path_dirname = NULL;
+    size_t       host_header_len       = 0;
+    char        *host_header           = NULL;
+    char        *create_request_body   = NULL;
+    char        *path_dirname          = NULL;
     char         target_URI[URI_MAX_LENGTH];
     char         request_url[URL_MAX_LENGTH];
     int          create_request_body_len = 0;
-    int          url_len = 0;
-    void        *ret_value = NULL;
+    int          url_len                 = 0;
+    void        *ret_value               = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received group create call with following parameters:\n");
     printf("     - H5Gcreate variant: %s\n", name ? "H5Gcreate2" : "H5Gcreate_anon");
-    if (name) printf("     - Group's name: %s\n", name);
+    if (name)
+        printf("     - Group's name: %s\n", name);
     printf("     - Group parent object's URI: %s\n", parent->URI);
     printf("     - Group parent object's type: %s\n", object_type_to_string(parent->obj_type));
     printf("     - Group parent object's domain path: %s\n", parent->domain->u.file.filepath_name);
@@ -73,17 +74,17 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
         FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file");
 
     /* Allocate and setup internal Group struct */
-    if (NULL == (new_group = (RV_object_t *) RV_malloc(sizeof(*new_group))))
+    if (NULL == (new_group = (RV_object_t *)RV_malloc(sizeof(*new_group))))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group object");
 
-    new_group->URI[0] = '\0';
-    new_group->obj_type = H5I_GROUP;
+    new_group->URI[0]          = '\0';
+    new_group->obj_type        = H5I_GROUP;
     new_group->u.group.gapl_id = FAIL;
     new_group->u.group.gcpl_id = FAIL;
 
     new_group->domain = parent->domain;
     parent->domain->u.file.ref_count++;
-    
+
     /* Copy the GAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * group access property list functions will function correctly
      */
@@ -130,54 +131,60 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
             H5I_type_t obj_type = H5I_GROUP;
             htri_t     search_ret;
 
-            search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
+            search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback,
+                                                NULL, target_URI);
 
             if (!search_ret || search_ret < 0) {
-                unsigned crt_intmd_group;
-                hid_t intmd_group_id = H5I_INVALID_HID;
+                unsigned     crt_intmd_group;
+                hid_t        intmd_group_id = H5I_INVALID_HID;
                 RV_object_t *intmd_group;
 
                 if (H5Pget_create_intermediate_group(lcpl_id, &crt_intmd_group))
                     FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get flag value in lcpl");
-                
+
                 if (crt_intmd_group) {
                     /* Remove trailing slash to avoid infinite loop due to H5_dirname */
                     if (path_dirname[strlen(path_dirname) - 1] == '/')
                         path_dirname[strlen(path_dirname) - 1] = '\0';
 
-                    if (NULL == (intmd_group = RV_group_create(obj, loc_params, path_dirname, lcpl_id, gcpl_id, gapl_id, dxpl_id, req)))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTOPENOBJ, NULL, "can't create intermediate group automatically");
-                    
+                    if (NULL == (intmd_group = RV_group_create(obj, loc_params, path_dirname, lcpl_id,
+                                                               gcpl_id, gapl_id, dxpl_id, req)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTOPENOBJ, NULL,
+                                        "can't create intermediate group automatically");
+
                     /* Get URI of final group now that it has been created */
-                    search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
-                
+                    search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type,
+                                                        RV_copy_object_URI_callback, NULL, target_URI);
+
                     RV_group_close(intmd_group, H5P_DEFAULT, NULL);
-                } else 
+                }
+                else
                     FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate target for group link");
             }
-                
-                
+
         } /* end if */
 
-        const char * const fmt_string = "{"
-                                            "\"link\": {"
-                                                "\"id\": \"%s\", "
-                                                "\"name\": \"%s\""
-                                            "}"
-                                        "}";
+        const char *const fmt_string = "{"
+                                       "\"link\": {"
+                                       "\"id\": \"%s\", "
+                                       "\"name\": \"%s\""
+                                       "}"
+                                       "}";
 
         /* Form the request body to link the new group to the parent object */
-        create_request_nalloc = strlen(fmt_string) + strlen(path_basename) + (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
-        if (NULL == (create_request_body = (char *) RV_malloc(create_request_nalloc)))
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group create request body");
+        create_request_nalloc = strlen(fmt_string) + strlen(path_basename) +
+                                (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
+        if (NULL == (create_request_body = (char *)RV_malloc(create_request_nalloc)))
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL,
+                            "can't allocate space for group create request body");
 
         if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string,
-                empty_dirname ? parent->URI : target_URI, path_basename)
-            ) < 0)
+                                                empty_dirname ? parent->URI : target_URI, path_basename)) < 0)
             FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error");
 
-        if ((size_t) create_request_body_len >= create_request_nalloc)
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "group link create request body size exceeded allocated buffer size");
+        if ((size_t)create_request_body_len >= create_request_nalloc)
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL,
+                            "group link create request body size exceeded allocated buffer size");
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Group create request body:\n%s\n\n", create_request_body);
@@ -186,12 +193,13 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
 
     /* Setup the host header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for request Host header");
 
     strcpy(host_header, host_string);
 
-    curl_headers = curl_slist_append(curl_headers, strncat(host_header, parent->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+    curl_headers = curl_slist_append(curl_headers, strncat(host_header, parent->domain->u.file.filepath_name,
+                                                           host_header_len - strlen(host_string) - 1));
 
     /* Disable use of Expect: 100 Continue HTTP response */
     curl_headers = curl_slist_append(curl_headers, "Expect:");
@@ -213,10 +221,12 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
-        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body ? create_request_body : ""))
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s",
+                        curl_err_buf);
+    if (CURLE_OK !=
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body ? create_request_body : ""))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL POST data: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) create_request_body_len))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)create_request_body_len))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL POST data size: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
@@ -239,7 +249,7 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     if (RV_parse_response(response_buffer.buffer, NULL, new_group->URI, RV_copy_object_URI_callback) < 0)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTCREATE, NULL, "can't parse new group's URI");
 
-    ret_value = (void *) new_group;
+    ret_value = (void *)new_group;
 
 done:
 #ifdef RV_CONNECTOR_DEBUG
@@ -275,7 +285,6 @@ done:
     return ret_value;
 } /* end RV_group_create() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_group_open
  *
@@ -290,11 +299,11 @@ done:
  *              March, 2017
  */
 void *
-RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
-    hid_t gapl_id, hid_t dxpl_id, void **req)
+RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id,
+              void **req)
 {
-    RV_object_t *parent = (RV_object_t *) obj;
-    RV_object_t *group = NULL;
+    RV_object_t *parent   = (RV_object_t *)obj;
+    RV_object_t *group    = NULL;
     H5I_type_t   obj_type = H5I_UNINIT;
     loc_info     loc_info;
     htri_t       search_ret;
@@ -313,23 +322,24 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
 
     /* Allocate and setup internal Group struct */
-    if (NULL == (group = (RV_object_t *) RV_malloc(sizeof(*group))))
+    if (NULL == (group = (RV_object_t *)RV_malloc(sizeof(*group))))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group object");
 
-    group->URI[0] = '\0';
-    group->obj_type = H5I_GROUP;
+    group->URI[0]          = '\0';
+    group->obj_type        = H5I_GROUP;
     group->u.group.gapl_id = FAIL;
     group->u.group.gcpl_id = FAIL;
 
     /* Copy information about file the group is in */
     group->domain = parent->domain;
     parent->domain->u.file.ref_count++;
-    
-    loc_info.URI = group->URI;
+
+    loc_info.URI    = group->URI;
     loc_info.domain = group->domain;
 
     /* Locate group and set domain */
-    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL, &loc_info);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL,
+                                        &loc_info);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate group by path");
 
@@ -350,12 +360,12 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
         group->u.group.gapl_id = H5P_GROUP_ACCESS_DEFAULT;
 
     /* Set up a GCPL for the group so that H5Gget_create_plist() will function correctly */
-    /* XXX: Because the HDF5 REST API does not support storing creationProperties for groups, 
+    /* XXX: Because the HDF5 REST API does not support storing creationProperties for groups,
      * the GCPL on re-open must be default.*/
     if ((group->u.group.gcpl_id = H5Pcreate(H5P_GROUP_CREATE)) < 0)
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create GCPL for group");
 
-    ret_value = (void *) group;
+    ret_value = (void *)group;
 
 done:
 #ifdef RV_CONNECTOR_DEBUG
@@ -379,7 +389,6 @@ done:
     return ret_value;
 } /* end RV_group_open() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_group_get
  *
@@ -394,11 +403,11 @@ done:
 herr_t
 RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
 {
-    RV_object_t *loc_obj = (RV_object_t *) obj;
+    RV_object_t *loc_obj         = (RV_object_t *)obj;
     size_t       host_header_len = 0;
-    char        *host_header = NULL;
+    char        *host_header     = NULL;
     char         request_url[URL_MAX_LENGTH];
-    int          url_len = 0;
+    int          url_len   = 0;
     herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -411,8 +420,7 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
 
     switch (args->op_type) {
         /* H5Gget_create_plist */
-        case H5VL_GROUP_GET_GCPL:
-        {
+        case H5VL_GROUP_GET_GCPL: {
             hid_t *ret_id = &args->args.get_gcpl.gcpl_id;
 
             if ((*ret_id = H5Pcopy(loc_obj->u.group.gcpl_id)) < 0)
@@ -422,67 +430,72 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
         } /* H5VL_GROUP_GET_GCPL */
 
         /* H5Gget_info */
-        case H5VL_GROUP_GET_INFO:
-        {
+        case H5VL_GROUP_GET_INFO: {
             H5VL_loc_params_t *loc_params = &args->args.get_info.loc_params;
             H5G_info_t        *group_info = args->args.get_info.ginfo;
 
             switch (loc_params->type) {
                 /* H5Gget_info */
-                case H5VL_OBJECT_BY_SELF:
-                {
+                case H5VL_OBJECT_BY_SELF: {
 #ifdef RV_CONNECTOR_DEBUG
                     printf("-> H5Gget_info(): Group's URI: %s\n", loc_obj->URI);
-                    printf("-> H5Gget_info(): Group's object type: %s\n\n", object_type_to_string(loc_obj->obj_type));
+                    printf("-> H5Gget_info(): Group's object type: %s\n\n",
+                           object_type_to_string(loc_obj->obj_type));
 #endif
 
                     /* Redirect cURL from the base URL to "/groups/<id>" to get information about the group */
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, loc_obj->URI)) < 0)
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL,
+                                            loc_obj->URI)) < 0)
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL, "H5Gget_info request URL size exceeded maximum URL size");
+                        FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL,
+                                        "H5Gget_info request URL size exceeded maximum URL size");
 
                     break;
                 } /* H5VL_OBJECT_BY_SELF */
 
                 /* H5Gget_info_by_name */
-                case H5VL_OBJECT_BY_NAME:
-                {
+                case H5VL_OBJECT_BY_NAME: {
                     H5I_type_t obj_type = H5I_GROUP;
                     htri_t     search_ret;
                     char       temp_URI[URI_MAX_LENGTH];
 
 #ifdef RV_CONNECTOR_DEBUG
                     printf("-> H5Gget_info_by_name(): loc_id object's URI: %s\n", loc_obj->URI);
-                    printf("-> H5Gget_info_by_name(): loc_id object's type: %s\n", object_type_to_string(loc_obj->obj_type));
-                    printf("-> H5Gget_info_by_name(): Path to group's parent object: %s\n\n", loc_params->loc_data.loc_by_name.name);
+                    printf("-> H5Gget_info_by_name(): loc_id object's type: %s\n",
+                           object_type_to_string(loc_obj->obj_type));
+                    printf("-> H5Gget_info_by_name(): Path to group's parent object: %s\n\n",
+                           loc_params->loc_data.loc_by_name.name);
 #endif
 
-                    search_ret = RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type,
-                            RV_copy_object_URI_callback, NULL, temp_URI);
+                    search_ret =
+                        RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type,
+                                               RV_copy_object_URI_callback, NULL, temp_URI);
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate group");
 
 #ifdef RV_CONNECTOR_DEBUG
                     printf("-> H5Gget_info_by_name(): found group's parent object by given path\n");
                     printf("-> H5Gget_info_by_name(): group's parent object URI: %s\n", temp_URI);
-                    printf("-> H5Gget_info_by_name(): group's parent object type: %s\n\n", object_type_to_string(obj_type));
+                    printf("-> H5Gget_info_by_name(): group's parent object type: %s\n\n",
+                           object_type_to_string(obj_type));
 #endif
 
                     /* Redirect cURL from the base URL to "/groups/<id>" to get information about the group */
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, temp_URI)) < 0)
+                    if ((url_len =
+                             snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, temp_URI)) < 0)
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL, "H5Gget_info_by_name request URL size exceeded maximum URL size");
+                        FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL,
+                                        "H5Gget_info_by_name request URL size exceeded maximum URL size");
 
                     break;
                 } /* H5VL_OBJECT_BY_NAME */
 
                 /* H5Gget_info_by_idx */
-                case H5VL_OBJECT_BY_IDX:
-                {
+                case H5VL_OBJECT_BY_IDX: {
                     FUNC_GOTO_ERROR(H5E_SYM, H5E_UNSUPPORTED, FAIL, "H5Gget_info_by_idx is unsupported");
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
@@ -494,12 +507,14 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
 
             /* Setup the host header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
 
             strcpy(host_header, host_string);
 
-            curl_headers = curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+            curl_headers =
+                curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name,
+                                                        host_header_len - strlen(host_string) - 1));
 
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
@@ -507,7 +522,8 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
+                                curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
 
@@ -532,7 +548,8 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
         } /* H5VL_GROUP_GET_INFO */
 
         default:
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTGET, FAIL, "can't get this type of information from group");;
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTGET, FAIL, "can't get this type of information from group");
+            ;
     } /* end switch */
 
 done:
@@ -553,7 +570,6 @@ done:
     return ret_value;
 } /* end RV_group_get() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_group_close
  *
@@ -569,7 +585,7 @@ done:
 herr_t
 RV_group_close(void *grp, hid_t dxpl_id, void **req)
 {
-    RV_object_t *_grp = (RV_object_t *) grp;
+    RV_object_t *_grp      = (RV_object_t *)grp;
     herr_t       ret_value = SUCCEED;
 
     if (!_grp)
@@ -609,7 +625,6 @@ done:
     return ret_value;
 } /* end RV_group_close() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_get_group_info_callback
  *
@@ -631,9 +646,9 @@ done:
 static herr_t
 RV_get_group_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
-    H5G_info_t *group_info = (H5G_info_t *) callback_data_out;
+    H5G_info_t *group_info = (H5G_info_t *)callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;
-    herr_t      ret_value = SUCCEED;
+    herr_t      ret_value  = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving group's info from server's HTTP response\n\n");
@@ -659,7 +674,7 @@ RV_get_group_info_callback(char *HTTP_response, void *callback_data_in, void *ca
     if (YAJL_GET_INTEGER(key_obj) < 0)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_BADVALUE, FAIL, "group link count was negative");
 
-    group_info->nlinks = (hsize_t) YAJL_GET_INTEGER(key_obj);
+    group_info->nlinks = (hsize_t)YAJL_GET_INTEGER(key_obj);
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Group had %llu links in it\n\n", group_info->nlinks);

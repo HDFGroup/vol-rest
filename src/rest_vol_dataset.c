@@ -18,19 +18,26 @@
 #include "rest_vol_dataset.h"
 
 /* Set of callbacks for RV_parse_response() */
-static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callback_data_in,
+                                                            void *callback_data_out);
 
 /* Helper functions for creating a Dataset */
-static herr_t RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t type_id, hid_t space_id,
-    hid_t lcpl_id, hid_t dcpl, char **create_request_body, size_t *create_request_body_len);
-static herr_t RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl_id, char **creation_properties_body, size_t *creation_properties_body_len);
+static herr_t RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t type_id,
+                                                   hid_t space_id, hid_t lcpl_id, hid_t dcpl,
+                                                   char  **create_request_body,
+                                                   size_t *create_request_body_len);
+static herr_t RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl_id, char **creation_properties_body,
+                                                             size_t *creation_properties_body_len);
 
 /* Helper function to convert a selection within an HDF5 Dataspace into a JSON-format string */
-static herr_t RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string, size_t *selection_string_len, hbool_t req_param);
+static herr_t RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string,
+                                                       size_t *selection_string_len, hbool_t req_param);
 
 /* Conversion function to convert one or more rest_obj_ref_t objects into a binary buffer for data transfer */
-static herr_t RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_len, char **buf_out, size_t *buf_out_len);
-static herr_t RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len, rv_obj_ref_t **buf_out, size_t *buf_out_len);
+static herr_t RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_len,
+                                            char **buf_out, size_t *buf_out_len);
+static herr_t RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len, rv_obj_ref_t **buf_out,
+                                            size_t *buf_out_len);
 
 /* Helper function to base64 encode a given buffer */
 static herr_t RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size);
@@ -39,22 +46,22 @@ static herr_t RV_base64_encode(const void *in, size_t in_size, char **out, size_
 static herr_t dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *op_data);
 
 /* JSON keys to retrieve the various creation properties from a dataset */
-const char *creation_properties_keys[]    = { "creationProperties", (const char *) 0 };
-const char *alloc_time_keys[]             = { "allocTime", (const char *) 0 };
-const char *creation_order_keys[]         = { "attributeCreationOrder", (const char *) 0 };
-const char *attribute_phase_change_keys[] = { "attributePhaseChange", (const char *) 0 };
-const char *fill_time_keys[]              = { "fillTime", (const char *) 0 };
-const char *fill_value_keys[]             = { "fillValue", (const char *) 0 };
-const char *filters_keys[]                = { "filters", (const char *) 0 };
-const char *filter_class_keys[]           = { "class", (const char *) 0 };
-const char *filter_ID_keys[]              = { "id", (const char *) 0 };
-const char *layout_keys[]                 = { "layout", (const char *) 0 };
-const char *track_times_keys[]            = { "trackTimes", (const char *) 0 };
-const char *max_compact_keys[]            = { "maxCompact", (const char *) 0 };
-const char *min_dense_keys[]              = { "minDense", (const char *) 0 };
-const char *layout_class_keys[]           = { "class", (const char *) 0 };
-const char *chunk_dims_keys[]             = { "dims", (const char *) 0 };
-const char *external_storage_keys[]       = { "externalStorage", (const char *) 0 };
+const char *creation_properties_keys[]    = {"creationProperties", (const char *)0};
+const char *alloc_time_keys[]             = {"allocTime", (const char *)0};
+const char *creation_order_keys[]         = {"attributeCreationOrder", (const char *)0};
+const char *attribute_phase_change_keys[] = {"attributePhaseChange", (const char *)0};
+const char *fill_time_keys[]              = {"fillTime", (const char *)0};
+const char *fill_value_keys[]             = {"fillValue", (const char *)0};
+const char *filters_keys[]                = {"filters", (const char *)0};
+const char *filter_class_keys[]           = {"class", (const char *)0};
+const char *filter_ID_keys[]              = {"id", (const char *)0};
+const char *layout_keys[]                 = {"layout", (const char *)0};
+const char *track_times_keys[]            = {"trackTimes", (const char *)0};
+const char *max_compact_keys[]            = {"maxCompact", (const char *)0};
+const char *min_dense_keys[]              = {"minDense", (const char *)0};
+const char *layout_class_keys[]           = {"class", (const char *)0};
+const char *chunk_dims_keys[]             = {"dims", (const char *)0};
+const char *external_storage_keys[]       = {"externalStorage", (const char *)0};
 
 /* Defines for Dataset operations */
 #define DATASET_CREATION_PROPERTIES_BODY_DEFAULT_SIZE 512
@@ -65,20 +72,21 @@ const char *external_storage_keys[]       = { "externalStorage", (const char *) 
 /* Default sizes for strings formed when dealing with turning a
  * representation of an HDF5 dataspace and a selection within one into JSON
  */
-#define DATASPACE_SELECTION_STRING_DEFAULT_SIZE       512
-#define DATASPACE_MAX_RANK                            32
+#define DATASPACE_SELECTION_STRING_DEFAULT_SIZE 512
+#define DATASPACE_MAX_RANK                      32
 
 /* Defines for the use of the LZF and ScaleOffset filters */
-#define LZF_FILTER_ID                    32000 /* Avoid calling this 'H5Z_FILTER_LZF'; The HDF5 Library could potentially add 'H5Z_FILTER_LZF' in the future */
-#define H5Z_SCALEOFFSET_PARM_SCALETYPE   0     /* ScaleOffset filter "User" parameter for scale type */
-#define H5Z_SCALEOFFSET_PARM_SCALEFACTOR 1     /* ScaleOffset filter "User" parameter for scale factor */
+#define LZF_FILTER_ID                                                                                        \
+    32000 /* Avoid calling this 'H5Z_FILTER_LZF'; The HDF5 Library could potentially add 'H5Z_FILTER_LZF' in \
+             the future */
+#define H5Z_SCALEOFFSET_PARM_SCALETYPE   0 /* ScaleOffset filter "User" parameter for scale type */
+#define H5Z_SCALEOFFSET_PARM_SCALEFACTOR 1 /* ScaleOffset filter "User" parameter for scale factor */
 
 /* Default size for the buffer to allocate during base64-encoding if the caller
  * of RV_base64_encode supplies a 0-sized buffer.
  */
-#define BASE64_ENCODE_DEFAULT_BUFFER_SIZE             33554432 /* 32MB */
+#define BASE64_ENCODE_DEFAULT_BUFFER_SIZE 33554432 /* 32MB */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_dataset_create
  *
@@ -93,23 +101,24 @@ const char *external_storage_keys[]       = { "externalStorage", (const char *) 
  *              March, 2017
  */
 void *
-RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
-    hid_t lcpl_id, hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req)
+RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t lcpl_id,
+                  hid_t type_id, hid_t space_id, hid_t dcpl_id, hid_t dapl_id, hid_t dxpl_id, void **req)
 {
-    RV_object_t *parent = (RV_object_t *) obj;
-    RV_object_t *new_dataset = NULL;
+    RV_object_t *parent                  = (RV_object_t *)obj;
+    RV_object_t *new_dataset             = NULL;
     curl_off_t   create_request_body_len = 0;
-    size_t       host_header_len = 0;
-    char        *host_header = NULL;
-    char        *create_request_body = NULL;
+    size_t       host_header_len         = 0;
+    char        *host_header             = NULL;
+    char        *create_request_body     = NULL;
     char         request_url[URL_MAX_LENGTH];
-    int          url_len = 0;
+    int          url_len   = 0;
     void        *ret_value = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset create call with following parameters:\n");
     printf("     - H5Dcreate variant: %s\n", name ? "H5Dcreate2" : "H5Dcreate_anon");
-    if (name) printf("     - Dataset's name: %s\n", name);
+    if (name)
+        printf("     - Dataset's name: %s\n", name);
     printf("     - Dataset's parent object URI: %s\n", parent->URI);
     printf("     - Dataset's parent object type: %s\n", object_type_to_string(parent->obj_type));
     printf("     - Dataset's parent object domain path: %s\n", parent->domain->u.file.filepath_name);
@@ -125,19 +134,19 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
         FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file");
 
     /* Allocate and setup internal Dataset struct */
-    if (NULL == (new_dataset = (RV_object_t *) RV_malloc(sizeof(*new_dataset))))
+    if (NULL == (new_dataset = (RV_object_t *)RV_malloc(sizeof(*new_dataset))))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for dataset object");
 
-    new_dataset->URI[0] = '\0';
-    new_dataset->obj_type = H5I_DATASET;
+    new_dataset->URI[0]             = '\0';
+    new_dataset->obj_type           = H5I_DATASET;
     new_dataset->u.dataset.dtype_id = FAIL;
     new_dataset->u.dataset.space_id = FAIL;
-    new_dataset->u.dataset.dapl_id = FAIL;
-    new_dataset->u.dataset.dcpl_id = FAIL;
-    
+    new_dataset->u.dataset.dapl_id  = FAIL;
+    new_dataset->u.dataset.dcpl_id  = FAIL;
+
     new_dataset->domain = parent->domain;
     parent->domain->u.file.ref_count++;
-    
+
     /* Copy the DAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Dget_access_plist() will function correctly
      */
@@ -162,27 +171,30 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
     {
         size_t tmp_len = 0;
 
-        if (RV_setup_dataset_create_request_body(obj, name, type_id, space_id,
-                lcpl_id, dcpl_id, &create_request_body, &tmp_len) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, NULL, "can't convert dataset creation parameters to JSON");
+        if (RV_setup_dataset_create_request_body(obj, name, type_id, space_id, lcpl_id, dcpl_id,
+                                                 &create_request_body, &tmp_len) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, NULL,
+                            "can't convert dataset creation parameters to JSON");
 
-        /* Check to make sure that the size of the create request HTTP body can safely be cast to a curl_off_t */
+        /* Check to make sure that the size of the create request HTTP body can safely be cast to a curl_off_t
+         */
         if (sizeof(curl_off_t) < sizeof(size_t))
             ASSIGN_TO_SMALLER_SIZE(create_request_body_len, curl_off_t, tmp_len, size_t)
         else if (sizeof(curl_off_t) > sizeof(size_t))
-            create_request_body_len = (curl_off_t) tmp_len;
+            create_request_body_len = (curl_off_t)tmp_len;
         else
             ASSIGN_TO_SAME_SIZE_UNSIGNED_TO_SIGNED(create_request_body_len, curl_off_t, tmp_len, size_t)
     }
 
     /* Setup the host header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for request Host header");
 
     strcpy(host_header, host_string);
 
-    curl_headers = curl_slist_append(curl_headers, strncat(host_header, parent->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+    curl_headers = curl_slist_append(curl_headers, strncat(host_header, parent->domain->u.file.filepath_name,
+                                                           host_header_len - strlen(host_string) - 1));
 
     /* Disable use of Expect: 100 Continue HTTP response */
     curl_headers = curl_slist_append(curl_headers, "Expect:");
@@ -195,7 +207,8 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, NULL, "snprintf error");
 
     if (url_len >= URL_MAX_LENGTH)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, NULL, "dataset create URL size exceeded maximum URL size");
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, NULL,
+                        "dataset create URL size exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Dataset creation request URL: %s\n\n", request_url);
@@ -204,7 +217,8 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf);
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s",
+                        curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set cURL POST data: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, create_request_body_len))
@@ -235,7 +249,7 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
     if ((new_dataset->u.dataset.space_id = H5Scopy(space_id)) < 0)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, NULL, "failed to copy dataset's dataspace");
 
-    ret_value = (void *) new_dataset;
+    ret_value = (void *)new_dataset;
 
 done:
 #ifdef RV_CONNECTOR_DEBUG
@@ -269,7 +283,6 @@ done:
     return ret_value;
 } /* end RV_dataset_create() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_dataset_open
  *
@@ -284,11 +297,11 @@ done:
  *              March, 2017
  */
 void *
-RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
-    hid_t dapl_id, hid_t dxpl_id, void **req)
+RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id,
+                hid_t dxpl_id, void **req)
 {
-    RV_object_t *parent = (RV_object_t *) obj;
-    RV_object_t *dataset = NULL;
+    RV_object_t *parent   = (RV_object_t *)obj;
+    RV_object_t *dataset  = NULL;
     H5I_type_t   obj_type = H5I_UNINIT;
     loc_info     loc_info;
     htri_t       search_ret;
@@ -307,41 +320,44 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
 
     /* Allocate and setup internal Dataset struct */
-    if (NULL == (dataset = (RV_object_t *) RV_malloc(sizeof(*dataset))))
+    if (NULL == (dataset = (RV_object_t *)RV_malloc(sizeof(*dataset))))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for dataset object");
 
-    dataset->URI[0] = '\0';
-    dataset->obj_type = H5I_DATASET;
+    dataset->URI[0]             = '\0';
+    dataset->obj_type           = H5I_DATASET;
     dataset->u.dataset.dtype_id = FAIL;
     dataset->u.dataset.space_id = FAIL;
-    dataset->u.dataset.dapl_id = FAIL;
-    dataset->u.dataset.dcpl_id = FAIL;
+    dataset->u.dataset.dapl_id  = FAIL;
+    dataset->u.dataset.dcpl_id  = FAIL;
 
     /* Copy information about file that the newly-created dataset is in */
     dataset->domain = parent->domain;
     parent->domain->u.file.ref_count++;
-    
-    loc_info.URI = dataset->URI;
+
+    loc_info.URI    = dataset->URI;
     loc_info.domain = dataset->domain;
 
     /* Locate dataset and set domain */
-    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL, &loc_info);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL,
+                                        &loc_info);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate dataset by path");
 
     dataset->domain = loc_info.domain;
-    
+
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Found dataset by given path\n\n");
 #endif
 
     /* Set up a Dataspace for the opened Dataset */
     if ((dataset->u.dataset.space_id = RV_parse_dataspace(response_buffer.buffer)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, NULL, "can't convert JSON to usable dataspace for dataset");
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, NULL,
+                        "can't convert JSON to usable dataspace for dataset");
 
     /* Set up a Datatype for the opened Dataset */
     if ((dataset->u.dataset.dtype_id = RV_parse_datatype(response_buffer.buffer, TRUE)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert JSON to usable datatype for dataset");
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL,
+                        "can't convert JSON to usable datatype for dataset");
 
     /* Copy the DAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Dget_access_plist() will function correctly
@@ -358,10 +374,12 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create DCPL for dataset");
 
     /* Set any necessary creation properties on the DCPL setup for the dataset */
-    if (RV_parse_response(response_buffer.buffer, NULL, &dataset->u.dataset.dcpl_id, RV_parse_dataset_creation_properties_callback) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL, "can't parse dataset's creation properties from JSON representation");
+    if (RV_parse_response(response_buffer.buffer, NULL, &dataset->u.dataset.dcpl_id,
+                          RV_parse_dataset_creation_properties_callback) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL,
+                        "can't parse dataset's creation properties from JSON representation");
 
-    ret_value = (void *) dataset;
+    ret_value = (void *)dataset;
 
 done:
 #ifdef RV_CONNECTOR_DEBUG
@@ -372,7 +390,8 @@ done:
         printf("     - Dataset's URI: %s\n", dataset->URI);
         printf("     - Dataset's object type: %s\n", object_type_to_string(dataset->obj_type));
         printf("     - Dataset's domain path: %s\n", dataset->domain->u.file.filepath_name);
-        printf("     - Dataset's datatype class: %s\n\n", datatype_class_to_string(dataset->u.dataset.dtype_id));
+        printf("     - Dataset's datatype class: %s\n\n",
+               datatype_class_to_string(dataset->u.dataset.dtype_id));
     }
 #endif
 
@@ -386,7 +405,6 @@ done:
     return ret_value;
 } /* end RV_dataset_open() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_dataset_read
  *
@@ -400,24 +418,24 @@ done:
  *              March, 2017
  */
 herr_t
-RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space_id[],
-                   hid_t file_space_id[], hid_t dxpl_id, void *buf[], void **req)
+RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space_id[], hid_t file_space_id[],
+                hid_t dxpl_id, void *buf[], void **req)
 {
-    H5S_sel_type  sel_type = H5S_SEL_ALL;
-    RV_object_t  *dataset = (RV_object_t *) dset[0];
-    H5T_class_t   dtype_class;
-    hssize_t      mem_select_npoints, file_select_npoints;
-    hbool_t       is_transfer_binary = FALSE;
-    htri_t        is_variable_str;
-    size_t        read_data_size;
-    size_t        selection_body_len = 0;
-    size_t        host_header_len = 0;
-    char         *host_header = NULL;
-    char         *selection_body = NULL;
-    void         *obj_ref_buf = NULL;
-    char          request_url[URL_MAX_LENGTH];
-    int           url_len = 0;
-    herr_t        ret_value = SUCCEED;
+    H5S_sel_type sel_type = H5S_SEL_ALL;
+    RV_object_t *dataset  = (RV_object_t *)dset[0];
+    H5T_class_t  dtype_class;
+    hssize_t     mem_select_npoints, file_select_npoints;
+    hbool_t      is_transfer_binary = FALSE;
+    htri_t       is_variable_str;
+    size_t       read_data_size;
+    size_t       selection_body_len = 0;
+    size_t       host_header_len    = 0;
+    char        *host_header        = NULL;
+    char        *selection_body     = NULL;
+    void        *obj_ref_buf        = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    int          url_len   = 0;
+    herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset read call with following parameters:\n");
@@ -479,7 +497,8 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space
 
             /* Copy the selection from file_space_id into the mem_space_id. */
             if (H5Sselect_copy(mem_space_id[0], file_space_id[0]) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL, "can't copy selection from file space to memory space");
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL,
+                                "can't copy selection from file space to memory space");
         } /* end if */
 
         /* Since the selection in the dataset's file dataspace is not set
@@ -490,8 +509,10 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type");
         is_transfer_binary = is_transfer_binary && (H5S_SEL_POINTS != sel_type);
 
-        if (RV_convert_dataspace_selection_to_string(file_space_id[0], &selection_body, &selection_body_len, is_transfer_binary) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL, "can't convert dataspace selection to string representation");
+        if (RV_convert_dataspace_selection_to_string(file_space_id[0], &selection_body, &selection_body_len,
+                                                     is_transfer_binary) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL,
+                            "can't convert dataspace selection to string representation");
     } /* end else */
 
     /* Verify that the number of selected points matches */
@@ -500,7 +521,8 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space
     if ((file_select_npoints = H5Sget_select_npoints(file_space_id[0])) < 0)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "file dataspace is invalid");
     if (mem_select_npoints != file_select_npoints)
-        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory selection num points != file selection num points");
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL,
+                        "memory selection num points != file selection num points");
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> %lld points selected in file dataspace\n", file_select_npoints);
@@ -509,27 +531,26 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space
 
     /* Setup the host header */
     host_header_len = strlen(dataset->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
 
     strcpy(host_header, host_string);
 
-    curl_headers = curl_slist_append(curl_headers, strncat(host_header, dataset->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+    curl_headers = curl_slist_append(curl_headers, strncat(host_header, dataset->domain->u.file.filepath_name,
+                                                           host_header_len - strlen(host_string) - 1));
 
     /* Disable use of Expect: 100 Continue HTTP response */
     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
     /* Instruct cURL on which type of transfer to perform, binary or JSON */
-    curl_headers = curl_slist_append(curl_headers, is_transfer_binary ? "Accept: application/octet-stream" : "Accept: application/json");
+    curl_headers = curl_slist_append(curl_headers, is_transfer_binary ? "Accept: application/octet-stream"
+                                                                      : "Accept: application/json");
 
     /* Redirect cURL from the base URL to "/datasets/<id>/value" to get the dataset data values */
-    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
-                            "%s/datasets/%s/value%s%s",
-                            base_URL,
-                            dataset->URI,
-                            is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? "?select=" : "",
-                            is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? selection_body : "")
-        ) < 0)
+    if ((url_len = snprintf(
+             request_url, URL_MAX_LENGTH, "%s/datasets/%s/value%s%s", base_URL, dataset->URI,
+             is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? "?select=" : "",
+             is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? selection_body : "")) < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
     if (url_len >= URL_MAX_LENGTH)
@@ -553,30 +574,34 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space
          */
 
         /* Ensure we have enough space to add the enclosing '{' and '}' */
-        if (NULL == (selection_body = (char *) RV_realloc(selection_body, selection_body_len + 3)))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't reallocate space for point selection body");
+        if (NULL == (selection_body = (char *)RV_realloc(selection_body, selection_body_len + 3)))
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
+                            "can't reallocate space for point selection body");
 
         /* Shift the whole string down by a byte */
         memmove(selection_body + 1, selection_body, selection_body_len + 1);
 
         /* Add in the braces */
-        selection_body[0] = '{'; selection_body[selection_body_len + 1] = '}';
+        selection_body[0]                      = '{';
+        selection_body[selection_body_len + 1] = '}';
         selection_body[selection_body_len + 2] = '\0';
 
         /* Check to make sure that the size of the selection HTTP body can safely be cast to a curl_off_t */
         if (sizeof(curl_off_t) < sizeof(size_t))
             ASSIGN_TO_SMALLER_SIZE(post_len, curl_off_t, selection_body_len + 2, size_t)
         else if (sizeof(curl_off_t) > sizeof(size_t))
-            post_len = (curl_off_t) (selection_body_len + 2);
+            post_len = (curl_off_t)(selection_body_len + 2);
         else
             ASSIGN_TO_SAME_SIZE_UNSIGNED_TO_SIGNED(post_len, curl_off_t, selection_body_len + 2, size_t)
 
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf);
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP POST request: %s",
+                            curl_err_buf);
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, selection_body))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL POST data: %s", curl_err_buf);
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, post_len))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL POST data size: %s", curl_err_buf);
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL POST data size: %s",
+                            curl_err_buf);
 
         curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
 
@@ -586,7 +611,8 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space
     } /* end if */
     else {
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
+                            curl_err_buf);
     } /* end else */
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
@@ -612,20 +638,21 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space
 
         /* Scatter the read data out to the supplied read buffer according to the mem_type_id
          * and mem_space_id given */
-        read_data_size = (size_t) file_select_npoints * dtype_size;
+        read_data_size = (size_t)file_select_npoints * dtype_size;
         if (H5Dscatter(dataset_read_scatter_op, &read_data_size, mem_type_id[0], mem_space_id[0], buf[0]) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL, "can't scatter data to read buffer");
     } /* end if */
     else {
         if (H5T_STD_REF_OBJ == mem_type_id[0]) {
             /* Convert the received binary buffer into a buffer of rest_obj_ref_t's */
-            if (RV_convert_buffer_to_obj_refs(response_buffer.buffer, (size_t) file_select_npoints,
-                    (rv_obj_ref_t **) &obj_ref_buf, &read_data_size) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert ref string/s to object ref array");
+            if (RV_convert_buffer_to_obj_refs(response_buffer.buffer, (size_t)file_select_npoints,
+                                              (rv_obj_ref_t **)&obj_ref_buf, &read_data_size) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                                "can't convert ref string/s to object ref array");
 
             memcpy(buf[0], obj_ref_buf, read_data_size);
         } /* end if */
-    } /* end else */
+    }     /* end else */
 
 done:
 #ifdef RV_CONNECTOR_DEBUG
@@ -649,7 +676,6 @@ done:
     return ret_value;
 } /* end RV_dataset_read() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_dataset_write
  *
@@ -663,27 +689,27 @@ done:
  *              March, 2017
  */
 herr_t
-RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space_id[],
-                    hid_t file_space_id[], hid_t dxpl_id, const void *buf[], void **req)
+RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_space_id[], hid_t file_space_id[],
+                 hid_t dxpl_id, const void *buf[], void **req)
 {
-    H5S_sel_type  sel_type = H5S_SEL_ALL;
-    RV_object_t  *dataset = (RV_object_t *) dset[0];
-    upload_info   uinfo;
-    H5T_class_t   dtype_class;
-    curl_off_t    write_len;
-    hssize_t      mem_select_npoints, file_select_npoints;
-    hbool_t       is_transfer_binary = FALSE;
-    htri_t        is_variable_str;
-    size_t        host_header_len = 0;
-    size_t        write_body_len = 0;
-    size_t        selection_body_len = 0;
-    char         *selection_body = NULL;
-    char         *base64_encoded_value = NULL;
-    char         *host_header = NULL;
-    char         *write_body = NULL;
-    char          request_url[URL_MAX_LENGTH];
-    int           url_len = 0;
-    herr_t        ret_value = SUCCEED;
+    H5S_sel_type sel_type = H5S_SEL_ALL;
+    RV_object_t *dataset  = (RV_object_t *)dset[0];
+    upload_info  uinfo;
+    H5T_class_t  dtype_class;
+    curl_off_t   write_len;
+    hssize_t     mem_select_npoints, file_select_npoints;
+    hbool_t      is_transfer_binary = FALSE;
+    htri_t       is_variable_str;
+    size_t       host_header_len      = 0;
+    size_t       write_body_len       = 0;
+    size_t       selection_body_len   = 0;
+    char        *selection_body       = NULL;
+    char        *base64_encoded_value = NULL;
+    char        *host_header          = NULL;
+    char        *write_body           = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    int          url_len   = 0;
+    herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset write call with following parameters:\n");
@@ -695,7 +721,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
     printf("     - Default DXPL? %s\n\n", (dxpl_id == H5P_DATASET_XFER_DEFAULT) ? "yes" : "no");
 #endif
 
-    if (count > 1) 
+    if (count > 1)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "multiple datasets are unsupported");
     if (H5I_DATASET != dataset->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a dataset");
@@ -749,7 +775,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
 
             /* Copy the selection from file_space_id into the mem_space_id */
             if (H5Sselect_copy(mem_space_id[0], file_space_id[0]) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL, "can't copy selection from file space to memory space");
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, FAIL,
+                                "can't copy selection from file space to memory space");
         } /* end if */
 
         /* Since the selection in the dataset's file dataspace is not set
@@ -760,8 +787,10 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type");
         is_transfer_binary = is_transfer_binary && (H5S_SEL_POINTS != sel_type);
 
-        if (RV_convert_dataspace_selection_to_string(file_space_id[0], &selection_body, &selection_body_len, is_transfer_binary) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL, "can't convert dataspace selection to string representation");
+        if (RV_convert_dataspace_selection_to_string(file_space_id[0], &selection_body, &selection_body_len,
+                                                     is_transfer_binary) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL,
+                            "can't convert dataspace selection to string representation");
     } /* end else */
 
     /* Verify that the number of selected points matches */
@@ -770,7 +799,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
     if ((file_select_npoints = H5Sget_select_npoints(file_space_id[0])) < 0)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "file dataspace is invalid");
     if (mem_select_npoints != file_select_npoints)
-        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory selection num points != file selection num points");
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL,
+                        "memory selection num points != file selection num points");
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> %lld points selected in file dataspace\n", file_select_npoints);
@@ -786,41 +816,42 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
         if (0 == (dtype_size = H5Tget_size(mem_type_id[0])))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
 
-        write_body_len = (size_t) file_select_npoints * dtype_size;
+        write_body_len = (size_t)file_select_npoints * dtype_size;
     } /* end if */
     else {
         if (H5T_STD_REF_OBJ == mem_type_id[0]) {
             /* Convert the buffer of rest_obj_ref_t's to a binary buffer */
-            if (RV_convert_obj_refs_to_buffer((const rv_obj_ref_t *) buf[0], (size_t) file_select_npoints, &write_body, &write_body_len) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert object ref/s to ref string/s");
+            if (RV_convert_obj_refs_to_buffer((const rv_obj_ref_t *)buf[0], (size_t)file_select_npoints,
+                                              &write_body, &write_body_len) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                                "can't convert object ref/s to ref string/s");
             buf[0] = write_body;
         } /* end if */
-    } /* end else */
-
+    }     /* end else */
 
     /* Setup the host header */
     host_header_len = strlen(dataset->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
 
     strcpy(host_header, host_string);
 
-    curl_headers = curl_slist_append(curl_headers, strncat(host_header, dataset->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+    curl_headers = curl_slist_append(curl_headers, strncat(host_header, dataset->domain->u.file.filepath_name,
+                                                           host_header_len - strlen(host_string) - 1));
 
     /* Disable use of Expect: 100 Continue HTTP response */
     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
     /* Instruct cURL on which type of transfer to perform, binary or JSON */
-    curl_headers = curl_slist_append(curl_headers, is_transfer_binary ? "Content-Type: application/octet-stream" : "Content-Type: application/json");
+    curl_headers =
+        curl_slist_append(curl_headers, is_transfer_binary ? "Content-Type: application/octet-stream"
+                                                           : "Content-Type: application/json");
 
     /* Redirect cURL from the base URL to "/datasets/<id>/value" to write the value out */
-    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
-                            "%s/datasets/%s/value%s%s",
-                            base_URL,
-                            dataset->URI,
-                            is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? "?select=" : "",
-                            is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? selection_body : "")
-        ) < 0)
+    if ((url_len = snprintf(
+             request_url, URL_MAX_LENGTH, "%s/datasets/%s/value%s%s", base_URL, dataset->URI,
+             is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? "?select=" : "",
+             is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? selection_body : "")) < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
     if (url_len >= URL_MAX_LENGTH)
@@ -834,17 +865,18 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
      * point list. Otherwise, a PUT request is made to the server.
      */
     if (H5S_SEL_POINTS == sel_type) {
-        const char * const fmt_string = "{%s,\"value_base64\": \"%s\"}";
-        size_t             value_body_len;
-        int                bytes_printed;
+        const char *const fmt_string = "{%s,\"value_base64\": \"%s\"}";
+        size_t            value_body_len;
+        int               bytes_printed;
 
         /* Since base64 encoding generally introduces 33% overhead for encoding,
          * go ahead and allocate a buffer 4/3 the size of the given write buffer
          * in order to try and avoid reallocations inside the encoding function.
          */
-        value_body_len = ((double) 4.0 / 3.0) * write_body_len;
+        value_body_len = ((double)4.0 / 3.0) * write_body_len;
         if (NULL == (base64_encoded_value = RV_malloc(value_body_len)))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate temporary buffer for base64-encoded write buffer");
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
+                            "can't allocate temporary buffer for base64-encoded write buffer");
 
         if (RV_base64_encode(buf[0], write_body_len, &base64_encoded_value, &value_body_len) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTENCODE, FAIL, "can't base64-encode write buffer");
@@ -857,7 +889,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
         if (NULL == (write_body = RV_malloc(write_body_len + 1)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for write buffer");
 
-        if ((bytes_printed = snprintf(write_body, write_body_len + 1, fmt_string, selection_body, base64_encoded_value)) < 0)
+        if ((bytes_printed = snprintf(write_body, write_body_len + 1, fmt_string, selection_body,
+                                      base64_encoded_value)) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -865,7 +898,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
 #endif
 
         if (bytes_printed >= write_body_len + 1)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "point selection write buffer exceeded allocated buffer size");
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                            "point selection write buffer exceeded allocated buffer size");
 
         curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
 
@@ -874,20 +908,21 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
 #endif
     } /* end if */
 
-    uinfo.buffer = is_transfer_binary ? buf[0] : write_body;
+    uinfo.buffer      = is_transfer_binary ? buf[0] : write_body;
     uinfo.buffer_size = write_body_len;
-    uinfo.bytes_sent = 0;
+    uinfo.bytes_sent  = 0;
 
     /* Check to make sure that the size of the write body can safely be cast to a curl_off_t */
     if (sizeof(curl_off_t) < sizeof(size_t))
         ASSIGN_TO_SMALLER_SIZE(write_len, curl_off_t, write_body_len, size_t)
     else if (sizeof(curl_off_t) > sizeof(size_t))
-        write_len = (curl_off_t) write_body_len;
+        write_len = (curl_off_t)write_body_len;
     else
         ASSIGN_TO_SAME_SIZE_UNSIGNED_TO_SIGNED(write_len, curl_off_t, write_body_len, size_t)
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf);
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s",
+                        curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, &uinfo))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, write_len))
@@ -936,7 +971,6 @@ done:
     return ret_value;
 } /* end RV_dataset_write() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_dataset_get
  *
@@ -951,7 +985,7 @@ done:
 herr_t
 RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **req)
 {
-    RV_object_t *dset = (RV_object_t *) obj;
+    RV_object_t *dset      = (RV_object_t *)obj;
     herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -967,8 +1001,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
 
     switch (args->op_type) {
         /* H5Dget_access_plist */
-        case H5VL_DATASET_GET_DAPL:
-        {
+        case H5VL_DATASET_GET_DAPL: {
             hid_t *ret_id = &args->args.get_dapl.dapl_id;
 
             if ((*ret_id = H5Pcopy(dset->u.dataset.dapl_id)) < 0)
@@ -978,8 +1011,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
         } /* H5VL_DATASET_GET_DAPL */
 
         /* H5Dget_create_plist */
-        case H5VL_DATASET_GET_DCPL:
-        {
+        case H5VL_DATASET_GET_DCPL: {
             hid_t *ret_id = &args->args.get_dcpl.dcpl_id;
 
             if ((*ret_id = H5Pcopy(dset->u.dataset.dcpl_id)) < 0)
@@ -989,8 +1021,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
         } /* H5VL_DATASET_GET_DCPL */
 
         /* H5Dget_space */
-        case H5VL_DATASET_GET_SPACE:
-        {
+        case H5VL_DATASET_GET_SPACE: {
             hid_t *ret_id = &args->args.get_space.space_id;
 
             if ((*ret_id = H5Scopy(dset->u.dataset.space_id)) < 0)
@@ -1010,8 +1041,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
             break;
 
         /* H5Dget_type */
-        case H5VL_DATASET_GET_TYPE:
-        {
+        case H5VL_DATASET_GET_TYPE: {
             hid_t *ret_id = &args->args.get_type.type_id;
 
             if ((*ret_id = H5Tcopy(dset->u.dataset.dtype_id)) < 0)
@@ -1021,7 +1051,8 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
         } /* H5VL_DATASET_GET_TYPE */
 
         default:
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get this type of information from dataset");
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                            "can't get this type of information from dataset");
     } /* end switch */
 
 done:
@@ -1030,7 +1061,6 @@ done:
     return ret_value;
 } /* end RV_dataset_get() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_dataset_specific
  *
@@ -1045,7 +1075,7 @@ done:
 herr_t
 RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id, void **req)
 {
-    RV_object_t *dset = (RV_object_t *) obj;
+    RV_object_t *dset      = (RV_object_t *)obj;
     herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1089,7 +1119,6 @@ done:
     return ret_value;
 } /* end RV_dataset_specific() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_dataset_close
  *
@@ -1105,7 +1134,7 @@ done:
 herr_t
 RV_dataset_close(void *dset, hid_t dxpl_id, void **req)
 {
-    RV_object_t *_dset = (RV_object_t *) dset;
+    RV_object_t *_dset     = (RV_object_t *)dset;
     herr_t       ret_value = SUCCEED;
 
     if (!_dset)
@@ -1151,7 +1180,6 @@ done:
     return ret_value;
 } /* end RV_dataset_close() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_parse_dataset_creation_properties_callback
  *
@@ -1185,12 +1213,12 @@ done:
  *              November, 2017
  */
 static herr_t
-RV_parse_dataset_creation_properties_callback(char *HTTP_response,
-    void *callback_data_in, void *callback_data_out)
+RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callback_data_in,
+                                              void *callback_data_out)
 {
-    yajl_val  parse_tree = NULL, creation_properties_obj, key_obj;
-    hid_t    *DCPL = (hid_t *) callback_data_out;
-    herr_t    ret_value = SUCCEED;
+    yajl_val parse_tree = NULL, creation_properties_obj, key_obj;
+    hid_t   *DCPL       = (hid_t *)callback_data_out;
+    herr_t   ret_value  = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving dataset's creation properties from server's HTTP response\n\n");
@@ -1205,9 +1233,9 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
     /* Retrieve the creationProperties object */
-    if (NULL == (creation_properties_obj = yajl_tree_get(parse_tree, creation_properties_keys, yajl_t_object)))
+    if (NULL ==
+        (creation_properties_obj = yajl_tree_get(parse_tree, creation_properties_keys, yajl_t_object)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of creationProperties object failed");
-
 
     /********************************************************************************************
      *                                                                                          *
@@ -1218,8 +1246,8 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                                                          *
      ********************************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, alloc_time_keys, yajl_t_string))) {
-        H5D_alloc_time_t  alloc_time;
-        char             *alloc_time_string;
+        H5D_alloc_time_t alloc_time;
+        char            *alloc_time_string;
 
         if (NULL == (alloc_time_string = YAJL_GET_STRING(key_obj)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "space allocation time string was NULL");
@@ -1257,7 +1285,6 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set space allocation time property on DCPL");
     } /* end if */
 
-
     /********************************************************************************************
      *                                                                                          *
      *                             Attribute Creation Order Section                             *
@@ -1267,8 +1294,8 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                                                          *
      ********************************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, creation_order_keys, yajl_t_string))) {
-        unsigned  crt_order_flags = 0x0;
-        char     *crt_order_string;
+        unsigned crt_order_flags = 0x0;
+        char    *crt_order_string;
 
         if (NULL == (crt_order_string = YAJL_GET_STRING(key_obj)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "attribute creation order string was NULL");
@@ -1277,7 +1304,8 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
             crt_order_flags = H5P_CRT_ORDER_INDEXED | H5P_CRT_ORDER_TRACKED;
 
 #ifdef RV_CONNECTOR_DEBUG
-            printf("-> Setting attribute creation order H5P_CRT_ORDER_INDEXED + H5P_CRT_ORDER_TRACKED on DCPL\n");
+            printf("-> Setting attribute creation order H5P_CRT_ORDER_INDEXED + H5P_CRT_ORDER_TRACKED on "
+                   "DCPL\n");
 #endif
         } /* end if */
         else {
@@ -1289,9 +1317,9 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
         } /* end else */
 
         if (H5Pset_attr_creation_order(*DCPL, crt_order_flags) < 0)
-            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set attribute creation order property on DCPL");
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL,
+                            "can't set attribute creation order property on DCPL");
     } /* end if */
-
 
     /****************************************************************************
      *                                                                          *
@@ -1302,38 +1330,44 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                                          *
      ****************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, attribute_phase_change_keys, yajl_t_object))) {
-        unsigned minDense = DATASET_CREATE_MIN_DENSE_ATTRIBUTES_DEFAULT;
+        unsigned minDense   = DATASET_CREATE_MIN_DENSE_ATTRIBUTES_DEFAULT;
         unsigned maxCompact = DATASET_CREATE_MAX_COMPACT_ATTRIBUTES_DEFAULT;
         yajl_val sub_obj;
 
         if (NULL == (sub_obj = yajl_tree_get(key_obj, max_compact_keys, yajl_t_number)))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of maxCompact attribute phase change value failed");
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                            "retrieval of maxCompact attribute phase change value failed");
 
         if (!YAJL_IS_INTEGER(sub_obj))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "return maxCompact attribute phase change value is not an integer");
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                            "return maxCompact attribute phase change value is not an integer");
 
         if (YAJL_GET_INTEGER(sub_obj) >= 0)
-            maxCompact = (unsigned) YAJL_GET_INTEGER(sub_obj);
+            maxCompact = (unsigned)YAJL_GET_INTEGER(sub_obj);
 
         if (NULL == (sub_obj = yajl_tree_get(key_obj, min_dense_keys, yajl_t_number)))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of minDense attribute phase change value failed");
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                            "retrieval of minDense attribute phase change value failed");
 
         if (!YAJL_IS_INTEGER(sub_obj))
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "returned minDense attribute phase change value is not an integer");
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                            "returned minDense attribute phase change value is not an integer");
 
         if (YAJL_GET_INTEGER(sub_obj) >= 0)
-            minDense = (unsigned) YAJL_GET_INTEGER(sub_obj);
+            minDense = (unsigned)YAJL_GET_INTEGER(sub_obj);
 
-        if (minDense != DATASET_CREATE_MIN_DENSE_ATTRIBUTES_DEFAULT || maxCompact != DATASET_CREATE_MAX_COMPACT_ATTRIBUTES_DEFAULT) {
+        if (minDense != DATASET_CREATE_MIN_DENSE_ATTRIBUTES_DEFAULT ||
+            maxCompact != DATASET_CREATE_MAX_COMPACT_ATTRIBUTES_DEFAULT) {
 #ifdef RV_CONNECTOR_DEBUG
-            printf("-> Setting attribute phase change values: [ minDense: %u, maxCompact: %u ] on DCPL\n", minDense, maxCompact);
+            printf("-> Setting attribute phase change values: [ minDense: %u, maxCompact: %u ] on DCPL\n",
+                   minDense, maxCompact);
 #endif
 
             if (H5Pset_attr_phase_change(*DCPL, maxCompact, minDense) < 0)
-                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set attribute phase change values property on DCPL");
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL,
+                                "can't set attribute phase change values property on DCPL");
         } /* end if */
-    } /* end if */
-
+    }     /* end if */
 
     /**********************************************************
      *                                                        *
@@ -1343,8 +1377,8 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                        *
      **********************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, fill_time_keys, yajl_t_string))) {
-        H5D_fill_time_t  fill_time;
-        char            *fill_time_str;
+        H5D_fill_time_t fill_time;
+        char           *fill_time_str;
 
         if (NULL == (fill_time_str = YAJL_GET_STRING(key_obj)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "fill time string was NULL");
@@ -1375,7 +1409,6 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set fill time property on DCPL");
     } /* end if */
 
-
     /******************************************************************************
      *                                                                            *
      *                             Fill Value Section                             *
@@ -1384,10 +1417,11 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                                            *
      ******************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, fill_value_keys, yajl_t_any))) {
-        /* TODO: Until fill value support is implemented, just push an error to the stack but continue ahead */
-        FUNC_DONE_ERROR(H5E_DATASET, H5E_UNSUPPORTED, SUCCEED, "warning: dataset fill values are unsupported");
+        /* TODO: Until fill value support is implemented, just push an error to the stack but continue ahead
+         */
+        FUNC_DONE_ERROR(H5E_DATASET, H5E_UNSUPPORTED, SUCCEED,
+                        "warning: dataset fill values are unsupported");
     } /* end if */
-
 
     /***************************************************************
      *                                                             *
@@ -1402,10 +1436,10 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
 
         /* Grab the relevant information from each filter and set them on the DCPL in turn. */
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
-            yajl_val   filter_obj = YAJL_GET_ARRAY(key_obj)->values[i];
-            yajl_val   filter_field;
-            char      *filter_class;
-            long long  filter_ID;
+            yajl_val  filter_obj = YAJL_GET_ARRAY(key_obj)->values[i];
+            yajl_val  filter_field;
+            char     *filter_class;
+            long long filter_ID;
 
             if (NULL == (filter_field = yajl_tree_get(filter_obj, filter_class_keys, yajl_t_string)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of filter class failed");
@@ -1422,45 +1456,56 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
             filter_ID = YAJL_GET_INTEGER(filter_field);
 
             switch (filter_ID) {
-                case H5Z_FILTER_DEFLATE:
-                {
-                    const char *deflate_level_keys[] = { "level", (const char *) 0 };
+                case H5Z_FILTER_DEFLATE: {
+                    const char *deflate_level_keys[] = {"level", (const char *)0};
                     long long   deflate_level;
 
 #ifdef RV_CONNECTOR_DEBUG
-                    printf("-> Discovered filter class H5Z_FILTER_DEFLATE in JSON response; setting deflate filter on DCPL\n");
+                    printf("-> Discovered filter class H5Z_FILTER_DEFLATE in JSON response; setting deflate "
+                           "filter on DCPL\n");
 #endif
 
-                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function */
+                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function
+                     */
                     if (strcmp(filter_class, "H5Z_FILTER_DEFLATE"))
-                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "warning: filter class '%s' does not match H5Z_FILTER_DEFLATE; DCPL should not be trusted", filter_class);
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED,
+                                        "warning: filter class '%s' does not match H5Z_FILTER_DEFLATE; DCPL "
+                                        "should not be trusted",
+                                        filter_class);
 
                     /* Grab the level of compression */
                     if (NULL == (filter_field = yajl_tree_get(filter_obj, deflate_level_keys, yajl_t_number)))
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of deflate filter compression level value failed");
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                                        "retrieval of deflate filter compression level value failed");
 
                     if (!YAJL_IS_INTEGER(filter_field))
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "returned deflate filter compression level is not an integer");
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                                        "returned deflate filter compression level is not an integer");
 
                     deflate_level = YAJL_GET_INTEGER(filter_field);
                     if (deflate_level < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "deflate filter compression level invalid (level < 0)");
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                                        "deflate filter compression level invalid (level < 0)");
 
-                    if (H5Pset_deflate(*DCPL, (unsigned) deflate_level) < 0)
+                    if (H5Pset_deflate(*DCPL, (unsigned)deflate_level) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set deflate filter on DCPL");
 
                     break;
                 }
 
-                case H5Z_FILTER_SHUFFLE:
-                {
+                case H5Z_FILTER_SHUFFLE: {
 #ifdef RV_CONNECTOR_DEBUG
-                    printf("-> Discovered filter class H5Z_FILTER_SHUFFLE in JSON response; setting shuffle filter on DCPL\n");
+                    printf("-> Discovered filter class H5Z_FILTER_SHUFFLE in JSON response; setting shuffle "
+                           "filter on DCPL\n");
 #endif
 
-                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function */
+                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function
+                     */
                     if (strcmp(filter_class, "H5Z_FILTER_SHUFFLE"))
-                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "warning: filter class '%s' does not match H5Z_FILTER_SHUFFLE; DCPL should not be trusted", filter_class);
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED,
+                                        "warning: filter class '%s' does not match H5Z_FILTER_SHUFFLE; DCPL "
+                                        "should not be trusted",
+                                        filter_class);
 
                     if (H5Pset_shuffle(*DCPL) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set shuffle filter on DCPL");
@@ -1468,77 +1513,100 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
                     break;
                 }
 
-                case H5Z_FILTER_FLETCHER32:
-                {
+                case H5Z_FILTER_FLETCHER32: {
 #ifdef RV_CONNECTOR_DEBUG
-                    printf("-> Discovered filter class H5Z_FILTER_FLETCHER32 in JSON response; setting fletcher32 filter on DCPL\n");
+                    printf("-> Discovered filter class H5Z_FILTER_FLETCHER32 in JSON response; setting "
+                           "fletcher32 filter on DCPL\n");
 #endif
 
-                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function */
+                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function
+                     */
                     if (strcmp(filter_class, "H5Z_FILTER_FLETCHER32"))
-                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "warning: filter class '%s' does not match H5Z_FILTER_FLETCHER32; DCPL should not be trusted", filter_class);
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED,
+                                        "warning: filter class '%s' does not match H5Z_FILTER_FLETCHER32; "
+                                        "DCPL should not be trusted",
+                                        filter_class);
 
                     if (H5Pset_fletcher32(*DCPL) < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set fletcher32 filter on DCPL");
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL,
+                                        "can't set fletcher32 filter on DCPL");
 
                     break;
                 }
 
-                case H5Z_FILTER_SZIP:
-                {
-                    const char *szip_option_mask_keys[] = { "coding", (const char *) 0 };
-                    const char *szip_ppb_keys[]         = { "pixelsPerBlock", (const char *) 0 };
+                case H5Z_FILTER_SZIP: {
+                    const char *szip_option_mask_keys[] = {"coding", (const char *)0};
+                    const char *szip_ppb_keys[]         = {"pixelsPerBlock", (const char *)0};
                     char       *szip_option_mask;
                     long long   szip_ppb;
 
 #ifdef RV_CONNECTOR_DEBUG
-                    printf("-> Discovered filter class H5Z_FILTER_SZIP in JSON response; setting SZIP filter on DCPL\n");
+                    printf("-> Discovered filter class H5Z_FILTER_SZIP in JSON response; setting SZIP filter "
+                           "on DCPL\n");
 #endif
 
-                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function */
+                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function
+                     */
                     if (strcmp(filter_class, "H5Z_FILTER_SZIP"))
-                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "warning: filter class '%s' does not match H5Z_FILTER_SZIP; DCPL should not be trusted", filter_class);
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED,
+                                        "warning: filter class '%s' does not match H5Z_FILTER_SZIP; DCPL "
+                                        "should not be trusted",
+                                        filter_class);
 
                     /* Retrieve the value of the SZIP option mask */
-                    if (NULL == (filter_field = yajl_tree_get(filter_obj, szip_option_mask_keys, yajl_t_string)))
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of SZIP option mask failed");
+                    if (NULL ==
+                        (filter_field = yajl_tree_get(filter_obj, szip_option_mask_keys, yajl_t_string)))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                                        "retrieval of SZIP option mask failed");
 
                     if (NULL == (szip_option_mask = YAJL_GET_STRING(filter_field)))
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "SZIP option mask string was NULL");
 
-                    if (strcmp(szip_option_mask, "H5_SZIP_EC_OPTION_MASK") && strcmp(szip_option_mask, "H5_SZIP_NN_OPTION_MASK")) {
+                    if (strcmp(szip_option_mask, "H5_SZIP_EC_OPTION_MASK") &&
+                        strcmp(szip_option_mask, "H5_SZIP_NN_OPTION_MASK")) {
                         /* Push an error to the stack, but don't fail this function */
-                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "invalid SZIP option mask value '%s'", szip_option_mask);
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED,
+                                        "invalid SZIP option mask value '%s'", szip_option_mask);
                         continue;
                     }
 
                     /* Retrieve the value of the SZIP "pixels per block" option */
                     if (NULL == (filter_field = yajl_tree_get(filter_obj, szip_ppb_keys, yajl_t_number)))
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of SZIP pixels per block option failed");
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                                        "retrieval of SZIP pixels per block option failed");
 
                     if (!YAJL_IS_INTEGER(filter_field))
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "returned SZIP pixels per block option value is not an integer");
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                                        "returned SZIP pixels per block option value is not an integer");
 
                     szip_ppb = YAJL_GET_INTEGER(filter_field);
                     if (szip_ppb < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid SZIP pixels per block option value (PPB < 0)");
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                                        "invalid SZIP pixels per block option value (PPB < 0)");
 
-                    if (H5Pset_szip(*DCPL, (!strcmp(szip_option_mask, "H5_SZIP_EC_OPTION_MASK") ? H5_SZIP_EC_OPTION_MASK : H5_SZIP_NN_OPTION_MASK),
-                            (unsigned) szip_ppb) < 0)
+                    if (H5Pset_szip(*DCPL,
+                                    (!strcmp(szip_option_mask, "H5_SZIP_EC_OPTION_MASK")
+                                         ? H5_SZIP_EC_OPTION_MASK
+                                         : H5_SZIP_NN_OPTION_MASK),
+                                    (unsigned)szip_ppb) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set SZIP filter on DCPL");
 
                     break;
                 }
 
-                case H5Z_FILTER_NBIT:
-                {
+                case H5Z_FILTER_NBIT: {
 #ifdef RV_CONNECTOR_DEBUG
-                    printf("-> Discovered filter class H5Z_FILTER_NBIT in JSON response; setting N-Bit filter on DCPL\n");
+                    printf("-> Discovered filter class H5Z_FILTER_NBIT in JSON response; setting N-Bit "
+                           "filter on DCPL\n");
 #endif
 
-                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function */
+                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function
+                     */
                     if (strcmp(filter_class, "H5Z_FILTER_NBIT"))
-                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "warning: filter class '%s' does not match H5Z_FILTER_NBIT; DCPL should not be trusted", filter_class);
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED,
+                                        "warning: filter class '%s' does not match H5Z_FILTER_NBIT; DCPL "
+                                        "should not be trusted",
+                                        filter_class);
 
                     if (H5Pset_nbit(*DCPL) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set N-Bit filter on DCPL");
@@ -1546,21 +1614,25 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
                     break;
                 }
 
-                case H5Z_FILTER_SCALEOFFSET:
-                {
-                    H5Z_SO_scale_type_t  scale_type;
-                    const char          *scale_type_keys[]   = { "scaleType", (const char *) 0 };
-                    const char          *scale_offset_keys[] = { "scaleOffset", (const char *) 0 };
-                    long long            scale_offset;
-                    char                *scale_type_str;
+                case H5Z_FILTER_SCALEOFFSET: {
+                    H5Z_SO_scale_type_t scale_type;
+                    const char         *scale_type_keys[]   = {"scaleType", (const char *)0};
+                    const char         *scale_offset_keys[] = {"scaleOffset", (const char *)0};
+                    long long           scale_offset;
+                    char               *scale_type_str;
 
 #ifdef RV_CONNECTOR_DEBUG
-                    printf("-> Discovered filter class H5Z_FILTER_SCALEOFFSET in JSON response; setting scale-offset filter on DCPL\n");
+                    printf("-> Discovered filter class H5Z_FILTER_SCALEOFFSET in JSON response; setting "
+                           "scale-offset filter on DCPL\n");
 #endif
 
-                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function */
+                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function
+                     */
                     if (strcmp(filter_class, "H5Z_FILTER_SCALEOFFSET"))
-                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "warning: filter class '%s' does not match H5Z_FILTER_SCALEOFFSET; DCPL should not be trusted", filter_class);
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED,
+                                        "warning: filter class '%s' does not match H5Z_FILTER_SCALEOFFSET; "
+                                        "DCPL should not be trusted",
+                                        filter_class);
 
                     /* Retrieve the scale type */
                     if (NULL == (filter_field = yajl_tree_get(filter_obj, scale_type_keys, yajl_t_string)))
@@ -1576,47 +1648,58 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
                     else if (!strcmp(scale_type_str, "H5Z_SO_INT"))
                         scale_type = H5Z_SO_INT;
                     else {
-                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid scale type '%s'", scale_type_str);
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid scale type '%s'",
+                                        scale_type_str);
                         continue;
                     }
 
                     /* Retrieve the scale offset value */
                     if (NULL == (filter_field = yajl_tree_get(filter_obj, scale_offset_keys, yajl_t_number)))
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of scale offset value failed");
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                                        "retrieval of scale offset value failed");
 
                     if (!YAJL_IS_INTEGER(filter_field))
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "returned scale offset value is not an integer");
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                                        "returned scale offset value is not an integer");
 
                     scale_offset = YAJL_GET_INTEGER(filter_field);
 
-                    if (H5Pset_scaleoffset(*DCPL, scale_type, (int) scale_offset) < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set scale-offset filter on DCPL");
+                    if (H5Pset_scaleoffset(*DCPL, scale_type, (int)scale_offset) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL,
+                                        "can't set scale-offset filter on DCPL");
 
                     break;
                 }
 
-                case LZF_FILTER_ID:
-                {
+                case LZF_FILTER_ID: {
 #ifdef RV_CONNECTOR_DEBUG
-                    printf("-> Discovered filter class H5Z_FILTER_LZF in JSON response; setting LZF filter on DCPL\n");
+                    printf("-> Discovered filter class H5Z_FILTER_LZF in JSON response; setting LZF filter "
+                           "on DCPL\n");
 #endif
 
-                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function */
+                    /* Quick sanity check; push an error to the stack on failure, but don't fail this function
+                     */
                     if (strcmp(filter_class, "H5Z_FILTER_LZF"))
-                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED, "warning: filter class '%s' does not match H5Z_FILTER_LZF; DCPL should not be trusted", filter_class);
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, SUCCEED,
+                                        "warning: filter class '%s' does not match H5Z_FILTER_LZF; DCPL "
+                                        "should not be trusted",
+                                        filter_class);
 
-                    /* Note that it may be more appropriate to set the LZF filter as mandatory here, but for now optional is used */
+                    /* Note that it may be more appropriate to set the LZF filter as mandatory here, but for
+                     * now optional is used */
                     if (H5Pset_filter(*DCPL, LZF_FILTER_ID, H5Z_FLAG_OPTIONAL, 0, NULL) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set LZF filter on DCPL");
 
                     break;
                 }
 
-                /* TODO: support for other/user-defined filters */
+                    /* TODO: support for other/user-defined filters */
 
                 default:
                     /* Push error to stack; but don't fail this function */
-                    FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "warning: invalid filter with class '%s' and ID '%lld' on DCPL", filter_class, filter_ID);
+                    FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                                    "warning: invalid filter with class '%s' and ID '%lld' on DCPL",
+                                    filter_class, filter_ID);
             }
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1625,8 +1708,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
             printf("->   ID: %lld\n", filter_ID);
 #endif
         } /* end for */
-    } /* end if */
-
+    }     /* end if */
 
     /****************************************************************************
      *                                                                          *
@@ -1636,9 +1718,9 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                                          *
      ****************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, layout_keys, yajl_t_object))) {
-        yajl_val  sub_obj;
-        size_t    i;
-        char     *layout_class;
+        yajl_val sub_obj;
+        size_t   i;
+        char    *layout_class;
 
         if (NULL == (sub_obj = yajl_tree_get(key_obj, layout_class_keys, yajl_t_string)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of layout class property failed");
@@ -1657,31 +1739,35 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
                 long long val;
 
                 if (!YAJL_IS_INTEGER(YAJL_GET_ARRAY(chunk_dims_obj)->values[i]))
-                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "one of the chunk dimension sizes was not an integer");
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                                    "one of the chunk dimension sizes was not an integer");
 
                 if ((val = YAJL_GET_INTEGER(YAJL_GET_ARRAY(chunk_dims_obj)->values[i])) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "one of the chunk dimension sizes was negative");
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                                    "one of the chunk dimension sizes was negative");
 
-                chunk_dims[i] = (hsize_t) val;
+                chunk_dims[i] = (hsize_t)val;
             } /* end for */
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Setting chunked layout on DCPL\n");
             printf("-> Chunk dims: [ ");
             for (i = 0; i < YAJL_GET_ARRAY(chunk_dims_obj)->len; i++) {
-                if (i > 0) printf(", ");
+                if (i > 0)
+                    printf(", ");
                 printf("%llu", chunk_dims[i]);
             }
             printf(" ]\n");
 #endif
 
-            if (H5Pset_chunk(*DCPL, (int) YAJL_GET_ARRAY(chunk_dims_obj)->len, chunk_dims) < 0)
+            if (H5Pset_chunk(*DCPL, (int)YAJL_GET_ARRAY(chunk_dims_obj)->len, chunk_dims) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set chunked storage layout on DCPL");
         } /* end if */
         else if (!strcmp(layout_class, "H5D_CONTIGUOUS")) {
             /* Check to see if there is any external storage information */
             if (yajl_tree_get(key_obj, external_storage_keys, yajl_t_array)) {
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset external file storage is unsupported");
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL,
+                                "dataset external file storage is unsupported");
             } /* end if */
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1699,8 +1785,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
             if (H5Pset_layout(*DCPL, H5D_COMPACT) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set compact storage layout on DCPL");
         } /* end else */
-    } /* end if */
-
+    }     /* end if */
 
     /*************************************************************************
      *                                                                       *
@@ -1710,8 +1795,8 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response,
      *                                                                       *
      *************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, track_times_keys, yajl_t_string))) {
-        hbool_t  track_times = false;
-        char    *track_times_str;
+        hbool_t track_times = false;
+        char   *track_times_str;
 
         if (NULL == (track_times_str = YAJL_GET_STRING(key_obj)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "track times string was NULL");
@@ -1737,7 +1822,6 @@ done:
     return ret_value;
 } /* end RV_parse_dataset_creation_properties_callback() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_convert_dataset_creation_properties_to_JSON
  *
@@ -1754,31 +1838,34 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_properties_body, size_t *creation_properties_body_len)
+RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_properties_body,
+                                               size_t *creation_properties_body_len)
 {
-    const char * const  leading_string = "\"creationProperties\": {";
-    H5D_alloc_time_t    alloc_time;
-    ptrdiff_t           buf_ptrdiff;
-    size_t              leading_string_len = strlen(leading_string);
-    size_t              bytes_to_print = 0;
-    size_t              out_string_len;
-    char               *chunk_dims_string = NULL;
-    char               *out_string = NULL;
-    char               *out_string_curr_pos; /* The "current position" pointer used to print to the appropriate place
-                                                in the buffer and not overwrite important leading data */
-    int                 bytes_printed = 0;
-    herr_t              ret_value = SUCCEED;
+    const char *const leading_string = "\"creationProperties\": {";
+    H5D_alloc_time_t  alloc_time;
+    ptrdiff_t         buf_ptrdiff;
+    size_t            leading_string_len = strlen(leading_string);
+    size_t            bytes_to_print     = 0;
+    size_t            out_string_len;
+    char             *chunk_dims_string = NULL;
+    char             *out_string        = NULL;
+    char *out_string_curr_pos; /* The "current position" pointer used to print to the appropriate place
+                                  in the buffer and not overwrite important leading data */
+    int    bytes_printed = 0;
+    herr_t ret_value     = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting dataset creation properties from DCPL to JSON\n\n");
 #endif
 
     if (!creation_properties_body)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid NULL pointer for dataset creation properties string buffer");
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                        "invalid NULL pointer for dataset creation properties string buffer");
 
     out_string_len = DATASET_CREATION_PROPERTIES_BODY_DEFAULT_SIZE;
-    if (NULL == (out_string = (char *) RV_malloc(out_string_len)))
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset creation properties string buffer");
+    if (NULL == (out_string = (char *)RV_malloc(out_string_len)))
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
+                        "can't allocate space for dataset creation properties string buffer");
 
     /* Keep track of the current position in the resulting string so everything
      * gets added smoothly
@@ -1786,8 +1873,8 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
     out_string_curr_pos = out_string;
 
     /* Make sure the buffer is at least large enough to hold the leading string */
-    CHECKED_REALLOC(out_string, out_string_len, leading_string_len + 1,
-            out_string_curr_pos, H5E_DATASET, FAIL);
+    CHECKED_REALLOC(out_string, out_string_len, leading_string_len + 1, out_string_curr_pos, H5E_DATASET,
+                    FAIL);
 
     /* Add the leading string */
     strncpy(out_string, leading_string, out_string_len);
@@ -1808,45 +1895,44 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
     buf_ptrdiff = out_string_curr_pos - out_string;
     if (buf_ptrdiff < 0)
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                        "unsafe cast: dataset creation properties buffer pointer difference was negative - "
+                        "this should not happen!");
 
-    CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+    CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print, out_string_curr_pos,
+                    H5E_DATASET, FAIL);
 
     switch (alloc_time) {
-        case H5D_ALLOC_TIME_DEFAULT:
-        {
-            const char * const default_alloc_time = "\"allocTime\": \"H5D_ALLOC_TIME_DEFAULT\"";
-            size_t             default_alloc_len = strlen(default_alloc_time);
+        case H5D_ALLOC_TIME_DEFAULT: {
+            const char *const default_alloc_time = "\"allocTime\": \"H5D_ALLOC_TIME_DEFAULT\"";
+            size_t            default_alloc_len  = strlen(default_alloc_time);
 
             strncat(out_string_curr_pos, default_alloc_time, default_alloc_len);
             out_string_curr_pos += default_alloc_len;
             break;
         } /* H5D_ALLOC_TIME_DEFAULT */
 
-        case H5D_ALLOC_TIME_EARLY:
-        {
-            const char * const early_alloc_time = "\"allocTime\": \"H5D_ALLOC_TIME_EARLY\"";
-            size_t             early_alloc_len = strlen(early_alloc_time);
+        case H5D_ALLOC_TIME_EARLY: {
+            const char *const early_alloc_time = "\"allocTime\": \"H5D_ALLOC_TIME_EARLY\"";
+            size_t            early_alloc_len  = strlen(early_alloc_time);
 
             strncat(out_string_curr_pos, early_alloc_time, early_alloc_len);
             out_string_curr_pos += early_alloc_len;
             break;
         } /* H5D_ALLOC_TIME_EARLY */
 
-        case H5D_ALLOC_TIME_LATE:
-        {
-            const char * const late_alloc_time = "\"allocTime\": \"H5D_ALLOC_TIME_LATE\"";
-            size_t             late_alloc_len = strlen(late_alloc_time);
+        case H5D_ALLOC_TIME_LATE: {
+            const char *const late_alloc_time = "\"allocTime\": \"H5D_ALLOC_TIME_LATE\"";
+            size_t            late_alloc_len  = strlen(late_alloc_time);
 
             strncat(out_string_curr_pos, late_alloc_time, late_alloc_len);
             out_string_curr_pos += late_alloc_len;
             break;
         } /* H5D_ALLOC_TIME_LATE */
 
-        case H5D_ALLOC_TIME_INCR:
-        {
-            const char * const incr_alloc_time = "\"allocTime\": \"H5D_ALLOC_TIME_INCR\"";
-            size_t             incr_alloc_len = strlen(incr_alloc_time);
+        case H5D_ALLOC_TIME_INCR: {
+            const char *const incr_alloc_time = "\"allocTime\": \"H5D_ALLOC_TIME_INCR\"";
+            size_t            incr_alloc_len  = strlen(incr_alloc_time);
 
             strncat(out_string_curr_pos, incr_alloc_time, incr_alloc_len);
             out_string_curr_pos += incr_alloc_len;
@@ -1857,7 +1943,6 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
         default:
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid dataset space alloc time");
     } /* end switch */
-
 
     /********************************************************************************************
      *                                                                                          *
@@ -1874,29 +1959,33 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve attribute creation order property");
 
         if (0 != crt_order_flags) {
-            const char * const fmt_string = ", \"attributeCreationOrder\": \"H5P_CRT_ORDER_%s\"";
+            const char *const fmt_string = ", \"attributeCreationOrder\": \"H5P_CRT_ORDER_%s\"";
 
             /* Check whether the buffer needs to be grown */
             bytes_to_print = strlen(fmt_string) + strlen("INDEXED") + 1;
 
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                "unsafe cast: dataset creation properties buffer pointer difference was "
+                                "negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                            out_string_curr_pos, H5E_DATASET, FAIL);
 
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
-                    (H5P_CRT_ORDER_INDEXED | H5P_CRT_ORDER_TRACKED) == crt_order_flags ? "INDEXED" : "TRACKED")
-                ) < 0)
+            if ((bytes_printed = snprintf(
+                     out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff, fmt_string,
+                     (H5P_CRT_ORDER_INDEXED | H5P_CRT_ORDER_TRACKED) == crt_order_flags ? "INDEXED"
+                                                                                        : "TRACKED")) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset creation order property string size exceeded allocated buffer size");
+            if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                                "dataset creation order property string size exceeded allocated buffer size");
 
             out_string_curr_pos += bytes_printed;
         } /* end if */
     }
-
 
     /****************************************************************************
      *                                                                          *
@@ -1912,32 +2001,37 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
         if (H5Pget_attr_phase_change(dcpl, &max_compact, &min_dense) < 0)
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve attribute phase change property");
 
-        if (DATASET_CREATE_MAX_COMPACT_ATTRIBUTES_DEFAULT != max_compact
-                || DATASET_CREATE_MIN_DENSE_ATTRIBUTES_DEFAULT != min_dense) {
-            const char * const fmt_string = ", \"attributePhaseChange\": {"
-                                                  "\"maxCompact\": %u, "
-                                                  "\"minDense\": %u"
-                                              "}";
+        if (DATASET_CREATE_MAX_COMPACT_ATTRIBUTES_DEFAULT != max_compact ||
+            DATASET_CREATE_MIN_DENSE_ATTRIBUTES_DEFAULT != min_dense) {
+            const char *const fmt_string = ", \"attributePhaseChange\": {"
+                                           "\"maxCompact\": %u, "
+                                           "\"minDense\": %u"
+                                           "}";
 
             /* Check whether the buffer needs to be grown */
             bytes_to_print = strlen(fmt_string) + (2 * MAX_NUM_LENGTH) + 1;
 
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                "unsafe cast: dataset creation properties buffer pointer difference was "
+                                "negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                            out_string_curr_pos, H5E_DATASET, FAIL);
 
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string, max_compact, min_dense)) < 0)
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                          fmt_string, max_compact, min_dense)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset attribute phase change property string size exceeded allocated buffer size");
+            if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                FUNC_GOTO_ERROR(
+                    H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                    "dataset attribute phase change property string size exceeded allocated buffer size");
 
             out_string_curr_pos += bytes_printed;
         } /* end if */
     }
-
 
     /**********************************************************************
      *                                                                    *
@@ -1953,29 +2047,32 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve fill time property");
 
         if (H5D_FILL_TIME_IFSET != fill_time) {
-            const char * const fmt_string = ", \"fillTime\": \"H5D_FILL_TIME_%s\"";
+            const char *const fmt_string = ", \"fillTime\": \"H5D_FILL_TIME_%s\"";
 
             /* Check whether the buffer needs to be grown */
             bytes_to_print = strlen(fmt_string) + strlen("ALLOC") + 1;
 
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                "unsafe cast: dataset creation properties buffer pointer difference was "
+                                "negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                            out_string_curr_pos, H5E_DATASET, FAIL);
 
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
-                    H5D_FILL_TIME_ALLOC == fill_time ? "ALLOC" : "NEVER")
-                ) < 0)
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                          fmt_string, H5D_FILL_TIME_ALLOC == fill_time ? "ALLOC" : "NEVER")) <
+                0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset fill time property string size exceeded allocated buffer size");
+            if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                                "dataset fill time property string size exceeded allocated buffer size");
 
             out_string_curr_pos += bytes_printed;
         } /* end if */
     }
-
 
     /******************************************************************
      *                                                                *
@@ -1993,17 +2090,20 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
         if (H5D_FILL_VALUE_DEFAULT != fill_status) {
             if (H5D_FILL_VALUE_UNDEFINED == fill_status) {
-                const char * const null_value = ", \"fillValue\": null";
-                size_t             null_value_len = strlen(null_value);
+                const char *const null_value     = ", \"fillValue\": null";
+                size_t            null_value_len = strlen(null_value);
 
                 /* Check whether the buffer needs to be grown */
                 bytes_to_print = null_value_len + 1;
 
                 buf_ptrdiff = out_string_curr_pos - out_string;
                 if (buf_ptrdiff < 0)
-                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                    "unsafe cast: dataset creation properties buffer pointer difference was "
+                                    "negative - this should not happen!");
 
-                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                out_string_curr_pos, H5E_DATASET, FAIL);
 
                 strncat(out_string_curr_pos, null_value, null_value_len);
                 out_string_curr_pos += null_value_len;
@@ -2011,9 +2111,8 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             else {
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset fill values are unsupported");
             } /* end else */
-        } /* end if */
+        }     /* end if */
     }
-
 
     /***************************************************************
      *                                                             *
@@ -2027,131 +2126,146 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
         int nfilters;
 
         if ((nfilters = H5Pget_nfilters(dcpl))) {
-            const char * const filters_string = ", \"filters\": [ ";
-            H5Z_filter_t       filter_id;
-            unsigned           filter_config;
-            unsigned           flags;
-            unsigned           cd_values[FILTER_MAX_CD_VALUES];
-            size_t             filters_string_len = strlen(filters_string);
-            size_t             cd_nelmts = FILTER_MAX_CD_VALUES;
-            size_t             filter_namelen = FILTER_NAME_MAX_LENGTH;
-            size_t             i;
-            char               filter_name[FILTER_NAME_MAX_LENGTH];
+            const char *const filters_string = ", \"filters\": [ ";
+            H5Z_filter_t      filter_id;
+            unsigned          filter_config;
+            unsigned          flags;
+            unsigned          cd_values[FILTER_MAX_CD_VALUES];
+            size_t            filters_string_len = strlen(filters_string);
+            size_t            cd_nelmts          = FILTER_MAX_CD_VALUES;
+            size_t            filter_namelen     = FILTER_NAME_MAX_LENGTH;
+            size_t            i;
+            char              filter_name[FILTER_NAME_MAX_LENGTH];
 
             /* Check whether the buffer needs to be grown */
             bytes_to_print = filters_string_len + 1;
 
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                "unsafe cast: dataset creation properties buffer pointer difference was "
+                                "negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                            out_string_curr_pos, H5E_DATASET, FAIL);
 
             strncat(out_string_curr_pos, filters_string, filters_string_len);
             out_string_curr_pos += filters_string_len;
 
-            for (i = 0; i < (size_t) nfilters; i++) {
-                /* Reset the value of cd_nelmts to make sure all of the filter's CD values are retrieved correctly */
+            for (i = 0; i < (size_t)nfilters; i++) {
+                /* Reset the value of cd_nelmts to make sure all of the filter's CD values are retrieved
+                 * correctly */
                 cd_nelmts = FILTER_MAX_CD_VALUES;
 
-                switch ((filter_id = H5Pget_filter2(dcpl, (unsigned) i, &flags, &cd_nelmts, cd_values, filter_namelen, filter_name, &filter_config))) {
-                    case H5Z_FILTER_DEFLATE:
-                    {
-                        const char * const fmt_string = "{"
-                                                            "\"class\": \"H5Z_FILTER_DEFLATE\","
-                                                            "\"id\": %d,"
-                                                            "\"level\": %u"
-                                                        "}";
+                switch ((filter_id = H5Pget_filter2(dcpl, (unsigned)i, &flags, &cd_nelmts, cd_values,
+                                                    filter_namelen, filter_name, &filter_config))) {
+                    case H5Z_FILTER_DEFLATE: {
+                        const char *const fmt_string = "{"
+                                                       "\"class\": \"H5Z_FILTER_DEFLATE\","
+                                                       "\"id\": %d,"
+                                                       "\"level\": %u"
+                                                       "}";
 
                         /* Check whether the buffer needs to be grown */
                         bytes_to_print = strlen(fmt_string) + (2 * MAX_NUM_LENGTH) + 1;
 
                         buf_ptrdiff = out_string_curr_pos - out_string;
                         if (buf_ptrdiff < 0)
-                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                            "unsafe cast: dataset creation properties buffer pointer "
+                                            "difference was negative - this should not happen!");
 
-                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                        out_string_curr_pos, H5E_DATASET, FAIL);
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
-                                H5Z_FILTER_DEFLATE,
-                                cd_values[0])
-                            ) < 0)
+                        if ((bytes_printed =
+                                 snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                          fmt_string, H5Z_FILTER_DEFLATE, cd_values[0])) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset deflate filter property string size exceeded allocated buffer size");
+                        if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                            FUNC_GOTO_ERROR(
+                                H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                                "dataset deflate filter property string size exceeded allocated buffer size");
 
                         out_string_curr_pos += bytes_printed;
                         break;
                     } /* H5Z_FILTER_DEFLATE */
 
-                    case H5Z_FILTER_SHUFFLE:
-                    {
-                        const char * const fmt_string = "{"
-                                                            "\"class\": \"H5Z_FILTER_SHUFFLE\","
-                                                            "\"id\": %d"
-                                                        "}";
+                    case H5Z_FILTER_SHUFFLE: {
+                        const char *const fmt_string = "{"
+                                                       "\"class\": \"H5Z_FILTER_SHUFFLE\","
+                                                       "\"id\": %d"
+                                                       "}";
 
                         /* Check whether the buffer needs to be grown */
                         bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH + 1;
 
                         buf_ptrdiff = out_string_curr_pos - out_string;
                         if (buf_ptrdiff < 0)
-                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                            "unsafe cast: dataset creation properties buffer pointer "
+                                            "difference was negative - this should not happen!");
 
-                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                        out_string_curr_pos, H5E_DATASET, FAIL);
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
-                                H5Z_FILTER_SHUFFLE)
-                            ) < 0)
+                        if ((bytes_printed =
+                                 snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                          fmt_string, H5Z_FILTER_SHUFFLE)) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset shuffle filter property string size exceeded allocated buffer size");
+                        if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                            FUNC_GOTO_ERROR(
+                                H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                                "dataset shuffle filter property string size exceeded allocated buffer size");
 
                         out_string_curr_pos += bytes_printed;
                         break;
                     } /* H5Z_FILTER_SHUFFLE */
 
-                    case H5Z_FILTER_FLETCHER32:
-                    {
-                        const char * const fmt_string = "{"
-                                                            "\"class\": \"H5Z_FILTER_FLETCHER32\","
-                                                            "\"id\": %d"
-                                                        "}";
+                    case H5Z_FILTER_FLETCHER32: {
+                        const char *const fmt_string = "{"
+                                                       "\"class\": \"H5Z_FILTER_FLETCHER32\","
+                                                       "\"id\": %d"
+                                                       "}";
 
                         /* Check whether the buffer needs to be grown */
                         bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH + 1;
 
                         buf_ptrdiff = out_string_curr_pos - out_string;
                         if (buf_ptrdiff < 0)
-                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                            "unsafe cast: dataset creation properties buffer pointer "
+                                            "difference was negative - this should not happen!");
 
-                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                        out_string_curr_pos, H5E_DATASET, FAIL);
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
-                                H5Z_FILTER_FLETCHER32)
-                            ) < 0)
+                        if ((bytes_printed =
+                                 snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                          fmt_string, H5Z_FILTER_FLETCHER32)) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset fletcher32 filter property string size exceeded allocated buffer size");
+                        if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                                            "dataset fletcher32 filter property string size exceeded "
+                                            "allocated buffer size");
 
                         out_string_curr_pos += bytes_printed;
                         break;
                     } /* H5Z_FILTER_FLETCHER32 */
 
-                    case H5Z_FILTER_SZIP:
-                    {
-                        const char *       szip_option_mask;
-                        const char * const fmt_string = "{"
-                                                            "\"class\": \"H5Z_FILTER_SZIP\","
-                                                            "\"id\": %d,"
-                                                            "\"bitsPerPixel\": %u,"
-                                                            "\"coding\": \"%s\","
-                                                            "\"pixelsPerBlock\": %u,"
-                                                            "\"pixelsPerScanline\": %u"
-                                                        "}";
+                    case H5Z_FILTER_SZIP: {
+                        const char       *szip_option_mask;
+                        const char *const fmt_string = "{"
+                                                       "\"class\": \"H5Z_FILTER_SZIP\","
+                                                       "\"id\": %d,"
+                                                       "\"bitsPerPixel\": %u,"
+                                                       "\"coding\": \"%s\","
+                                                       "\"pixelsPerBlock\": %u,"
+                                                       "\"pixelsPerScanline\": %u"
+                                                       "}";
 
                         switch (cd_values[H5Z_SZIP_PARM_MASK]) {
                             case H5_SZIP_EC_OPTION_MASK:
@@ -2164,79 +2278,93 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                             default:
 #ifdef RV_CONNECTOR_DEBUG
-                                printf("-> Unable to add SZIP filter to DCPL - unsupported mask value specified (not H5_SZIP_EC_OPTION_MASK or H5_SZIP_NN_OPTION_MASK)\n\n");
+                                printf(
+                                    "-> Unable to add SZIP filter to DCPL - unsupported mask value specified "
+                                    "(not H5_SZIP_EC_OPTION_MASK or H5_SZIP_NN_OPTION_MASK)\n\n");
 #endif
 
                                 if (flags & H5Z_FLAG_OPTIONAL)
                                     continue;
                                 else
-                                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set SZIP filter on DCPL - unsupported mask value specified (not H5_SZIP_EC_OPTION_MASK or H5_SZIP_NN_OPTION_MASK)");
+                                    FUNC_GOTO_ERROR(
+                                        H5E_DATASET, H5E_CANTSET, FAIL,
+                                        "can't set SZIP filter on DCPL - unsupported mask value specified "
+                                        "(not H5_SZIP_EC_OPTION_MASK or H5_SZIP_NN_OPTION_MASK)");
 
                                 break;
                         } /* end switch */
 
                         /* Check whether the buffer needs to be grown */
-                        bytes_to_print = strlen(fmt_string) + (4 * MAX_NUM_LENGTH) + strlen(szip_option_mask) + 1;
+                        bytes_to_print =
+                            strlen(fmt_string) + (4 * MAX_NUM_LENGTH) + strlen(szip_option_mask) + 1;
 
                         buf_ptrdiff = out_string_curr_pos - out_string;
                         if (buf_ptrdiff < 0)
-                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                            "unsafe cast: dataset creation properties buffer pointer "
+                                            "difference was negative - this should not happen!");
 
-                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                        out_string_curr_pos, H5E_DATASET, FAIL);
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
-                                H5Z_FILTER_SZIP,
-                                cd_values[H5Z_SZIP_PARM_BPP],
-                                cd_values[H5Z_SZIP_PARM_MASK] == H5_SZIP_EC_OPTION_MASK ? "H5_SZIP_EC_OPTION_MASK" : "H5_SZIP_NN_OPTION_MASK",
-                                cd_values[H5Z_SZIP_PARM_PPB],
-                                cd_values[H5Z_SZIP_PARM_PPS])
-                            ) < 0)
+                        if ((bytes_printed =
+                                 snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                          fmt_string, H5Z_FILTER_SZIP, cd_values[H5Z_SZIP_PARM_BPP],
+                                          cd_values[H5Z_SZIP_PARM_MASK] == H5_SZIP_EC_OPTION_MASK
+                                              ? "H5_SZIP_EC_OPTION_MASK"
+                                              : "H5_SZIP_NN_OPTION_MASK",
+                                          cd_values[H5Z_SZIP_PARM_PPB], cd_values[H5Z_SZIP_PARM_PPS])) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset szip filter property string size exceeded allocated buffer size");
+                        if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                            FUNC_GOTO_ERROR(
+                                H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                                "dataset szip filter property string size exceeded allocated buffer size");
 
                         out_string_curr_pos += bytes_printed;
                         break;
                     } /* H5Z_FILTER_SZIP */
 
-                    case H5Z_FILTER_NBIT:
-                    {
-                        const char * const fmt_string = "{"
-                                                            "\"class\": \"H5Z_FILTER_NBIT\","
-                                                            "\"id\": %d"
-                                                        "}";
+                    case H5Z_FILTER_NBIT: {
+                        const char *const fmt_string = "{"
+                                                       "\"class\": \"H5Z_FILTER_NBIT\","
+                                                       "\"id\": %d"
+                                                       "}";
 
                         /* Check whether the buffer needs to be grown */
                         bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH + 1;
 
                         buf_ptrdiff = out_string_curr_pos - out_string;
                         if (buf_ptrdiff < 0)
-                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                            "unsafe cast: dataset creation properties buffer pointer "
+                                            "difference was negative - this should not happen!");
 
-                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                        out_string_curr_pos, H5E_DATASET, FAIL);
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
-                                H5Z_FILTER_NBIT)
-                            ) < 0)
+                        if ((bytes_printed =
+                                 snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                          fmt_string, H5Z_FILTER_NBIT)) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset nbit filter property string size exceeded allocated buffer size");
+                        if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                            FUNC_GOTO_ERROR(
+                                H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                                "dataset nbit filter property string size exceeded allocated buffer size");
 
                         out_string_curr_pos += bytes_printed;
                         break;
                     } /* H5Z_FILTER_NBIT */
 
-                    case H5Z_FILTER_SCALEOFFSET:
-                    {
-                        const char *       scaleType;
-                        const char * const fmt_string = "{"
-                                                            "\"class\": \"H5Z_FILTER_SCALEOFFSET\","
-                                                            "\"id\": %d,"
-                                                            "\"scaleType\": \"%s\","
-                                                            "\"scaleOffset\": %u"
-                                                        "}";
+                    case H5Z_FILTER_SCALEOFFSET: {
+                        const char       *scaleType;
+                        const char *const fmt_string = "{"
+                                                       "\"class\": \"H5Z_FILTER_SCALEOFFSET\","
+                                                       "\"id\": %d,"
+                                                       "\"scaleType\": \"%s\","
+                                                       "\"scaleOffset\": %u"
+                                                       "}";
 
                         switch (cd_values[H5Z_SCALEOFFSET_PARM_SCALETYPE]) {
                             case H5Z_SO_FLOAT_DSCALE:
@@ -2253,13 +2381,18 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                             default:
 #ifdef RV_CONNECTOR_DEBUG
-                                printf("-> Unable to add ScaleOffset filter to DCPL - unsupported scale type specified (not H5Z_SO_FLOAT_DSCALE, H5Z_SO_FLOAT_ESCALE or H5Z_SO_INT)\n\n");
+                                printf("-> Unable to add ScaleOffset filter to DCPL - unsupported scale type "
+                                       "specified (not H5Z_SO_FLOAT_DSCALE, H5Z_SO_FLOAT_ESCALE or "
+                                       "H5Z_SO_INT)\n\n");
 #endif
 
                                 if (flags & H5Z_FLAG_OPTIONAL)
                                     continue;
                                 else
-                                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set ScaleOffset filter on DCPL - unsupported scale type specified (not H5Z_SO_FLOAT_DSCALE, H5Z_SO_FLOAT_ESCALE or H5Z_SO_INT)");
+                                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL,
+                                                    "can't set ScaleOffset filter on DCPL - unsupported "
+                                                    "scale type specified (not H5Z_SO_FLOAT_DSCALE, "
+                                                    "H5Z_SO_FLOAT_ESCALE or H5Z_SO_INT)");
 
                                 break;
                         } /* end switch */
@@ -2269,19 +2402,23 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                         buf_ptrdiff = out_string_curr_pos - out_string;
                         if (buf_ptrdiff < 0)
-                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                            "unsafe cast: dataset creation properties buffer pointer "
+                                            "difference was negative - this should not happen!");
 
-                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                        out_string_curr_pos, H5E_DATASET, FAIL);
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
-                                H5Z_FILTER_SCALEOFFSET,
-                                scaleType,
-                                cd_values[H5Z_SCALEOFFSET_PARM_SCALEFACTOR])
-                            ) < 0)
+                        if ((bytes_printed =
+                                 snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                          fmt_string, H5Z_FILTER_SCALEOFFSET, scaleType,
+                                          cd_values[H5Z_SCALEOFFSET_PARM_SCALEFACTOR])) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset scaleoffset filter property string size exceeded allocated buffer size");
+                        if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                                            "dataset scaleoffset filter property string size exceeded "
+                                            "allocated buffer size");
 
                         out_string_curr_pos += bytes_printed;
                         break;
@@ -2289,34 +2426,38 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                     case LZF_FILTER_ID: /* LZF Filter */
                     {
-                        const char * const fmt_string = "{"
-                                                            "\"class\": \"H5Z_FILTER_LZF\","
-                                                            "\"id\": %d"
-                                                        "}";
+                        const char *const fmt_string = "{"
+                                                       "\"class\": \"H5Z_FILTER_LZF\","
+                                                       "\"id\": %d"
+                                                       "}";
 
                         /* Check whether the buffer needs to be grown */
                         bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH + 1;
 
                         buf_ptrdiff = out_string_curr_pos - out_string;
                         if (buf_ptrdiff < 0)
-                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                            "unsafe cast: dataset creation properties buffer pointer "
+                                            "difference was negative - this should not happen!");
 
-                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                        out_string_curr_pos, H5E_DATASET, FAIL);
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
-                                LZF_FILTER_ID)
-                            ) < 0)
+                        if ((bytes_printed =
+                                 snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                          fmt_string, LZF_FILTER_ID)) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset lzf filter property string size exceeded allocated buffer size");
+                        if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                            FUNC_GOTO_ERROR(
+                                H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                                "dataset lzf filter property string size exceeded allocated buffer size");
 
                         out_string_curr_pos += bytes_printed;
                         break;
                     } /* LZF_FILTER_ID */
 
-                    case H5Z_FILTER_ERROR:
-                    {
+                    case H5Z_FILTER_ERROR: {
 #ifdef RV_CONNECTOR_DEBUG
                         printf("-> Unknown filter specified for filter %zu - not adding to DCPL\n\n", i);
 #endif
@@ -2331,18 +2472,21 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                     default: /* User-defined filter */
                     {
-                        char               *parameters = NULL;
-                        const char * const  fmt_string = "{"
-                                                             "\"class\": \"H5Z_FILTER_USER\","
-                                                             "\"id\": %d,"
-                                                             "\"parameters\": %s"
-                                                         "}";
+                        char             *parameters = NULL;
+                        const char *const fmt_string = "{"
+                                                       "\"class\": \"H5Z_FILTER_USER\","
+                                                       "\"id\": %d,"
+                                                       "\"parameters\": %s"
+                                                       "}";
 
                         if (filter_id < 0) {
                             if (flags & H5Z_FLAG_OPTIONAL)
                                 continue;
                             else
-                                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "Unable to set filter on DCPL - invalid filter specified for filter %zu", i);
+                                FUNC_GOTO_ERROR(
+                                    H5E_DATASET, H5E_CANTSET, FAIL,
+                                    "Unable to set filter on DCPL - invalid filter specified for filter %zu",
+                                    i);
                         } /* end if */
 
                         /* Retrieve all of the parameters for the user-defined filter */
@@ -2352,23 +2496,27 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                         buf_ptrdiff = out_string_curr_pos - out_string;
                         if (buf_ptrdiff < 0)
-                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                            "unsafe cast: dataset creation properties buffer pointer "
+                                            "difference was negative - this should not happen!");
 
-                        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                        CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                        out_string_curr_pos, H5E_DATASET, FAIL);
 
-                        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
-                                filter_id,
-                                parameters)
-                            ) < 0)
+                        if ((bytes_printed =
+                                 snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                          fmt_string, filter_id, parameters)) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset user-defined filter property string size exceeded allocated buffer size");
+                        if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                                            "dataset user-defined filter property string size exceeded "
+                                            "allocated buffer size");
 
                         out_string_curr_pos += bytes_printed;
                         break;
                     } /* User-defined filter */
-                } /* end switch */
+                }     /* end switch */
 
                 /* TODO: When the addition of an optional filter fails, it should use the continue statement
                  * to allow this loop to continue instead of throwing an error stack and failing the whole
@@ -2382,25 +2530,30 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                 if (i < nfilters - 1) {
                     buf_ptrdiff = out_string_curr_pos - out_string;
                     if (buf_ptrdiff < 0)
-                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                        "unsafe cast: dataset creation properties buffer pointer difference "
+                                        "was negative - this should not happen!");
 
-                    CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
+                    CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + 1, out_string_curr_pos,
+                                    H5E_DATASET, FAIL);
 
                     strcat(out_string_curr_pos++, ",");
                 } /* end if */
-            } /* end for */
+            }     /* end for */
 
             /* Make sure to add a closing ']' to close the 'filters' section */
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                "unsafe cast: dataset creation properties buffer pointer difference was "
+                                "negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + 1, out_string_curr_pos,
+                            H5E_DATASET, FAIL);
 
             strcat(out_string_curr_pos++, "]");
         } /* end if */
     }
-
 
     /****************************************************************************************
      *                                                                                      *
@@ -2410,40 +2563,44 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
      *                                                                                      *
      ****************************************************************************************/
     switch (H5Pget_layout(dcpl)) {
-        case H5D_COMPACT:
-        {
-            const char * const compact_layout_str = ", \"layout\": {"
-                                                           "\"class\": \"H5D_COMPACT\""
-                                                      "}";
-            size_t             compact_layout_str_len = strlen(compact_layout_str);
+        case H5D_COMPACT: {
+            const char *const compact_layout_str     = ", \"layout\": {"
+                                                       "\"class\": \"H5D_COMPACT\""
+                                                       "}";
+            size_t            compact_layout_str_len = strlen(compact_layout_str);
 
             /* Check whether the buffer needs to be grown */
             bytes_to_print = compact_layout_str_len + 1;
 
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                "unsafe cast: dataset creation properties buffer pointer difference was "
+                                "negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                            out_string_curr_pos, H5E_DATASET, FAIL);
 
             strncat(out_string_curr_pos, compact_layout_str, compact_layout_str_len);
             out_string_curr_pos += compact_layout_str_len;
             break;
         } /* H5D_COMPACT */
 
-        case H5D_CONTIGUOUS:
-        {
-            const char * const contiguous_layout_str = ", \"layout\": {\"class\": \"H5D_CONTIGUOUS\"";
-            int                external_file_count;
+        case H5D_CONTIGUOUS: {
+            const char *const contiguous_layout_str = ", \"layout\": {\"class\": \"H5D_CONTIGUOUS\"";
+            int               external_file_count;
 
             /* Check whether the buffer needs to be grown */
             bytes_to_print = strlen(contiguous_layout_str);
 
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                "unsafe cast: dataset creation properties buffer pointer difference was "
+                                "negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                            out_string_curr_pos, H5E_DATASET, FAIL);
 
             /* Append the "contiguous layout" string */
             strncat(out_string_curr_pos, contiguous_layout_str, bytes_to_print);
@@ -2454,59 +2611,66 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                 FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTGET, FAIL, "can't retrieve external file count");
 
             if (external_file_count > 0) {
-                size_t             i;
-                const char * const external_storage_str = ", externalStorage: [";
-                const char * const external_file_str    = "%s{"
-                                                              "\"name\": %s,"
-                                                              "\"offset\": " OFF_T_SPECIFIER ","
-                                                              "\"size\": %llu"
-                                                          "}";
+                size_t            i;
+                const char *const external_storage_str = ", externalStorage: [";
+                const char *const external_file_str    = "%s{"
+                                                         "\"name\": %s,"
+                                                         "\"offset\": " OFF_T_SPECIFIER ","
+                                                         "\"size\": %llu"
+                                                         "}";
 
                 /* Check whether the buffer needs to be grown */
                 bytes_to_print += strlen(external_storage_str);
 
                 buf_ptrdiff = out_string_curr_pos - out_string;
                 if (buf_ptrdiff < 0)
-                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                    "unsafe cast: dataset creation properties buffer pointer difference was "
+                                    "negative - this should not happen!");
 
-                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                out_string_curr_pos, H5E_DATASET, FAIL);
 
                 /* Append the "external storage" string */
                 strncat(out_string_curr_pos, external_storage_str, bytes_to_print);
                 out_string_curr_pos += bytes_to_print;
 
                 /* Append an entry for each of the external files */
-                for (i = 0; i < (size_t) external_file_count; i++) {
+                for (i = 0; i < (size_t)external_file_count; i++) {
                     hsize_t file_size;
                     off_t   file_offset;
                     char    file_name[EXTERNAL_FILE_NAME_MAX_LENGTH];
 
-                    if (H5Pget_external(dcpl, (unsigned) i, (size_t) EXTERNAL_FILE_NAME_MAX_LENGTH, file_name, &file_offset, &file_size) < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get information for external file %zu from DCPL", i);
+                    if (H5Pget_external(dcpl, (unsigned)i, (size_t)EXTERNAL_FILE_NAME_MAX_LENGTH, file_name,
+                                        &file_offset, &file_size) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                                        "can't get information for external file %zu from DCPL", i);
 
                     /* Ensure that the file name buffer is NULL-terminated */
                     file_name[EXTERNAL_FILE_NAME_MAX_LENGTH - 1] = '\0';
 
-                    bytes_to_print += strlen(external_file_str) + strlen(file_name) + (2 * MAX_NUM_LENGTH) + (i > 0 ? 1 : 0) - 8;
+                    bytes_to_print += strlen(external_file_str) + strlen(file_name) + (2 * MAX_NUM_LENGTH) +
+                                      (i > 0 ? 1 : 0) - 8;
 
                     /* Check whether the buffer needs to be grown */
                     buf_ptrdiff = out_string_curr_pos - out_string;
                     if (buf_ptrdiff < 0)
-                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                        "unsafe cast: dataset creation properties buffer pointer difference "
+                                        "was negative - this should not happen!");
 
-                    CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+                    CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                    out_string_curr_pos, H5E_DATASET, FAIL);
 
-                    if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff,
-                            external_file_str,
-                            (i > 0) ? "," : "",
-                            file_name,
-                            OFF_T_CAST file_offset,
-                            file_size)
-                        ) < 0)
+                    if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                                  external_file_str, (i > 0) ? "," : "", file_name,
+                                                  OFF_T_CAST file_offset, file_size)) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                    if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset external file list property string size exceeded allocated buffer size");
+                    if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                        FUNC_GOTO_ERROR(
+                            H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                            "dataset external file list property string size exceeded allocated buffer size");
 
                     out_string_curr_pos += bytes_printed;
                 } /* end for */
@@ -2514,9 +2678,12 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                 /* Make sure to add a closing ']' to close the external file section */
                 buf_ptrdiff = out_string_curr_pos - out_string;
                 if (buf_ptrdiff < 0)
-                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                    "unsafe cast: dataset creation properties buffer pointer difference was "
+                                    "negative - this should not happen!");
 
-                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
+                CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + 1, out_string_curr_pos,
+                                H5E_DATASET, FAIL);
 
                 strcat(out_string_curr_pos++, "]");
             } /* end if */
@@ -2524,25 +2691,27 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             /* Make sure to add a closing '}' to close the 'layout' section */
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                "unsafe cast: dataset creation properties buffer pointer difference was "
+                                "negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + 1, out_string_curr_pos,
+                            H5E_DATASET, FAIL);
 
             strcat(out_string_curr_pos++, "}");
 
             break;
         } /* H5D_CONTIGUOUS */
 
-        case H5D_CHUNKED:
-        {
-            hsize_t             chunk_dims[H5S_MAX_RANK + 1];
-            size_t              i;
-            char               *chunk_dims_string_curr_pos;
-            int                 ndims;
-            const char * const  fmt_string = ", \"layout\": {"
-                                                   "\"class\": \"H5D_CHUNKED\","
-                                                   "\"dims\": %s"
-                                               "}";
+        case H5D_CHUNKED: {
+            hsize_t           chunk_dims[H5S_MAX_RANK + 1];
+            size_t            i;
+            char             *chunk_dims_string_curr_pos;
+            int               ndims;
+            const char *const fmt_string = ", \"layout\": {"
+                                           "\"class\": \"H5D_CHUNKED\","
+                                           "\"dims\": %s"
+                                           "}";
 
             if ((ndims = H5Pget_chunk(dcpl, H5S_MAX_RANK + 1, chunk_dims)) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve dataset chunk dimensionality");
@@ -2550,19 +2719,23 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             if (!ndims)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "no chunk dimensionality specified");
 
-            if (NULL == (chunk_dims_string = (char *) RV_malloc((size_t) ((ndims * MAX_NUM_LENGTH) + ndims + 3))))
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for chunk dimensionality string");
-            chunk_dims_string_curr_pos = chunk_dims_string;
+            if (NULL ==
+                (chunk_dims_string = (char *)RV_malloc((size_t)((ndims * MAX_NUM_LENGTH) + ndims + 3))))
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for chunk dimensionality string");
+            chunk_dims_string_curr_pos  = chunk_dims_string;
             *chunk_dims_string_curr_pos = '\0';
 
             strcat(chunk_dims_string_curr_pos++, "[");
 
-            for (i = 0; i < (size_t) ndims; i++) {
-                if ((bytes_printed = snprintf(chunk_dims_string_curr_pos, MAX_NUM_LENGTH, "%s%" PRIuHSIZE, i > 0 ? "," : "", chunk_dims[i])) < 0)
+            for (i = 0; i < (size_t)ndims; i++) {
+                if ((bytes_printed = snprintf(chunk_dims_string_curr_pos, MAX_NUM_LENGTH, "%s%" PRIuHSIZE,
+                                              i > 0 ? "," : "", chunk_dims[i])) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                 if (bytes_printed >= MAX_NUM_LENGTH)
-                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "chunk 'dimension size' string size exceeded maximum number string size");
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                                    "chunk 'dimension size' string size exceeded maximum number string size");
 
                 chunk_dims_string_curr_pos += bytes_printed;
             } /* end for */
@@ -2574,15 +2747,21 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                "unsafe cast: dataset creation properties buffer pointer difference was "
+                                "negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                            out_string_curr_pos, H5E_DATASET, FAIL);
 
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string, chunk_dims_string)) < 0)
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                          fmt_string, chunk_dims_string)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset chunk dimensionality property string size exceeded allocated buffer size");
+            if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                FUNC_GOTO_ERROR(
+                    H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                    "dataset chunk dimensionality property string size exceeded allocated buffer size");
 
             out_string_curr_pos += bytes_printed;
             break;
@@ -2598,7 +2777,6 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve dataset layout property");
     } /* end switch */
 
-
     /*************************************************************************************
      *                                                                                   *
      *                            Object Time Tracking Section                           *
@@ -2613,33 +2791,39 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve object time tracking property");
 
         if (track_times) {
-            const char * const track_times_true = ", \"trackTimes\": \"true\"";
-            size_t             track_times_true_len = strlen(track_times_true);
+            const char *const track_times_true     = ", \"trackTimes\": \"true\"";
+            size_t            track_times_true_len = strlen(track_times_true);
 
             /* Check whether the buffer needs to be grown */
             bytes_to_print = track_times_true_len + 1;
 
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                "unsafe cast: dataset creation properties buffer pointer difference was "
+                                "negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                            out_string_curr_pos, H5E_DATASET, FAIL);
 
             strncat(out_string_curr_pos, track_times_true, track_times_true_len);
             out_string_curr_pos += track_times_true_len;
         } /* end if */
         else {
-            const char * const track_times_false = ", \"trackTimes\": \"false\"";
-            size_t             track_times_false_len = strlen(track_times_false);
+            const char *const track_times_false     = ", \"trackTimes\": \"false\"";
+            size_t            track_times_false_len = strlen(track_times_false);
 
             /* Check whether the buffer needs to be grown */
             bytes_to_print = track_times_false_len + 1;
 
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                "unsafe cast: dataset creation properties buffer pointer difference was "
+                                "negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATASET, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                            out_string_curr_pos, H5E_DATASET, FAIL);
 
             strncat(out_string_curr_pos, track_times_false, track_times_false_len);
             out_string_curr_pos += track_times_false_len;
@@ -2649,9 +2833,12 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
     /* Make sure to add a closing '}' to close the creationProperties section */
     buf_ptrdiff = out_string_curr_pos - out_string;
     if (buf_ptrdiff < 0)
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                        "unsafe cast: dataset creation properties buffer pointer difference was negative - "
+                        "this should not happen!");
 
-    CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 1, out_string_curr_pos, H5E_DATASET, FAIL);
+    CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + 1, out_string_curr_pos, H5E_DATASET,
+                    FAIL);
 
     strcat(out_string_curr_pos++, "}");
 
@@ -2661,9 +2848,11 @@ done:
         if (creation_properties_body_len) {
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_DONE_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataset creation properties buffer pointer difference was negative - this should not happen!");
+                FUNC_DONE_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                "unsafe cast: dataset creation properties buffer pointer difference was "
+                                "negative - this should not happen!");
             else
-                *creation_properties_body_len = (size_t) buf_ptrdiff;
+                *creation_properties_body_len = (size_t)buf_ptrdiff;
         } /* end if */
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -2681,7 +2870,6 @@ done:
     return ret_value;
 } /* end RV_convert_dataset_creation_properties_to_JSON() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_setup_dataset_create_request_body
  *
@@ -2701,24 +2889,25 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_setup_dataset_create_request_body(void *parent_obj, const char *name,
-    hid_t type_id, hid_t space_id, hid_t lcpl_id, hid_t dcpl, char **create_request_body, size_t *create_request_body_len)
+RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t type_id, hid_t space_id,
+                                     hid_t lcpl_id, hid_t dcpl, char **create_request_body,
+                                     size_t *create_request_body_len)
 {
-    RV_object_t *pobj = (RV_object_t *) parent_obj;
+    RV_object_t *pobj                         = (RV_object_t *)parent_obj;
     size_t       creation_properties_body_len = 0;
-    size_t       create_request_nalloc = 0;
-    size_t       datatype_body_len = 0;
-    size_t       link_body_nalloc = 0;
-    char        *datatype_body = NULL;
-    char        *out_string = NULL;
-    char        *shape_body = NULL;
-    char        *maxdims_body = NULL;
-    char        *creation_properties_body = NULL;
-    char        *link_body = NULL;
-    char        *path_dirname = NULL;
-    int          create_request_len = 0;
-    int          link_body_len = 0;
-    herr_t       ret_value = SUCCEED;
+    size_t       create_request_nalloc        = 0;
+    size_t       datatype_body_len            = 0;
+    size_t       link_body_nalloc             = 0;
+    char        *datatype_body                = NULL;
+    char        *out_string                   = NULL;
+    char        *shape_body                   = NULL;
+    char        *maxdims_body                 = NULL;
+    char        *creation_properties_body     = NULL;
+    char        *link_body                    = NULL;
+    char        *path_dirname                 = NULL;
+    int          create_request_len           = 0;
+    int          link_body_len                = 0;
+    herr_t       ret_value                    = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Setting up dataset creation request\n\n");
@@ -2731,28 +2920,33 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name,
 
     /* Form the Datatype portion of the Dataset create request */
     if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL, "can't convert dataset's datatype to JSON representation");
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL,
+                        "can't convert dataset's datatype to JSON representation");
 
     /* If the Dataspace of the Dataset was not specified as H5P_DEFAULT, parse it. */
     if (H5P_DEFAULT != space_id)
         if (RV_convert_dataspace_shape_to_JSON(space_id, &shape_body, &maxdims_body) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL, "can't convert dataset's dataspace to JSON representation");
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, FAIL,
+                            "can't convert dataset's dataspace to JSON representation");
 
-    /* If the DCPL was not specified as H5P_DEFAULT, form the Dataset Creation Properties portion of the Dataset create request */
+    /* If the DCPL was not specified as H5P_DEFAULT, form the Dataset Creation Properties portion of the
+     * Dataset create request */
     if (H5P_DATASET_CREATE_DEFAULT != dcpl)
-        if (RV_convert_dataset_creation_properties_to_JSON(dcpl, &creation_properties_body, &creation_properties_body_len) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL, "can't convert Dataset Creation Properties to JSON representation");
+        if (RV_convert_dataset_creation_properties_to_JSON(dcpl, &creation_properties_body,
+                                                           &creation_properties_body_len) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL,
+                            "can't convert Dataset Creation Properties to JSON representation");
 
     /* If this isn't an H5Dcreate_anon call, create a link for the Dataset to
      * link it into the file structure */
     if (name) {
-        hbool_t            empty_dirname;
-        char               target_URI[URI_MAX_LENGTH];
-        const char * const link_basename = H5_rest_basename(name);
-        const char * const link_body_format = "\"link\": {"
-                                                 "\"id\": \"%s\", "
-                                                 "\"name\": \"%s\""
-                                              "}";
+        hbool_t           empty_dirname;
+        char              target_URI[URI_MAX_LENGTH];
+        const char *const link_basename    = H5_rest_basename(name);
+        const char *const link_body_format = "\"link\": {"
+                                             "\"id\": \"%s\", "
+                                             "\"name\": \"%s\""
+                                             "}";
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Creating JSON link for dataset\n\n");
@@ -2765,7 +2959,6 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name,
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid pathname for dataset link");
         empty_dirname = !strcmp(path_dirname, "");
 
-
         /* If the path to the final group in the chain wasn't empty, get the URI of the final
          * group in order to correctly link the dataset into the file structure. Otherwise,
          * the supplied parent group is the one housing the dataset, so just use its URI.
@@ -2774,51 +2967,58 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name,
             H5I_type_t obj_type = H5I_GROUP;
             htri_t     search_ret;
 
-            search_ret = RV_find_object_by_path(pobj, path_dirname, &obj_type,
-                    RV_copy_object_URI_callback, NULL, target_URI);
+            search_ret = RV_find_object_by_path(pobj, path_dirname, &obj_type, RV_copy_object_URI_callback,
+                                                NULL, target_URI);
             if (!search_ret || search_ret < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, FAIL, "can't locate target for dataset link");
         } /* end if */
 
-        link_body_nalloc = strlen(link_body_format) + strlen(link_basename) + (empty_dirname ? strlen(pobj->URI) : strlen(target_URI)) + 1;
-        if (NULL == (link_body = (char *) RV_malloc(link_body_nalloc)))
+        link_body_nalloc = strlen(link_body_format) + strlen(link_basename) +
+                           (empty_dirname ? strlen(pobj->URI) : strlen(target_URI)) + 1;
+        if (NULL == (link_body = (char *)RV_malloc(link_body_nalloc)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset link body");
 
         /* Form the Dataset Creation Link portion of the Dataset create request using the above format
          * specifier and the corresponding arguments */
-        if ((link_body_len = snprintf(link_body, link_body_nalloc, link_body_format, empty_dirname ? pobj->URI : target_URI, link_basename)) < 0)
+        if ((link_body_len = snprintf(link_body, link_body_nalloc, link_body_format,
+                                      empty_dirname ? pobj->URI : target_URI, link_basename)) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-        if ((size_t) link_body_len >= link_body_nalloc)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset link create request body size exceeded allocated buffer size");
+        if ((size_t)link_body_len >= link_body_nalloc)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                            "dataset link create request body size exceeded allocated buffer size");
     } /* end if */
 
-    create_request_nalloc = datatype_body_len
-                          + (shape_body ? strlen(shape_body) + 2 : 0)
-                          + (maxdims_body ? strlen(maxdims_body) + 2 : 0)
-                          + (creation_properties_body ? creation_properties_body_len + 2 : 0)
-                          + (link_body ? (size_t) link_body_len + 2 : 0)
-                          + 3;
+    create_request_nalloc = datatype_body_len + (shape_body ? strlen(shape_body) + 2 : 0) +
+                            (maxdims_body ? strlen(maxdims_body) + 2 : 0) +
+                            (creation_properties_body ? creation_properties_body_len + 2 : 0) +
+                            (link_body ? (size_t)link_body_len + 2 : 0) + 3;
 
-    if (NULL == (out_string = (char *) RV_malloc(create_request_nalloc)))
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset creation request body");
+    if (NULL == (out_string = (char *)RV_malloc(create_request_nalloc)))
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
+                        "can't allocate space for dataset creation request body");
 
-    if ((create_request_len = snprintf(out_string, create_request_nalloc,
-             "{%s%s%s%s%s%s%s%s%s}",
-             datatype_body,                                            /* Add the required Dataset Datatype description */
-             shape_body ? ", " : "",                                   /* Add separator for Dataset shape section, if specified */
-             shape_body ? shape_body : "",                             /* Add the Dataset Shape description, if specified */
-             maxdims_body ? ", " : "",                                 /* Add separator for Max Dims section, if specified */
-             maxdims_body ? maxdims_body : "",                         /* Add the Dataset Maximum Dimension Size section, if specified */
-             creation_properties_body ? ", " : "",                     /* Add separator for Dataset Creation properties section, if specified */
-             creation_properties_body ? creation_properties_body : "", /* Add the Dataset Creation properties section, if specified */
-             link_body ? ", " : "",                                    /* Add separator for Link Creation section, if specified */
-             link_body ? link_body : "")                               /* Add the Link Creation section, if specified */
-        ) < 0)
+    if ((create_request_len = snprintf(
+             out_string, create_request_nalloc, "{%s%s%s%s%s%s%s%s%s}",
+             datatype_body,                /* Add the required Dataset Datatype description */
+             shape_body ? ", " : "",       /* Add separator for Dataset shape section, if specified */
+             shape_body ? shape_body : "", /* Add the Dataset Shape description, if specified */
+             maxdims_body ? ", " : "",     /* Add separator for Max Dims section, if specified */
+             maxdims_body ? maxdims_body
+                          : "", /* Add the Dataset Maximum Dimension Size section, if specified */
+             creation_properties_body
+                 ? ", "
+                 : "", /* Add separator for Dataset Creation properties section, if specified */
+             creation_properties_body ? creation_properties_body
+                                      : "", /* Add the Dataset Creation properties section, if specified */
+             link_body ? ", " : "",         /* Add separator for Link Creation section, if specified */
+             link_body ? link_body : "")    /* Add the Link Creation section, if specified */
+         ) < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-    if ((size_t) create_request_len >= create_request_nalloc)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "dataset create request body size exceeded allocated buffer size");
+    if ((size_t)create_request_len >= create_request_nalloc)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                        "dataset create request body size exceeded allocated buffer size");
 
 done:
 #ifdef RV_CONNECTOR_DEBUG
@@ -2827,7 +3027,8 @@ done:
 
     if (ret_value >= 0) {
         *create_request_body = out_string;
-        if (create_request_body_len) *create_request_body_len = (size_t) create_request_len;
+        if (create_request_body_len)
+            *create_request_body_len = (size_t)create_request_len;
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Dataset creation request JSON:\n%s\n\n", out_string);
@@ -2854,7 +3055,6 @@ done:
     return ret_value;
 } /* end RV_setup_dataset_create_request_body() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_convert_dataspace_selection_to_string
  *
@@ -2886,25 +3086,25 @@ done:
  *              March, 2017
  */
 static herr_t
-RV_convert_dataspace_selection_to_string(hid_t space_id,
-    char **selection_string, size_t *selection_string_len, hbool_t req_param)
+RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string,
+                                         size_t *selection_string_len, hbool_t req_param)
 {
-    ptrdiff_t  buf_ptrdiff;
-    hsize_t   *point_list = NULL;
-    hsize_t   *start = NULL;
-    hsize_t   *stride = NULL;
-    hsize_t   *count = NULL;
-    hsize_t   *block = NULL;
-    size_t     i;
-    size_t     out_string_len;
-    char      *out_string = NULL;
-    char      *out_string_curr_pos;
-    char      *start_body = NULL;
-    char      *stop_body = NULL;
-    char      *step_body = NULL;
-    int        bytes_printed = 0;
-    int        ndims;
-    herr_t     ret_value = SUCCEED;
+    ptrdiff_t buf_ptrdiff;
+    hsize_t  *point_list = NULL;
+    hsize_t  *start      = NULL;
+    hsize_t  *stride     = NULL;
+    hsize_t  *count      = NULL;
+    hsize_t  *block      = NULL;
+    size_t    i;
+    size_t    out_string_len;
+    char     *out_string = NULL;
+    char     *out_string_curr_pos;
+    char     *start_body    = NULL;
+    char     *stop_body     = NULL;
+    char     *step_body     = NULL;
+    int       bytes_printed = 0;
+    int       ndims;
+    herr_t    ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting selection within dataspace to JSON\n\n");
@@ -2914,8 +3114,9 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "dataspace selection string was NULL");
 
     out_string_len = DATASPACE_SELECTION_STRING_DEFAULT_SIZE;
-    if (NULL == (out_string = (char *) RV_malloc(out_string_len)))
-        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace selection string");
+    if (NULL == (out_string = (char *)RV_malloc(out_string_len)))
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                        "can't allocate space for dataspace selection string");
 
     out_string_curr_pos = out_string;
 
@@ -2943,11 +3144,11 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                 break;
 
             case H5S_SEL_POINTS:
-                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_UNSUPPORTED, FAIL, "point selections are unsupported as a HTTP request parameter");
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_UNSUPPORTED, FAIL,
+                                "point selections are unsupported as a HTTP request parameter");
                 break;
 
-            case H5S_SEL_HYPERSLABS:
-            {
+            case H5S_SEL_HYPERSLABS: {
 #ifdef RV_CONNECTOR_DEBUG
                 printf("-> Hyperslab selection\n\n");
 #endif
@@ -2960,39 +3161,43 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                  * where X is the starting coordinate of the selection, Y is the ending coordinate of
                  * the selection, and Z is the stride of the selection in that dimension.
                  */
-                if (NULL == (start = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*start))))
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'start' values");
-                if (NULL == (stride = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*stride))))
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'stride' values");
-                if (NULL == (count = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*count))))
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'count' values");
-                if (NULL == (block = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*block))))
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'block' values");
+                if (NULL == (start = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*start))))
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                    "can't allocate space for hyperslab selection 'start' values");
+                if (NULL == (stride = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*stride))))
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                    "can't allocate space for hyperslab selection 'stride' values");
+                if (NULL == (count = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*count))))
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                    "can't allocate space for hyperslab selection 'count' values");
+                if (NULL == (block = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*block))))
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                    "can't allocate space for hyperslab selection 'block' values");
 
                 if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get regular hyperslab selection");
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL,
+                                    "can't get regular hyperslab selection");
 
                 strcat(out_string_curr_pos++, "[");
 
                 /* Append a tuple for each dimension of the dataspace */
-                for (i = 0; i < (size_t) ndims; i++) {
+                for (i = 0; i < (size_t)ndims; i++) {
                     buf_ptrdiff = out_string_curr_pos - out_string;
                     if (buf_ptrdiff < 0)
-                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                        "unsafe cast: dataspace buffer pointer difference was negative - "
+                                        "this should not happen!");
 
-                    size_t out_string_new_len = (size_t) buf_ptrdiff + (3 * MAX_NUM_LENGTH) + 4;
+                    size_t out_string_new_len = (size_t)buf_ptrdiff + (3 * MAX_NUM_LENGTH) + 4;
 
-                    CHECKED_REALLOC(out_string, out_string_len, out_string_new_len,
-                            out_string_curr_pos, H5E_DATASPACE, FAIL);
+                    CHECKED_REALLOC(out_string, out_string_len, out_string_new_len, out_string_curr_pos,
+                                    H5E_DATASPACE, FAIL);
 
-                    if ((bytes_printed = snprintf(out_string_curr_pos,
-                                                out_string_new_len,
-                                                 "%s%" PRIuHSIZE ":%" PRIuHSIZE ":%" PRIuHSIZE,
-                                                 i > 0 ? "," : "",
-                                                 start[i],
-                                                 (start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1),
-                                                 (stride[i] / block[i])
-                                         )) < 0)
+                    if ((bytes_printed = snprintf(
+                             out_string_curr_pos, out_string_new_len,
+                             "%s%" PRIuHSIZE ":%" PRIuHSIZE ":%" PRIuHSIZE, i > 0 ? "," : "", start[i],
+                             (start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1),
+                             (stride[i] / block[i]))) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     out_string_curr_pos += bytes_printed;
@@ -3000,9 +3205,12 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
 
                 buf_ptrdiff = out_string_curr_pos - out_string;
                 if (buf_ptrdiff < 0)
-                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                    "unsafe cast: dataspace buffer pointer difference was negative - this "
+                                    "should not happen!");
 
-                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 2, out_string_curr_pos, H5E_DATASPACE, FAIL);
+                CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + 2, out_string_curr_pos,
+                                H5E_DATASPACE, FAIL);
 
                 strcat(out_string_curr_pos++, "]");
 
@@ -3014,7 +3222,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
             default:
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "invalid selection type");
         } /* end switch */
-    } /* end if */
+    }     /* end if */
     else {
         /* Format the selection as JSON so that it can be sent in the request body of an HTTP
          * request. This is primarily the format used when the datatype of the Dataset being
@@ -3027,11 +3235,10 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
             case H5S_SEL_NONE:
                 break;
 
-            case H5S_SEL_POINTS:
-            {
-                const char * const points_str = "\"points\": [";
-                hssize_t           num_points;
-                size_t             points_strlen = strlen(points_str);
+            case H5S_SEL_POINTS: {
+                const char *const points_str = "\"points\": [";
+                hssize_t          num_points;
+                size_t            points_strlen = strlen(points_str);
 
 #ifdef RV_CONNECTOR_DEBUG
                 printf("-> Point selection\n\n");
@@ -3040,60 +3247,72 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                 if ((num_points = H5Sget_select_npoints(space_id)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of selected points");
 
-                if (NULL == (point_list = (hsize_t *) RV_malloc((size_t) (ndims * num_points) * sizeof(*point_list))))
+                if (NULL ==
+                    (point_list = (hsize_t *)RV_malloc((size_t)(ndims * num_points) * sizeof(*point_list))))
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate point list buffer");
 
-                if (H5Sget_select_elem_pointlist(space_id, 0, (hsize_t) num_points, point_list) < 0)
+                if (H5Sget_select_elem_pointlist(space_id, 0, (hsize_t)num_points, point_list) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve point list");
 
-                CHECKED_REALLOC(out_string, out_string_len, points_strlen + 1, out_string_curr_pos, H5E_DATASPACE, FAIL);
+                CHECKED_REALLOC(out_string, out_string_len, points_strlen + 1, out_string_curr_pos,
+                                H5E_DATASPACE, FAIL);
 
                 strcat(out_string_curr_pos, points_str);
                 out_string_curr_pos += strlen(points_str);
 
-                for (i = 0; i < (hsize_t) num_points; i++) {
+                for (i = 0; i < (hsize_t)num_points; i++) {
                     size_t j;
 
                     /* Check whether the buffer needs to grow to accommodate the next point */
                     buf_ptrdiff = out_string_curr_pos - out_string;
                     if (buf_ptrdiff < 0)
-                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                        "unsafe cast: dataspace buffer pointer difference was negative - "
+                                        "this should not happen!");
 
-                    size_t out_string_new_len = buf_ptrdiff + ((size_t) ((ndims * MAX_NUM_LENGTH) + (ndims) + (ndims > 1 ? 3 : 1)));
-                    
-                    CHECKED_REALLOC(out_string, out_string_len, out_string_new_len, out_string_curr_pos, H5E_DATASPACE, FAIL);
+                    size_t out_string_new_len =
+                        buf_ptrdiff + ((size_t)((ndims * MAX_NUM_LENGTH) + (ndims) + (ndims > 1 ? 3 : 1)));
+
+                    CHECKED_REALLOC(out_string, out_string_len, out_string_new_len, out_string_curr_pos,
+                                    H5E_DATASPACE, FAIL);
 
                     /* Add the delimiter between individual points */
-                    if (i > 0) strcat(out_string_curr_pos++, ",");
+                    if (i > 0)
+                        strcat(out_string_curr_pos++, ",");
 
                     /* Add starting bracket for the next point, if applicable */
-                    if (ndims > 1) strcat(out_string_curr_pos++, "[");
+                    if (ndims > 1)
+                        strcat(out_string_curr_pos++, "[");
 
-                    for (j = 0; j < (size_t) ndims; j++) {
-                        if ((bytes_printed = snprintf(out_string_curr_pos, \
-                        out_string_new_len - (size_t) buf_ptrdiff,"%s%" PRIuHSIZE, j > 0 ? "," : "", point_list[(i * (size_t) ndims) + j])) < 0)
+                    for (j = 0; j < (size_t)ndims; j++) {
+                        if ((bytes_printed = snprintf(
+                                 out_string_curr_pos, out_string_new_len - (size_t)buf_ptrdiff,
+                                 "%s%" PRIuHSIZE, j > 0 ? "," : "", point_list[(i * (size_t)ndims) + j])) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                         out_string_curr_pos += bytes_printed;
                     } /* end for */
 
                     /* Enclose the current point in brackets */
-                    if (ndims > 1) strcat(out_string_curr_pos++, "]");
+                    if (ndims > 1)
+                        strcat(out_string_curr_pos++, "]");
                 } /* end for */
 
                 buf_ptrdiff = out_string_curr_pos - out_string;
                 if (buf_ptrdiff < 0)
-                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                    "unsafe cast: dataspace buffer pointer difference was negative - this "
+                                    "should not happen!");
 
-                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 2, out_string_curr_pos, H5E_DATASPACE, FAIL);
+                CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + 2, out_string_curr_pos,
+                                H5E_DATASPACE, FAIL);
 
                 strcat(out_string_curr_pos++, "]");
 
                 break;
             } /* H5S_SEL_POINTS */
 
-            case H5S_SEL_HYPERSLABS:
-            {
+            case H5S_SEL_HYPERSLABS: {
                 /* Format the hyperslab selection according to the 'start', 'stop' and 'step' keys
                  * in a JSON request body. This looks like:
                  *
@@ -3101,36 +3320,46 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                  * "stop": Y, Y, ...,
                  * "step": Z, Z, ...
                  */
-                char *start_body_curr_pos, *stop_body_curr_pos, *step_body_curr_pos;
-                const char * const slab_format = "\"start\": %s,"
-                                                 "\"stop\": %s,"
-                                                 "\"step\": %s";
+                char             *start_body_curr_pos, *stop_body_curr_pos, *step_body_curr_pos;
+                const char *const slab_format = "\"start\": %s,"
+                                                "\"stop\": %s,"
+                                                "\"step\": %s";
 
 #ifdef RV_CONNECTOR_DEBUG
                 printf("-> Hyperslab selection\n\n");
 #endif
 
-                if (NULL == (start = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*start))))
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'start' values");
-                if (NULL == (stride = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*stride))))
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'stride' values");
-                if (NULL == (count = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*count))))
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'count' values");
-                if (NULL == (block = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*block))))
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'block' values");
+                if (NULL == (start = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*start))))
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                    "can't allocate space for hyperslab selection 'start' values");
+                if (NULL == (stride = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*stride))))
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                    "can't allocate space for hyperslab selection 'stride' values");
+                if (NULL == (count = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*count))))
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                    "can't allocate space for hyperslab selection 'count' values");
+                if (NULL == (block = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*block))))
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                    "can't allocate space for hyperslab selection 'block' values");
 
                 size_t body_size = ndims * MAX_NUM_LENGTH + ndims;
 
-                if (NULL == (start_body = (char *) RV_calloc(body_size)))
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'start' values string representation");
+                if (NULL == (start_body = (char *)RV_calloc(body_size)))
+                    FUNC_GOTO_ERROR(
+                        H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                        "can't allocate space for hyperslab selection 'start' values string representation");
                 start_body_curr_pos = start_body;
 
-                if (NULL == (stop_body = (char *) RV_calloc(body_size)))
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'stop' values string representation");
+                if (NULL == (stop_body = (char *)RV_calloc(body_size)))
+                    FUNC_GOTO_ERROR(
+                        H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                        "can't allocate space for hyperslab selection 'stop' values string representation");
                 stop_body_curr_pos = stop_body;
 
-                if (NULL == (step_body = (char *) RV_calloc(body_size)))
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for hyperslab selection 'step' values string representation");
+                if (NULL == (step_body = (char *)RV_calloc(body_size)))
+                    FUNC_GOTO_ERROR(
+                        H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                        "can't allocate space for hyperslab selection 'step' values string representation");
                 step_body_curr_pos = step_body;
 
                 strcat(start_body_curr_pos++, "[");
@@ -3138,21 +3367,26 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                 strcat(stop_body_curr_pos++, "[");
 
                 if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get regular hyperslab selection");
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL,
+                                    "can't get regular hyperslab selection");
 
-                for (i = 0; i < (size_t) ndims; i++) {
-                    if ((bytes_printed = snprintf(start_body_curr_pos, \
-                    body_size - (size_t) (start_body_curr_pos - start_body),"%s%" PRIuHSIZE, (i > 0 ? "," : ""), start[i])) < 0)
+                for (i = 0; i < (size_t)ndims; i++) {
+                    if ((bytes_printed = snprintf(start_body_curr_pos,
+                                                  body_size - (size_t)(start_body_curr_pos - start_body),
+                                                  "%s%" PRIuHSIZE, (i > 0 ? "," : ""), start[i])) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
                     start_body_curr_pos += bytes_printed;
 
-                    if ((bytes_printed = snprintf(stop_body_curr_pos, \
-                    body_size - (size_t) (stop_body_curr_pos - stop_body),"%s%" PRIuHSIZE, (i > 0 ? "," : ""), (start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1))) < 0)
+                    if ((bytes_printed = snprintf(
+                             stop_body_curr_pos, body_size - (size_t)(stop_body_curr_pos - stop_body),
+                             "%s%" PRIuHSIZE, (i > 0 ? "," : ""),
+                             (start[i] + (stride[i] * (count[i] - 1)) + (block[i] - 1) + 1))) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
                     stop_body_curr_pos += bytes_printed;
 
-                    if ((bytes_printed = snprintf(step_body_curr_pos, \
-                    body_size - (size_t) (step_body_curr_pos - step_body), "%s%" PRIuHSIZE, (i > 0 ? "," : ""), (stride[i] / block[i]))) < 0)
+                    if ((bytes_printed = snprintf(
+                             step_body_curr_pos, body_size - (size_t)(step_body_curr_pos - step_body),
+                             "%s%" PRIuHSIZE, (i > 0 ? "," : ""), (stride[i] / block[i]))) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
                     step_body_curr_pos += bytes_printed;
                 } /* end for */
@@ -3163,22 +3397,22 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
 
                 buf_ptrdiff = out_string_curr_pos - out_string;
                 if (buf_ptrdiff < 0)
-                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                    "unsafe cast: dataspace buffer pointer difference was negative - this "
+                                    "should not happen!");
 
                 CHECKED_REALLOC(out_string, out_string_len,
-                        (size_t) buf_ptrdiff + strlen(start_body) + strlen(stop_body) + strlen(step_body) + 1,
-                        out_string_curr_pos, H5E_DATASPACE, FAIL);
+                                (size_t)buf_ptrdiff + strlen(start_body) + strlen(stop_body) +
+                                    strlen(step_body) + 1,
+                                out_string_curr_pos, H5E_DATASPACE, FAIL);
 
-                if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff,
-                                              slab_format,
-                                              start_body,
-                                              stop_body,
-                                              step_body
-                                     )) < 0)
+                if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                              slab_format, start_body, stop_body, step_body)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "dataspace string size exceeded allocated buffer size");
+                if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL,
+                                    "dataspace string size exceeded allocated buffer size");
 
                 out_string_curr_pos += bytes_printed;
 
@@ -3190,7 +3424,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
             default:
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "invalid selection type");
         } /* end switch(H5Sget_select_type()) */
-    } /* end else */
+    }     /* end else */
 
 done:
     if (ret_value >= 0) {
@@ -3198,9 +3432,11 @@ done:
         if (selection_string_len) {
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_DONE_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");
+                FUNC_DONE_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                "unsafe cast: dataspace buffer pointer difference was negative - this should "
+                                "not happen!");
             else
-                *selection_string_len = (size_t) buf_ptrdiff;
+                *selection_string_len = (size_t)buf_ptrdiff;
         } /* end if */
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -3232,7 +3468,6 @@ done:
     return ret_value;
 } /* end RV_convert_dataspace_selection_to_string() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_convert_obj_refs_to_buffer
  *
@@ -3262,21 +3497,17 @@ done:
  *              December, 2017
  */
 static herr_t
-RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_len,
-    char **buf_out, size_t *buf_out_len)
+RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_len, char **buf_out,
+                              size_t *buf_out_len)
 {
-    const char * const prefix_table[] = {
-            "groups",
-            "datatypes",
-            "datasets"
-    };
-    size_t  i;
-    size_t  prefix_index;
-    size_t  out_len = 0;
-    char   *out = NULL;
-    char   *out_curr_pos;
-    int     ref_string_len = 0;
-    herr_t  ret_value = SUCCEED;
+    const char *const prefix_table[] = {"groups", "datatypes", "datasets"};
+    size_t            i;
+    size_t            prefix_index;
+    size_t            out_len = 0;
+    char             *out     = NULL;
+    char             *out_curr_pos;
+    int               ref_string_len = 0;
+    herr_t            ret_value      = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting object ref. array to binary buffer\n\n");
@@ -3292,8 +3523,9 @@ RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_le
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid reference array length specified");
 
     out_len = ref_array_len * OBJECT_REF_STRING_LEN;
-    if (NULL == (out = (char *) RV_malloc(out_len)))
-        FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_CANTALLOC, FAIL, "can't allocate space for object reference string buffer");
+    if (NULL == (out = (char *)RV_malloc(out_len)))
+        FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_CANTALLOC, FAIL,
+                        "can't allocate space for object reference string buffer");
     out_curr_pos = out;
 
     for (i = 0; i < ref_array_len; i++) {
@@ -3335,22 +3567,20 @@ RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_le
                 FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_BADVALUE, FAIL, "invalid ref obj. type");
         } /* end switch */
 
-        if ((ref_string_len = snprintf(out_curr_pos, OBJECT_REF_STRING_LEN,
-                                       "%s/%s",
-                                       prefix_table[prefix_index],
-                                       ref_array[i].ref_obj_URI)
-            ) < 0)
+        if ((ref_string_len = snprintf(out_curr_pos, OBJECT_REF_STRING_LEN, "%s/%s",
+                                       prefix_table[prefix_index], ref_array[i].ref_obj_URI)) < 0)
             FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
         if (ref_string_len >= OBJECT_REF_STRING_LEN + 1)
-            FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_SYSERRSTR, FAIL, "object reference string size exceeded maximum reference string size");
+            FUNC_GOTO_ERROR(H5E_REFERENCE, H5E_SYSERRSTR, FAIL,
+                            "object reference string size exceeded maximum reference string size");
 
         out_curr_pos += OBJECT_REF_STRING_LEN;
     } /* end for */
 
 done:
     if (ret_value >= 0) {
-        *buf_out = out;
+        *buf_out     = out;
         *buf_out_len = out_len;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -3365,11 +3595,9 @@ done:
             RV_free(out);
     } /* end else */
 
-
     return ret_value;
 } /* end RV_convert_obj_refs_to_buffer() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_convert_buffer_to_obj_refs
  *
@@ -3393,12 +3621,11 @@ done:
  *              December, 2017
  */
 static herr_t
-RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
-    rv_obj_ref_t **buf_out, size_t *buf_out_len)
+RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len, rv_obj_ref_t **buf_out, size_t *buf_out_len)
 {
     rv_obj_ref_t *out = NULL;
     size_t        i;
-    size_t        out_len = 0;
+    size_t        out_len   = 0;
     herr_t        ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -3415,7 +3642,7 @@ RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "invalid reference buffer size specified");
 
     out_len = ref_buf_len * sizeof(rv_obj_ref_t);
-    if (NULL == (out = (rv_obj_ref_t *) RV_malloc(out_len)))
+    if (NULL == (out = (rv_obj_ref_t *)RV_malloc(out_len)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for object reference array");
 
     for (i = 0; i < ref_buf_len; i++) {
@@ -3428,7 +3655,8 @@ RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
          * past the prefix in order to get to the real URI.
          */
         URI_start = ref_buf + (i * OBJECT_REF_STRING_LEN);
-        while (*URI_start && *URI_start != '/') URI_start++;
+        while (*URI_start && *URI_start != '/')
+            URI_start++;
 
         /* Handle empty ref data */
         if (!*URI_start) {
@@ -3456,11 +3684,11 @@ RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
         else {
             out[i].ref_obj_type = H5I_BADID;
         } /* end else */
-    } /* end for */
+    }     /* end for */
 
 done:
     if (ret_value >= 0) {
-        *buf_out = out;
+        *buf_out     = out;
         *buf_out_len = out_len;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -3478,7 +3706,6 @@ done:
     return ret_value;
 } /* end RV_convert_buffer_to_obj_refs() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_base64_encode
  *
@@ -3494,7 +3721,7 @@ done:
 static herr_t
 RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size)
 {
-    const uint8_t *buf = (const uint8_t *) in;
+    const uint8_t *buf       = (const uint8_t *)in;
     const char     charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     uint32_t       three_byte_set;
     uint8_t        c0, c1, c2, c3;
@@ -3515,26 +3742,27 @@ RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size)
      */
     if (!out_size || (out_size && !*out_size)) {
         nalloc = BASE64_ENCODE_DEFAULT_BUFFER_SIZE;
-        if (NULL == (*out = (char *) RV_malloc(nalloc)))
-            FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't allocate space for base64-encoding output buffer");
+        if (NULL == (*out = (char *)RV_malloc(nalloc)))
+            FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL,
+                            "can't allocate space for base64-encoding output buffer");
     } /* end if */
     else
         nalloc = *out_size;
 
     for (i = 0; i < in_size; i += 3) {
-        three_byte_set = ((uint32_t) buf[i]) << 16;
+        three_byte_set = ((uint32_t)buf[i]) << 16;
 
         if (i + 1 < in_size)
-            three_byte_set += ((uint32_t) buf[i + 1]) << 8;
+            three_byte_set += ((uint32_t)buf[i + 1]) << 8;
 
         if (i + 2 < in_size)
             three_byte_set += buf[i + 2];
 
         /* Split 3-byte number into four 6-bit groups for encoding */
-        c0 = (uint8_t) (three_byte_set >> 18) & 0x3f;
-        c1 = (uint8_t) (three_byte_set >> 12) & 0x3f;
-        c2 = (uint8_t) (three_byte_set >> 6)  & 0x3f;
-        c3 = (uint8_t)  three_byte_set        & 0x3f;
+        c0 = (uint8_t)(three_byte_set >> 18) & 0x3f;
+        c1 = (uint8_t)(three_byte_set >> 12) & 0x3f;
+        c2 = (uint8_t)(three_byte_set >> 6) & 0x3f;
+        c3 = (uint8_t)three_byte_set & 0x3f;
 
         CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 2, H5E_RESOURCE, FAIL);
 
@@ -3552,7 +3780,7 @@ RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size)
 
             (*out)[out_index++] = charset[c3];
         } /* end if */
-    } /* end for */
+    }     /* end for */
 
     /* Add trailing padding when out_index does not fall on the beginning of a 4-byte set */
     npad = (4 - (out_index % 4)) % 4;
@@ -3575,7 +3803,6 @@ done:
     return ret_value;
 } /* end RV_base64_encode() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    dataset_read_scatter_op
  *
@@ -3590,8 +3817,8 @@ done:
 static herr_t
 dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *op_data)
 {
-    *src_buf = response_buffer.buffer;
-    *src_buf_bytes_used = *((size_t *) op_data);
+    *src_buf            = response_buffer.buffer;
+    *src_buf_bytes_used = *((size_t *)op_data);
 
     return 0;
 } /* end dataset_read_scatter_op() */

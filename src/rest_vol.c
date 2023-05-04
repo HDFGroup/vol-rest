@@ -27,12 +27,12 @@
 #include "rest_vol.h"
 
 /* Default size for buffer used when transforming an HDF5 dataspace into JSON. */
-#define DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE           256
+#define DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE 256
 
 /* Default initial size for the response buffer allocated which cURL writes
  * its responses into
  */
-#define CURL_RESPONSE_BUFFER_DEFAULT_SIZE             1024
+#define CURL_RESPONSE_BUFFER_DEFAULT_SIZE 1024
 /*
  * The VOL connector identification number.
  */
@@ -41,13 +41,13 @@ hid_t H5_rest_id_g = H5I_UNINIT;
 static hbool_t H5_rest_initialized_g = FALSE;
 
 /* Identifiers for HDF5's error API */
-hid_t H5_rest_err_stack_g = H5I_INVALID_HID;
-hid_t H5_rest_err_class_g = H5I_INVALID_HID;
-hid_t H5_rest_obj_err_maj_g = H5I_INVALID_HID;
-hid_t H5_rest_parse_err_min_g = H5I_INVALID_HID;
-hid_t H5_rest_link_table_err_min_g = H5I_INVALID_HID;
+hid_t H5_rest_err_stack_g               = H5I_INVALID_HID;
+hid_t H5_rest_err_class_g               = H5I_INVALID_HID;
+hid_t H5_rest_obj_err_maj_g             = H5I_INVALID_HID;
+hid_t H5_rest_parse_err_min_g           = H5I_INVALID_HID;
+hid_t H5_rest_link_table_err_min_g      = H5I_INVALID_HID;
 hid_t H5_rest_link_table_iter_err_min_g = H5I_INVALID_HID;
-hid_t H5_rest_attr_table_err_min_g = H5I_INVALID_HID;
+hid_t H5_rest_attr_table_err_min_g      = H5I_INVALID_HID;
 hid_t H5_rest_attr_table_iter_err_min_g = H5I_INVALID_HID;
 
 /*
@@ -81,43 +81,43 @@ size_t H5_rest_curr_alloc_bytes;
  * responses out to after making a call to the server. The buffer
  * in this struct is allocated upon connector initialization and is
  * dynamically grown as needed throughout the lifetime of the connector.
-  */
+ */
 struct response_buffer response_buffer;
 
 /* Authentication information for authenticating
  * with Active Directory.
  */
 typedef struct H5_rest_ad_info_t {
-    char clientID[128];
-    char tenantID[128];
-    char resourceID[128];
-    char client_secret[128];
+    char    clientID[128];
+    char    tenantID[128];
+    char    resourceID[128];
+    char    client_secret[128];
     hbool_t unattended;
 } H5_rest_ad_info_t;
 
 /* Host header string for specifying the host (Domain) for requests */
-const char * const host_string = "X-Hdf-domain: ";
+const char *const host_string = "X-Hdf-domain: ";
 
 /* JSON key to retrieve the ID of the root group of a file */
-const char *root_id_keys[] = { "root", (const char *) 0 };
+const char *root_id_keys[] = {"root", (const char *)0};
 
 /* JSON key to retrieve the ID of an object from the server */
-const char *object_id_keys[] = { "id", (const char *) 0 };
+const char *object_id_keys[] = {"id", (const char *)0};
 
 /* JSON key to retrieve the ID of a link from the server */
-const char *link_id_keys[]   = { "link", "id", (const char *) 0 };
+const char *link_id_keys[] = {"link", "id", (const char *)0};
 
 /* JSON keys to retrieve the class of a link (HARD, SOFT, EXTERNAL, etc.) */
-const char *link_class_keys[]  = { "link", "class", (const char *) 0 };
-const char *link_class_keys2[] = { "class", (const char *) 0 };
+const char *link_class_keys[]  = {"link", "class", (const char *)0};
+const char *link_class_keys2[] = {"class", (const char *)0};
 
 /* JSON keys to retrieve information about a dataspace */
-const char *dataspace_class_keys[]    = { "shape", "class", (const char *) 0 };
-const char *dataspace_dims_keys[]     = { "shape", "dims", (const char *) 0 };
-const char *dataspace_max_dims_keys[] = { "shape", "maxdims", (const char *) 0 };
+const char *dataspace_class_keys[]    = {"shape", "class", (const char *)0};
+const char *dataspace_dims_keys[]     = {"shape", "dims", (const char *)0};
+const char *dataspace_max_dims_keys[] = {"shape", "maxdims", (const char *)0};
 
 /* JSON keys to retrieve the path of a domain */
-const char *domain_keys[] = {"domain", (const char*) 0};
+const char *domain_keys[] = {"domain", (const char *)0};
 
 /* Internal initialization/termination functions which are called by
  * the public functions H5rest_init() and H5rest_term() */
@@ -140,31 +140,31 @@ static char *H5_rest_url_encode_path(const char *path);
 
 /* The REST VOL connector's class structure. */
 static const H5VL_class_t H5VL_rest_g = {
-    HDF5_VOL_REST_VERSION,         /* Connector struct version number       */
-    HDF5_VOL_REST_CLS_VAL,         /* Connector value                       */
-    HDF5_VOL_REST_NAME,            /* Connector name                        */
-    HDF5_VOL_REST_CONN_VERSION,    /* Connector version #                   */
-    H5VL_VOL_REST_CAP_FLAGS,       /* Connector capability flags            */
-    H5_rest_init,                  /* Connector initialization function     */
-    H5_rest_term,                  /* Connector termination function        */
+    HDF5_VOL_REST_VERSION,      /* Connector struct version number       */
+    HDF5_VOL_REST_CLS_VAL,      /* Connector value                       */
+    HDF5_VOL_REST_NAME,         /* Connector name                        */
+    HDF5_VOL_REST_CONN_VERSION, /* Connector version #                   */
+    H5VL_VOL_REST_CAP_FLAGS,    /* Connector capability flags            */
+    H5_rest_init,               /* Connector initialization function     */
+    H5_rest_term,               /* Connector termination function        */
 
     /* Connector info callbacks */
     {
-        0,                         /* Connector info size                   */
-        NULL,                      /* Connector info copy function          */
-        NULL,                      /* Connector info compare function       */
-        NULL,                      /* Connector info free function          */
-        NULL,                      /* Connector info to string function     */
-        NULL,                      /* Connector string to info function     */
+        0,    /* Connector info size                   */
+        NULL, /* Connector info copy function          */
+        NULL, /* Connector info compare function       */
+        NULL, /* Connector info free function          */
+        NULL, /* Connector info to string function     */
+        NULL, /* Connector string to info function     */
     },
 
     /* Connector 'wrap' callbacks */
     {
-        NULL,                      /* Connector get object function         */
-        NULL,                      /* Connector get wrap context function   */
-        NULL,                      /* Connector wrap object function        */
-        NULL,                      /* Connector unwrap object function      */
-        NULL,                      /* Connector free wrap context function  */
+        NULL, /* Connector get object function         */
+        NULL, /* Connector get wrap context function   */
+        NULL, /* Connector wrap object function        */
+        NULL, /* Connector unwrap object function      */
+        NULL, /* Connector free wrap context function  */
     },
 
     /* Connector attribute callbacks */
@@ -242,40 +242,39 @@ static const H5VL_class_t H5VL_rest_g = {
 
     /* Connector introspection callbacks */
     {
-        H5_rest_get_conn_cls,      /* Connector introspect 'get class' function */
-        H5_rest_get_cap_flags,     /* Capt flags */
-        H5_rest_opt_query,         /* Connector introspect 'opt query' function */
+        H5_rest_get_conn_cls,  /* Connector introspect 'get class' function */
+        H5_rest_get_cap_flags, /* Capt flags */
+        H5_rest_opt_query,     /* Connector introspect 'opt query' function */
     },
 
     /* Connector async request callbacks */
     {
-        NULL,                      /* Connector request 'wait' function      */
-        NULL,                      /* Connector request 'notify' function    */
-        NULL,                      /* Connector request 'cancel' function    */
-        NULL,                      /* Connector request 'specific' function  */
-        NULL,                      /* Connector request 'optional' function  */
-        NULL,                      /* Connector request 'free' function      */
+        NULL, /* Connector request 'wait' function      */
+        NULL, /* Connector request 'notify' function    */
+        NULL, /* Connector request 'cancel' function    */
+        NULL, /* Connector request 'specific' function  */
+        NULL, /* Connector request 'optional' function  */
+        NULL, /* Connector request 'free' function      */
     },
 
     /* Connector 'blob' callbacks */
     {
-        NULL,                      /* Connector blob 'put' function          */
-        NULL,                      /* Connector blob 'get' function          */
-        NULL,                      /* Connector blob 'specific' function     */
-        NULL,                      /* Connector blob 'optional' function     */
+        NULL, /* Connector blob 'put' function          */
+        NULL, /* Connector blob 'get' function          */
+        NULL, /* Connector blob 'specific' function     */
+        NULL, /* Connector blob 'optional' function     */
     },
 
     /* Connector object token callbacks */
     {
-        NULL,                      /* Connector token compare function       */
-        NULL,                      /* Connector token 'to string' function   */
-        NULL,                      /* Connector token 'from string' function */
+        NULL, /* Connector token compare function       */
+        NULL, /* Connector token 'to string' function   */
+        NULL, /* Connector token 'from string' function */
     },
 
-    NULL,                          /* Connector 'catch-all' function         */
+    NULL, /* Connector 'catch-all' function         */
 };
 
-
 /*-------------------------------------------------------------------------
  * Function:    H5rest_init
  *
@@ -291,7 +290,7 @@ static const H5VL_class_t H5VL_rest_g = {
 herr_t
 H5rest_init(void)
 {
-    H5I_type_t idType = H5I_UNINIT;
+    H5I_type_t idType    = H5I_UNINIT;
     herr_t     ret_value = SUCCEED;
 
     /* Initialize HDF5 */
@@ -306,7 +305,8 @@ H5rest_init(void)
         htri_t is_registered;
 
         if ((is_registered = H5VLis_connector_registered_by_name(H5VL_rest_g.name)) < 0)
-            FUNC_GOTO_ERROR(H5E_ID, H5E_CANTINIT, FAIL, "can't determine if REST VOL connector is registered");
+            FUNC_GOTO_ERROR(H5E_ID, H5E_CANTINIT, FAIL,
+                            "can't determine if REST VOL connector is registered");
 
         if (!is_registered) {
             /* Register connector */
@@ -315,7 +315,8 @@ H5rest_init(void)
         } /* end if */
         else {
             if ((H5_rest_id_g = H5VLget_connector_id_by_name(H5VL_rest_g.name)) < 0)
-                FUNC_GOTO_ERROR(H5E_ID, H5E_CANTGET, FAIL, "unable to get registered ID for REST VOL connector");
+                FUNC_GOTO_ERROR(H5E_ID, H5E_CANTGET, FAIL,
+                                "unable to get registered ID for REST VOL connector");
         } /* end else */
 
         if (H5_rest_id_g >= 0 && (idType = H5Iget_type(H5_rest_id_g)) < 0)
@@ -335,7 +336,6 @@ done:
     return ret_value;
 } /* end H5rest_init() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    H5_rest_init
  *
@@ -349,9 +349,9 @@ done:
 static herr_t
 H5_rest_init(hid_t vipl_id)
 {
-    herr_t ret_value = SUCCEED;
-    curl_version_info_data *curl_ver = NULL;
-    char user_agent[128] = {'\0'};
+    herr_t                  ret_value       = SUCCEED;
+    curl_version_info_data *curl_ver        = NULL;
+    char                    user_agent[128] = {'\0'};
 
     /* Check if already initialized */
     if (H5_rest_initialized_g)
@@ -374,9 +374,9 @@ H5_rest_init(hid_t vipl_id)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL error buffer");
 
     /* Allocate buffer for cURL to write responses to */
-    if (NULL == (response_buffer.buffer = (char *) RV_malloc(CURL_RESPONSE_BUFFER_DEFAULT_SIZE)))
+    if (NULL == (response_buffer.buffer = (char *)RV_malloc(CURL_RESPONSE_BUFFER_DEFAULT_SIZE)))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate cURL response buffer");
-    response_buffer.buffer_size = CURL_RESPONSE_BUFFER_DEFAULT_SIZE;
+    response_buffer.buffer_size  = CURL_RESPONSE_BUFFER_DEFAULT_SIZE;
     response_buffer.curr_buf_ptr = response_buffer.buffer;
 
     /* Redirect cURL output to response buffer */
@@ -389,22 +389,22 @@ H5_rest_init(hid_t vipl_id)
 
     /* Set user agent string */
     curl_ver = curl_version_info(CURLVERSION_NOW);
-    if (snprintf(user_agent, sizeof(user_agent), "libhdf5/%d.%d.%d (%s; %s v%s)",
-                 H5_VERS_MAJOR, H5_VERS_MINOR, H5_VERS_RELEASE, curl_ver->host,
-                 HDF5_VOL_REST_LIB_NAME, HDF5_VOL_REST_LIB_VER) < 0)
-    {
+    if (snprintf(user_agent, sizeof(user_agent), "libhdf5/%d.%d.%d (%s; %s v%s)", H5_VERS_MAJOR,
+                 H5_VERS_MINOR, H5_VERS_RELEASE, curl_ver->host, HDF5_VOL_REST_LIB_NAME,
+                 HDF5_VOL_REST_LIB_VER) < 0) {
         FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "error creating user agent string");
     }
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent))
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "error while setting CURL option (CURLOPT_USERAGENT)");
 
     const char *URL = getenv("HSDS_ENDPOINT");
-    
+
     if (URL && !strncmp(URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
-        char* socket_path = "/tmp/hs/sn_1.sock";
+        char *socket_path = "/tmp/hs/sn_1.sock";
 
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UNIX_SOCKET_PATH, socket_path))
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL socket path header: %s", curl_err_buf);
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL socket path header: %s",
+                            curl_err_buf);
     }
 
 #ifdef RV_CURL_DEBUG
@@ -413,7 +413,8 @@ H5_rest_init(hid_t vipl_id)
 #endif
 
     /* Register the connector with HDF5's error reporting API */
-    if ((H5_rest_err_class_g = H5Eregister_class(HDF5_VOL_REST_ERR_CLS_NAME, HDF5_VOL_REST_LIB_NAME, HDF5_VOL_REST_LIB_VER)) < 0)
+    if ((H5_rest_err_class_g = H5Eregister_class(HDF5_VOL_REST_ERR_CLS_NAME, HDF5_VOL_REST_LIB_NAME,
+                                                 HDF5_VOL_REST_LIB_VER)) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't register with HDF5 error API");
 
     /* Create a separate error stack for the REST VOL to report errors with */
@@ -423,15 +424,22 @@ H5_rest_init(hid_t vipl_id)
     /* Set up a few REST VOL-specific error API message classes */
     if ((H5_rest_obj_err_maj_g = H5Ecreate_msg(H5_rest_err_class_g, H5E_MAJOR, "Object interface")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for object interface");
-    if ((H5_rest_parse_err_min_g = H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Error occurred while parsing JSON")) < 0)
+    if ((H5_rest_parse_err_min_g =
+             H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Error occurred while parsing JSON")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for JSON parsing failures");
-    if ((H5_rest_link_table_err_min_g = H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't build table of links for iteration")) < 0)
+    if ((H5_rest_link_table_err_min_g =
+             H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't build table of links for iteration")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for link table build error");
-    if ((H5_rest_link_table_iter_err_min_g = H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't iterate through link table")) < 0)
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for link table iteration error");
-    if ((H5_rest_attr_table_err_min_g = H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't build table of attributes for iteration")) < 0)
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create error message for attribute table build error");
-    if ((H5_rest_attr_table_iter_err_min_g = H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't iterate through attribute table")) < 0)
+    if ((H5_rest_link_table_iter_err_min_g =
+             H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't iterate through link table")) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL,
+                        "can't create error message for link table iteration error");
+    if ((H5_rest_attr_table_err_min_g = H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR,
+                                                      "Can't build table of attributes for iteration")) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL,
+                        "can't create error message for attribute table build error");
+    if ((H5_rest_attr_table_iter_err_min_g =
+             H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't iterate through attribute table")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create message for attribute iteration error");
 
     /* Initialized */
@@ -467,25 +475,32 @@ done:
 #ifdef RV_TRACK_MEM_USAGE
     /* Check for allocated memory */
     if (0 != H5_rest_curr_alloc_bytes)
-        FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "%zu bytes were still left allocated", H5_rest_curr_alloc_bytes);
+        FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "%zu bytes were still left allocated",
+                        H5_rest_curr_alloc_bytes);
 
     H5_rest_curr_alloc_bytes = 0;
 #endif
 
     /* Unregister from the HDF5 error API */
     if (H5_rest_err_class_g >= 0) {
-        if(H5_rest_obj_err_maj_g >= 0 && H5Eclose_msg(H5_rest_obj_err_maj_g) < 0)
-            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister error message for object interface");
-        if(H5_rest_parse_err_min_g >= 0 && H5Eclose_msg(H5_rest_parse_err_min_g) < 0)
-            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister error message for JSON parsing error");
-        if(H5_rest_link_table_err_min_g >= 0 && H5Eclose_msg(H5_rest_link_table_err_min_g) < 0)
-            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister error message for building link table");
-        if(H5_rest_link_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_link_table_iter_err_min_g) < 0)
-            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister error message for iterating over link table");
-        if(H5_rest_attr_table_err_min_g >= 0 && H5Eclose_msg(H5_rest_attr_table_err_min_g) < 0)
-            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister error message for building attribute table");
-        if(H5_rest_attr_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_attr_table_iter_err_min_g) < 0)
-            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister error message for iterating over attribute table");
+        if (H5_rest_obj_err_maj_g >= 0 && H5Eclose_msg(H5_rest_obj_err_maj_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
+                            "can't unregister error message for object interface");
+        if (H5_rest_parse_err_min_g >= 0 && H5Eclose_msg(H5_rest_parse_err_min_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
+                            "can't unregister error message for JSON parsing error");
+        if (H5_rest_link_table_err_min_g >= 0 && H5Eclose_msg(H5_rest_link_table_err_min_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
+                            "can't unregister error message for building link table");
+        if (H5_rest_link_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_link_table_iter_err_min_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
+                            "can't unregister error message for iterating over link table");
+        if (H5_rest_attr_table_err_min_g >= 0 && H5Eclose_msg(H5_rest_attr_table_err_min_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
+                            "can't unregister error message for building attribute table");
+        if (H5_rest_attr_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_attr_table_iter_err_min_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
+                            "can't unregister error message for iterating over attribute table");
 
         if (H5Eunregister_class(H5_rest_err_class_g) < 0)
             FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister from HDF5 error API");
@@ -499,20 +514,19 @@ done:
             PRINT_ERROR_STACK;
         } /* end if */
 
-        H5_rest_err_stack_g = H5I_INVALID_HID;
-        H5_rest_err_class_g = H5I_INVALID_HID;
-        H5_rest_obj_err_maj_g = H5I_INVALID_HID;
-        H5_rest_parse_err_min_g = H5I_INVALID_HID;
-        H5_rest_link_table_err_min_g = H5I_INVALID_HID;
+        H5_rest_err_stack_g               = H5I_INVALID_HID;
+        H5_rest_err_class_g               = H5I_INVALID_HID;
+        H5_rest_obj_err_maj_g             = H5I_INVALID_HID;
+        H5_rest_parse_err_min_g           = H5I_INVALID_HID;
+        H5_rest_link_table_err_min_g      = H5I_INVALID_HID;
         H5_rest_link_table_iter_err_min_g = H5I_INVALID_HID;
-        H5_rest_attr_table_err_min_g = H5I_INVALID_HID;
+        H5_rest_attr_table_err_min_g      = H5I_INVALID_HID;
         H5_rest_attr_table_iter_err_min_g = H5I_INVALID_HID;
     } /* end if */
 
     return ret_value;
 } /* end H5rest_term() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    H5_rest_term
  *
@@ -563,7 +577,6 @@ done:
     return ret_value;
 } /* end H5_rest_term() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    H5Pset_fapl_rest_vol
  *
@@ -585,7 +598,8 @@ H5Pset_fapl_rest_vol(hid_t fapl_id)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_UNINITIALIZED, FAIL, "REST VOL connector not initialized");
 
     if (H5P_DEFAULT == fapl_id)
-        FUNC_GOTO_ERROR(H5E_PLIST, H5E_BADVALUE, FAIL, "can't set REST VOL connector for default property list");
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_BADVALUE, FAIL,
+                        "can't set REST VOL connector for default property list");
 
     if ((is_fapl = H5Pisa_class(fapl_id, H5P_FILE_ACCESS)) < 0)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADTYPE, FAIL, "couldn't determine property list class");
@@ -604,7 +618,6 @@ done:
     return ret_value;
 } /* end H5Pset_fapl_rest_vol() */
 
-
 const char *
 H5rest_get_object_uri(hid_t obj_id)
 {
@@ -613,17 +626,16 @@ H5rest_get_object_uri(hid_t obj_id)
 
     /* TODO: Route through REST VOL optional catch-all function */
 
-    if (NULL == (VOL_obj = (RV_object_t *) H5VLobject(obj_id)))
+    if (NULL == (VOL_obj = (RV_object_t *)H5VLobject(obj_id)))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, NULL, "invalid identifier");
     ret_value = VOL_obj->URI;
 
 done:
     PRINT_ERROR_STACK;
 
-    return (const char *) ret_value;
+    return (const char *)ret_value;
 } /* end H5rest_get_object_uri() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    H5_rest_set_connection_information
  *
@@ -640,11 +652,11 @@ done:
 herr_t
 H5_rest_set_connection_information(void)
 {
-    H5_rest_ad_info_t  ad_info;
-    const char        *URL;
-    size_t             URL_len = 0;
-    FILE              *config_file = NULL;
-    herr_t             ret_value = SUCCEED;
+    H5_rest_ad_info_t ad_info;
+    const char       *URL;
+    size_t            URL_len     = 0;
+    FILE             *config_file = NULL;
+    herr_t            ret_value   = SUCCEED;
 
     memset(&ad_info, 0, sizeof(ad_info));
 
@@ -652,13 +664,13 @@ H5_rest_set_connection_information(void)
      * Attempt to pull in configuration/authentication information from
      * the environment.
      */
-    
+
     if ((URL = getenv("HSDS_ENDPOINT"))) {
 
         if (!strncmp(URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
             /* This is just a placeholder URL for curl's syntax, its specific value is unimportant */
-            URL = "0";
-            URL_len = 1; 
+            URL     = "0";
+            URL_len = 1;
 
             if (!base_URL || (0 != (strncmp(base_URL, URL, strlen(URL))))) {
 
@@ -668,20 +680,20 @@ H5_rest_set_connection_information(void)
                     base_URL = NULL;
                 }
 
-                if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
-                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for placeholder base URL");
-                        
+                if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
+                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
+                                    "can't allocate space necessary for placeholder base URL");
+
                 strncpy(base_URL, URL, URL_len);
                 base_URL[URL_len] = '\0';
             }
-            
-
-        } else {
+        }
+        else {
             /*
-            * Save a copy of the base URL being worked on so that operations like
-            * creating a Group can be redirected to "base URL"/groups by building
-            * off of the base URL supplied.
-            */
+             * Save a copy of the base URL being worked on so that operations like
+             * creating a Group can be redirected to "base URL"/groups by building
+             * off of the base URL supplied.
+             */
             URL_len = strlen(URL);
 
             if (!base_URL || (0 != (strncmp(base_URL, URL, strlen(URL))))) {
@@ -692,9 +704,10 @@ H5_rest_set_connection_information(void)
                     base_URL = NULL;
                 }
 
-                if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
-                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for placeholder base URL");
-                        
+                if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
+                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
+                                    "can't allocate space necessary for placeholder base URL");
+
                 strncpy(base_URL, URL, URL_len);
                 base_URL[URL_len] = '\0';
             }
@@ -714,11 +727,11 @@ H5_rest_set_connection_information(void)
                 if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, password))
                     FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf);
             } /* end if */
-        } /* end if */
+        }     /* end if */
         else {
-            const char *clientID = getenv("HSDS_AD_CLIENT_ID");
-            const char *tenantID = getenv("HSDS_AD_TENANT_ID");
-            const char *resourceID = getenv("HSDS_AD_RESOURCE_ID");
+            const char *clientID      = getenv("HSDS_AD_CLIENT_ID");
+            const char *tenantID      = getenv("HSDS_AD_TENANT_ID");
+            const char *resourceID    = getenv("HSDS_AD_RESOURCE_ID");
             const char *client_secret = getenv("HSDS_AD_CLIENT_SECRET");
 
             if (clientID)
@@ -736,12 +749,12 @@ H5_rest_set_connection_information(void)
             if (H5_rest_authenticate_with_AD(&ad_info) < 0)
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't authenticate with Active Directory");
         } /* end else */
-    } /* end if */
+    }     /* end if */
     else {
         const char *cfg_file_name = ".hscfg";
-        size_t      pathname_len = 0;
-        char       *home_dir = NULL;
-        char       *pathname = NULL;
+        size_t      pathname_len  = 0;
+        char       *home_dir      = NULL;
+        char       *pathname      = NULL;
         char        file_line[1024];
         int         file_path_len = 0;
 
@@ -754,33 +767,41 @@ H5_rest_set_connection_information(void)
         char *home_drive = NULL;
 
         if (NULL == (home_drive = getenv("HOMEDRIVE")))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "reading config file - unable to retrieve location of home directory");
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL,
+                            "reading config file - unable to retrieve location of home directory");
 
         if (NULL == (home_dir = getenv("HOMEPATH")))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "reading config file - unable to retrieve location of home directory");
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL,
+                            "reading config file - unable to retrieve location of home directory");
 
         pathname_len = strlen(home_drive) + strlen(home_dir) + strlen(cfg_file_name) + 3;
         if (NULL == (pathname = RV_malloc(pathname_len)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "unable to allocate space for config file pathname");
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
+                            "unable to allocate space for config file pathname");
 
-        if ((file_path_len = snprintf(pathname, pathname_len, "%s\\%s\\%s", home_drive, home_dir, cfg_file_name)) < 0)
+        if ((file_path_len =
+                 snprintf(pathname, pathname_len, "%s\\%s\\%s", home_drive, home_dir, cfg_file_name)) < 0)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "snprintf error");
 
         if (file_path_len >= pathname_len)
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "config file path length exceeded maximum path length");
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL,
+                            "config file path length exceeded maximum path length");
 #else
         if (NULL == (home_dir = getenv("HOME")))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "reading config file - unable to retrieve location of home directory");
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL,
+                            "reading config file - unable to retrieve location of home directory");
 
         pathname_len = strlen(home_dir) + strlen(cfg_file_name) + 2;
         if (NULL == (pathname = RV_malloc(pathname_len)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "unable to allocate space for config file pathname");
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
+                            "unable to allocate space for config file pathname");
 
         if ((file_path_len = snprintf(pathname, pathname_len, "%s/%s", home_dir, cfg_file_name)) < 0)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
 
         if (file_path_len >= pathname_len)
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "config file path length exceeded maximum path length");
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL,
+                            "config file path length exceeded maximum path length");
 #endif
 
         if (NULL == (config_file = fopen(pathname, "r")))
@@ -794,10 +815,11 @@ H5_rest_set_connection_information(void)
             char *key;
             char *val;
 
-            if ((file_line[0] == '#') || !strlen(file_line)) continue;
+            if ((file_line[0] == '#') || !strlen(file_line))
+                continue;
             key = strtok(file_line, " =\n");
             val = strtok(NULL, " =\n");
-            
+
             if (!strcmp(key, "hs_endpoint")) {
                 if (val) {
                     /*
@@ -806,7 +828,7 @@ H5_rest_set_connection_information(void)
                      * off of the base URL supplied.
                      */
                     URL_len = strlen(val);
-                    
+
                     if (!base_URL || (0 != (strncmp(base_URL, val, URL_len)))) {
 
                         /* If previous value is incorrect, reassign */
@@ -815,27 +837,28 @@ H5_rest_set_connection_information(void)
                             base_URL = NULL;
                         }
 
-                        if (NULL == (base_URL = (char *) RV_malloc(URL_len + 1)))
-                            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate space necessary for placeholder base URL");
-                                
+                        if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
+                            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
+                                            "can't allocate space necessary for placeholder base URL");
+
                         strncpy(base_URL, val, URL_len);
                         base_URL[URL_len] = '\0';
                     }
 
                 } /* end if */
-            } /* end if */
+            }     /* end if */
             else if (!strcmp(key, "hs_username")) {
                 if (val && strlen(val)) {
                     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, val))
                         FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf);
                 } /* end if */
-            } /* end else if */
+            }     /* end else if */
             else if (!strcmp(key, "hs_password")) {
                 if (val && strlen(val)) {
                     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, val))
                         FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf);
                 } /* end if */
-            } /* end else if */
+            }     /* end else if */
             else if (!strcmp(key, "hs_ad_app_id")) {
                 if (val && strlen(val))
                     strncpy(ad_info.clientID, val, sizeof(ad_info.clientID) - 1);
@@ -853,8 +876,8 @@ H5_rest_set_connection_information(void)
                     ad_info.unattended = TRUE;
                     strncpy(ad_info.client_secret, val, sizeof(ad_info.client_secret) - 1);
                 } /* end if */
-            } /* end else if */
-        } /* end while */
+            }     /* end else if */
+        }         /* end while */
 
         /* Attempt authentication with Active Directory if ID values are present */
         if (ad_info.clientID[0] != '\0' && ad_info.tenantID[0] != '\0' && ad_info.resourceID[0] != '\0')
@@ -863,7 +886,9 @@ H5_rest_set_connection_information(void)
     } /* end else */
 
     if (!base_URL)
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "must specify a base URL - please set HSDS_ENDPOINT environment variable or create a config file");
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL,
+                        "must specify a base URL - please set HSDS_ENDPOINT environment variable or create a "
+                        "config file");
 
 done:
     if (config_file)
@@ -874,7 +899,6 @@ done:
     return ret_value;
 } /* end H5_rest_set_connection_information() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    H5_rest_authenticate_with_AD
  *
@@ -895,18 +919,18 @@ done:
 static herr_t
 H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 {
-    const char *access_token_key[] = { "access_token", (const char *) 0 };
-    const char *refresh_token_key[] = { "refresh_token", (const char *) 0 };
-    const char *expires_in_key[] = { "expires_in", (const char *) 0 };
+    const char *access_token_key[]  = {"access_token", (const char *)0};
+    const char *refresh_token_key[] = {"refresh_token", (const char *)0};
+    const char *expires_in_key[]    = {"expires_in", (const char *)0};
     const char *token_cfg_file_name = ".hstokencfg";
     yajl_val    parse_tree = NULL, key_obj = NULL;
     size_t      token_cfg_file_pathname_len = 0;
-    FILE       *token_cfg_file = NULL;
-    char       *token_cfg_file_pathname = NULL;
-    char       *home_dir = NULL;
-    char       *access_token = NULL;
-    char       *refresh_token = NULL;
-    time_t      token_expires = -1;
+    FILE       *token_cfg_file              = NULL;
+    char       *token_cfg_file_pathname     = NULL;
+    char       *home_dir                    = NULL;
+    char       *access_token                = NULL;
+    char       *refresh_token               = NULL;
+    time_t      token_expires               = -1;
     char        tenant_string[1024];
     char        data_string[1024];
     herr_t      ret_value = SUCCEED;
@@ -927,33 +951,42 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
 
-    /* Check if an access token config file exists in the user's home directory */
+        /* Check if an access token config file exists in the user's home directory */
 #ifdef WIN32
     {
         char *home_drive = NULL;
 
         if (NULL == (home_drive = getenv("HOMEDRIVE")))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "reading access token config file - unable to retrieve location of home directory");
+            FUNC_GOTO_ERROR(
+                H5E_VOL, H5E_CANTGET, FAIL,
+                "reading access token config file - unable to retrieve location of home directory");
 
         if (NULL == (home_dir = getenv("HOMEPATH")))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "reading access token config file - unable to retrieve location of home directory");
+            FUNC_GOTO_ERROR(
+                H5E_VOL, H5E_CANTGET, FAIL,
+                "reading access token config file - unable to retrieve location of home directory");
 
         token_cfg_file_pathname_len = strlen(home_drive) + strlen(home_dir) + strlen(token_cfg_file_name) + 3;
         if (NULL == (token_cfg_file_pathname = RV_malloc(token_cfg_file_pathname_len)))
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "unable to allocate space for access token config file pathname");
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
+                            "unable to allocate space for access token config file pathname");
 
-        if (snprintf(token_cfg_file_pathname, token_cfg_file_pathname_len, "%s\\%s\\%s", home_drive, home_dir, token_cfg_file_name) < 0)
+        if (snprintf(token_cfg_file_pathname, token_cfg_file_pathname_len, "%s\\%s\\%s", home_drive, home_dir,
+                     token_cfg_file_name) < 0)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "snprintf error");
     }
 #else
     if (NULL == (home_dir = getenv("HOME")))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL, "reading access token config file - unable to retrieve location of home directory");
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGET, FAIL,
+                        "reading access token config file - unable to retrieve location of home directory");
 
     token_cfg_file_pathname_len = strlen(home_dir) + strlen(token_cfg_file_name) + 2;
     if (NULL == (token_cfg_file_pathname = RV_malloc(token_cfg_file_pathname_len)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "unable to allocate space for access token config file pathname");
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
+                        "unable to allocate space for access token config file pathname");
 
-    if (snprintf(token_cfg_file_pathname, token_cfg_file_pathname_len, "%s/%s", home_dir, token_cfg_file_name) < 0)
+    if (snprintf(token_cfg_file_pathname, token_cfg_file_pathname_len, "%s/%s", home_dir,
+                 token_cfg_file_name) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
 #endif
 
@@ -961,9 +994,9 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
     printf("-> Token config file location: %s\n", token_cfg_file_pathname);
 #endif
     if ((token_cfg_file = fopen(token_cfg_file_pathname, "rb"))) {
-        char *cfg_json = NULL; /* Buffer for token config file content */
-        size_t file_size;
-        const char *cfg_access_token[] = {base_URL, "accessToken", (const char *)0};
+        char       *cfg_json = NULL; /* Buffer for token config file content */
+        size_t      file_size;
+        const char *cfg_access_token[]  = {base_URL, "accessToken", (const char *)0};
         const char *cfg_refresh_token[] = {base_URL, "refreshToken", (const char *)0};
         const char *cfg_token_expires[] = {base_URL, "expiresOn", (const char *)0};
 
@@ -976,8 +1009,9 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_SEEKERROR, FAIL, "Failed to fseek(0, SEEK_END) token config file");
         if ((file_size = (size_t)ftell(token_cfg_file)) < 0)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTGETSIZE, FAIL, "Failed to get token config file size");
-        if ((cfg_json = (char*)RV_malloc(file_size + 1)) == NULL)
-            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "Failed to allocate memory for token config file content");
+        if ((cfg_json = (char *)RV_malloc(file_size + 1)) == NULL)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
+                            "Failed to allocate memory for token config file content");
         cfg_json[file_size] = '\0';
         if (fseek(token_cfg_file, 0, SEEK_SET) != 0)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_SEEKERROR, FAIL, "Failed to fseek(0, SEEK_SET) token config file");
@@ -986,8 +1020,7 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
         fclose(token_cfg_file);
 
 #ifdef RV_CONNECTOR_DEBUG
-        printf("-> JSON read from \"%s\":\n-> BEGIN JSON>%s<END JSON\n",
-            token_cfg_file_pathname, cfg_json);
+        printf("-> JSON read from \"%s\":\n-> BEGIN JSON>%s<END JSON\n", token_cfg_file_pathname, cfg_json);
 #endif
 
         /* Parse token config file */
@@ -1033,7 +1066,8 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 #endif
         if (ad_info->unattended) {
             if (ad_info->client_secret[0] == '\0')
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "Active Directory authentication client secret is NULL");
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL,
+                                "Active Directory authentication client secret is NULL");
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Performing unattended authentication\n");
@@ -1045,7 +1079,7 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 
             /* Form URL from tenant ID string */
             if (snprintf(tenant_string, sizeof(tenant_string),
-                    "https://login.microsoftonline.com/%s/oauth2/v2.0/token", ad_info->tenantID) < 0)
+                         "https://login.microsoftonline.com/%s/oauth2/v2.0/token", ad_info->tenantID) < 0)
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, tenant_string))
@@ -1053,8 +1087,8 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 
             /* Form token string */
             if (snprintf(data_string, sizeof(data_string),
-                    "grant_type=client_credentials&client_id=%s&scope=%s/.default&client_secret=%s",
-                    ad_info->clientID, ad_info->resourceID, ad_info->client_secret) < 0)
+                         "grant_type=client_credentials&client_id=%s&scope=%s/.default&client_secret=%s",
+                         ad_info->clientID, ad_info->resourceID, ad_info->client_secret) < 0)
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_string))
@@ -1070,27 +1104,29 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 #endif
         } /* end if */
         else {
-            const char *ad_auth_message_keys[] = { "message", (const char *) 0 };
-            const char *device_code_keys[] = { "device_code", (const char *) 0 };
-            char       *device_code = NULL;
+            const char *ad_auth_message_keys[] = {"message", (const char *)0};
+            const char *device_code_keys[]     = {"device_code", (const char *)0};
+            char       *device_code            = NULL;
             char       *instruction_string;
 
             /* Set cURL up to authenticate device with AD in attended manner */
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST"))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set HTTP POST operation: %s", curl_err_buf);
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set HTTP POST operation: %s",
+                                curl_err_buf);
 
             /* Form URL from tenant ID string */
             if (snprintf(tenant_string, sizeof(tenant_string),
-                    "https://login.microsoftonline.com/%s/oauth2/v2.0/devicecode", ad_info->tenantID) < 0)
+                         "https://login.microsoftonline.com/%s/oauth2/v2.0/devicecode",
+                         ad_info->tenantID) < 0)
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, tenant_string))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
 
             /* Form client ID string */
-            if (snprintf(data_string, sizeof(data_string),
-                    "client_id=%s&scope=%s/.default", ad_info->clientID, ad_info->resourceID) < 0)
+            if (snprintf(data_string, sizeof(data_string), "client_id=%s&scope=%s/.default",
+                         ad_info->clientID, ad_info->resourceID) < 0)
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_string))
@@ -1112,11 +1148,14 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 
             /* Retrieve the authentication message */
             if (NULL == (key_obj = yajl_tree_get(parse_tree, ad_auth_message_keys, yajl_t_string)))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve authentication instructions message");
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL,
+                                "can't retrieve authentication instructions message");
             if (NULL == (instruction_string = YAJL_GET_STRING(key_obj)))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve authentication instructions message");
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL,
+                                "can't retrieve authentication instructions message");
 
-            printf("Please follow the instructions below\n %s\n\nHit Enter when completed", instruction_string);
+            printf("Please follow the instructions below\n %s\n\nHit Enter when completed",
+                   instruction_string);
             getchar();
 
             /* Assume that the user has now properly signed in - attempt to retrieve token */
@@ -1132,7 +1171,7 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 
             /* Form URL from tenant ID string */
             if (snprintf(tenant_string, sizeof(tenant_string),
-                    "https://login.microsoftonline.com/%s/oauth2/v2.0/token", ad_info->tenantID) < 0)
+                         "https://login.microsoftonline.com/%s/oauth2/v2.0/token", ad_info->tenantID) < 0)
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, tenant_string))
@@ -1140,8 +1179,9 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 
             /* Form token string */
             if (snprintf(data_string, sizeof(data_string),
-                    "grant_type=urn%%3Aietf%%3Aparams%%3Aoauth%%3Agrant-type%%3Adevice_code&device_code=%s&client_id=%s",
-                    device_code, ad_info->clientID) < 0)
+                         "grant_type=urn%%3Aietf%%3Aparams%%3Aoauth%%3Agrant-type%%3Adevice_code&device_code="
+                         "%s&client_id=%s",
+                         device_code, ad_info->clientID) < 0)
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "snprintf error");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data_string))
@@ -1157,7 +1197,6 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Authentication server response:\n-> %s\n", response_buffer.buffer);
 #endif
-
 
         } /* end else */
 
@@ -1183,21 +1222,20 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned expires_in value is not an integer");
         token_expires = YAJL_GET_INTEGER(key_obj);
 #ifdef RV_CONNECTOR_DEBUG
-        printf("-> Access token expires after %ld (duration: %ld seconds)\n", time(NULL) + token_expires, token_expires);
+        printf("-> Access token expires after %ld (duration: %ld seconds)\n", time(NULL) + token_expires,
+               token_expires);
 #endif
         token_expires = time(NULL) + token_expires - 1;
 
         /* Get refresh token (optional) */
-        if (NULL != (key_obj = yajl_tree_get(parse_tree, refresh_token_key, yajl_t_string)))
-        {
+        if (NULL != (key_obj = yajl_tree_get(parse_tree, refresh_token_key, yajl_t_string))) {
             if (NULL == (refresh_token = YAJL_GET_STRING(key_obj)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve refresh token's string value");
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Refresh token:\n-> \"%s\"\n", refresh_token);
 #endif
         }
-        else
-        {
+        else {
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Refresh token NOT PROVIDED\n");
 #endif
@@ -1238,7 +1276,6 @@ done:
  *         Helper functions         *
  ************************************/
 
-
 /*-------------------------------------------------------------------------
  * Function:    H5_rest_curl_read_data_callback
  *
@@ -1255,9 +1292,9 @@ done:
 static size_t
 H5_rest_curl_read_data_callback(char *buffer, size_t size, size_t nmemb, void *inptr)
 {
-    upload_info *uinfo = (upload_info *) inptr;
+    upload_info *uinfo        = (upload_info *)inptr;
     size_t       max_buf_size = size * nmemb;
-    size_t       data_size = 0;
+    size_t       data_size    = 0;
 
     if (inptr) {
         size_t bytes_left = 0;
@@ -1268,9 +1305,9 @@ H5_rest_curl_read_data_callback(char *buffer, size_t size, size_t nmemb, void *i
         }
 
         bytes_left = uinfo->buffer_size - uinfo->bytes_sent;
-        data_size = (bytes_left > max_buf_size) ? max_buf_size : bytes_left;
+        data_size  = (bytes_left > max_buf_size) ? max_buf_size : bytes_left;
 
-        memcpy(buffer, (const char*) uinfo->buffer + uinfo->bytes_sent, data_size);
+        memcpy(buffer, (const char *)uinfo->buffer + uinfo->bytes_sent, data_size);
 
         uinfo->bytes_sent += data_size;
     } /* end if */
@@ -1278,7 +1315,6 @@ H5_rest_curl_read_data_callback(char *buffer, size_t size, size_t nmemb, void *i
     return data_size;
 } /* end H5_rest_curl_read_data_callback() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    H5_rest_curl_write_data_callback
  *
@@ -1305,19 +1341,22 @@ H5_rest_curl_write_data_callback(char *buffer, size_t size, size_t nmemb, void *
      */
     buf_ptrdiff = (response_buffer.curr_buf_ptr + data_size) - response_buffer.buffer;
     if (buf_ptrdiff < 0)
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, 0, "unsafe cast: response buffer pointer difference was negative - this should not happen!");
+        FUNC_GOTO_ERROR(
+            H5E_INTERNAL, H5E_BADVALUE, 0,
+            "unsafe cast: response buffer pointer difference was negative - this should not happen!");
 
     /* Avoid using the 'CHECKED_REALLOC' macro here because we don't necessarily
      * want to free the connector's response buffer if the reallocation fails.
      */
-    while ((size_t) (buf_ptrdiff + 1) > response_buffer.buffer_size) {
+    while ((size_t)(buf_ptrdiff + 1) > response_buffer.buffer_size) {
         char *tmp_realloc;
 
-        if (NULL == (tmp_realloc = (char *) RV_realloc(response_buffer.buffer, 2 * response_buffer.buffer_size)))
+        if (NULL ==
+            (tmp_realloc = (char *)RV_realloc(response_buffer.buffer, 2 * response_buffer.buffer_size)))
             FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, 0, "can't reallocate space for response buffer");
 
         response_buffer.curr_buf_ptr = tmp_realloc + (response_buffer.curr_buf_ptr - response_buffer.buffer);
-        response_buffer.buffer = tmp_realloc;
+        response_buffer.buffer       = tmp_realloc;
         response_buffer.buffer_size *= 2;
     } /* end while */
 
@@ -1331,7 +1370,6 @@ done:
     return ret_value;
 } /* end H5_rest_curl_write_data_callback() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    H5_rest_basename
  *
@@ -1360,7 +1398,6 @@ H5_rest_basename(const char *path)
     return substr ? substr + 1 : path;
 } /* end H5_rest_basename() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    H5_rest_dirname
  *
@@ -1378,10 +1415,10 @@ H5_rest_basename(const char *path)
 char *
 H5_rest_dirname(const char *path)
 {
-    size_t  len = (size_t) (H5_rest_basename(path) - path);
-    char   *dirname = NULL;
+    size_t len     = (size_t)(H5_rest_basename(path) - path);
+    char  *dirname = NULL;
 
-    if (NULL == (dirname = (char *) RV_malloc(len + 1)))
+    if (NULL == (dirname = (char *)RV_malloc(len + 1)))
         return NULL;
 
     memcpy(dirname, path, len);
@@ -1390,7 +1427,6 @@ H5_rest_dirname(const char *path)
     return dirname;
 } /* end H5_rest_dirname() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    H5_rest_url_encode_path
  *
@@ -1407,25 +1443,25 @@ H5_rest_dirname(const char *path)
 static char *
 H5_rest_url_encode_path(const char *path)
 {
-    ptrdiff_t  buf_ptrdiff;
-    size_t     bytes_nalloc;
-    size_t     path_prefix_len;
-    size_t     path_component_len;
-    char      *path_copy = NULL;
-    char      *url_encoded_path_component = NULL;
-    char      *token;
-    char      *cur_pos;
-    char      *tmp_buffer = NULL;
-    char      *ret_value = NULL;
+    ptrdiff_t buf_ptrdiff;
+    size_t    bytes_nalloc;
+    size_t    path_prefix_len;
+    size_t    path_component_len;
+    char     *path_copy                  = NULL;
+    char     *url_encoded_path_component = NULL;
+    char     *token;
+    char     *cur_pos;
+    char     *tmp_buffer = NULL;
+    char     *ret_value  = NULL;
 
     if (!path)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "path was NULL");
 
     /* Retrieve the length of the possible path prefix, which could be something like '/', '.', etc. */
-    cur_pos = (char *) path;
+    cur_pos = (char *)path;
     while (*cur_pos && !isalnum(*cur_pos))
         cur_pos++;
-    path_prefix_len = (size_t) (cur_pos - path);
+    path_prefix_len = (size_t)(cur_pos - path);
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Length of path prefix: %zu\n\n", path_prefix_len);
@@ -1449,7 +1485,8 @@ H5_rest_url_encode_path(const char *path)
      */
     bytes_nalloc = (3 * bytes_nalloc) + path_prefix_len + 1;
     if (NULL == (tmp_buffer = RV_malloc(bytes_nalloc)))
-        FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, NULL, "can't allocate space for resulting URL-encoded path buffer");
+        FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, NULL,
+                        "can't allocate space for resulting URL-encoded path buffer");
 
     cur_pos = tmp_buffer;
 
@@ -1468,9 +1505,12 @@ H5_rest_url_encode_path(const char *path)
 
         buf_ptrdiff = cur_pos - tmp_buffer;
         if (buf_ptrdiff < 0)
-            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, NULL, "unsafe cast: path buffer pointer difference was negative - this should not happen!");
+            FUNC_GOTO_ERROR(
+                H5E_INTERNAL, H5E_BADVALUE, NULL,
+                "unsafe cast: path buffer pointer difference was negative - this should not happen!");
 
-        CHECKED_REALLOC(tmp_buffer, bytes_nalloc, (size_t) buf_ptrdiff + path_component_len, cur_pos, H5E_RESOURCE, NULL);
+        CHECKED_REALLOC(tmp_buffer, bytes_nalloc, (size_t)buf_ptrdiff + path_component_len, cur_pos,
+                        H5E_RESOURCE, NULL);
 
         strncpy(cur_pos, url_encoded_path_component, path_component_len);
         cur_pos += path_component_len;
@@ -1499,9 +1539,12 @@ H5_rest_url_encode_path(const char *path)
         /* Check if the path components buffer needs to be grown */
         buf_ptrdiff = cur_pos - tmp_buffer;
         if (buf_ptrdiff < 0)
-            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, NULL, "unsafe cast: path buffer pointer difference was negative - this should not happen!");
+            FUNC_GOTO_ERROR(
+                H5E_INTERNAL, H5E_BADVALUE, NULL,
+                "unsafe cast: path buffer pointer difference was negative - this should not happen!");
 
-        CHECKED_REALLOC(tmp_buffer, bytes_nalloc, (size_t) buf_ptrdiff + path_component_len + 1, cur_pos, H5E_RESOURCE, NULL);
+        CHECKED_REALLOC(tmp_buffer, bytes_nalloc, (size_t)buf_ptrdiff + path_component_len + 1, cur_pos,
+                        H5E_RESOURCE, NULL);
 
         *cur_pos++ = '/';
         strncpy(cur_pos, url_encoded_path_component, path_component_len);
@@ -1513,9 +1556,10 @@ H5_rest_url_encode_path(const char *path)
 
     buf_ptrdiff = cur_pos - tmp_buffer;
     if (buf_ptrdiff < 0)
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, NULL, "unsafe cast: path buffer pointer difference was negative - this should not happen!");
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, NULL,
+                        "unsafe cast: path buffer pointer difference was negative - this should not happen!");
 
-    CHECKED_REALLOC(tmp_buffer, bytes_nalloc, (size_t) buf_ptrdiff + 1, cur_pos, H5E_RESOURCE, NULL);
+    CHECKED_REALLOC(tmp_buffer, bytes_nalloc, (size_t)buf_ptrdiff + 1, cur_pos, H5E_RESOURCE, NULL);
 
     *cur_pos = '\0';
 
@@ -1536,7 +1580,6 @@ done:
     return ret_value;
 } /* end H5_rest_url_encode_path() */
 
-
 /*---------------------------------------------------------------------------
  * Function:    H5_rest_get_conn_cls
  *
@@ -1570,7 +1613,8 @@ done:
  *---------------------------------------------------------------------------
  */
 static herr_t
-H5_rest_get_cap_flags(const void *info, uint64_t *cap_flags) {
+H5_rest_get_cap_flags(const void *info, uint64_t *cap_flags)
+{
     herr_t ret_value = SUCCEED;
 
     if (!cap_flags)
@@ -1583,7 +1627,6 @@ done:
     return ret_value;
 } /* end H5_rest_get_cap_flags() */
 
-
 /*---------------------------------------------------------------------------
  * Function:    H5_rest_opt_query
  *
@@ -1608,7 +1651,6 @@ done:
     return ret_value;
 } /* end H5_rest_opt_query() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_parse_response
  *
@@ -1644,16 +1686,16 @@ done:
  * Function:    RV_copy_object_URI_and_domain_callback
  *
  * Purpose:     Copies information from response to provided buffers.
- * 
- *              This function should be used in place of 
+ *
+ *              This function should be used in place of
  *              RV_copy_object_URI_callback wherever the object
  *              may be an external link, whose domain is different
  *              from the domain of its parent object.
- * 
+ *
  *              callback_data_out is expected to be a pointer to an array
  *              of two pointers, the first being the address of a buffer for the URI,
  *              and the second being the address of a pointer to a domain buffer of the target object.
- * 
+ *
  *              callback_data_is provided inside RV_find_object_by_path.
  *
  * Return:      Non-negative on success/Negative on failure
@@ -1661,13 +1703,15 @@ done:
  * Programmer:  Matthew Larson
  *              April, 2023
  */
-herr_t RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out) {
-    yajl_val     parse_tree = NULL, key_obj;
-    char        *parsed_id_string = NULL;
-    herr_t ret_value = SUCCEED;
-    loc_info    *loc_info_out = (loc_info*) callback_data_out;
-    RV_object_t  found_domain;
-    bool is_external_domain = false;
+herr_t
+RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+{
+    yajl_val    parse_tree       = NULL, key_obj;
+    char       *parsed_id_string = NULL;
+    herr_t      ret_value        = SUCCEED;
+    loc_info   *loc_info_out     = (loc_info *)callback_data_out;
+    RV_object_t found_domain;
+    bool        is_external_domain = false;
 
     /* Parse domain information from response */
 #ifdef RV_CONNECTOR_DEBUG
@@ -1689,7 +1733,7 @@ herr_t RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callbac
     if (!YAJL_IS_STRING(key_obj))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain is not a string");
 
-    if (NULL == (found_domain.u.file.filepath_name  = YAJL_GET_STRING(key_obj)))
+    if (NULL == (found_domain.u.file.filepath_name = YAJL_GET_STRING(key_obj)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "domain was NULL");
 
     /* Retrieve domain id */
@@ -1707,13 +1751,14 @@ herr_t RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callbac
 
     if (NULL == strncpy(found_domain.URI, parsed_id_string, URI_MAX_LENGTH))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to copy memory for domain id");
-   
+
     /* If retrieved domain is different than the domain through which this object
      * was accessed, replace the returned object's domain. */
-     is_external_domain = strcmp(found_domain.u.file.filepath_name, loc_info_out->domain->u.file.filepath_name);
+    is_external_domain =
+        strcmp(found_domain.u.file.filepath_name, loc_info_out->domain->u.file.filepath_name);
 
     if (is_external_domain) {
-        RV_object_t* new_domain = NULL;
+        RV_object_t *new_domain = NULL;
 
         if (NULL == (new_domain = RV_malloc(sizeof(RV_object_t))))
             FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL, "failed to allocate memory for new domain");
@@ -1721,33 +1766,36 @@ herr_t RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callbac
         memcpy(new_domain, &found_domain, sizeof(RV_object_t));
 
         /* Wait until after heap allocation to set self pointer */
-        new_domain->domain = new_domain;
+        new_domain->domain   = new_domain;
         new_domain->obj_type = H5I_FILE;
 
-        if (NULL == (new_domain->u.file.filepath_name = RV_malloc(strlen(found_domain.u.file.filepath_name) + 1)))
-            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL, "failed to allocate memory for new domain path");
+        if (NULL ==
+            (new_domain->u.file.filepath_name = RV_malloc(strlen(found_domain.u.file.filepath_name) + 1)))
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL,
+                            "failed to allocate memory for new domain path");
 
-        strncpy(new_domain->u.file.filepath_name, found_domain.u.file.filepath_name, strlen(found_domain.u.file.filepath_name) + 1);
+        strncpy(new_domain->u.file.filepath_name, found_domain.u.file.filepath_name,
+                strlen(found_domain.u.file.filepath_name) + 1);
 
-        new_domain->u.file.intent = loc_info_out->domain->u.file.intent;
-        new_domain->u.file.fapl_id = H5Pcopy(loc_info_out->domain->u.file.fapl_id);     
-        new_domain->u.file.fcpl_id = H5Pcopy(loc_info_out->domain->u.file.fcpl_id);
+        new_domain->u.file.intent    = loc_info_out->domain->u.file.intent;
+        new_domain->u.file.fapl_id   = H5Pcopy(loc_info_out->domain->u.file.fapl_id);
+        new_domain->u.file.fcpl_id   = H5Pcopy(loc_info_out->domain->u.file.fcpl_id);
         new_domain->u.file.ref_count = 1;
 
         RV_file_close(loc_info_out->domain, H5P_DEFAULT, NULL);
 
         loc_info_out->domain = new_domain;
     }
-    
+
     ret_value = RV_copy_object_URI_callback(HTTP_response, NULL, loc_info_out->URI);
-    
+
 done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
     return ret_value;
 }
-
+
 /*-------------------------------------------------------------------------
  * Function:    RV_copy_object_URI_callback
  *
@@ -1768,10 +1816,10 @@ done:
 herr_t
 RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
-    yajl_val  parse_tree = NULL, key_obj;
-    char     *parsed_string;
-    char     *buf_out = (char *) callback_data_out;
-    herr_t    ret_value = SUCCEED;
+    yajl_val parse_tree = NULL, key_obj;
+    char    *parsed_string;
+    char    *buf_out   = (char *)callback_data_out;
+    herr_t   ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving object's URI from server's HTTP response\n\n");
@@ -1796,7 +1844,7 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "link type string was NULL");
 
         if (!strcmp(link_type, "H5L_TYPE_SOFT") || !strcmp(link_type, "H5L_TYPE_EXTERNAL") ||
-                !strcmp(link_type, "H5L_TYPE_UD"))
+            !strcmp(link_type, "H5L_TYPE_UD"))
             FUNC_GOTO_DONE(SUCCEED);
     } /* end if */
 
@@ -1861,7 +1909,7 @@ RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *c
             printf("-> Found object's URI by \"root\" JSON key path\n\n");
 #endif
         } /* end else */
-    } /* end else */
+    }     /* end else */
 
     strncpy(buf_out, parsed_string, URI_MAX_LENGTH);
 
@@ -1872,7 +1920,6 @@ done:
     return ret_value;
 } /* end RV_copy_object_URI_parse_callback() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_find_object_by_path
  *
@@ -1926,21 +1973,21 @@ done:
  *              November, 2017
  */
 htri_t
-RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
-    H5I_type_t *target_object_type, herr_t (*obj_found_callback)(char *, void *, void *),
-    void *callback_data_in, void *callback_data_out)
+RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
+                       herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
+                       void *callback_data_out)
 {
-    RV_object_t *external_file = NULL;
-    hbool_t      is_relative_path = FALSE;
-    size_t       host_header_len = 0;
-    char        *host_header = NULL;
-    char        *path_dirname = NULL;
-    char        *tmp_link_val = NULL;
+    RV_object_t *external_file         = NULL;
+    hbool_t      is_relative_path      = FALSE;
+    size_t       host_header_len       = 0;
+    char        *host_header           = NULL;
+    char        *path_dirname          = NULL;
+    char        *tmp_link_val          = NULL;
     char        *url_encoded_link_name = NULL;
     char        *url_encoded_path_name = NULL;
     char         request_url[URL_MAX_LENGTH];
     long         http_response;
-    int          url_len = 0;
+    int          url_len   = 0;
     htri_t       ret_value = FAIL;
 
     if (!parent_obj)
@@ -1949,19 +1996,18 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "target path was NULL");
     if (!target_object_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "target object type pointer was NULL");
-    if (   H5I_FILE != parent_obj->obj_type
-        && H5I_GROUP != parent_obj->obj_type
-        && H5I_DATATYPE != parent_obj->obj_type
-        && H5I_DATASET != parent_obj->obj_type)
+    if (H5I_FILE != parent_obj->obj_type && H5I_GROUP != parent_obj->obj_type &&
+        H5I_DATATYPE != parent_obj->obj_type && H5I_DATASET != parent_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file, group, datatype or dataset");
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> Finding object by path '%s' from parent object of type %s with URI %s\n\n",
-            obj_path, object_type_to_string(parent_obj->obj_type), parent_obj->URI);
+    printf("-> Finding object by path '%s' from parent object of type %s with URI %s\n\n", obj_path,
+           object_type_to_string(parent_obj->obj_type), parent_obj->URI);
 #endif
 
     /* In order to not confuse the server, make sure the path has no leading spaces */
-    while (*obj_path == ' ') obj_path++;
+    while (*obj_path == ' ')
+        obj_path++;
 
     /* Do a bit of pre-processing for optimizing */
     if (!strcmp(obj_path, ".")) {
@@ -1974,7 +2020,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
 #endif
 
         *target_object_type = parent_obj->obj_type;
-        is_relative_path = TRUE;
+        is_relative_path    = TRUE;
     } /* end if */
     else if (!strcmp(obj_path, "/")) {
         /* If the path "/" is being searched for, referring to the root group, retrieve the
@@ -1986,7 +2032,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
 #endif
 
         *target_object_type = H5I_GROUP;
-        is_relative_path = FALSE;
+        is_relative_path    = FALSE;
     } /* end else if */
     else {
         /* Check to see whether this path is a relative path by checking for the
@@ -2012,13 +2058,13 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
      * we skip ahead to the GET request and optional callback function.
      */
     if (H5I_UNINIT == *target_object_type) {
-        H5L_info2_t  link_info;
-        const char  *ext_filename = NULL;
-        const char  *ext_obj_path = NULL;
-        hbool_t      empty_dirname;
-        htri_t       search_ret;
-        char        *pobj_URI = parent_obj->URI;
-        char         temp_URI[URI_MAX_LENGTH];
+        H5L_info2_t link_info;
+        const char *ext_filename = NULL;
+        const char *ext_obj_path = NULL;
+        hbool_t     empty_dirname;
+        htri_t      search_ret;
+        char       *pobj_URI = parent_obj->URI;
+        char        temp_URI[URI_MAX_LENGTH];
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Unknown target object type; retrieving object type\n\n");
@@ -2044,9 +2090,10 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
              * there.
              */
             search_ret = RV_find_object_by_path(parent_obj, path_dirname, &obj_type,
-                    RV_copy_object_URI_callback, NULL, temp_URI);
+                                                RV_copy_object_URI_callback, NULL, temp_URI);
             if (!search_ret || search_ret < 0)
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate parent group for object of unknown type");
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL,
+                                "can't locate parent group for object of unknown type");
 
             pobj_URI = temp_URI;
         } /* end if */
@@ -2063,31 +2110,31 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
         if (NULL == (url_encoded_link_name = curl_easy_escape(curl, H5_rest_basename(obj_path), 0)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
 
-        if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
-                                "%s/groups/%s/links/%s",
-                                base_URL,
-                                pobj_URI,
-                                url_encoded_link_name)
-            ) < 0)
+        if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links/%s", base_URL, pobj_URI,
+                                url_encoded_link_name)) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
         if (url_len >= URL_MAX_LENGTH)
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size");
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                            "link GET request URL size exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
-        printf("-> Retrieving link type for link to target object of unknown type at URL %s\n\n", request_url);
+        printf("-> Retrieving link type for link to target object of unknown type at URL %s\n\n",
+               request_url);
 #endif
 
         /* Setup cURL for making GET requests */
 
         /* Setup the host header */
         host_header_len = strlen(parent_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-        if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+        if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
 
         strcpy(host_header, host_string);
 
-        curl_headers = curl_slist_append(curl_headers, strncat(host_header, parent_obj->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+        curl_headers =
+            curl_slist_append(curl_headers, strncat(host_header, parent_obj->domain->u.file.filepath_name,
+                                                    host_header_len - strlen(host_string) - 1));
 
         /* Disable use of Expect: 100 Continue HTTP response */
         curl_headers = curl_slist_append(curl_headers, "Expect:");
@@ -2095,7 +2142,8 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
+                            curl_err_buf);
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
 
@@ -2119,14 +2167,16 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
             printf("-> Link was a hard link; retrieving target object's info\n\n");
 #endif
 
-            if (RV_parse_response(response_buffer.buffer, NULL, target_object_type, RV_get_link_obj_type_callback) < 0)
+            if (RV_parse_response(response_buffer.buffer, NULL, target_object_type,
+                                  RV_get_link_obj_type_callback) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve hard link's target object type");
         } /* end if */
         else {
             size_t link_val_len = 0;
 
 #ifdef RV_CONNECTOR_DEBUG
-            printf("-> Link was a %s link; retrieving link's value\n\n", H5L_TYPE_SOFT == link_info.type ? "soft" : "external");
+            printf("-> Link was a %s link; retrieving link's value\n\n",
+                   H5L_TYPE_SOFT == link_info.type ? "soft" : "external");
 #endif
 
             if (RV_parse_response(response_buffer.buffer, &link_val_len, NULL, RV_get_link_val_callback) < 0)
@@ -2135,7 +2185,8 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
             if (NULL == (tmp_link_val = RV_malloc(link_val_len)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link's value");
 
-            if (RV_parse_response(response_buffer.buffer, &link_val_len, tmp_link_val, RV_get_link_val_callback) < 0)
+            if (RV_parse_response(response_buffer.buffer, &link_val_len, tmp_link_val,
+                                  RV_get_link_val_callback) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link's value");
 
             if (H5L_TYPE_EXTERNAL == link_info.type) {
@@ -2146,20 +2197,22 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
                 /* Attempt to open the file referenced by the external link using the same access flags as
                  * used to open the file that the link resides within.
                  */
-                if (NULL == (external_file = RV_file_open(ext_filename, parent_obj->domain->u.file.intent,
-                        parent_obj->domain->u.file.fapl_id, H5P_DEFAULT, NULL)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTOPENOBJ, FAIL, "can't open file referenced by external link");
+                if (NULL ==
+                    (external_file = RV_file_open(ext_filename, parent_obj->domain->u.file.intent,
+                                                  parent_obj->domain->u.file.fapl_id, H5P_DEFAULT, NULL)))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTOPENOBJ, FAIL,
+                                    "can't open file referenced by external link");
 
                 parent_obj = external_file;
-                obj_path = ext_obj_path;
+                obj_path   = ext_obj_path;
             } /* end if */
             else {
                 obj_path = tmp_link_val;
             } /* end else */
-        } /* end if */
+        }     /* end if */
 
-        search_ret = RV_find_object_by_path(parent_obj, obj_path, target_object_type,
-                obj_found_callback, callback_data_in, callback_data_out);
+        search_ret = RV_find_object_by_path(parent_obj, obj_path, target_object_type, obj_found_callback,
+                                            callback_data_in, callback_data_out);
         if (!search_ret || search_ret < 0)
             FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate target object by path");
 
@@ -2176,30 +2229,26 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
             case H5I_GROUP:
                 /* Handle the special case for the paths "." and "/" */
                 if (!strcmp(obj_path, ".") || !strcmp(obj_path, "/")) {
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
-                                            "%s/groups/%s",
-                                            base_URL,
-                                            parent_obj->URI)
-                        ) < 0)
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL,
+                                            parent_obj->URI)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size");
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                                        "link GET request URL size exceeded maximum URL size");
                 } /* end if */
                 else {
                     if (NULL == (url_encoded_path_name = H5_rest_url_encode_path(obj_path)))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path");
 
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
-                                            "%s/groups/%s?h5path=%s",
-                                            base_URL,
-                                            is_relative_path ? parent_obj->URI : "",
-                                            url_encoded_path_name)
-                        ) < 0)
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s?h5path=%s", base_URL,
+                                            is_relative_path ? parent_obj->URI : "", url_encoded_path_name)) <
+                        0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size");
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                                        "link GET request URL size exceeded maximum URL size");
                 } /* end else */
 
                 break;
@@ -2207,32 +2256,27 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
             case H5I_DATATYPE:
                 /* Handle the special case for the paths "." and "/" */
                 if (!strcmp(obj_path, ".") || !strcmp(obj_path, "/")) {
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
-                                            "%s/datatypes/%s",
-                                            base_URL,
-                                            parent_obj->URI)
-                        ) < 0)
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL,
+                                            parent_obj->URI)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size");
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                                        "link GET request URL size exceeded maximum URL size");
                 } /* end if */
                 else {
                     if (NULL == (url_encoded_path_name = H5_rest_url_encode_path(obj_path)))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path");
 
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
-                                            "%s/datatypes/?%s%s%sh5path=%s",
-                                            base_URL,
-                                            is_relative_path ? "grpid=" : "",
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/?%s%s%sh5path=%s",
+                                            base_URL, is_relative_path ? "grpid=" : "",
                                             is_relative_path ? parent_obj->URI : "",
-                                            is_relative_path ? "&" : "",
-                                            url_encoded_path_name)
-                        ) < 0)
+                                            is_relative_path ? "&" : "", url_encoded_path_name)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size");
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                                        "link GET request URL size exceeded maximum URL size");
                 } /* end else */
 
                 break;
@@ -2240,32 +2284,27 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
             case H5I_DATASET:
                 /* Handle the special case for the paths "." and "/" */
                 if (!strcmp(obj_path, ".") || !strcmp(obj_path, "/")) {
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
-                                            "%s/datasets/%s",
-                                            base_URL,
-                                            parent_obj->URI)
-                        ) < 0)
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL,
+                                            parent_obj->URI)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size");
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                                        "link GET request URL size exceeded maximum URL size");
                 } /* end if */
                 else {
                     if (NULL == (url_encoded_path_name = H5_rest_url_encode_path(obj_path)))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path");
 
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
-                                            "%s/datasets/?%s%s%sh5path=%s",
-                                            base_URL,
-                                            is_relative_path ? "grpid=" : "",
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/?%s%s%sh5path=%s",
+                                            base_URL, is_relative_path ? "grpid=" : "",
                                             is_relative_path ? parent_obj->URI : "",
-                                            is_relative_path ? "&" : "",
-                                            url_encoded_path_name)
-                        ) < 0)
+                                            is_relative_path ? "&" : "", url_encoded_path_name)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size");
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                                        "link GET request URL size exceeded maximum URL size");
                 } /* end else */
 
                 break;
@@ -2283,7 +2322,8 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
             case H5I_ERROR_STACK:
             case H5I_NTYPES:
             default:
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "target object not a group, datatype or dataset");
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL,
+                                "target object not a group, datatype or dataset");
         } /* end switch */
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -2294,12 +2334,14 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
 
         /* Setup the host header */
         host_header_len = strlen(parent_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-        if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+        if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
 
         strcpy(host_header, host_string);
 
-        curl_headers = curl_slist_append(curl_headers, strncat(host_header, parent_obj->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+        curl_headers =
+            curl_slist_append(curl_headers, strncat(host_header, parent_obj->domain->u.file.filepath_name,
+                                                    host_header_len - strlen(host_string) - 1));
 
         /* Disable use of Expect: 100 Continue HTTP response */
         curl_headers = curl_slist_append(curl_headers, "Expect:");
@@ -2307,7 +2349,8 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
+                            curl_err_buf);
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
 
@@ -2329,13 +2372,13 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path,
 #endif
 
         if (ret_value > 0) {
-            if (obj_found_callback && RV_parse_response(response_buffer.buffer,
-                    callback_data_in, callback_data_out, obj_found_callback) < 0) {
+            if (obj_found_callback && RV_parse_response(response_buffer.buffer, callback_data_in,
+                                                        callback_data_out, obj_found_callback) < 0) {
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "can't perform callback operation");
             }
-                
+
         } /* end if */
-    } /* end else */
+    }     /* end else */
 
 done:
     if (tmp_link_val)
@@ -2361,7 +2404,6 @@ done:
     return ret_value;
 } /* end RV_find_object_by_path() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_parse_dataspace
  *
@@ -2377,12 +2419,12 @@ done:
 hid_t
 RV_parse_dataspace(char *space)
 {
-    yajl_val  parse_tree = NULL, key_obj = NULL;
-    hsize_t  *space_dims = NULL;
-    hsize_t  *space_maxdims = NULL;
-    hid_t     dataspace = FAIL;
-    char     *dataspace_type = NULL;
-    hid_t     ret_value = FAIL;
+    yajl_val parse_tree = NULL, key_obj = NULL;
+    hsize_t *space_dims     = NULL;
+    hsize_t *space_maxdims  = NULL;
+    hid_t    dataspace      = FAIL;
+    char    *dataspace_type = NULL;
+    hid_t    ret_value      = FAIL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Parsing dataspace from HTTP response\n\n");
@@ -2439,44 +2481,49 @@ RV_parse_dataspace(char *space)
         if (!YAJL_GET_ARRAY(dims_obj)->len)
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "0-sized dataspace dimensionality array");
 
-        if (NULL == (space_dims = (hsize_t *) RV_malloc(YAJL_GET_ARRAY(dims_obj)->len * sizeof(*space_dims))))
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace dimensionality array");
+        if (NULL == (space_dims = (hsize_t *)RV_malloc(YAJL_GET_ARRAY(dims_obj)->len * sizeof(*space_dims))))
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                            "can't allocate space for dataspace dimensionality array");
 
         if (maxdims_specified)
-            if (NULL == (space_maxdims = (hsize_t *) RV_malloc(YAJL_GET_ARRAY(maxdims_obj)->len * sizeof(*space_maxdims))))
-                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace maximum dimensionality array");
+            if (NULL == (space_maxdims =
+                             (hsize_t *)RV_malloc(YAJL_GET_ARRAY(maxdims_obj)->len * sizeof(*space_maxdims))))
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for dataspace maximum dimensionality array");
 
         for (i = 0; i < dims_obj->u.array.len; i++) {
             long long val = YAJL_GET_INTEGER(dims_obj->u.array.values[i]);
 
-            space_dims[i] = (hsize_t) val;
+            space_dims[i] = (hsize_t)val;
 
             if (maxdims_specified) {
                 val = YAJL_GET_INTEGER(maxdims_obj->u.array.values[i]);
 
-                space_maxdims[i] = (val == 0) ? H5S_UNLIMITED : (hsize_t) val;
+                space_maxdims[i] = (val == 0) ? H5S_UNLIMITED : (hsize_t)val;
             } /* end if */
-        } /* end for */
+        }     /* end for */
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Creating simple dataspace\n");
         printf("-> Dims: [ ");
         for (i = 0; i < dims_obj->u.array.len; i++) {
-            if (i > 0) printf(", ");
+            if (i > 0)
+                printf(", ");
             printf("%llu", space_dims[i]);
         }
         printf(" ]\n\n");
         if (maxdims_specified) {
             printf("-> MaxDims: [ ");
             for (i = 0; i < maxdims_obj->u.array.len; i++) {
-                if (i > 0) printf(", ");
+                if (i > 0)
+                    printf(", ");
                 printf("%llu", space_maxdims[i]);
             }
             printf(" ]\n\n");
         }
 #endif
 
-        if ((dataspace = H5Screate_simple((int) dims_obj->u.array.len, space_dims, space_maxdims)) < 0)
+        if ((dataspace = H5Screate_simple((int)dims_obj->u.array.len, space_dims, space_maxdims)) < 0)
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCREATE, FAIL, "can't create simple dataspace");
     } /* end if */
 
@@ -2494,7 +2541,6 @@ done:
     return ret_value;
 } /* end RV_parse_dataspace() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_convert_dataspace_shape_to_JSON
  *
@@ -2511,13 +2557,13 @@ done:
 herr_t
 RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **maxdims_body)
 {
-    H5S_class_t  space_type;
-    ptrdiff_t    buf_ptrdiff;
-    hsize_t     *dims = NULL;
-    hsize_t     *maxdims = NULL;
-    char        *shape_out_string = NULL;
-    char        *maxdims_out_string = NULL;
-    herr_t       ret_value = SUCCEED;
+    H5S_class_t space_type;
+    ptrdiff_t   buf_ptrdiff;
+    hsize_t    *dims               = NULL;
+    hsize_t    *maxdims            = NULL;
+    char       *shape_out_string   = NULL;
+    char       *maxdims_out_string = NULL;
+    herr_t      ret_value          = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting dataspace to JSON representation\n\n");
@@ -2530,68 +2576,77 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
      * is specified in the request body during the creation of an object,
      * the server will create the object with a scalar dataspace.
      */
-    if (H5S_SCALAR == space_type) FUNC_GOTO_DONE(SUCCEED);
+    if (H5S_SCALAR == space_type)
+        FUNC_GOTO_DONE(SUCCEED);
 
     /* Allocate space for each buffer */
     if (shape_body)
-        if (NULL == (shape_out_string = (char *) RV_malloc(DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE)))
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace shape buffer");
+        if (NULL == (shape_out_string = (char *)RV_malloc(DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE)))
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                            "can't allocate space for dataspace shape buffer");
     if (H5S_NULL != space_type) {
         if (maxdims_body)
-            if (NULL == (maxdims_out_string = (char *) RV_malloc(DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE)))
-                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for dataspace maximum dimension size buffer");
+            if (NULL == (maxdims_out_string = (char *)RV_malloc(DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE)))
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for dataspace maximum dimension size buffer");
     } /* end if */
 
     /* Ensure that both buffers are NUL-terminated */
-    if (shape_out_string) *shape_out_string = '\0';
-    if (maxdims_out_string) *maxdims_out_string = '\0';
+    if (shape_out_string)
+        *shape_out_string = '\0';
+    if (maxdims_out_string)
+        *maxdims_out_string = '\0';
 
     switch (space_type) {
-        case H5S_NULL:
-        {
-            const char * const null_str = "\"shape\": \"H5S_NULL\"";
-            size_t             null_strlen = strlen(null_str);
-            size_t             shape_out_string_curr_len = DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE;
+        case H5S_NULL: {
+            const char *const null_str                  = "\"shape\": \"H5S_NULL\"";
+            size_t            null_strlen               = strlen(null_str);
+            size_t            shape_out_string_curr_len = DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE;
 
-            CHECKED_REALLOC_NO_PTR(shape_out_string, shape_out_string_curr_len, null_strlen + 1, H5E_DATASPACE, FAIL);
+            CHECKED_REALLOC_NO_PTR(shape_out_string, shape_out_string_curr_len, null_strlen + 1,
+                                   H5E_DATASPACE, FAIL);
 
             strncat(shape_out_string, null_str, null_strlen);
             break;
         } /* H5S_NULL */
 
-        case H5S_SIMPLE:
-        {
-            const char * const  shape_key = "\"shape\": [";
-            const char * const  maxdims_key = "\"maxdims\": [";
-            size_t              shape_out_string_curr_len = DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE;
-            size_t              maxdims_out_string_curr_len = DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE;
-            size_t              i;
-            char               *shape_out_string_curr_pos = shape_out_string;
-            char               *maxdims_out_string_curr_pos = maxdims_out_string;
-            int                 space_ndims;
-            int                 bytes_printed;
+        case H5S_SIMPLE: {
+            const char *const shape_key                   = "\"shape\": [";
+            const char *const maxdims_key                 = "\"maxdims\": [";
+            size_t            shape_out_string_curr_len   = DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE;
+            size_t            maxdims_out_string_curr_len = DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE;
+            size_t            i;
+            char             *shape_out_string_curr_pos   = shape_out_string;
+            char             *maxdims_out_string_curr_pos = maxdims_out_string;
+            int               space_ndims;
+            int               bytes_printed;
 
             if ((space_ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of dimensions in dataspace");
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL,
+                                "can't get number of dimensions in dataspace");
             if (!space_ndims)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "0-dimension dataspace");
 
             if (shape_out_string)
-                if (NULL == (dims = (hsize_t *) RV_malloc((size_t) space_ndims * sizeof(*dims))))
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate memory for dataspace dimensions");
+                if (NULL == (dims = (hsize_t *)RV_malloc((size_t)space_ndims * sizeof(*dims))))
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                    "can't allocate memory for dataspace dimensions");
 
             if (maxdims_out_string)
-                if (NULL == (maxdims = (hsize_t *) RV_malloc((size_t) space_ndims * sizeof(*dims))))
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate memory for dataspace maximum dimension sizes");
+                if (NULL == (maxdims = (hsize_t *)RV_malloc((size_t)space_ndims * sizeof(*dims))))
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                    "can't allocate memory for dataspace maximum dimension sizes");
 
             if (H5Sget_simple_extent_dims(space_id, dims, maxdims) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace dimensions and maximum dimension sizes");
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL,
+                                "can't retrieve dataspace dimensions and maximum dimension sizes");
 
             /* Add the JSON key prefixes to their respective buffers */
             if (shape_out_string) {
                 size_t shape_key_len = strlen(shape_key);
 
-                CHECKED_REALLOC_NO_PTR(shape_out_string, shape_out_string_curr_len, shape_key_len + 1, H5E_DATASPACE, FAIL);
+                CHECKED_REALLOC_NO_PTR(shape_out_string, shape_out_string_curr_len, shape_key_len + 1,
+                                       H5E_DATASPACE, FAIL);
                 strncat(shape_out_string_curr_pos, shape_key, shape_key_len);
                 shape_out_string_curr_pos += shape_key_len;
             } /* end if */
@@ -2599,7 +2654,8 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
             if (maxdims_out_string) {
                 size_t maxdims_key_len = strlen(maxdims_key);
 
-                CHECKED_REALLOC_NO_PTR(maxdims_out_string, maxdims_out_string_curr_len, maxdims_key_len + 1, H5E_DATASPACE, FAIL);
+                CHECKED_REALLOC_NO_PTR(maxdims_out_string, maxdims_out_string_curr_len, maxdims_key_len + 1,
+                                       H5E_DATASPACE, FAIL);
                 strncat(maxdims_out_string_curr_pos, maxdims_key, maxdims_key_len);
                 maxdims_out_string_curr_pos += maxdims_key_len;
             } /* end if */
@@ -2607,22 +2663,25 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
             /* For each dimension, append values to the respective string buffers according to
              * the dimension size and maximum dimension size of each dimension.
              */
-            for (i = 0; i < (size_t) space_ndims; i++) {
+            for (i = 0; i < (size_t)space_ndims; i++) {
                 /* Check whether the shape and maximum dimension size string buffers
                  * need to be grown before appending the values for the next dimension
                  * into the buffers */
                 if (shape_out_string) {
                     buf_ptrdiff = shape_out_string_curr_pos - shape_out_string;
                     if (buf_ptrdiff < 0)
-                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                        "unsafe cast: dataspace buffer pointer difference was negative - "
+                                        "this should not happen!");
 
-                    size_t shape_out_string_new_len = (size_t) buf_ptrdiff + MAX_NUM_LENGTH + 1;
-                    
+                    size_t shape_out_string_new_len = (size_t)buf_ptrdiff + MAX_NUM_LENGTH + 1;
+
                     CHECKED_REALLOC(shape_out_string, shape_out_string_curr_len, shape_out_string_new_len,
                                     shape_out_string_curr_pos, H5E_DATASPACE, FAIL);
 
-                    if ((bytes_printed = snprintf(shape_out_string_curr_pos, \
-                    shape_out_string_new_len - (size_t) buf_ptrdiff,"%s%" PRIuHSIZE, i > 0 ? "," : "", dims[i])) < 0)
+                    if ((bytes_printed = snprintf(shape_out_string_curr_pos,
+                                                  shape_out_string_new_len - (size_t)buf_ptrdiff,
+                                                  "%s%" PRIuHSIZE, i > 0 ? "," : "", dims[i])) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
                     shape_out_string_curr_pos += bytes_printed;
                 } /* end if */
@@ -2630,31 +2689,39 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
                 if (maxdims_out_string) {
                     buf_ptrdiff = maxdims_out_string_curr_pos - maxdims_out_string;
                     if (buf_ptrdiff < 0)
-                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                        "unsafe cast: dataspace buffer pointer difference was negative - "
+                                        "this should not happen!");
 
-                    size_t maxdims_out_string_new_len = (size_t) buf_ptrdiff + MAX_NUM_LENGTH + 1;
+                    size_t maxdims_out_string_new_len = (size_t)buf_ptrdiff + MAX_NUM_LENGTH + 1;
 
-                    CHECKED_REALLOC(maxdims_out_string, maxdims_out_string_curr_len, maxdims_out_string_new_len,
-                                    maxdims_out_string_curr_pos, H5E_DATASPACE, FAIL);
+                    CHECKED_REALLOC(maxdims_out_string, maxdims_out_string_curr_len,
+                                    maxdims_out_string_new_len, maxdims_out_string_curr_pos, H5E_DATASPACE,
+                                    FAIL);
 
                     /* According to the server specification, unlimited dimension extents should be specified
                      * as having a maxdims entry of '0'
                      */
                     if (H5S_UNLIMITED == maxdims[i]) {
-                        if (i > 0) strcat(maxdims_out_string_curr_pos++, ",");
+                        if (i > 0)
+                            strcat(maxdims_out_string_curr_pos++, ",");
                         strcat(maxdims_out_string_curr_pos++, "0");
                     } /* end if */
                     else {
-                        if ((bytes_printed = snprintf(maxdims_out_string_curr_pos, \
-                        maxdims_out_string_new_len - (size_t) maxdims_out_string_curr_pos,"%s%" PRIuHSIZE, i > 0 ? "," : "", maxdims[i])) < 0)
+                        if ((bytes_printed =
+                                 snprintf(maxdims_out_string_curr_pos,
+                                          maxdims_out_string_new_len - (size_t)maxdims_out_string_curr_pos,
+                                          "%s%" PRIuHSIZE, i > 0 ? "," : "", maxdims[i])) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
                         maxdims_out_string_curr_pos += bytes_printed;
                     } /* end else */
-                } /* end if */
-            } /* end for */
+                }     /* end if */
+            }         /* end for */
 
-            if (shape_out_string) strcat(shape_out_string_curr_pos++, "]");
-            if (maxdims_out_string) strcat(maxdims_out_string_curr_pos++, "]");
+            if (shape_out_string)
+                strcat(shape_out_string_curr_pos++, "]");
+            if (maxdims_out_string)
+                strcat(maxdims_out_string_curr_pos++, "]");
 
             break;
         } /* H5S_SIMPLE */
@@ -2673,8 +2740,10 @@ done:
             *maxdims_body = maxdims_out_string;
 
 #ifdef RV_CONNECTOR_DEBUG
-        if (shape_out_string) printf("-> Dataspace dimensions:\n%s\n\n", shape_out_string);
-        if (maxdims_out_string) printf("-> Dataspace maximum dimensions:\n%s\n\n", maxdims_out_string);
+        if (shape_out_string)
+            printf("-> Dataspace dimensions:\n%s\n\n", shape_out_string);
+        if (maxdims_out_string)
+            printf("-> Dataspace maximum dimensions:\n%s\n\n", maxdims_out_string);
 #endif
     } /* end if */
     else {
@@ -2697,14 +2766,12 @@ done:
  * connector to be dynamically loaded by HDF5.   *
  *************************************************/
 
-
 H5PLUGIN_DLL H5PL_type_t
 H5PLget_plugin_type(void)
 {
     return H5PL_TYPE_VOL;
 } /* end H5PLget_plugin_type() */
 
-
 H5PLUGIN_DLL const void *
 H5PLget_plugin_info(void)
 {

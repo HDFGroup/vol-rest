@@ -27,10 +27,10 @@ rv_hash_string(void *string)
 {
     /* This is the djb2 string hash function */
 
-    unsigned int result = 5381;
+    unsigned int         result = 5381;
     const unsigned char *p;
 
-    p = (const unsigned char *) string;
+    p = (const unsigned char *)string;
 
     while (*p != '\0') {
         result = (result << 5) + result + *p;

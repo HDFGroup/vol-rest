@@ -17,7 +17,6 @@
 
 #include "rest_vol_file.h"
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_file_create
  *
@@ -32,14 +31,13 @@
  *              March, 2017
  */
 void *
-RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
-    hid_t dxpl_id, void **req)
+RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, hid_t dxpl_id, void **req)
 {
     RV_object_t *new_file = NULL;
     size_t       name_length;
     size_t       host_header_len = 0;
-    char        *host_header = NULL;
-    void        *ret_value = NULL;
+    char        *host_header     = NULL;
+    void        *ret_value       = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file create call with following parameters:\n");
@@ -56,19 +54,20 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
      */
     if (fapl_id == H5P_FILE_ACCESS_DEFAULT)
         if (H5_rest_set_connection_information() < 0)
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL,
+                            "can't set REST VOL connector connection information");
 
     /* Allocate and setup internal File struct */
-    if (NULL == (new_file = (RV_object_t *) RV_malloc(sizeof(*new_file))))
+    if (NULL == (new_file = (RV_object_t *)RV_malloc(sizeof(*new_file))))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for file object");
 
-    new_file->URI[0] = '\0';
-    new_file->obj_type = H5I_FILE;
-    new_file->u.file.intent = H5F_ACC_RDWR;
+    new_file->URI[0]               = '\0';
+    new_file->obj_type             = H5I_FILE;
+    new_file->u.file.intent        = H5F_ACC_RDWR;
     new_file->u.file.filepath_name = NULL;
-    new_file->u.file.fapl_id = FAIL;
-    new_file->u.file.fcpl_id = FAIL;
-    new_file->u.file.ref_count = 1;
+    new_file->u.file.fapl_id       = FAIL;
+    new_file->u.file.fcpl_id       = FAIL;
+    new_file->u.file.ref_count     = 1;
 
     /* Copy the FAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Fget_access_plist() will function correctly. Note that due to the nature
@@ -98,19 +97,18 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
      */
     new_file->domain = new_file;
 
-    /* Copy the path name into the new file object */ 
+    /* Copy the path name into the new file object */
     name_length = strlen(name);
 
-    if (NULL == (new_file->u.file.filepath_name = (char *) RV_malloc(name_length + 1)))
+    if (NULL == (new_file->u.file.filepath_name = (char *)RV_malloc(name_length + 1)))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath name");
 
     strncpy(new_file->u.file.filepath_name, name, name_length);
     new_file->u.file.filepath_name[name_length] = '\0';
-   
 
     /* Setup the host header */
     host_header_len = name_length + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header");
 
     strcpy(host_header, host_string);
@@ -133,7 +131,8 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
         long http_response;
 
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s",
+                            curl_err_buf);
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> H5F_ACC_TRUNC specified; checking if file exists\n\n");
@@ -157,7 +156,8 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
         /* If the file exists, go ahead and delete it before proceeding */
         if (HTTP_SUCCESS(http_response)) {
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL,
+                                "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> File existed and H5F_ACC_TRUNC specified; deleting file\n\n");
@@ -170,12 +170,14 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
             CURL_PERFORM(curl, H5E_FILE, H5E_CANTREMOVE, NULL);
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't reset cURL custom request: %s", curl_err_buf);
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't reset cURL custom request: %s",
+                                curl_err_buf);
         } /* end if */
-    } /* end if */
+    }     /* end if */
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP PUT request: %s", curl_err_buf);
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP PUT request: %s",
+                        curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, NULL))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL PUT data: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, 0))
@@ -198,7 +200,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     if (RV_parse_response(response_buffer.buffer, NULL, new_file->URI, RV_copy_object_URI_callback) < 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't parse new file's URI");
 
-    ret_value = (void *) new_file;
+    ret_value = (void *)new_file;
 
 done:
 #ifdef RV_CONNECTOR_DEBUG
@@ -238,7 +240,6 @@ done:
     return ret_value;
 } /* end RV_file_create() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_file_open
  *
@@ -258,8 +259,8 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     RV_object_t *file = NULL;
     size_t       name_length;
     size_t       host_header_len = 0;
-    char        *host_header = NULL;
-    void        *ret_value = NULL;
+    char        *host_header     = NULL;
+    void        *ret_value       = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file open call with following parameters:\n");
@@ -275,19 +276,20 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
      */
     if (fapl_id == H5P_FILE_ACCESS_DEFAULT)
         if (H5_rest_set_connection_information() < 0)
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL,
+                            "can't set REST VOL connector connection information");
 
     /* Allocate and setup internal File struct */
-    if (NULL == (file = (RV_object_t *) RV_malloc(sizeof(*file))))
+    if (NULL == (file = (RV_object_t *)RV_malloc(sizeof(*file))))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for file object");
 
-    file->URI[0] = '\0';
-    file->obj_type = H5I_FILE;
-    file->u.file.intent = flags;
+    file->URI[0]               = '\0';
+    file->obj_type             = H5I_FILE;
+    file->u.file.intent        = flags;
     file->u.file.filepath_name = NULL;
-    file->u.file.fapl_id = FAIL;
-    file->u.file.fcpl_id = FAIL;
-    file->u.file.ref_count = 1;
+    file->u.file.fapl_id       = FAIL;
+    file->u.file.fcpl_id       = FAIL;
+    file->u.file.ref_count     = 1;
 
     /* Store self-referential pointer in the domain field for this object
      * to simplify code for other types of objects
@@ -296,7 +298,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
 
     /* Copy the path name into the new file object */
     name_length = strlen(name);
-    if (NULL == (file->u.file.filepath_name = (char *) RV_malloc(name_length + 1)))
+    if (NULL == (file->u.file.filepath_name = (char *)RV_malloc(name_length + 1)))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath name");
 
     strncpy(file->u.file.filepath_name, name, name_length);
@@ -304,7 +306,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
 
     /* Setup the host header */
     host_header_len = name_length + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header");
 
     strcpy(host_header, host_string);
@@ -317,7 +319,8 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s",
+                        curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
 
@@ -350,7 +353,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     if ((file->u.file.fcpl_id = H5Pcreate(H5P_FILE_CREATE)) < 0)
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create FCPL for file");
 
-    ret_value = (void *) file;
+    ret_value = (void *)file;
 
 done:
 #ifdef RV_CONNECTOR_DEBUG
@@ -382,7 +385,6 @@ done:
     return ret_value;
 } /* end RV_file_open() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_file_get
  *
@@ -397,7 +399,7 @@ done:
 herr_t
 RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
 {
-    RV_object_t *_obj = (RV_object_t *) obj;
+    RV_object_t *_obj      = (RV_object_t *)obj;
     herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -416,8 +418,7 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
             break;
 
         /* H5Fget_access_plist */
-        case H5VL_FILE_GET_FAPL:
-        {
+        case H5VL_FILE_GET_FAPL: {
             hid_t *ret_id = &args->args.get_fapl.fapl_id;
 
             if ((*ret_id = H5Pcopy(_obj->u.file.fapl_id)) < 0)
@@ -427,8 +428,7 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
         } /* H5VL_FILE_GET_FAPL */
 
         /* H5Fget_create_plist */
-        case H5VL_FILE_GET_FCPL:
-        {
+        case H5VL_FILE_GET_FCPL: {
             hid_t *ret_id = &args->args.get_fcpl.fcpl_id;
 
             if ((*ret_id = H5Pcopy(_obj->u.file.fcpl_id)) < 0)
@@ -442,8 +442,7 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
             break;
 
         /* H5Fget_intent */
-        case H5VL_FILE_GET_INTENT:
-        {
+        case H5VL_FILE_GET_INTENT: {
             unsigned *ret_intent = args->args.get_intent.flags;
 
             *ret_intent = _obj->u.file.intent;
@@ -452,14 +451,13 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
         } /* H5VL_FILE_GET_INTENT */
 
         /* H5Fget_name */
-        case H5VL_FILE_GET_NAME:
-        {
-            H5I_type_t  obj_type = args->args.get_name.type;
-            size_t      name_buf_size = args->args.get_name.buf_size;
-            char       *name_buf = args->args.get_name.buf;
-            ssize_t    *ret_size = args->args.get_name.file_name_len;
+        case H5VL_FILE_GET_NAME: {
+            H5I_type_t obj_type      = args->args.get_name.type;
+            size_t     name_buf_size = args->args.get_name.buf_size;
+            char      *name_buf      = args->args.get_name.buf;
+            ssize_t   *ret_size      = args->args.get_name.file_name_len;
 
-            *ret_size = (ssize_t) strlen(_obj->domain->u.file.filepath_name);
+            *ret_size = (ssize_t)strlen(_obj->domain->u.file.filepath_name);
 
             if (name_buf && name_buf_size) {
                 strncpy(name_buf, _obj->domain->u.file.filepath_name, name_buf_size - 1);
@@ -489,7 +487,6 @@ done:
     return ret_value;
 } /* end RV_file_get() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_file_specific
  *
@@ -502,12 +499,13 @@ done:
  *              March, 2017
  */
 herr_t
-RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void **req) {
-    RV_object_t *file = (RV_object_t *) obj;
-    herr_t       ret_value = SUCCEED;
-    char  *host_header = NULL;
-    size_t host_header_len;
-    size_t name_length;
+RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void **req)
+{
+    RV_object_t *file        = (RV_object_t *)obj;
+    herr_t       ret_value   = SUCCEED;
+    char        *host_header = NULL;
+    size_t       host_header_len;
+    size_t       name_length;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file-specific call with following parameters:\n");
@@ -516,7 +514,7 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
         printf("     - File's URI: %s\n", file->URI);
         printf("     - File's pathname: %s\n", file->domain->u.file.filepath_name);
     } /* end if */
-    printf("\n");   
+    printf("\n");
 #endif
 
     if (file && H5I_FILE != file->obj_type)
@@ -529,22 +527,21 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             break;
 
         /* H5Freopen */
-        case H5VL_FILE_REOPEN:
-        {
+        case H5VL_FILE_REOPEN: {
             void **ret_file = args->args.reopen.file;
 
-            if (NULL == (*ret_file = RV_file_open(file->u.file.filepath_name, file->u.file.intent, file->u.file.fapl_id, dxpl_id, NULL)))
+            if (NULL == (*ret_file = RV_file_open(file->u.file.filepath_name, file->u.file.intent,
+                                                  file->u.file.fapl_id, dxpl_id, NULL)))
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTOPENOBJ, FAIL, "can't re-open file");
 
             break;
         } /* H5VL_FILE_REOPEN */
 
         /* H5Fis_accessible */
-        case H5VL_FILE_IS_ACCESSIBLE:
-        {
-            hbool_t *ret_is_accessible = args->args.is_accessible.accessible;
-            const char *filename = args->args.is_accessible.filename;
-            hid_t fapl_id = args->args.is_accessible.fapl_id;
+        case H5VL_FILE_IS_ACCESSIBLE: {
+            hbool_t    *ret_is_accessible = args->args.is_accessible.accessible;
+            const char *filename          = args->args.is_accessible.filename;
+            hid_t       fapl_id           = args->args.is_accessible.fapl_id;
 
             /* Initialize in case of failure */
             *ret_is_accessible = FALSE;
@@ -560,9 +557,8 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
         } /* H5VL_FILE_IS_ACCESSIBLE */
 
         /* H5Fdelete */
-        case H5VL_FILE_DELETE:
-        {
-            long http_response;
+        case H5VL_FILE_DELETE: {
+            long  http_response;
             char *filename = args->args.del.filename;
 
             name_length = strlen(filename);
@@ -570,8 +566,9 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             /* Setup the host header */
             host_header_len = name_length + strlen(host_string) + 1;
 
-            if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header");
+            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL,
+                                "can't allocate space for request Host header");
 
             strcpy(host_header, host_string);
 
@@ -585,9 +582,9 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
 
-
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);                            
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL,
+                                "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);
 
             CURL_PERFORM(curl, H5E_FILE, H5E_CLOSEERROR, NULL);
 
@@ -612,7 +609,8 @@ done:
 
     /* Restore CUSTOMREQUEST to internal default */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);                            
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP DELETE request: %s",
+                        curl_err_buf);
 
     if (host_header) {
         RV_free(host_header);
@@ -621,7 +619,6 @@ done:
     return ret_value;
 } /* end RV_file_specific() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_file_close
  *
@@ -638,7 +635,7 @@ herr_t
 RV_file_close(void *file, hid_t dxpl_id, void **req)
 {
 
-    RV_object_t *_file = (RV_object_t *) file;
+    RV_object_t *_file     = (RV_object_t *)file;
     herr_t       ret_value = SUCCEED;
 
     if (!_file)

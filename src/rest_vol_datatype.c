@@ -28,29 +28,27 @@
 #define PREDEFINED_DATATYPE_NAME_MAX_LENGTH 20
 
 /* JSON keys to retrieve information about a datatype */
-const char *type_class_keys[] = { "type", "class", (const char *) 0 };
-const char *type_base_keys[]  = { "type", "base", (const char *) 0 };
+const char *type_class_keys[] = {"type", "class", (const char *)0};
+const char *type_base_keys[]  = {"type", "base", (const char *)0};
 
 /* JSON keys to retrieve information about a string datatype */
-const char *str_length_keys[]  = { "type", "length", (const char *) 0 };
-const char *str_charset_keys[] = { "type", "charSet", (const char *) 0 };
-const char *str_pad_keys[]     = { "type", "strPad", (const char *) 0 };
+const char *str_length_keys[]  = {"type", "length", (const char *)0};
+const char *str_charset_keys[] = {"type", "charSet", (const char *)0};
+const char *str_pad_keys[]     = {"type", "strPad", (const char *)0};
 
 /* JSON keys to retrieve information about a compound datatype */
-const char *compound_field_keys[] = { "type", "fields", (const char *) 0 };
+const char *compound_field_keys[] = {"type", "fields", (const char *)0};
 
 /* JSON keys to retrieve information about an array datatype */
-const char *array_dims_keys[] = { "type", "dims", (const char *) 0 };
+const char *array_dims_keys[] = {"type", "dims", (const char *)0};
 
 /* JSON keys to retrieve information about an enum datatype */
-const char *enum_mapping_keys[] = { "type", "mapping", (const char *) 0 };
-
+const char *enum_mapping_keys[] = {"type", "mapping", (const char *)0};
 
 /* Conversion functions to convert a JSON-format string to an HDF5 Datatype or vice versa */
 static hid_t       RV_convert_JSON_to_datatype(const char *type);
 static const char *RV_convert_predefined_datatype_to_string(hid_t type_id);
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_datatype_commit
  *
@@ -66,29 +64,30 @@ static const char *RV_convert_predefined_datatype_to_string(hid_t type_id);
  */
 void *
 RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t type_id,
-    hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req)
+                   hid_t lcpl_id, hid_t tcpl_id, hid_t tapl_id, hid_t dxpl_id, void **req)
 {
-    RV_object_t *parent = (RV_object_t *) obj;
-    RV_object_t *new_datatype = NULL;
+    RV_object_t *parent                = (RV_object_t *)obj;
+    RV_object_t *new_datatype          = NULL;
     size_t       commit_request_nalloc = 0;
-    size_t       link_body_nalloc = 0;
-    size_t       host_header_len = 0;
-    size_t       datatype_body_len = 0;
-    char        *host_header = NULL;
-    char        *commit_request_body = NULL;
-    char        *datatype_body = NULL;
-    char        *link_body = NULL;
-    char        *path_dirname = NULL;
+    size_t       link_body_nalloc      = 0;
+    size_t       host_header_len       = 0;
+    size_t       datatype_body_len     = 0;
+    char        *host_header           = NULL;
+    char        *commit_request_body   = NULL;
+    char        *datatype_body         = NULL;
+    char        *link_body             = NULL;
+    char        *path_dirname          = NULL;
     char         request_url[URL_MAX_LENGTH];
     int          commit_request_len = 0;
-    int          link_body_len = 0;
-    int          url_len = 0;
-    void        *ret_value = NULL;
+    int          link_body_len      = 0;
+    int          url_len            = 0;
+    void        *ret_value          = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received datatype commit call with following parameters:\n");
     printf("     - H5Tcommit variant: %s\n", name ? "H5Tcommit2" : "H5Tcommit_anon");
-    if (name) printf("     - Datatype's name: %s\n", name);
+    if (name)
+        printf("     - Datatype's name: %s\n", name);
     printf("     - Datatype's class: %s\n", datatype_class_to_string(type_id));
     printf("     - Datatype's parent object URI: %s\n", parent->URI);
     printf("     - Datatype's parent object type: %s\n", object_type_to_string(parent->obj_type));
@@ -106,18 +105,18 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
         FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file");
 
     /* Allocate and setup internal Datatype struct */
-    if (NULL == (new_datatype = (RV_object_t *) RV_malloc(sizeof(*new_datatype))))
+    if (NULL == (new_datatype = (RV_object_t *)RV_malloc(sizeof(*new_datatype))))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for datatype object");
 
-    new_datatype->URI[0] = '\0';
-    new_datatype->obj_type = H5I_DATATYPE;
+    new_datatype->URI[0]              = '\0';
+    new_datatype->obj_type            = H5I_DATATYPE;
     new_datatype->u.datatype.dtype_id = FAIL;
-    new_datatype->u.datatype.tapl_id = FAIL;
-    new_datatype->u.datatype.tcpl_id = FAIL;
-    
+    new_datatype->u.datatype.tapl_id  = FAIL;
+    new_datatype->u.datatype.tcpl_id  = FAIL;
+
     new_datatype->domain = parent->domain;
     parent->domain->u.file.ref_count++;
-    
+
     /* Copy the TAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * datatype access property list functions will function correctly
      */
@@ -145,13 +144,13 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     /* If this is not a H5Tcommit_anon call, create a link for the Datatype
      * to link it into the file structure */
     if (name) {
-        hbool_t            empty_dirname;
-        char               target_URI[URI_MAX_LENGTH];
-        const char * const link_basename = H5_rest_basename(name);
-        const char * const link_body_format = "\"link\": {"
-                                                  "\"id\": \"%s\", "
-                                                  "\"name\": \"%s\""
-                                              "}";
+        hbool_t           empty_dirname;
+        char              target_URI[URI_MAX_LENGTH];
+        const char *const link_basename    = H5_rest_basename(name);
+        const char *const link_body_format = "\"link\": {"
+                                             "\"id\": \"%s\", "
+                                             "\"name\": \"%s\""
+                                             "}";
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Creating JSON link for datatype\n\n");
@@ -172,39 +171,41 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
             H5I_type_t obj_type = H5I_GROUP;
             htri_t     search_ret;
 
-            search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
+            search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback,
+                                                NULL, target_URI);
             if (!search_ret || search_ret < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't locate target for dataset link");
         } /* end if */
 
-        link_body_nalloc = strlen(link_body_format) + strlen(link_basename) + (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
-        if (NULL == (link_body = (char *) RV_malloc(link_body_nalloc)))
+        link_body_nalloc = strlen(link_body_format) + strlen(link_basename) +
+                           (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
+        if (NULL == (link_body = (char *)RV_malloc(link_body_nalloc)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for datatype link body");
 
         /* Form the Datatype Commit Link portion of the commit request using the above format
          * specifier and the corresponding arguments */
-        if ((link_body_len = snprintf(link_body, link_body_nalloc, link_body_format, empty_dirname ? parent->URI : target_URI, link_basename)) < 0)
+        if ((link_body_len = snprintf(link_body, link_body_nalloc, link_body_format,
+                                      empty_dirname ? parent->URI : target_URI, link_basename)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "snprintf error");
 
-        if ((size_t) link_body_len >= link_body_nalloc)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "datatype link create request body size exceeded allocated buffer size");
+        if ((size_t)link_body_len >= link_body_nalloc)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL,
+                            "datatype link create request body size exceeded allocated buffer size");
     } /* end if */
 
     /* Form the request body to commit the Datatype */
-    commit_request_nalloc = datatype_body_len + (link_body ? (size_t) link_body_len + 2 : 0) + 3;
-    if (NULL == (commit_request_body = (char *) RV_malloc(commit_request_nalloc)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for datatype commit request body");
+    commit_request_nalloc = datatype_body_len + (link_body ? (size_t)link_body_len + 2 : 0) + 3;
+    if (NULL == (commit_request_body = (char *)RV_malloc(commit_request_nalloc)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL,
+                        "can't allocate space for datatype commit request body");
 
-    if ((commit_request_len = snprintf(commit_request_body, commit_request_nalloc,
-             "{%s%s%s}",
-             datatype_body,
-             link_body ? ", " : "",
-             link_body ? link_body : "")
-        ) < 0)
+    if ((commit_request_len = snprintf(commit_request_body, commit_request_nalloc, "{%s%s%s}", datatype_body,
+                                       link_body ? ", " : "", link_body ? link_body : "")) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "snprintf error");
 
-    if ((size_t) commit_request_len >= commit_request_nalloc)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "datatype create request body size exceeded allocated buffer size");
+    if ((size_t)commit_request_len >= commit_request_nalloc)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL,
+                        "datatype create request body size exceeded allocated buffer size");
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Datatype commit request body:\n%s\n\n", commit_request_body);
@@ -212,12 +213,13 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
 
     /* Setup the host header */
     host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *) RV_malloc(host_header_len)))
+    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header");
 
     strcpy(host_header, host_string);
 
-    curl_headers = curl_slist_append(curl_headers, strncat(host_header, parent->domain->u.file.filepath_name, host_header_len - strlen(host_string) - 1));
+    curl_headers = curl_slist_append(curl_headers, strncat(host_header, parent->domain->u.file.filepath_name,
+                                                           host_header_len - strlen(host_string) - 1));
 
     /* Disable use of Expect: 100 Continue HTTP response */
     curl_headers = curl_slist_append(curl_headers, "Expect:");
@@ -230,7 +232,8 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "snprintf error");
 
     if (url_len >= URL_MAX_LENGTH)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "datatype create URL size exceeded maximum URL size");
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL,
+                        "datatype create URL size exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Datatype commit URL: %s\n\n", request_url);
@@ -239,10 +242,11 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s", curl_err_buf);
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s",
+                        curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, commit_request_body))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL POST data: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t) commit_request_len))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)commit_request_len))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL POST data size: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
@@ -265,7 +269,7 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     if (RV_parse_response(response_buffer.buffer, NULL, new_datatype->URI, RV_copy_object_URI_callback) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, NULL, "can't parse committed datatype's URI");
 
-    ret_value = (void *) new_datatype;
+    ret_value = (void *)new_datatype;
 
 done:
 #ifdef RV_CONNECTOR_DEBUG
@@ -305,7 +309,6 @@ done:
     return ret_value;
 } /* end RV_datatype_commit() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_datatype_open
  *
@@ -320,10 +323,10 @@ done:
  *              August, 2017
  */
 void *
-RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
-    hid_t tapl_id, hid_t dxpl_id, void **req)
+RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t tapl_id,
+                 hid_t dxpl_id, void **req)
 {
-    RV_object_t *parent = (RV_object_t *) obj;
+    RV_object_t *parent   = (RV_object_t *)obj;
     RV_object_t *datatype = NULL;
     H5I_type_t   obj_type = H5I_UNINIT;
     loc_info     loc_info;
@@ -343,28 +346,29 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
 
     /* Allocate and setup internal Datatype struct */
-    if (NULL == (datatype = (RV_object_t *) RV_malloc(sizeof(*datatype))))
+    if (NULL == (datatype = (RV_object_t *)RV_malloc(sizeof(*datatype))))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for datatype object");
 
-    datatype->URI[0] = '\0';
-    datatype->obj_type = H5I_DATATYPE;
+    datatype->URI[0]              = '\0';
+    datatype->obj_type            = H5I_DATATYPE;
     datatype->u.datatype.dtype_id = FAIL;
-    datatype->u.datatype.tapl_id = FAIL;
-    datatype->u.datatype.tcpl_id = FAIL;
-    
+    datatype->u.datatype.tapl_id  = FAIL;
+    datatype->u.datatype.tcpl_id  = FAIL;
+
     datatype->domain = parent->domain;
     parent->domain->u.file.ref_count++;
-    
-    loc_info.URI = datatype->URI;
+
+    loc_info.URI    = datatype->URI;
     loc_info.domain = datatype->domain;
 
     /* Locate datatype and set domain */
-    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL, &loc_info);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL,
+                                        &loc_info);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't locate datatype by path");
 
     datatype->domain = loc_info.domain;
-    
+
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Found datatype by given path\n\n");
 #endif
@@ -389,7 +393,7 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
     if ((datatype->u.datatype.tcpl_id = H5Pcreate(H5P_DATATYPE_CREATE)) < 0)
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create TCPL for datatype");
 
-    ret_value = (void *) datatype;
+    ret_value = (void *)datatype;
 
 done:
 #ifdef RV_CONNECTOR_DEBUG
@@ -400,7 +404,8 @@ done:
         printf("     - Datatype's URI: %s\n", datatype->URI);
         printf("     - Datatype's object type: %s\n", object_type_to_string(datatype->obj_type));
         printf("     - Datatype's domain path: %s\n", datatype->domain->u.file.filepath_name);
-        printf("     - Datatype's datatype class: %s\n\n", datatype_class_to_string(datatype->u.datatype.dtype_id));
+        printf("     - Datatype's datatype class: %s\n\n",
+               datatype_class_to_string(datatype->u.datatype.dtype_id));
     } /* end if */
 #endif
 
@@ -414,7 +419,6 @@ done:
     return ret_value;
 } /* end RV_datatype_open() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_datatype_get
  *
@@ -429,7 +433,7 @@ done:
 herr_t
 RV_datatype_get(void *obj, H5VL_datatype_get_args_t *args, hid_t dxpl_id, void **req)
 {
-    RV_object_t *dtype = (RV_object_t *) obj;
+    RV_object_t *dtype     = (RV_object_t *)obj;
     herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -444,23 +448,23 @@ RV_datatype_get(void *obj, H5VL_datatype_get_args_t *args, hid_t dxpl_id, void *
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a datatype");
 
     switch (args->op_type) {
-        case H5VL_DATATYPE_GET_BINARY_SIZE:
-        {
+        case H5VL_DATATYPE_GET_BINARY_SIZE: {
             size_t *binary_size = args->args.get_binary_size.size;
 
             if (H5Tencode(dtype->u.datatype.dtype_id, NULL, binary_size) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADTYPE, FAIL, "can't determine serialized length of datatype");
-                
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADTYPE, FAIL,
+                                "can't determine serialized length of datatype");
+
             break;
         }
-        case H5VL_DATATYPE_GET_BINARY:
-        {
+        case H5VL_DATATYPE_GET_BINARY: {
             /* ssize_t *nalloc = va_arg(arguments, ssize_t *); */
-            void    *buf = args->args.get_binary.buf;
-            size_t   size = args->args.get_binary.buf_size;
+            void  *buf  = args->args.get_binary.buf;
+            size_t size = args->args.get_binary.buf_size;
 
             if (H5Tencode(dtype->u.datatype.dtype_id, buf, &size) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADTYPE, FAIL, "can't determine serialized length of datatype");
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADTYPE, FAIL,
+                                "can't determine serialized length of datatype");
 
             /* *nalloc = (ssize_t) size; */
 
@@ -468,8 +472,7 @@ RV_datatype_get(void *obj, H5VL_datatype_get_args_t *args, hid_t dxpl_id, void *
         } /* H5VL_DATATYPE_GET_BINARY */
 
         /* H5Tget_create_plist */
-        case H5VL_DATATYPE_GET_TCPL:
-        {
+        case H5VL_DATATYPE_GET_TCPL: {
             hid_t *plist_id = &args->args.get_tcpl.tcpl_id;
 
             /* Retrieve the datatype's creation property list */
@@ -480,7 +483,8 @@ RV_datatype_get(void *obj, H5VL_datatype_get_args_t *args, hid_t dxpl_id, void *
         } /* H5VL_DATATYPE_GET_TCPL */
 
         default:
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get this type of information from datatype");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                            "can't get this type of information from datatype");
     } /* end switch */
 
 done:
@@ -489,7 +493,6 @@ done:
     return ret_value;
 } /* end RV_datatype_get() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_datatype_close
  *
@@ -506,7 +509,7 @@ done:
 herr_t
 RV_datatype_close(void *dt, hid_t dxpl_id, void **req)
 {
-    RV_object_t *_dtype = (RV_object_t *) dt;
+    RV_object_t *_dtype    = (RV_object_t *)dt;
     herr_t       ret_value = SUCCEED;
 
     if (!_dtype)
@@ -528,15 +531,17 @@ RV_datatype_close(void *dt, hid_t dxpl_id, void **req)
         FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype");
 
     if (_dtype->u.datatype.tapl_id >= 0) {
-        if (_dtype->u.datatype.tapl_id != H5P_DATATYPE_ACCESS_DEFAULT && H5Pclose(_dtype->u.datatype.tapl_id) < 0)
+        if (_dtype->u.datatype.tapl_id != H5P_DATATYPE_ACCESS_DEFAULT &&
+            H5Pclose(_dtype->u.datatype.tapl_id) < 0)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close TAPL");
     } /* end if */
     if (_dtype->u.datatype.tcpl_id >= 0) {
-        if (_dtype->u.datatype.tcpl_id != H5P_DATATYPE_CREATE_DEFAULT && H5Pclose(_dtype->u.datatype.tcpl_id) < 0)
+        if (_dtype->u.datatype.tcpl_id != H5P_DATATYPE_CREATE_DEFAULT &&
+            H5Pclose(_dtype->u.datatype.tcpl_id) < 0)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close TCPL");
     } /* end if */
 
-    if(RV_file_close(_dtype->domain, H5P_DEFAULT, NULL) < 0)
+    if (RV_file_close(_dtype->domain, H5P_DEFAULT, NULL) < 0)
         FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");
 
     RV_free(_dtype);
@@ -548,7 +553,6 @@ done:
     return ret_value;
 } /* end RV_datatype_close() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_parse_datatype
  *
@@ -575,10 +579,10 @@ done:
 hid_t
 RV_parse_datatype(char *type, hbool_t need_truncate)
 {
-    hbool_t  substring_allocated = FALSE;
-    hid_t    datatype = FAIL;
-    char    *type_string = type;
-    hid_t    ret_value = FAIL;
+    hbool_t substring_allocated = FALSE;
+    hid_t   datatype            = FAIL;
+    char   *type_string         = type;
+    hid_t   ret_value           = FAIL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Parsing datatype from HTTP response\n\n");
@@ -588,9 +592,9 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "datatype JSON buffer was NULL");
 
     if (need_truncate) {
-        ptrdiff_t  buf_ptrdiff;
-        char      *type_section_ptr = NULL;
-        char      *type_section_start, *type_section_end;
+        ptrdiff_t buf_ptrdiff;
+        char     *type_section_ptr = NULL;
+        char     *type_section_start, *type_section_end;
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Extraneous information included in HTTP response, extracting out datatype section\n\n");
@@ -598,11 +602,14 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
 
         /* Start by locating the beginning of the "type" subsection, as indicated by the JSON "type" key */
         if (NULL == (type_section_ptr = strstr(type, "\"type\"")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find \"type\" information section in datatype string");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "can't find \"type\" information section in datatype string");
 
         /* Search for the initial '{' brace that begins the section */
         if (NULL == (type_section_start = strstr(type_section_ptr, "{")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find beginning '{' of \"type\" information section in datatype string - misformatted JSON likely");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "can't find beginning '{' of \"type\" information section in datatype string - "
+                            "misformatted JSON likely");
 
         /* Continue forward through the string buffer character-by-character until the end of this JSON
          * object section is found.
@@ -611,16 +618,20 @@ RV_parse_datatype(char *type, hbool_t need_truncate)
 
         buf_ptrdiff = type_section_end - type_section_ptr;
         if (buf_ptrdiff < 0)
-            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+            FUNC_GOTO_ERROR(
+                H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
 
-        if (NULL == (type_string = (char *) RV_malloc((size_t) buf_ptrdiff + 3)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for \"type\" subsection");
+        if (NULL == (type_string = (char *)RV_malloc((size_t)buf_ptrdiff + 3)))
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
+                            "can't allocate space for \"type\" subsection");
 
-        memcpy(type_string + 1, type_section_ptr, (size_t) buf_ptrdiff);
+        memcpy(type_string + 1, type_section_ptr, (size_t)buf_ptrdiff);
 
         /* Wrap the "type" substring in braces and NULL terminate it */
-        type_string[0] = '{'; type_string[(size_t) buf_ptrdiff + 1] = '}';
-        type_string[(size_t) buf_ptrdiff + 2] = '\0';
+        type_string[0]                       = '{';
+        type_string[(size_t)buf_ptrdiff + 1] = '}';
+        type_string[(size_t)buf_ptrdiff + 2] = '\0';
 
         substring_allocated = TRUE;
     } /* end if */
@@ -641,7 +652,6 @@ done:
     return ret_value;
 } /* end RV_parse_datatype() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_convert_datatype_to_JSON
  *
@@ -665,41 +675,43 @@ done:
 herr_t
 RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested)
 {
-    H5T_class_t   type_class;
-    const char   *leading_string = "\"type\": "; /* Leading string for all datatypes */
-    ptrdiff_t     buf_ptrdiff;
-    hsize_t      *array_dims = NULL;
-    htri_t        type_is_committed;
-    size_t        leading_string_len = strlen(leading_string);
-    size_t        out_string_len;
-    size_t        bytes_to_print = 0;            /* Used to calculate whether the datatype body buffer needs to be grown */
-    size_t        type_size;
-    size_t        i;
-    hid_t         type_base_class = FAIL;
-    hid_t         compound_member = FAIL;
-    void         *enum_value = NULL;
-    char         *enum_value_name = NULL;
-    char         *enum_mapping = NULL;
-    char         *array_shape = NULL;
-    char         *array_base_type = NULL;
-    char        **compound_member_strings = NULL;
-    char         *compound_member_name = NULL;
-    char         *out_string = NULL;
-    char         *out_string_curr_pos;           /* The "current position" pointer used to print to the appropriate place
-                                                  in the buffer and not overwrite important leading data */
-    int           bytes_printed = 0;
-    herr_t        ret_value = SUCCEED;
+    H5T_class_t type_class;
+    const char *leading_string = "\"type\": "; /* Leading string for all datatypes */
+    ptrdiff_t   buf_ptrdiff;
+    hsize_t    *array_dims = NULL;
+    htri_t      type_is_committed;
+    size_t      leading_string_len = strlen(leading_string);
+    size_t      out_string_len;
+    size_t      bytes_to_print = 0; /* Used to calculate whether the datatype body buffer needs to be grown */
+    size_t      type_size;
+    size_t      i;
+    hid_t       type_base_class         = FAIL;
+    hid_t       compound_member         = FAIL;
+    void       *enum_value              = NULL;
+    char       *enum_value_name         = NULL;
+    char       *enum_mapping            = NULL;
+    char       *array_shape             = NULL;
+    char       *array_base_type         = NULL;
+    char      **compound_member_strings = NULL;
+    char       *compound_member_name    = NULL;
+    char       *out_string              = NULL;
+    char       *out_string_curr_pos; /* The "current position" pointer used to print to the appropriate place
+                                      in the buffer and not overwrite important leading data */
+    int    bytes_printed = 0;
+    herr_t ret_value     = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting datatype to JSON\n\n");
 #endif
 
     if (!type_body)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid NULL pointer for converted datatype's string buffer");
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
+                        "invalid NULL pointer for converted datatype's string buffer");
 
     out_string_len = DATATYPE_BODY_DEFAULT_SIZE;
-    if (NULL == (out_string = (char *) RV_malloc(out_string_len)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for converted datatype's string buffer");
+    if (NULL == (out_string = (char *)RV_malloc(out_string_len)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
+                        "can't allocate space for converted datatype's string buffer");
 
     /* Keep track of the current position in the resulting string so everything
      * gets added smoothly
@@ -707,8 +719,8 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
     out_string_curr_pos = out_string;
 
     /* Make sure the buffer is at least large enough to hold the leading "type" string */
-    CHECKED_REALLOC(out_string, out_string_len, leading_string_len + 1,
-            out_string_curr_pos, H5E_DATATYPE, FAIL);
+    CHECKED_REALLOC(out_string, out_string_len, leading_string_len + 1, out_string_curr_pos, H5E_DATATYPE,
+                    FAIL);
 
     /* Add the leading "'type': " string */
     if (!nested) {
@@ -736,15 +748,20 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 
         buf_ptrdiff = out_string_curr_pos - out_string;
         if (buf_ptrdiff < 0)
-            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+            FUNC_GOTO_ERROR(
+                H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
 
-        CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
+        CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print, out_string_curr_pos,
+                        H5E_DATATYPE, FAIL);
 
-        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, "\"%s\"", vol_obj->URI)) < 0)
+        if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff, "\"%s\"",
+                                      vol_obj->URI)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-        if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size");
+        if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL,
+                            "datatype string size exceeded allocated buffer size");
 
         out_string_curr_pos += bytes_printed;
 
@@ -760,49 +777,53 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 
     switch ((type_class = H5Tget_class(type_id))) {
         case H5T_INTEGER:
-        case H5T_FLOAT:
-        {
-            const char         *type_name;
-            const char * const  int_class_str = "H5T_INTEGER";
-            const char * const  float_class_str = "H5T_FLOAT";
-            const char * const  fmt_string = "{"
-                                                 "\"class\": \"%s\", "
-                                                 "\"base\": \"%s\""
-                                             "}";
+        case H5T_FLOAT: {
+            const char       *type_name;
+            const char *const int_class_str   = "H5T_INTEGER";
+            const char *const float_class_str = "H5T_FLOAT";
+            const char *const fmt_string      = "{"
+                                                "\"class\": \"%s\", "
+                                                "\"base\": \"%s\""
+                                                "}";
 
             /* Convert the class and name of the datatype to JSON */
             if (NULL == (type_name = RV_convert_predefined_datatype_to_string(type_id)))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype");
 
             /* Check whether the buffer needs to be grown */
-            bytes_to_print = (H5T_INTEGER == type_class ? strlen(int_class_str) : strlen(float_class_str))
-                           + strlen(type_name) + (strlen(fmt_string) - 4) + 1;
+            bytes_to_print = (H5T_INTEGER == type_class ? strlen(int_class_str) : strlen(float_class_str)) +
+                             strlen(type_name) + (strlen(fmt_string) - 4) + 1;
 
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(
+                    H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                    "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                            out_string_curr_pos, H5E_DATATYPE, FAIL);
 
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff, fmt_string,
-                    (H5T_INTEGER == type_class ? int_class_str : float_class_str), type_name)) < 0)
+            if ((bytes_printed =
+                     snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff, fmt_string,
+                              (H5T_INTEGER == type_class ? int_class_str : float_class_str), type_name)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size");
+            if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL,
+                                "datatype string size exceeded allocated buffer size");
 
             out_string_curr_pos += bytes_printed;
 
             break;
         } /* H5T_INTEGER */ /* H5T_FLOAT */
 
-        case H5T_STRING:
-        {
-            const char * const cset_ascii_string = "H5T_CSET_ASCII";
-            htri_t             is_vlen;
+        case H5T_STRING: {
+            const char *const cset_ascii_string = "H5T_CSET_ASCII";
+            htri_t            is_vlen;
 
             if ((is_vlen = H5Tis_variable_str(type_id)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't determine if datatype is variable-length string");
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
+                                "can't determine if datatype is variable-length string");
 
             /* Build the Datatype body by appending the character set for the string type,
              * any type of string padding, and the length of the string */
@@ -812,54 +833,64 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
              * fixed-length strings, but these may change in the future.
              */
             if (is_vlen) {
-                const char * const nullterm_string = "H5T_STR_NULLTERM";
-                const char * const fmt_string = "{"
+                const char *const nullterm_string = "H5T_STR_NULLTERM";
+                const char *const fmt_string      = "{"
                                                     "\"class\": \"H5T_STRING\", "
                                                     "\"charSet\": \"%s\", "
                                                     "\"strPad\": \"%s\", "
                                                     "\"length\": \"H5T_VARIABLE\""
-                                                "}";
+                                                    "}";
 
-                bytes_to_print = (strlen(fmt_string) - 4) + strlen(cset_ascii_string) + strlen(nullterm_string) + 1;
+                bytes_to_print =
+                    (strlen(fmt_string) - 4) + strlen(cset_ascii_string) + strlen(nullterm_string) + 1;
 
                 buf_ptrdiff = out_string_curr_pos - out_string;
                 if (buf_ptrdiff < 0)
-                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                    "unsafe cast: datatype buffer pointer difference was negative - this "
+                                    "should not happen!");
 
-                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
+                CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                out_string_curr_pos, H5E_DATATYPE, FAIL);
 
                 if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - leading_string_len,
                                               fmt_string, cset_ascii_string, nullterm_string)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                if ((size_t) bytes_printed >= out_string_len - leading_string_len)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size");
+                if ((size_t)bytes_printed >= out_string_len - leading_string_len)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL,
+                                    "datatype string size exceeded allocated buffer size");
 
                 out_string_curr_pos += bytes_printed;
             } /* end if */
             else {
-                const char * const nullpad_string = "H5T_STR_NULLPAD";
-                const char * const fmt_string = "{"
-                                                    "\"class\": \"H5T_STRING\", "
-                                                    "\"charSet\": \"%s\", "
-                                                    "\"strPad\": \"%s\", "
-                                                    "\"length\": %zu"
-                                                "}";
+                const char *const nullpad_string = "H5T_STR_NULLPAD";
+                const char *const fmt_string     = "{"
+                                                   "\"class\": \"H5T_STRING\", "
+                                                   "\"charSet\": \"%s\", "
+                                                   "\"strPad\": \"%s\", "
+                                                   "\"length\": %zu"
+                                                   "}";
 
-                bytes_to_print = (strlen(fmt_string) - 7) + strlen(cset_ascii_string) + strlen(nullpad_string) + MAX_NUM_LENGTH + 1;
+                bytes_to_print = (strlen(fmt_string) - 7) + strlen(cset_ascii_string) +
+                                 strlen(nullpad_string) + MAX_NUM_LENGTH + 1;
 
                 buf_ptrdiff = out_string_curr_pos - out_string;
                 if (buf_ptrdiff < 0)
-                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                    "unsafe cast: datatype buffer pointer difference was negative - this "
+                                    "should not happen!");
 
-                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
+                CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                out_string_curr_pos, H5E_DATATYPE, FAIL);
 
                 if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - leading_string_len,
                                               fmt_string, cset_ascii_string, nullpad_string, type_size)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                if ((size_t) bytes_printed >= out_string_len - leading_string_len)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size");
+                if ((size_t)bytes_printed >= out_string_len - leading_string_len)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL,
+                                    "datatype string size exceeded allocated buffer size");
 
                 out_string_curr_pos += bytes_printed;
             } /* end else */
@@ -867,31 +898,36 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             break;
         } /* H5T_STRING */
 
-        case H5T_COMPOUND:
-        {
-            const char         *compound_type_leading_string = "{\"class\": \"H5T_COMPOUND\", \"fields\": [";
-            size_t              compound_type_leading_strlen = strlen(compound_type_leading_string);
-            int                 nmembers;
-            const char * const  fmt_string = "{"
-                                                 "\"name\": \"%s\", "
-                                                 "%s"
-                                             "}%s";
+        case H5T_COMPOUND: {
+            const char       *compound_type_leading_string = "{\"class\": \"H5T_COMPOUND\", \"fields\": [";
+            size_t            compound_type_leading_strlen = strlen(compound_type_leading_string);
+            int               nmembers;
+            const char *const fmt_string = "{"
+                                           "\"name\": \"%s\", "
+                                           "%s"
+                                           "}%s";
 
             if ((nmembers = H5Tget_nmembers(type_id)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve number of members in compound datatype");
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                "can't retrieve number of members in compound datatype");
 
-            if (NULL == (compound_member_strings = (char **) RV_malloc(((size_t) nmembers + 1) * sizeof(*compound_member_strings))))
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for compound datatype member strings");
+            if (NULL == (compound_member_strings =
+                             (char **)RV_malloc(((size_t)nmembers + 1) * sizeof(*compound_member_strings))))
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for compound datatype member strings");
 
-            for (i = 0; i < (size_t) nmembers + 1; i++)
+            for (i = 0; i < (size_t)nmembers + 1; i++)
                 compound_member_strings[i] = NULL;
 
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(
+                    H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                    "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + compound_type_leading_strlen + 1,
-                    out_string_curr_pos, H5E_DATATYPE, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len,
+                            (size_t)buf_ptrdiff + compound_type_leading_strlen + 1, out_string_curr_pos,
+                            H5E_DATATYPE, FAIL);
 
             strncpy(out_string_curr_pos, compound_type_leading_string, compound_type_leading_strlen);
             out_string_curr_pos += compound_type_leading_strlen;
@@ -899,46 +935,53 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             /* For each member in the compound type, convert it into its JSON representation
              * equivalent and append it to the growing datatype string
              */
-            for (i = 0; i < (size_t) nmembers; i++) {
-                if ((compound_member = H5Tget_member_type(type_id, (unsigned) i)) < 0)
+            for (i = 0; i < (size_t)nmembers; i++) {
+                if ((compound_member = H5Tget_member_type(type_id, (unsigned)i)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound datatype member");
 
 #ifdef RV_CONNECTOR_DEBUG
                 printf("-> Converting compound datatype member %zu to JSON\n\n", i);
 #endif
 
-                if (RV_convert_datatype_to_JSON(compound_member, &compound_member_strings[i], NULL, FALSE) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert compound datatype member to JSON representation");
+                if (RV_convert_datatype_to_JSON(compound_member, &compound_member_strings[i], NULL, FALSE) <
+                    0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                                    "can't convert compound datatype member to JSON representation");
 
-                if (NULL == (compound_member_name = H5Tget_member_name(type_id, (unsigned) i)))
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound datatype member name");
+                if (NULL == (compound_member_name = H5Tget_member_name(type_id, (unsigned)i)))
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                    "can't get compound datatype member name");
 
                 /* Check whether the buffer needs to be grown */
-                bytes_to_print = strlen(compound_member_name) + strlen(compound_member_strings[i])
-                        + (strlen(fmt_string) - 6) + (i < (size_t) nmembers - 1 ? 2 : 0) + 1;
+                bytes_to_print = strlen(compound_member_name) + strlen(compound_member_strings[i]) +
+                                 (strlen(fmt_string) - 6) + (i < (size_t)nmembers - 1 ? 2 : 0) + 1;
 
                 buf_ptrdiff = out_string_curr_pos - out_string;
                 if (buf_ptrdiff < 0)
-                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                    "unsafe cast: datatype buffer pointer difference was negative - this "
+                                    "should not happen!");
 
-                CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print,
-                        out_string_curr_pos, H5E_DATATYPE, FAIL);
+                CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                out_string_curr_pos, H5E_DATATYPE, FAIL);
 
-                if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff,
+                if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
                                               fmt_string, compound_member_name, compound_member_strings[i],
-                                              i < (size_t) nmembers - 1 ? ", " : "")) < 0)
+                                              i < (size_t)nmembers - 1 ? ", " : "")) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size");
+                if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL,
+                                    "datatype string size exceeded allocated buffer size");
 
                 out_string_curr_pos += bytes_printed;
 
                 if (H5Tclose(compound_member) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype");
                 if (H5free_memory(compound_member_name) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free compound datatype member name buffer");
-                compound_member = FAIL;
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL,
+                                    "can't free compound datatype member name buffer");
+                compound_member      = FAIL;
                 compound_member_name = NULL;
             } /* end for */
 
@@ -947,9 +990,12 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
              */
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(
+                    H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                    "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + 3, out_string_curr_pos, H5E_DATATYPE, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + 3, out_string_curr_pos,
+                            H5E_DATATYPE, FAIL);
 
             strcat(out_string_curr_pos, "]}");
             out_string_curr_pos += strlen("]}");
@@ -957,96 +1003,107 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             break;
         } /* H5T_COMPOUND */
 
-        case H5T_ENUM:
-        {
-            H5T_sign_t          type_sign;
-            const char         *base_type_name;
-            size_t              enum_mapping_length = 0;
-            char               *mapping_curr_pos;
-            int                 enum_nmembers;
-            const char * const  fmt_string = "{"
-                                                 "\"class\": \"H5T_ENUM\", "
-                                                 "\"base\": {"
-                                                     "\"class\": \"H5T_INTEGER\", "
-                                                     "\"base\": \"%s\""
-                                                 "}, "
-                                                 "\"mapping\": {"
-                                                     "%s"
-                                                 "}"
-                                             "}";
+        case H5T_ENUM: {
+            H5T_sign_t        type_sign;
+            const char       *base_type_name;
+            size_t            enum_mapping_length = 0;
+            char             *mapping_curr_pos;
+            int               enum_nmembers;
+            const char *const fmt_string = "{"
+                                           "\"class\": \"H5T_ENUM\", "
+                                           "\"base\": {"
+                                           "\"class\": \"H5T_INTEGER\", "
+                                           "\"base\": \"%s\""
+                                           "}, "
+                                           "\"mapping\": {"
+                                           "%s"
+                                           "}"
+                                           "}";
 
             if (H5T_SGN_ERROR == (type_sign = H5Tget_sign(type_id)))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get sign of enum base datatype");
 
             if ((enum_nmembers = H5Tget_nmembers(type_id)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't get number of members of enumerated type");
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
+                                "can't get number of members of enumerated type");
 
             if (NULL == (enum_value = RV_calloc(H5_SIZEOF_LONG_LONG)))
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for enum member value");
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for enum member value");
 
             enum_mapping_length = ENUM_MAPPING_DEFAULT_SIZE;
-            if (NULL == (enum_mapping = (char *) RV_malloc(enum_mapping_length)))
+            if (NULL == (enum_mapping = (char *)RV_malloc(enum_mapping_length)))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for enum mapping");
 
             /* For each member in the enum type, retrieve the member's name and value, then
              * append these to the growing datatype string
              */
-            for (i = 0, mapping_curr_pos = enum_mapping; i < (size_t) enum_nmembers; i++) {
-                if (NULL == (enum_value_name = H5Tget_member_name(type_id, (unsigned) i)))
+            for (i = 0, mapping_curr_pos = enum_mapping; i < (size_t)enum_nmembers; i++) {
+                if (NULL == (enum_value_name = H5Tget_member_name(type_id, (unsigned)i)))
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't get name of enum member");
 
-                if (H5Tget_member_value(type_id, (unsigned) i, enum_value) < 0)
+                if (H5Tget_member_value(type_id, (unsigned)i, enum_value) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't retrieve value of enum member");
 
                 /* Determine the correct cast type for the enum value buffer and then append this member's
                  * name and numeric value to the mapping list.
                  */
                 if (H5T_SGN_NONE == type_sign) {
-                    const char * const mapping_fmt_string = "\"%s\": %llu%s";
+                    const char *const mapping_fmt_string = "\"%s\": %llu%s";
 
                     /* Check if the mapping buffer needs to grow */
-                    bytes_to_print = strlen(enum_value_name) + MAX_NUM_LENGTH + (strlen(mapping_fmt_string) - 8)
-                                   + (i < (size_t) enum_nmembers - 1 ? 2 : 0) + 1;
+                    bytes_to_print = strlen(enum_value_name) + MAX_NUM_LENGTH +
+                                     (strlen(mapping_fmt_string) - 8) +
+                                     (i < (size_t)enum_nmembers - 1 ? 2 : 0) + 1;
 
                     buf_ptrdiff = mapping_curr_pos - enum_mapping;
                     if (buf_ptrdiff < 0)
-                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                        "unsafe cast: datatype buffer pointer difference was negative - this "
+                                        "should not happen!");
 
-                    CHECKED_REALLOC(enum_mapping, enum_mapping_length, (size_t) buf_ptrdiff + bytes_to_print,
-                            mapping_curr_pos, H5E_DATATYPE, FAIL);
+                    CHECKED_REALLOC(enum_mapping, enum_mapping_length, (size_t)buf_ptrdiff + bytes_to_print,
+                                    mapping_curr_pos, H5E_DATATYPE, FAIL);
 
-                    if ((bytes_printed = snprintf(mapping_curr_pos, enum_mapping_length - (size_t) buf_ptrdiff,
-                                                  mapping_fmt_string, enum_value_name, *((unsigned long long int *) enum_value),
-                                                  i < (size_t) enum_nmembers - 1 ? ", " : "")) < 0)
+                    if ((bytes_printed = snprintf(mapping_curr_pos, enum_mapping_length - (size_t)buf_ptrdiff,
+                                                  mapping_fmt_string, enum_value_name,
+                                                  *((unsigned long long int *)enum_value),
+                                                  i < (size_t)enum_nmembers - 1 ? ", " : "")) < 0)
                         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
                 } /* end if */
                 else {
-                    const char * const mapping_fmt_string = "\"%s\": %lld%s";
+                    const char *const mapping_fmt_string = "\"%s\": %lld%s";
 
                     /* Check if the mapping buffer needs to grow */
-                    bytes_to_print = strlen(enum_value_name) + MAX_NUM_LENGTH + (strlen(mapping_fmt_string) - 8)
-                                   + (i < (size_t) enum_nmembers - 1 ? 2 : 0) + 1;
+                    bytes_to_print = strlen(enum_value_name) + MAX_NUM_LENGTH +
+                                     (strlen(mapping_fmt_string) - 8) +
+                                     (i < (size_t)enum_nmembers - 1 ? 2 : 0) + 1;
 
                     buf_ptrdiff = mapping_curr_pos - enum_mapping;
                     if (buf_ptrdiff < 0)
-                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+                        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                        "unsafe cast: datatype buffer pointer difference was negative - this "
+                                        "should not happen!");
 
-                    CHECKED_REALLOC(enum_mapping, enum_mapping_length, (size_t) buf_ptrdiff + bytes_to_print,
-                            mapping_curr_pos, H5E_DATATYPE, FAIL);
+                    CHECKED_REALLOC(enum_mapping, enum_mapping_length, (size_t)buf_ptrdiff + bytes_to_print,
+                                    mapping_curr_pos, H5E_DATATYPE, FAIL);
 
-                    if ((bytes_printed = snprintf(mapping_curr_pos, enum_mapping_length - (size_t) buf_ptrdiff,
-                                                  mapping_fmt_string, enum_value_name, *((long long int *) enum_value),
-                                                  i < (size_t) enum_nmembers - 1 ? ", " : "")) < 0)
+                    if ((bytes_printed =
+                             snprintf(mapping_curr_pos, enum_mapping_length - (size_t)buf_ptrdiff,
+                                      mapping_fmt_string, enum_value_name, *((long long int *)enum_value),
+                                      i < (size_t)enum_nmembers - 1 ? ", " : "")) < 0)
                         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
                 } /* end else */
 
-                if ((size_t) bytes_printed >= enum_mapping_length - (size_t) buf_ptrdiff)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "enum member string size exceeded allocated mapping buffer size");
+                if ((size_t)bytes_printed >= enum_mapping_length - (size_t)buf_ptrdiff)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL,
+                                    "enum member string size exceeded allocated mapping buffer size");
 
                 mapping_curr_pos += bytes_printed;
 
                 if (H5free_memory(enum_value_name) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free memory allocated for enum member name");
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL,
+                                    "can't free memory allocated for enum member name");
                 enum_value_name = NULL;
             } /* end for */
 
@@ -1066,50 +1123,55 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(
+                    H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                    "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print,
-                    out_string_curr_pos, H5E_DATATYPE, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                            out_string_curr_pos, H5E_DATATYPE, FAIL);
 
             /* Build the Datatype body by appending the base integer type class for the enum
              * and the mapping values to map from numeric values to
              * string representations.
              */
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff,
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
                                           fmt_string, base_type_name, enum_mapping)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size");
+            if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL,
+                                "datatype string size exceeded allocated buffer size");
 
             out_string_curr_pos += bytes_printed;
 
             break;
         } /* H5T_ENUM */
 
-        case H5T_ARRAY:
-        {
-            size_t              array_base_type_len = 0;
-            char               *array_shape_curr_pos;
-            int                 ndims;
-            const char * const  fmt_string = "{"
-                                                 "\"class\": \"H5T_ARRAY\", "
-                                                 "\"base\": %s, "
-                                                 "\"dims\": %s"
-                                             "}";
+        case H5T_ARRAY: {
+            size_t            array_base_type_len = 0;
+            char             *array_shape_curr_pos;
+            int               ndims;
+            const char *const fmt_string = "{"
+                                           "\"class\": \"H5T_ARRAY\", "
+                                           "\"base\": %s, "
+                                           "\"dims\": %s"
+                                           "}";
 
             if ((ndims = H5Tget_array_ndims(type_id)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't get array datatype number of dimensions");
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
+                                "can't get array datatype number of dimensions");
             if (!ndims)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "0-sized array datatype");
 
-            if (NULL == (array_shape = (char *) RV_malloc((size_t) (ndims * MAX_NUM_LENGTH + ndims + 3))))
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array datatype dimensionality string");
-            array_shape_curr_pos = array_shape;
+            if (NULL == (array_shape = (char *)RV_malloc((size_t)(ndims * MAX_NUM_LENGTH + ndims + 3))))
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for array datatype dimensionality string");
+            array_shape_curr_pos  = array_shape;
             *array_shape_curr_pos = '\0';
 
-            if (NULL == (array_dims = (hsize_t *) RV_malloc((size_t) ndims * sizeof(*array_dims))))
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array datatype dimensions");
+            if (NULL == (array_dims = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*array_dims))))
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for array datatype dimensions");
 
             if (H5Tget_array_dims2(type_id, array_dims) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get array datatype dimensions");
@@ -1117,12 +1179,14 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             strcat(array_shape_curr_pos++, "[");
 
             /* Setup the shape of the array Datatype */
-            for (i = 0; i < (size_t) ndims; i++) {
-                if ((bytes_printed = snprintf(array_shape_curr_pos, MAX_NUM_LENGTH, "%s%" PRIuHSIZE, i > 0 ? "," : "", array_dims[i])) < 0)
+            for (i = 0; i < (size_t)ndims; i++) {
+                if ((bytes_printed = snprintf(array_shape_curr_pos, MAX_NUM_LENGTH, "%s%" PRIuHSIZE,
+                                              i > 0 ? "," : "", array_dims[i])) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                 if (bytes_printed >= MAX_NUM_LENGTH)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "array dimension size string exceeded maximum number string size");
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL,
+                                    "array dimension size string exceeded maximum number string size");
 
                 array_shape_curr_pos += bytes_printed;
             } /* end for */
@@ -1134,92 +1198,99 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get base datatype for array type");
 
             if ((type_is_committed = H5Tcommitted(type_base_class)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine if array base datatype is committed");
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                "can't determine if array base datatype is committed");
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Converting array datatype's base datatype to JSON\n\n");
 #endif
 
-            if (RV_convert_datatype_to_JSON(type_base_class, &array_base_type, &array_base_type_len, TRUE) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert datatype to JSON representation");
+            if (RV_convert_datatype_to_JSON(type_base_class, &array_base_type, &array_base_type_len, TRUE) <
+                0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                                "can't convert datatype to JSON representation");
 
             /* Check whether the buffer needs to be grown */
             bytes_to_print = array_base_type_len + strlen(array_shape) + (strlen(fmt_string) - 4) + 1;
 
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(
+                    H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                    "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print,
-                    out_string_curr_pos, H5E_DATATYPE, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                            out_string_curr_pos, H5E_DATATYPE, FAIL);
 
-            /* Build the Datatype body by appending the array type class and base type and dimensions of the array */
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff,
+            /* Build the Datatype body by appending the array type class and base type and dimensions of the
+             * array */
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
                                           fmt_string, array_base_type, array_shape)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size");
+            if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL,
+                                "datatype string size exceeded allocated buffer size");
 
             out_string_curr_pos += bytes_printed;
 
             break;
         } /* H5T_ARRAY */
 
-        case H5T_BITFIELD:
-        {
+        case H5T_BITFIELD: {
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - bitfield");
             break;
         } /* H5T_BITFIELD */
 
-        case H5T_OPAQUE:
-        {
+        case H5T_OPAQUE: {
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - opaque");
             break;
         } /* H5T_OPAQUE */
 
-        case H5T_REFERENCE:
-        {
-            htri_t             is_obj_ref;
-            const char * const obj_ref_str = "H5T_STD_REF_OBJ";
-            const char * const reg_ref_str = "H5T_STD_REF_DSETREG";
-            const char * const fmt_string = "{"
-                                                "\"class\": \"H5T_REFERENCE\","
-                                                "\"base\": \"%s\""
+        case H5T_REFERENCE: {
+            htri_t            is_obj_ref;
+            const char *const obj_ref_str = "H5T_STD_REF_OBJ";
+            const char *const reg_ref_str = "H5T_STD_REF_DSETREG";
+            const char *const fmt_string  = "{"
+                                            "\"class\": \"H5T_REFERENCE\","
+                                            "\"base\": \"%s\""
                                             "}";
 
             is_obj_ref = H5Tequal(type_id, H5T_STD_REF_OBJ);
             if (is_obj_ref < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't determine type of reference");
 
-            bytes_to_print = (strlen(fmt_string) - 2) + (is_obj_ref ? strlen(obj_ref_str) : strlen(reg_ref_str)) + 1;
+            bytes_to_print =
+                (strlen(fmt_string) - 2) + (is_obj_ref ? strlen(obj_ref_str) : strlen(reg_ref_str)) + 1;
 
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(
+                    H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                    "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
 
-            CHECKED_REALLOC(out_string, out_string_len, (size_t) buf_ptrdiff + bytes_to_print, out_string_curr_pos, H5E_DATATYPE, FAIL);
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                            out_string_curr_pos, H5E_DATATYPE, FAIL);
 
-            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t) buf_ptrdiff,
-                    fmt_string, is_obj_ref ? obj_ref_str : reg_ref_str)) < 0)
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                          fmt_string, is_obj_ref ? obj_ref_str : reg_ref_str)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-            if ((size_t) bytes_printed >= out_string_len - (size_t) buf_ptrdiff)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "datatype string size exceeded allocated buffer size");
+            if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL,
+                                "datatype string size exceeded allocated buffer size");
 
             out_string_curr_pos += bytes_printed;
 
             break;
         } /* H5T_REFERENCE */
 
-        case H5T_VLEN:
-        {
+        case H5T_VLEN: {
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - VLEN");
             break;
         } /* H5T_VLEN */
 
-        case H5T_TIME:
-        {
+        case H5T_TIME: {
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - time");
             break;
         } /* H5T_TIME */
@@ -1236,9 +1307,11 @@ done:
         if (type_body_len) {
             buf_ptrdiff = out_string_curr_pos - out_string;
             if (buf_ptrdiff < 0)
-                FUNC_DONE_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+                FUNC_DONE_ERROR(
+                    H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                    "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
             else
-                *type_body_len = (size_t) buf_ptrdiff;
+                *type_body_len = (size_t)buf_ptrdiff;
         } /* end if */
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1277,7 +1350,6 @@ done:
     return ret_value;
 } /* end RV_convert_datatype_to_JSON() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_convert_JSON_to_datatype
  *
@@ -1329,18 +1401,18 @@ done:
 static hid_t
 RV_convert_JSON_to_datatype(const char *type)
 {
-    yajl_val   parse_tree = NULL, key_obj = NULL;
-    hsize_t   *array_dims = NULL;
-    size_t     i;
-    hid_t      datatype = FAIL;
-    hid_t     *compound_member_type_array = NULL;
-    hid_t      enum_base_type = FAIL;
-    char     **compound_member_names = NULL;
-    char      *datatype_class = NULL;
-    char      *array_base_type_substring = NULL;
-    char      *tmp_cmpd_type_buffer = NULL;
-    char      *tmp_enum_base_type_buffer = NULL;
-    hid_t      ret_value = FAIL;
+    yajl_val parse_tree = NULL, key_obj = NULL;
+    hsize_t *array_dims = NULL;
+    size_t   i;
+    hid_t    datatype                   = FAIL;
+    hid_t   *compound_member_type_array = NULL;
+    hid_t    enum_base_type             = FAIL;
+    char   **compound_member_names      = NULL;
+    char    *datatype_class             = NULL;
+    char    *array_base_type_substring  = NULL;
+    char    *tmp_cmpd_type_buffer       = NULL;
+    char    *tmp_enum_base_type_buffer  = NULL;
+    hid_t    ret_value                  = FAIL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting JSON buffer %s to hid_t\n", type);
@@ -1358,8 +1430,8 @@ RV_convert_JSON_to_datatype(const char *type)
 
     /* Create the appropriate datatype or copy an existing one */
     if (!strcmp(datatype_class, "H5T_INTEGER")) {
-        hbool_t  is_predefined = TRUE;
-        char    *type_base = NULL;
+        hbool_t is_predefined = TRUE;
+        char   *type_base     = NULL;
 
         if (NULL == (key_obj = yajl_tree_get(parse_tree, type_base_keys, yajl_t_string)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type");
@@ -1368,9 +1440,9 @@ RV_convert_JSON_to_datatype(const char *type)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type");
 
         if (is_predefined) {
-            hbool_t  is_unsigned;
-            hid_t    predefined_type = FAIL;
-            char    *type_base_ptr = type_base + 8;
+            hbool_t is_unsigned;
+            hid_t   predefined_type = FAIL;
+            char   *type_base_ptr   = type_base + 8;
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Predefined Integer type sign: %c\n", *type_base_ptr);
@@ -1483,13 +1555,14 @@ RV_convert_JSON_to_datatype(const char *type)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy predefined integer datatype");
         } /* end if */
         else {
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "non-predefined integer types are unsupported");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                            "non-predefined integer types are unsupported");
         } /* end else */
-    } /* end if */
+    }     /* end if */
     else if (!strcmp(datatype_class, "H5T_FLOAT")) {
-        hbool_t  is_predefined = TRUE;
-        hid_t    predefined_type = FAIL;
-        char    *type_base = NULL;
+        hbool_t is_predefined   = TRUE;
+        hid_t   predefined_type = FAIL;
+        char   *type_base       = NULL;
 
         if (NULL == (key_obj = yajl_tree_get(parse_tree, type_base_keys, yajl_t_string)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type");
@@ -1508,7 +1581,8 @@ RV_convert_JSON_to_datatype(const char *type)
                 /* 32-bit floating point */
                 case '3':
 #ifdef RV_CONNECTOR_DEBUG
-                    printf("-> 32-bit Floating Point - %s\n", (*(type_base_ptr + 2) == 'L') ? "Little-endian" : "Big-endian");
+                    printf("-> 32-bit Floating Point - %s\n",
+                           (*(type_base_ptr + 2) == 'L') ? "Little-endian" : "Big-endian");
 #endif
 
                     /* Determine whether the floating point type is big- or little-endian */
@@ -1519,7 +1593,8 @@ RV_convert_JSON_to_datatype(const char *type)
                 /* 64-bit floating point */
                 case '6':
 #ifdef RV_CONNECTOR_DEBUG
-                    printf("-> 64-bit Floating Point - %s\n", (*(type_base_ptr + 2) == 'L') ? "Little-endian" : "Big-endian");
+                    printf("-> 64-bit Floating Point - %s\n",
+                           (*(type_base_ptr + 2) == 'L') ? "Little-endian" : "Big-endian");
 #endif
 
                     predefined_type = (*(type_base_ptr + 2) == 'L') ? H5T_IEEE_F64LE : H5T_IEEE_F64BE;
@@ -1527,21 +1602,24 @@ RV_convert_JSON_to_datatype(const char *type)
                     break;
 
                 default:
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unknown predefined floating-point datatype");
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
+                                    "unknown predefined floating-point datatype");
             } /* end switch */
 
             if ((datatype = H5Tcopy(predefined_type)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL, "can't copy predefined floating-point datatype");
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, FAIL,
+                                "can't copy predefined floating-point datatype");
         } /* end if */
         else {
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "non-predefined floating-point types are unsupported");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                            "non-predefined floating-point types are unsupported");
         } /* end else */
-    } /* end if */
+    }     /* end if */
     else if (!strcmp(datatype_class, "H5T_STRING")) {
-        long long  fixed_length = 0;
-        hbool_t    is_variable_str;
-        char      *charSet = NULL;
-        char      *strPad = NULL;
+        long long fixed_length = 0;
+        hbool_t   is_variable_str;
+        char     *charSet = NULL;
+        char     *strPad  = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> String datatype\n");
@@ -1557,13 +1635,14 @@ RV_convert_JSON_to_datatype(const char *type)
         printf("-> %s string\n", is_variable_str ? "Variable-length" : "Fixed-length");
 #endif
 
-
         /* Retrieve and check the string datatype's character set */
         if (NULL == (key_obj = yajl_tree_get(parse_tree, str_charset_keys, yajl_t_string)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's character set");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "can't retrieve string datatype's character set");
 
         if (NULL == (charSet = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's character set");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "can't retrieve string datatype's character set");
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> String charSet: %s\n", charSet);
@@ -1571,19 +1650,23 @@ RV_convert_JSON_to_datatype(const char *type)
 
         /* Currently, only H5T_CSET_ASCII character set is supported */
         if (strcmp(charSet, "H5T_CSET_ASCII"))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported character set for string datatype");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                            "unsupported character set for string datatype");
 
         /* Retrieve and check the string datatype's string padding */
         if (NULL == (key_obj = yajl_tree_get(parse_tree, str_pad_keys, yajl_t_string)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's padding type");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "can't retrieve string datatype's padding type");
 
         if (NULL == (strPad = YAJL_GET_STRING(key_obj)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's padding type");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "can't retrieve string datatype's padding type");
 
         /* Currently, only H5T_STR_NULLPAD string padding is supported for fixed-length strings
          * and H5T_STR_NULLTERM for variable-length strings */
         if (strcmp(strPad, is_variable_str ? "H5T_STR_NULLTERM" : "H5T_STR_NULLPAD"))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported string padding type for string datatype");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                            "unsupported string padding type for string datatype");
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> String padding: %s\n", strPad);
@@ -1593,29 +1676,32 @@ RV_convert_JSON_to_datatype(const char *type)
         if (NULL == (key_obj = yajl_tree_get(parse_tree, str_length_keys, yajl_t_any)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's length");
 
-        if (!is_variable_str) fixed_length = YAJL_GET_INTEGER(key_obj);
+        if (!is_variable_str)
+            fixed_length = YAJL_GET_INTEGER(key_obj);
         if (fixed_length < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype length");
 
-        if ((datatype = H5Tcreate(H5T_STRING, is_variable_str ? H5T_VARIABLE : (size_t) fixed_length)) < 0)
+        if ((datatype = H5Tcreate(H5T_STRING, is_variable_str ? H5T_VARIABLE : (size_t)fixed_length)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create string datatype");
 
         if (H5Tset_cset(datatype, H5T_CSET_ASCII) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't set character set for string datatype");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL,
+                            "can't set character set for string datatype");
 
         if (H5Tset_strpad(datatype, is_variable_str ? H5T_STR_NULLTERM : H5T_STR_NULLPAD) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't set string padding for string datatype");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL,
+                            "can't set string padding for string datatype");
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_OPAQUE")) {
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - opaque");
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_COMPOUND")) {
-        ptrdiff_t  buf_ptrdiff;
-        size_t     tmp_cmpd_type_buffer_size;
-        size_t     total_type_size = 0;
-        size_t     current_offset = 0;
-        char      *type_section_ptr = NULL;
-        char      *section_start, *section_end;
+        ptrdiff_t buf_ptrdiff;
+        size_t    tmp_cmpd_type_buffer_size;
+        size_t    total_type_size  = 0;
+        size_t    current_offset   = 0;
+        char     *type_section_ptr = NULL;
+        char     *section_start, *section_end;
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Compound Datatype\n");
@@ -1623,25 +1709,32 @@ RV_convert_JSON_to_datatype(const char *type)
 
         /* Retrieve the compound member fields array */
         if (NULL == (key_obj = yajl_tree_get(parse_tree, compound_field_keys, yajl_t_array)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve compound datatype's members array");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "can't retrieve compound datatype's members array");
 
         if (!YAJL_GET_ARRAY(key_obj)->len)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "0-sized compound datatype members array");
 
-        if (NULL == (compound_member_type_array = (hid_t *) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*compound_member_type_array))))
+        if (NULL == (compound_member_type_array = (hid_t *)RV_malloc(YAJL_GET_ARRAY(key_obj)->len *
+                                                                     sizeof(*compound_member_type_array))))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate compound datatype");
-        for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) compound_member_type_array[i] = FAIL;
+        for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++)
+            compound_member_type_array[i] = FAIL;
 
-        if (NULL == (compound_member_names = (char **) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*compound_member_names))))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate compound datatype member names array");
-        for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) compound_member_names[i] = NULL;
+        if (NULL == (compound_member_names =
+                         (char **)RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*compound_member_names))))
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
+                            "can't allocate compound datatype member names array");
+        for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++)
+            compound_member_names[i] = NULL;
 
         /* Allocate space for a temporary buffer used to extract and process the substring corresponding to
          * each compound member's datatype
          */
         tmp_cmpd_type_buffer_size = DATATYPE_BODY_DEFAULT_SIZE;
-        if (NULL == (tmp_cmpd_type_buffer = (char *) RV_malloc(tmp_cmpd_type_buffer_size)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate temporary buffer for storing type information");
+        if (NULL == (tmp_cmpd_type_buffer = (char *)RV_malloc(tmp_cmpd_type_buffer_size)))
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
+                            "can't allocate temporary buffer for storing type information");
 
         /* Retrieve the names of all of the members of the Compound Datatype */
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
@@ -1649,32 +1742,39 @@ RV_convert_JSON_to_datatype(const char *type)
             size_t   j;
 
             if (NULL == (compound_member_field = YAJL_GET_ARRAY(key_obj)->values[i]))
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't get compound field member %zu information", i);
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                                "can't get compound field member %zu information", i);
 
             for (j = 0; j < YAJL_GET_OBJECT(compound_member_field)->len; j++) {
                 if (!strcmp(YAJL_GET_OBJECT(compound_member_field)->keys[j], "name"))
-                    if (NULL == (compound_member_names[i] = YAJL_GET_STRING(YAJL_GET_OBJECT(compound_member_field)->values[j])))
-                        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't get compound field member %zu name", j);
+                    if (NULL == (compound_member_names[i] =
+                                     YAJL_GET_STRING(YAJL_GET_OBJECT(compound_member_field)->values[j])))
+                        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                                        "can't get compound field member %zu name", j);
             } /* end for */
-        } /* end for */
+        }     /* end for */
 
-        /* For each field in the Compound Datatype's string representation, locate the beginning and end of its "type"
-         * section and copy that substring into the temporary buffer. Then, convert that substring into an hid_t and
-         * store it for later insertion once the Compound Datatype has been created.
+        /* For each field in the Compound Datatype's string representation, locate the beginning and end of
+         * its "type" section and copy that substring into the temporary buffer. Then, convert that substring
+         * into an hid_t and store it for later insertion once the Compound Datatype has been created.
          */
 
         /* Start the search from the "fields" JSON key */
         if (NULL == (type_section_ptr = strstr(type, "\"fields\"")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find \"fields\" information section in datatype string");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "can't find \"fields\" information section in datatype string");
 
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
             /* Find the beginning of the "type" section for this Compound Datatype member */
             if (NULL == (type_section_ptr = strstr(type_section_ptr, "\"type\"")))
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find \"type\" information section in datatype string");
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                                "can't find \"type\" information section in datatype string");
 
             /* Search for the initial '{' brace that begins the section */
             if (NULL == (section_start = strstr(type_section_ptr, "{")))
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find beginning '{' of \"type\" information section in datatype string - misformatted JSON likely");
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                                "can't find beginning '{' of \"type\" information section in datatype string "
+                                "- misformatted JSON likely");
 
             /* Continue forward through the string buffer character-by-character until the end of this JSON
              * object section is found.
@@ -1684,16 +1784,20 @@ RV_convert_JSON_to_datatype(const char *type)
             /* Check if the temporary buffer needs to grow to accommodate this "type" substring */
             buf_ptrdiff = section_end - type_section_ptr;
             if (buf_ptrdiff < 0)
-                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+                FUNC_GOTO_ERROR(
+                    H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                    "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
 
-            CHECKED_REALLOC_NO_PTR(tmp_cmpd_type_buffer, tmp_cmpd_type_buffer_size, (size_t) buf_ptrdiff + 3, H5E_DATATYPE, FAIL);
+            CHECKED_REALLOC_NO_PTR(tmp_cmpd_type_buffer, tmp_cmpd_type_buffer_size, (size_t)buf_ptrdiff + 3,
+                                   H5E_DATATYPE, FAIL);
 
-            /* Copy the "type" substring into the temporary buffer, wrapping it in enclosing braces to ensure that the
-             * string-to-datatype conversion function can correctly process the string
+            /* Copy the "type" substring into the temporary buffer, wrapping it in enclosing braces to ensure
+             * that the string-to-datatype conversion function can correctly process the string
              */
-            memcpy(tmp_cmpd_type_buffer + 1, type_section_ptr, (size_t) buf_ptrdiff);
-            tmp_cmpd_type_buffer[0] = '{'; tmp_cmpd_type_buffer[(size_t) buf_ptrdiff + 1] = '}';
-            tmp_cmpd_type_buffer[(size_t) buf_ptrdiff + 2] = '\0';
+            memcpy(tmp_cmpd_type_buffer + 1, type_section_ptr, (size_t)buf_ptrdiff);
+            tmp_cmpd_type_buffer[0]                       = '{';
+            tmp_cmpd_type_buffer[(size_t)buf_ptrdiff + 1] = '}';
+            tmp_cmpd_type_buffer[(size_t)buf_ptrdiff + 2] = '\0';
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Compound datatype member %zu name: %s\n", i, compound_member_names[i]);
@@ -1701,7 +1805,8 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
             if ((compound_member_type_array[i] = RV_convert_JSON_to_datatype(tmp_cmpd_type_buffer)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert compound datatype member %zu from JSON representation", i);
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                                "can't convert compound datatype member %zu from JSON representation", i);
 
             total_type_size += H5Tget_size(compound_member_type_array[i]);
 
@@ -1714,17 +1819,19 @@ RV_convert_JSON_to_datatype(const char *type)
 
         /* Insert all fields into the Compound Datatype */
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
-            if (H5Tinsert(datatype, compound_member_names[i], current_offset, compound_member_type_array[i]) < 0)
+            if (H5Tinsert(datatype, compound_member_names[i], current_offset, compound_member_type_array[i]) <
+                0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTINSERT, FAIL, "can't insert compound datatype member");
             current_offset += H5Tget_size(compound_member_type_array[i]);
         } /* end for */
-    } /* end if */
+    }     /* end if */
     else if (!strcmp(datatype_class, "H5T_ARRAY")) {
-        const char * const  type_string = "{\"type\":"; /* Gets prepended to the array "base" datatype substring */
-        ptrdiff_t           buf_ptrdiff;
-        size_t              type_string_len = strlen(type_string);
-        char               *base_type_substring_start, *base_type_substring_end;
-        hid_t               base_type_id = FAIL;
+        const char *const type_string =
+            "{\"type\":"; /* Gets prepended to the array "base" datatype substring */
+        ptrdiff_t buf_ptrdiff;
+        size_t    type_string_len = strlen(type_string);
+        char     *base_type_substring_start, *base_type_substring_end;
+        hid_t     base_type_id = FAIL;
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Array datatype\n");
@@ -1737,18 +1844,19 @@ RV_convert_JSON_to_datatype(const char *type)
         if (!YAJL_GET_ARRAY(key_obj)->len)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "0-sized array");
 
-        if (NULL == (array_dims = (hsize_t *) RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*array_dims))))
+        if (NULL == (array_dims = (hsize_t *)RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*array_dims))))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array dimensions");
 
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
             if (YAJL_IS_INTEGER(YAJL_GET_ARRAY(key_obj)->values[i]))
-                array_dims[i] = (hsize_t) YAJL_GET_INTEGER(YAJL_GET_ARRAY(key_obj)->values[i]);
+                array_dims[i] = (hsize_t)YAJL_GET_INTEGER(YAJL_GET_ARRAY(key_obj)->values[i]);
         } /* end for */
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Array datatype dimensions: [");
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
-            if (i > 0) printf(", ");
+            if (i > 0)
+                printf(", ");
             printf("%llu", array_dims[i]);
         }
         printf("]\n");
@@ -1756,9 +1864,11 @@ RV_convert_JSON_to_datatype(const char *type)
 
         /* Locate the beginning and end braces of the "base" section for the array datatype */
         if (NULL == (base_type_substring_start = strstr(type, "\"base\"")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't find \"base\" type information in datatype string");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "can't find \"base\" type information in datatype string");
         if (NULL == (base_type_substring_start = strstr(base_type_substring_start, "{")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "incorrectly formatted \"base\" type information in datatype string");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "incorrectly formatted \"base\" type information in datatype string");
 
         FIND_JSON_SECTION_END(base_type_substring_start, base_type_substring_end, H5E_DATATYPE, FAIL);
 
@@ -1767,19 +1877,23 @@ RV_convert_JSON_to_datatype(const char *type)
          */
         buf_ptrdiff = base_type_substring_end - base_type_substring_start;
         if (buf_ptrdiff < 0)
-            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+            FUNC_GOTO_ERROR(
+                H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
 
-        if (NULL == (array_base_type_substring = (char *) RV_malloc((size_t) buf_ptrdiff + type_string_len + 2)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array base type substring");
+        if (NULL ==
+            (array_base_type_substring = (char *)RV_malloc((size_t)buf_ptrdiff + type_string_len + 2)))
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
+                            "can't allocate space for array base type substring");
 
         /* In order for the conversion function to correctly process the datatype string, it must be in the
          * form {"type": {...}}. Since the enclosing braces and the leading "type:" string are missing from
          * the substring we have extracted, add them here before processing occurs.
          */
         memcpy(array_base_type_substring, type_string, type_string_len);
-        memcpy(array_base_type_substring + type_string_len, base_type_substring_start, (size_t) buf_ptrdiff);
-        array_base_type_substring[type_string_len + (size_t) buf_ptrdiff] = '}';
-        array_base_type_substring[type_string_len + (size_t) buf_ptrdiff + 1] = '\0';
+        memcpy(array_base_type_substring + type_string_len, base_type_substring_start, (size_t)buf_ptrdiff);
+        array_base_type_substring[type_string_len + (size_t)buf_ptrdiff]     = '}';
+        array_base_type_substring[type_string_len + (size_t)buf_ptrdiff + 1] = '\0';
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Converting array base datatype string to hid_t\n");
@@ -1787,17 +1901,19 @@ RV_convert_JSON_to_datatype(const char *type)
 
         /* Convert the string representation of the array's base datatype to an hid_t */
         if ((base_type_id = RV_convert_JSON_to_datatype(array_base_type_substring)) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert JSON representation of array base datatype to a usable form");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                            "can't convert JSON representation of array base datatype to a usable form");
 
-        if ((datatype = H5Tarray_create2(base_type_id, (unsigned) i, array_dims)) < 0)
+        if ((datatype = H5Tarray_create2(base_type_id, (unsigned)i, array_dims)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create array datatype");
     } /* end if */
     else if (!strcmp(datatype_class, "H5T_ENUM")) {
-        const char * const  type_string = "{\"type\":"; /* Gets prepended to the enum "base" datatype substring */
-        ptrdiff_t           buf_ptrdiff;
-        size_t              type_string_len = strlen(type_string);
-        char               *base_section_ptr = NULL;
-        char               *base_section_end = NULL;
+        const char *const type_string =
+            "{\"type\":"; /* Gets prepended to the enum "base" datatype substring */
+        ptrdiff_t buf_ptrdiff;
+        size_t    type_string_len  = strlen(type_string);
+        char     *base_section_ptr = NULL;
+        char     *base_section_end = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Enum Datatype\n");
@@ -1805,9 +1921,11 @@ RV_convert_JSON_to_datatype(const char *type)
 
         /* Locate the beginning and end braces of the "base" section for the enum datatype */
         if (NULL == (base_section_ptr = strstr(type, "\"base\"")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "incorrectly formatted datatype string - missing \"base\" datatype section");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "incorrectly formatted datatype string - missing \"base\" datatype section");
         if (NULL == (base_section_ptr = strstr(base_section_ptr, "{")))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "incorrectly formatted \"base\" datatype section in datatype string");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "incorrectly formatted \"base\" datatype section in datatype string");
 
         FIND_JSON_SECTION_END(base_section_ptr, base_section_end, H5E_DATATYPE, FAIL);
 
@@ -1816,40 +1934,50 @@ RV_convert_JSON_to_datatype(const char *type)
          */
         buf_ptrdiff = base_section_end - base_section_ptr;
         if (buf_ptrdiff < 0)
-            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+            FUNC_GOTO_ERROR(
+                H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
 
-        if (NULL == (tmp_enum_base_type_buffer = (char *) RV_malloc((size_t) buf_ptrdiff + type_string_len + 2)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for enum base datatype temporary buffer");
+        if (NULL ==
+            (tmp_enum_base_type_buffer = (char *)RV_malloc((size_t)buf_ptrdiff + type_string_len + 2)))
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
+                            "can't allocate space for enum base datatype temporary buffer");
 
         /* In order for the conversion function to correctly process the datatype string, it must be in the
          * form {"type": {...}}. Since the enclosing braces and the leading "type:" string are missing from
          * the substring we have extracted, add them here before processing occurs.
          */
         memcpy(tmp_enum_base_type_buffer, type_string, type_string_len); /* Prepend the "type" string */
-        memcpy(tmp_enum_base_type_buffer + type_string_len, base_section_ptr, (size_t) buf_ptrdiff); /* Append the "base" information substring */
-        tmp_enum_base_type_buffer[type_string_len + (size_t) buf_ptrdiff] = '}';
-        tmp_enum_base_type_buffer[type_string_len + (size_t) buf_ptrdiff + 1] = '\0';
+        memcpy(tmp_enum_base_type_buffer + type_string_len, base_section_ptr,
+               (size_t)buf_ptrdiff); /* Append the "base" information substring */
+        tmp_enum_base_type_buffer[type_string_len + (size_t)buf_ptrdiff]     = '}';
+        tmp_enum_base_type_buffer[type_string_len + (size_t)buf_ptrdiff + 1] = '\0';
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Converting enum base datatype string to hid_t\n");
 #endif
 
-        /* Convert the enum's base datatype substring into an hid_t for use in the following H5Tenum_create call */
+        /* Convert the enum's base datatype substring into an hid_t for use in the following H5Tenum_create
+         * call */
         if ((enum_base_type = RV_convert_JSON_to_datatype(tmp_enum_base_type_buffer)) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert enum datatype's base datatype section from JSON into datatype");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                            "can't convert enum datatype's base datatype section from JSON into datatype");
 
         if ((datatype = H5Tenum_create(enum_base_type)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create enum datatype");
 
         if (NULL == (key_obj = yajl_tree_get(parse_tree, enum_mapping_keys, yajl_t_object)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve enum mapping from enum JSON representation");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "can't retrieve enum mapping from enum JSON representation");
 
-        /* Retrieve the name and value of each member in the enum mapping, inserting them into the enum type as new members */
+        /* Retrieve the name and value of each member in the enum mapping, inserting them into the enum type
+         * as new members */
         for (i = 0; i < YAJL_GET_OBJECT(key_obj)->len; i++) {
             long long val;
 
             if (!YAJL_IS_INTEGER(YAJL_GET_OBJECT(key_obj)->values[i]))
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "enum member %zu value is not an integer", i);
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "enum member %zu value is not an integer",
+                                i);
 
             val = YAJL_GET_INTEGER(YAJL_GET_OBJECT(key_obj)->values[i]);
 
@@ -1857,10 +1985,10 @@ RV_convert_JSON_to_datatype(const char *type)
             if (H5Tconvert(H5T_NATIVE_LLONG, enum_base_type, 1, &val, NULL, H5P_DEFAULT) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert enum value to base type");
 
-            if (H5Tenum_insert(datatype, YAJL_GET_OBJECT(key_obj)->keys[i], (void *) &val) < 0)
+            if (H5Tenum_insert(datatype, YAJL_GET_OBJECT(key_obj)->keys[i], (void *)&val) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTINSERT, FAIL, "can't insert member into enum datatype");
         } /* end for */
-    } /* end if */
+    }     /* end if */
     else if (!strcmp(datatype_class, "H5T_REFERENCE")) {
         char *type_base;
 
@@ -1913,9 +2041,10 @@ done:
         if (compound_member_type_array) {
             while (FAIL != compound_member_type_array[i])
                 if (H5Tclose(compound_member_type_array[i]) < 0)
-                    FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close compound datatype members");
+                    FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL,
+                                    "can't close compound datatype members");
         } /* end if */
-    } /* end if */
+    }     /* end if */
 
     if (array_dims)
         RV_free(array_dims);
@@ -1939,7 +2068,6 @@ done:
     return ret_value;
 } /* end RV_convert_JSON_to_datatype() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_convert_predefined_datatype_to_string
  *
@@ -1955,13 +2083,13 @@ done:
 static const char *
 RV_convert_predefined_datatype_to_string(hid_t type_id)
 {
-    H5T_class_t  type_class = H5T_NO_CLASS;
-    H5T_order_t  type_order = H5T_ORDER_NONE;
-    H5T_sign_t   type_sign = H5T_SGN_NONE;
-    static char  type_name[PREDEFINED_DATATYPE_NAME_MAX_LENGTH];
-    size_t       type_size;
-    int          type_str_len = 0;
-    char        *ret_value = type_name;
+    H5T_class_t type_class = H5T_NO_CLASS;
+    H5T_order_t type_order = H5T_ORDER_NONE;
+    H5T_sign_t  type_sign  = H5T_SGN_NONE;
+    static char type_name[PREDEFINED_DATATYPE_NAME_MAX_LENGTH];
+    size_t      type_size;
+    int         type_str_len = 0;
+    char       *ret_value    = type_name;
 
     if (H5T_NO_CLASS == (type_class = H5Tget_class(type_id)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, NULL, "invalid datatype");
@@ -1976,17 +2104,17 @@ RV_convert_predefined_datatype_to_string(hid_t type_id)
         if (H5T_SGN_ERROR == (type_sign = H5Tget_sign(type_id)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, NULL, "invalid datatype sign");
 
-    if ((type_str_len = snprintf(type_name, PREDEFINED_DATATYPE_NAME_MAX_LENGTH,
-             "H5T_%s_%s%zu%s",
-             (type_class == H5T_INTEGER) ? "STD" : "IEEE",
-             (type_class == H5T_FLOAT) ? "F" : (type_sign == H5T_SGN_NONE) ? "U" : "I",
-             type_size * 8,
-             (type_order == H5T_ORDER_LE) ? "LE" : "BE")
-        ) < 0)
+    if ((type_str_len = snprintf(type_name, PREDEFINED_DATATYPE_NAME_MAX_LENGTH, "H5T_%s_%s%zu%s",
+                                 (type_class == H5T_INTEGER) ? "STD" : "IEEE",
+                                 (type_class == H5T_FLOAT)     ? "F"
+                                 : (type_sign == H5T_SGN_NONE) ? "U"
+                                                               : "I",
+                                 type_size * 8, (type_order == H5T_ORDER_LE) ? "LE" : "BE")) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "snprintf error");
 
     if (type_str_len >= PREDEFINED_DATATYPE_NAME_MAX_LENGTH)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "predefined datatype name string size exceeded maximum size");
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL,
+                        "predefined datatype name string size exceeded maximum size");
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converted predefined datatype to string representation %s\n\n", type_name);

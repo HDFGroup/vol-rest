@@ -19,7 +19,7 @@
 #include "rest_vol_mem.h"
 
 #ifdef RV_TRACK_MEM_USAGE
-
+
 /*-------------------------------------------------------------------------
  * Function:    RV_malloc_debug
  *
@@ -49,7 +49,7 @@ RV_malloc_debug(size_t size)
         /* Keep track of the allocated size */
         if (NULL != (ret_value = malloc(size + sizeof(block_size)))) {
             memcpy(ret_value, &block_size, sizeof(block_size));
-            ret_value = (char *) ret_value + sizeof(block_size);
+            ret_value = (char *)ret_value + sizeof(block_size);
 
             H5_rest_curr_alloc_bytes += size;
         } /* end if */
@@ -63,7 +63,6 @@ RV_malloc_debug(size_t size)
     return ret_value;
 } /* end RV_malloc_debug() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_calloc_debug
  *
@@ -101,7 +100,6 @@ RV_calloc_debug(size_t size)
     return ret_value;
 } /* end RV_calloc_debug() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_realloc_debug
  *
@@ -133,7 +131,7 @@ RV_realloc_debug(void *mem, size_t size)
             if (mem) {
                 size_t block_size;
 
-                memcpy(&block_size, (char *) mem - sizeof(block_size), sizeof(block_size));
+                memcpy(&block_size, (char *)mem - sizeof(block_size), sizeof(block_size));
 
                 ret_value = RV_malloc(size);
                 memcpy(ret_value, mem, size < block_size ? size : block_size);
@@ -155,7 +153,6 @@ RV_realloc_debug(void *mem, size_t size)
     return ret_value;
 } /* end RV_realloc_debug() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_free_debug
  *
@@ -178,10 +175,10 @@ RV_free_debug(void *mem)
 #ifdef RV_TRACK_MEM_USAGE
         size_t block_size;
 
-        memcpy(&block_size, (char *) mem - sizeof(block_size), sizeof(block_size));
+        memcpy(&block_size, (char *)mem - sizeof(block_size), sizeof(block_size));
         H5_rest_curr_alloc_bytes -= block_size;
 
-        free((char *) mem - sizeof(block_size));
+        free((char *)mem - sizeof(block_size));
 #else
         free(mem);
 #endif

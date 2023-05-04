@@ -13,7 +13,7 @@
  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 /*
- *  This example illustrates how to create a dataset that is a 4 x 6 
+ *  This example illustrates how to create a dataset that is a 4 x 6
  *  array.  It is used in the HDF5 Tutorial.
  */
 
@@ -22,49 +22,50 @@
 #include "hdf5.h"
 #include "rest_vol_public.h"
 
-#define FILE "dset.h5"
+#define FILE                 "dset.h5"
 #define FILE_NAME_MAX_LENGTH 256
 
-int main(void) {
+int
+main(void)
+{
 
-   hid_t       file_id, fapl_id, dataset_id, dataspace_id;  /* identifiers */
-   hsize_t     dims[2];
-   const char *username;
-   char        filename[FILE_NAME_MAX_LENGTH];
-   herr_t      status;
+    hid_t       file_id, fapl_id, dataset_id, dataspace_id; /* identifiers */
+    hsize_t     dims[2];
+    const char *username;
+    char        filename[FILE_NAME_MAX_LENGTH];
+    herr_t      status;
 
-   H5rest_init();
+    H5rest_init();
 
-   fapl_id = H5Pcreate(H5P_FILE_ACCESS);
-   H5Pset_fapl_rest_vol(fapl_id);
+    fapl_id = H5Pcreate(H5P_FILE_ACCESS);
+    H5Pset_fapl_rest_vol(fapl_id);
 
-   username = getenv("HSDS_USERNAME");
+    username = getenv("HSDS_USERNAME");
 
-   snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" FILE, username);
+    snprintf(filename, FILE_NAME_MAX_LENGTH, "/home/%s/" FILE, username);
 
-   /* Create a new file using default properties. */
-   file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id);
+    /* Create a new file using default properties. */
+    file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, fapl_id);
 
-   /* Create the data space for the dataset. */
-   dims[0] = 4; 
-   dims[1] = 6; 
-   dataspace_id = H5Screate_simple(2, dims, NULL);
+    /* Create the data space for the dataset. */
+    dims[0]      = 4;
+    dims[1]      = 6;
+    dataspace_id = H5Screate_simple(2, dims, NULL);
 
-   /* Create the dataset. */
-   dataset_id = H5Dcreate2(file_id, "/dset", H5T_STD_I32BE, dataspace_id, 
-                          H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    /* Create the dataset. */
+    dataset_id =
+        H5Dcreate2(file_id, "/dset", H5T_STD_I32BE, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
-   /* End access to the dataset and release resources used by it. */
-   status = H5Dclose(dataset_id);
+    /* End access to the dataset and release resources used by it. */
+    status = H5Dclose(dataset_id);
 
-   /* Terminate access to the data space. */ 
-   status = H5Sclose(dataspace_id);
+    /* Terminate access to the data space. */
+    status = H5Sclose(dataspace_id);
 
-   status = H5Pclose(fapl_id);
+    status = H5Pclose(fapl_id);
 
-   /* Close the file. */
-   status = H5Fclose(file_id);
+    /* Close the file. */
+    status = H5Fclose(file_id);
 
-   H5rest_term();
+    H5rest_term();
 }
-
