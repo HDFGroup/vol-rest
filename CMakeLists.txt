@@ -311,7 +311,7 @@ endmacro ()
 # Setup output Directories
 #-----------------------------------------------------------------------------
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY
-    ${PROJECT_BINARY_DIR}/bin CACHE PATH "Single Directory for all Exectuables."
+    ${PROJECT_BINARY_DIR}/bin CACHE PATH "Single Directory for all Executables."
 )
 set (CMAKE_LIBRARY_OUTPUT_DIRECTORY
     ${PROJECT_BINARY_DIR}/bin CACHE PATH "Single Directory for all Libraries"

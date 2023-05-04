@@ -558,7 +558,7 @@ done:
  * Function:    RV_group_close
  *
  * Purpose:     Closes an HDF5 group by freeing the memory allocated for
- *              its internal memory struct object. There is no interation
+ *              its internal memory struct object. There is no interaction
  *              with the server, whose state is unchanged.
  *
  * Return:      Non-negative on success/Negative on failure

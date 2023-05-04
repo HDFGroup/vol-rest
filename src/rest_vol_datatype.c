@@ -942,7 +942,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                 compound_member_name = NULL;
             } /* end for */
 
-            /* Check if the buffer needs to grow to accomodate the closing ']' and '}' symbols, as well as
+            /* Check if the buffer needs to grow to accommodate the closing ']' and '}' symbols, as well as
              * the NUL terminator
              */
             buf_ptrdiff = out_string_curr_pos - out_string;
@@ -1052,7 +1052,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 
             /* Retrieve the enum type's base datatype and convert it into JSON as well */
             if ((type_base_class = H5Tget_super(type_id)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "cant get base datatype for enum type");
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get base datatype for enum type");
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Converting enum datatype's base datatype to JSON\n\n");
@@ -1681,7 +1681,7 @@ RV_convert_JSON_to_datatype(const char *type)
              */
             FIND_JSON_SECTION_END(section_start, section_end, H5E_DATATYPE, FAIL);
 
-            /* Check if the temporary buffer needs to grow to accomodate this "type" substring */
+            /* Check if the temporary buffer needs to grow to accommodate this "type" substring */
             buf_ptrdiff = section_end - type_section_ptr;
             if (buf_ptrdiff < 0)
                 FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");

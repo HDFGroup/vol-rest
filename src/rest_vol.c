@@ -143,7 +143,7 @@ static const H5VL_class_t H5VL_rest_g = {
     HDF5_VOL_REST_VERSION,         /* Connector struct version number       */
     HDF5_VOL_REST_CLS_VAL,         /* Connector value                       */
     HDF5_VOL_REST_NAME,            /* Connector name                        */
-    HDF5_VOL_REST_CONN_VERSION,    /* Conector version # */
+    HDF5_VOL_REST_CONN_VERSION,    /* Connector version #                   */
     H5VL_VOL_REST_CAP_FLAGS,       /* Connector capability flags            */
     H5_rest_init,                  /* Connector initialization function     */
     H5_rest_term,                  /* Connector termination function        */

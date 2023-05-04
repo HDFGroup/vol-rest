@@ -2807,7 +2807,7 @@ test_create_attribute_on_datatype(void)
     }
 
     {
-        /* Temporary workaround for now since H5Tcommit2 doesn't return something public useable
+        /* Temporary workaround for now since H5Tcommit2 doesn't return something publicly usable
          * for a VOL object */
         if (H5Tclose(type_id) < 0)
             TEST_ERROR
@@ -9874,7 +9874,7 @@ test_datatype_property_lists(void)
         goto error;
     }
 
-    /* Now close the property lists and datatypes and see if we can still retieve copies of
+    /* Now close the property lists and datatypes and see if we can still retrieve copies of
      * the property lists upon opening (instead of creating) a datatype
      */
     if (H5Pclose(tcpl_id1) < 0)

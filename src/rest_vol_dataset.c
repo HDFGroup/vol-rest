@@ -1094,7 +1094,7 @@ done:
  * Function:    RV_dataset_close
  *
  * Purpose:     Closes an HDF5 dataset by freeing the memory allocated for
- *              its internal memory struct object. There is no interation
+ *              its internal memory struct object. There is no interaction
  *              with the server, whose state is unchanged.
  *
  * Return:      Non-negative on success/Negative on failure
@@ -3054,7 +3054,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id,
                 for (i = 0; i < (hsize_t) num_points; i++) {
                     size_t j;
 
-                    /* Check whether the buffer needs to grow to accomodate the next point */
+                    /* Check whether the buffer needs to grow to accommodate the next point */
                     buf_ptrdiff = out_string_curr_pos - out_string;
                     if (buf_ptrdiff < 0)
                         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL, "unsafe cast: dataspace buffer pointer difference was negative - this should not happen!");

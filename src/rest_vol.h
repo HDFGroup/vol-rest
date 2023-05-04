@@ -506,7 +506,7 @@ struct RV_object_t {
     } u;
 };
 
-/* A strcture which is filled out by a callback that reads
+/* A structure which is filled out by a callback that reads
  * the server's response, containing information that uniquely
  * identifies an object by URI and the domain containing it. */
 typedef struct loc_info {
