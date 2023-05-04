@@ -104,6 +104,9 @@ const char *root_id_keys[] = {"root", (const char *)0};
 /* JSON key to retrieve the ID of an object from the server */
 const char *object_id_keys[] = {"id", (const char *)0};
 
+/* JSON keys to retrieve information about creation properties of an object */
+const char *object_creation_properties_keys[] = {"creationProperties", (const char *) 0};
+
 /* JSON key to retrieve the ID of a link from the server */
 const char *link_id_keys[] = {"link", "id", (const char *)0};
 
@@ -118,6 +121,11 @@ const char *dataspace_max_dims_keys[] = {"shape", "maxdims", (const char *)0};
 
 /* JSON keys to retrieve the path of a domain */
 const char *domain_keys[] = {"domain", (const char *)0};
+
+/* Default size for the buffer to allocate during base64-encoding if the caller
+ * of RV_base64_encode supplies a 0-sized buffer.
+ */
+#define BASE64_ENCODE_DEFAULT_BUFFER_SIZE             33554432 /* 32MB */
 
 /* Internal initialization/termination functions which are called by
  * the public functions H5rest_init() and H5rest_term() */
@@ -137,6 +145,10 @@ static size_t H5_rest_curl_write_data_callback(char *buffer, size_t size, size_t
 
 /* Helper function to URL-encode an entire pathname by URL-encoding each of its separate components */
 static char *H5_rest_url_encode_path(const char *path);
+
+/* Helper functions to base64 encode/decode a binary buffer */
+herr_t RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size);
+herr_t RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size);
 
 /* The REST VOL connector's class structure. */
 static const H5VL_class_t H5VL_rest_g = {
@@ -2405,6 +2417,59 @@ done:
 } /* end RV_find_object_by_path() */
 
 /*-------------------------------------------------------------------------
+ * Function:    RV_copy_creation_properties_callback
+ *
+ * Purpose:     Callback for RV_parse_response to get the
+ *              creationProperties field in the response.
+ * 
+ *              Allocates memory at *callback_data_out that must be
+ *              freed by caller.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              May, 2023
+ */
+herr_t RV_copy_creation_properties_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out) {
+    yajl_val  parse_tree = NULL, key_obj;
+    char     *parsed_string;
+    char     **buf_out = (char **) callback_data_out;
+    herr_t    ret_value = SUCCEED;
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Retrieving object's creation properties from server's HTTP response\n\n");
+#endif
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
+    if (!buf_out)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL");
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
+
+    key_obj = yajl_tree_get(parse_tree, object_creation_properties_keys, yajl_t_string);
+
+    if (!YAJL_IS_STRING(key_obj))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned creationProperties is not a string");
+
+    if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "creationProperties was NULL");
+
+    if (NULL == (*buf_out = RV_malloc(strlen(parsed_string) + 1)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "failed to allocate memory for creationProperties");
+    
+    if (NULL == (memcpy(*buf_out, parsed_string, strlen(parsed_string) + 1)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "failed to copy creationProperties");
+
+done:
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    return ret_value;
+} /* end RV_copy_creation_properties_callback() */
+
+/*-------------------------------------------------------------------------
  * Function:    RV_parse_dataspace
  *
  * Purpose:     Given a JSON representation of an HDF5 dataspace, parse the
@@ -2761,6 +2826,236 @@ done:
     return ret_value;
 } /* end RV_convert_dataspace_shape_to_JSON() */
 
+/*-------------------------------------------------------------------------
+ * Function:    RV_base64_encode
+ *
+ * Purpose:     A helper function to base64 encode the given buffer. This
+ *              is used specifically when dealing with writing data to a
+ *              dataset using a point selection, and when sending plist
+ *              information to the server.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              January, 2018
+ */
+herr_t
+RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size)
+{
+    const uint8_t *buf = (const uint8_t *) in;
+    const char     charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    uint32_t       three_byte_set;
+    uint8_t        c0, c1, c2, c3;
+    size_t         i;
+    size_t         nalloc;
+    size_t         out_index = 0;
+    int            npad;
+    herr_t         ret_value = SUCCEED;
+
+    if (!in)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "input buffer pointer was NULL");
+    if (!out)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer pointer was NULL");
+
+    /* If the caller has specified a 0-sized buffer, allocate one and set nalloc
+     * so that the following 'nalloc *= 2' calls don't result in 0-sized
+     * allocations.
+     */
+    if (!out_size || (out_size && !*out_size)) {
+        nalloc = BASE64_ENCODE_DEFAULT_BUFFER_SIZE;
+        if (NULL == (*out = (char *) RV_malloc(nalloc)))
+            FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't allocate space for base64-encoding output buffer");
+    } /* end if */
+    else
+        nalloc = *out_size;
+
+    for (i = 0; i < in_size; i += 3) {
+        three_byte_set = ((uint32_t) buf[i]) << 16;
+
+        if (i + 1 < in_size)
+            three_byte_set += ((uint32_t) buf[i + 1]) << 8;
+
+        if (i + 2 < in_size)
+            three_byte_set += buf[i + 2];
+
+        /* Split 3-byte number into four 6-bit groups for encoding */
+        c0 = (uint8_t) (three_byte_set >> 18) & 0x3f;
+        c1 = (uint8_t) (three_byte_set >> 12) & 0x3f;
+        c2 = (uint8_t) (three_byte_set >> 6)  & 0x3f;
+        c3 = (uint8_t)  three_byte_set        & 0x3f;
+
+        CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 2, H5E_RESOURCE, FAIL);
+
+        (*out)[out_index++] = charset[c0];
+        (*out)[out_index++] = charset[c1];
+
+        if (i + 1 < in_size) {
+            CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
+
+            (*out)[out_index++] = charset[c2];
+        } /* end if */
+
+        if (i + 2 < in_size) {
+            CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
+
+            (*out)[out_index++] = charset[c3];
+        } /* end if */
+    } /* end for */
+
+    /* Add trailing padding when out_index does not fall on the beginning of a 4-byte set */
+    npad = (4 - (out_index % 4)) % 4;
+    while (npad) {
+        CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
+
+        (*out)[out_index++] = '=';
+
+        npad--;
+    } /* end while */
+
+    CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
+
+    (*out)[out_index] = '\0';
+
+    if (out_size)
+        *out_size = out_index;
+
+done:
+    return ret_value;
+} /* end RV_base64_encode() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_base64_decode
+ *
+ * Purpose:     A helper function to base64 decode the given buffer. This
+ *              is used specifically when dealing with writing data to a
+ *              dataset using a point selection, and when sending plist
+ *              information to the server.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              May, 2023
+ */
+herr_t
+RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size)
+{
+    uint8_t *buf = (uint8_t*) in;
+    const char charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    uint32_t four_byte_set;
+    uint8_t c0, c1, c2, c3;
+    size_t         nalloc = 0;
+    size_t         out_index = 0;
+    herr_t         ret_value = SUCCEED;
+
+    if (!in)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "input buffer pointer was NULL");
+    if (!out)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer pointer was NULL");
+
+    /* If the caller has specified a 0-sized buffer, allocate one and set nalloc
+     * so that the following 'nalloc *= 2' calls don't result in 0-sized
+     * allocations.
+     */
+    if (!out_size || (out_size && !*out_size)) {
+        nalloc = BASE64_ENCODE_DEFAULT_BUFFER_SIZE;
+        if (NULL == (*out = (char *) RV_malloc(nalloc)))
+            FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't allocate space for base64-encoding output buffer");
+    } /* end if */
+    else
+        nalloc = *out_size;
+
+    for (size_t i = 0; i < in_size; i += 4) {
+        four_byte_set = ((uint32_t) buf[i]) << 24;
+
+        if (i + 1 < in_size)
+            four_byte_set += ((uint32_t) buf[i + 1]) << 16;
+
+        if (i + 2 < in_size)
+            four_byte_set += ((uint32_t) buf[i + 2]) << 8;
+
+        if (i + 3 < in_size)
+            four_byte_set += ((uint32_t) buf[i + 3]);
+
+
+        if (((char) buf[i + 3])== '=') {
+            /* Two characters of padding */
+
+            /* Ignore last two padding chars */
+            c0 =  (uint8_t) (four_byte_set >> 24);
+            c1 =  (uint8_t) (four_byte_set >> 16);
+
+            c0 = (uint8_t) (strchr(charset, c0) - charset);
+            c1 = (uint8_t) (strchr(charset, c1) - charset);
+
+            four_byte_set = (((uint32_t) c0) << 6) | (((uint32_t) c1) << 0);
+
+            /* Remove 4 trailing bits due to padding */
+            four_byte_set = four_byte_set >> 4;
+
+            c0 = (uint8_t) (four_byte_set >> 8);
+            c1 = (uint8_t) (four_byte_set >> 0);
+
+            CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
+            (*out)[out_index++] = c1;
+
+        } else if (((char) buf[i + 2])== '=') {
+            /* One character of padding */
+
+            /* Ignore last one padding char */
+            c0 =  (uint8_t) (four_byte_set >> 24);
+            c1 =  (uint8_t) (four_byte_set >> 16);
+            c2 =  (uint8_t) (four_byte_set >> 8);
+
+            c0 = (uint8_t) (strchr(charset, c0) - charset);
+            c1 = (uint8_t) (strchr(charset, c1) - charset);
+            c2 = (uint8_t) (strchr(charset, c2) - charset);
+
+            four_byte_set = (((uint32_t) c0) << 12) | (((uint32_t) c1) << 6) | (((uint32_t) c2) << 0);
+
+            /* Remove 2 trailing bits due to padding */
+            four_byte_set = four_byte_set >> 2;
+            
+            c0 = (uint8_t) (four_byte_set >> 16);
+            c1 = (uint8_t) (four_byte_set >> 8);
+            c2 = (uint8_t) (four_byte_set >> 0);
+
+            CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 2, H5E_RESOURCE, FAIL);
+            (*out)[out_index++] = c1;
+            (*out)[out_index++] = c2;
+
+        } else {
+            /* 0 bytes of padding */
+            c0 = (uint8_t) (four_byte_set >> 24);
+            c1=  (uint8_t) (four_byte_set >> 16);
+            c2 = (uint8_t) (four_byte_set >> 8);
+            c3 = (uint8_t) (four_byte_set >> 0);
+
+            c0 = (uint8_t) (strchr(charset, c0) - charset);
+            c1 = (uint8_t) (strchr(charset, c1) - charset);
+            c2 = (uint8_t) (strchr(charset, c2) - charset);
+            c3 = (uint8_t) (strchr(charset, c3) - charset);
+
+            four_byte_set = (((uint32_t) c0) << 18) | (((uint32_t) c1) << 12) | (((uint32_t) c2) << 6) | (((uint32_t) c3) << 0);
+
+            c0 = (uint8_t) (four_byte_set >> 24); // 0
+            c1=  (uint8_t) (four_byte_set >> 16);
+            c2 = (uint8_t) (four_byte_set >> 8);
+            c3 = (uint8_t) (four_byte_set >> 0);
+
+            CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 3, H5E_RESOURCE, FAIL);
+            (*out)[out_index++] = c1;
+            (*out)[out_index++] = c2;
+            (*out)[out_index++] = c3;
+        }
+    } /* end for */
+
+    (*out)[out_index++] = '\0';
+    
+    if (out_size)
+        *out_size = out_index;
+done:
+    return ret_value;
+} /* end RV_base64_decode() */
 /*************************************************
  * The following two routines allow the REST VOL *
  * connector to be dynamically loaded by HDF5.   *

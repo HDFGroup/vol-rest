@@ -38,10 +38,7 @@ static herr_t RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_
                                             char **buf_out, size_t *buf_out_len);
 static herr_t RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len, rv_obj_ref_t **buf_out,
                                             size_t *buf_out_len);
-
-/* Helper function to base64 encode a given buffer */
-static herr_t RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size);
-
+                                            
 /* H5Dscatter() callback for dataset reads */
 static herr_t dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *op_data);
 
@@ -3705,103 +3702,6 @@ done:
 
     return ret_value;
 } /* end RV_convert_buffer_to_obj_refs() */
-
-/*-------------------------------------------------------------------------
- * Function:    RV_base64_encode
- *
- * Purpose:     A helper function to base64 encode the given buffer. This
- *              is used specifically when dealing with writing data to a
- *              dataset using a point selection.
- *
- * Return:      Non-negative on success/Negative on failure
- *
- * Programmer:  Jordan Henderson
- *              January, 2018
- */
-static herr_t
-RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size)
-{
-    const uint8_t *buf       = (const uint8_t *)in;
-    const char     charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    uint32_t       three_byte_set;
-    uint8_t        c0, c1, c2, c3;
-    size_t         i;
-    size_t         nalloc;
-    size_t         out_index = 0;
-    int            npad;
-    herr_t         ret_value = SUCCEED;
-
-    if (!in)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "input buffer pointer was NULL");
-    if (!out)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer pointer was NULL");
-
-    /* If the caller has specified a 0-sized buffer, allocate one and set nalloc
-     * so that the following 'nalloc *= 2' calls don't result in 0-sized
-     * allocations.
-     */
-    if (!out_size || (out_size && !*out_size)) {
-        nalloc = BASE64_ENCODE_DEFAULT_BUFFER_SIZE;
-        if (NULL == (*out = (char *)RV_malloc(nalloc)))
-            FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL,
-                            "can't allocate space for base64-encoding output buffer");
-    } /* end if */
-    else
-        nalloc = *out_size;
-
-    for (i = 0; i < in_size; i += 3) {
-        three_byte_set = ((uint32_t)buf[i]) << 16;
-
-        if (i + 1 < in_size)
-            three_byte_set += ((uint32_t)buf[i + 1]) << 8;
-
-        if (i + 2 < in_size)
-            three_byte_set += buf[i + 2];
-
-        /* Split 3-byte number into four 6-bit groups for encoding */
-        c0 = (uint8_t)(three_byte_set >> 18) & 0x3f;
-        c1 = (uint8_t)(three_byte_set >> 12) & 0x3f;
-        c2 = (uint8_t)(three_byte_set >> 6) & 0x3f;
-        c3 = (uint8_t)three_byte_set & 0x3f;
-
-        CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 2, H5E_RESOURCE, FAIL);
-
-        (*out)[out_index++] = charset[c0];
-        (*out)[out_index++] = charset[c1];
-
-        if (i + 1 < in_size) {
-            CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
-
-            (*out)[out_index++] = charset[c2];
-        } /* end if */
-
-        if (i + 2 < in_size) {
-            CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
-
-            (*out)[out_index++] = charset[c3];
-        } /* end if */
-    }     /* end for */
-
-    /* Add trailing padding when out_index does not fall on the beginning of a 4-byte set */
-    npad = (4 - (out_index % 4)) % 4;
-    while (npad) {
-        CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
-
-        (*out)[out_index++] = '=';
-
-        npad--;
-    } /* end while */
-
-    CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
-
-    (*out)[out_index] = '\0';
-
-    if (out_size)
-        *out_size = out_index;
-
-done:
-    return ret_value;
-} /* end RV_base64_encode() */
 
 /*-------------------------------------------------------------------------
  * Function:    dataset_read_scatter_op
