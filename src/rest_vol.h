@@ -210,20 +210,20 @@
             current_symbol = *advancement_ptr++;                                                             \
                                                                                                              \
             /* If we reached the end of string before finding the end of the JSON object section, something  \
-             * is wrong. Most likely the JSON is misformatted, with a stray '{' in the section somewhere.                     \
+             * is wrong. Most likely the JSON is misformatted, with a stray '{' in the section somewhere.    \
              */                                                                                              \
             if (!current_symbol)                                                                             \
                 FUNC_GOTO_ERROR(ERR_MAJOR, H5E_PARSEERROR, ret_value,                                        \
                                 "can't locate end of section - misformatted JSON likely");                   \
                                                                                                              \
             /* If we encounter a " in the buffer, we assume that this is a JSON string and we suspend        \
-             * processing of '{' and '}' symbols until the matching " is found that ends the JSON string.                             \
-             * Note however that it is possible for the JSON string to have an escaped \" combination within                                 \
-             * it, in which case this is not the ending " and we will still suspend processing. Note further                                      \
-             * that the JSON string may also have the escaped \\ sequence within it as well. Since it is                                            \
-             * safer to search forward in the string buffer (as we know the next character must be valid or                                               \
-             * the NUL terminator) we check each character for the presence of a \ symbol, and if the                                                        \
-             * following character is \ or ", we just skip ahead two characters and continue on.                                                                       \
+             * processing of '{' and '}' symbols until the matching " is found that ends the JSON string.    \
+             * Note however that it is possible for the JSON string to have an escaped \" combination within \
+             * it, in which case this is not the ending " and we will still suspend processing. Note further \
+             * that the JSON string may also have the escaped \\ sequence within it as well. Since it is     \
+             * safer to search forward in the string buffer (as we know the next character must be valid or  \
+             * the NUL terminator) we check each character for the presence of a \ symbol, and if the        \
+             * following character is \ or ", we just skip ahead two characters and continue on.             \
              */                                                                                              \
             if (current_symbol == '\\') {                                                                    \
                 if (*advancement_ptr == '\\' || *advancement_ptr == '"') {                                   \
