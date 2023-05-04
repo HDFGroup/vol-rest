@@ -130,12 +130,14 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
 
     new_dataset->URI[0] = '\0';
     new_dataset->obj_type = H5I_DATASET;
-    new_dataset->domain = parent->domain; /* Store pointer to file that the newly-created dataset is in */
     new_dataset->u.dataset.dtype_id = FAIL;
     new_dataset->u.dataset.space_id = FAIL;
     new_dataset->u.dataset.dapl_id = FAIL;
     new_dataset->u.dataset.dcpl_id = FAIL;
-
+    
+    new_dataset->domain = parent->domain;
+    parent->domain->u.file.ref_count++;
+    
     /* Copy the DAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Dget_access_plist() will function correctly
      */
@@ -288,6 +290,7 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *dataset = NULL;
     H5I_type_t   obj_type = H5I_UNINIT;
+    loc_info     loc_info;
     htri_t       search_ret;
     void        *ret_value = NULL;
 
@@ -309,17 +312,25 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
 
     dataset->URI[0] = '\0';
     dataset->obj_type = H5I_DATASET;
-    dataset->domain = parent->domain; /* Store pointer to file that the opened Dataset is within */
     dataset->u.dataset.dtype_id = FAIL;
     dataset->u.dataset.space_id = FAIL;
     dataset->u.dataset.dapl_id = FAIL;
     dataset->u.dataset.dcpl_id = FAIL;
 
-    /* Locate the Dataset */
-    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_callback, NULL, dataset->URI);
+    /* Copy information about file that the newly-created dataset is in */
+    dataset->domain = parent->domain;
+    parent->domain->u.file.ref_count++;
+    
+    loc_info.URI = dataset->URI;
+    loc_info.domain = dataset->domain;
+
+    /* Locate dataset and set domain */
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL, &loc_info);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate dataset by path");
 
+    dataset->domain = loc_info.domain;
+    
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Found dataset by given path\n\n");
 #endif
@@ -1114,6 +1125,7 @@ RV_dataset_close(void *dset, hid_t dxpl_id, void **req)
 
     if (_dset->u.dataset.dtype_id >= 0 && H5Tclose(_dset->u.dataset.dtype_id) < 0)
         FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close dataset's datatype");
+
     if (_dset->u.dataset.space_id >= 0 && H5Sclose(_dset->u.dataset.space_id) < 0)
         FUNC_DONE_ERROR(H5E_DATASPACE, H5E_CANTCLOSEOBJ, FAIL, "can't close dataset's dataspace");
 
@@ -1125,6 +1137,10 @@ RV_dataset_close(void *dset, hid_t dxpl_id, void **req)
         if (_dset->u.dataset.dcpl_id != H5P_DATASET_CREATE_DEFAULT && H5Pclose(_dset->u.dataset.dcpl_id) < 0)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close DCPL");
     } /* end if */
+
+    if (RV_file_close(_dset->domain, H5P_DEFAULT, NULL)) {
+        FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");
+    }
 
     RV_free(_dset);
     _dset = NULL;

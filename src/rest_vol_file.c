@@ -68,6 +68,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id,
     new_file->u.file.filepath_name = NULL;
     new_file->u.file.fapl_id = FAIL;
     new_file->u.file.fcpl_id = FAIL;
+    new_file->u.file.ref_count = 1;
 
     /* Copy the FAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Fget_access_plist() will function correctly. Note that due to the nature
@@ -286,6 +287,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     file->u.file.filepath_name = NULL;
     file->u.file.fapl_id = FAIL;
     file->u.file.fcpl_id = FAIL;
+    file->u.file.ref_count = 1;
 
     /* Store self-referential pointer in the domain field for this object
      * to simplify code for other types of objects
@@ -635,6 +637,7 @@ done:
 herr_t
 RV_file_close(void *file, hid_t dxpl_id, void **req)
 {
+
     RV_object_t *_file = (RV_object_t *) file;
     herr_t       ret_value = SUCCEED;
 
@@ -653,21 +656,26 @@ RV_file_close(void *file, hid_t dxpl_id, void **req)
     if (H5I_FILE != _file->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file");
 
-    if (_file->u.file.filepath_name) {
-        RV_free(_file->u.file.filepath_name);
-        _file->u.file.filepath_name = NULL;
+    _file->u.file.ref_count--;
+
+    if (_file->u.file.ref_count == 0) {
+        if (_file->u.file.fapl_id >= 0) {
+            if (_file->u.file.fapl_id != H5P_FILE_ACCESS_DEFAULT && H5Pclose(_file->u.file.fapl_id) < 0)
+                FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FAPL");
+        } /* end if */
+        if (_file->u.file.fcpl_id >= 0) {
+            if (_file->u.file.fcpl_id != H5P_FILE_CREATE_DEFAULT && H5Pclose(_file->u.file.fcpl_id) < 0)
+                FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FCPL");
+        } /* end if */
+
+        if (_file->u.file.filepath_name) {
+            RV_free(_file->u.file.filepath_name);
+            _file->u.file.filepath_name = NULL;
+        }
+
+        RV_free(_file);
     }
 
-    if (_file->u.file.fapl_id >= 0) {
-        if (_file->u.file.fapl_id != H5P_FILE_ACCESS_DEFAULT && H5Pclose(_file->u.file.fapl_id) < 0)
-            FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FAPL");
-    } /* end if */
-    if (_file->u.file.fcpl_id >= 0) {
-        if (_file->u.file.fcpl_id != H5P_FILE_CREATE_DEFAULT && H5Pclose(_file->u.file.fcpl_id) < 0)
-            FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close FCPL");
-    } /* end if */
-
-    RV_free(_file);
     _file = NULL;
 
 done:

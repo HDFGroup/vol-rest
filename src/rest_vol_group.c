@@ -80,8 +80,10 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     new_group->obj_type = H5I_GROUP;
     new_group->u.group.gapl_id = FAIL;
     new_group->u.group.gcpl_id = FAIL;
-    new_group->domain = parent->domain; /* Store pointer to file that the newly-created group is within */
 
+    new_group->domain = parent->domain;
+    parent->domain->u.file.ref_count++;
+    
     /* Copy the GAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * group access property list functions will function correctly
      */
@@ -149,7 +151,7 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
                     /* Get URI of final group now that it has been created */
                     search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type, RV_copy_object_URI_callback, NULL, target_URI);
                 
-                    RV_free(intmd_group);
+                    RV_group_close(intmd_group, H5P_DEFAULT, NULL);
                 } else 
                     FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate target for group link");
             }
@@ -294,6 +296,7 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
     RV_object_t *parent = (RV_object_t *) obj;
     RV_object_t *group = NULL;
     H5I_type_t   obj_type = H5I_UNINIT;
+    loc_info     loc_info;
     htri_t       search_ret;
     void        *ret_value = NULL;
 
@@ -317,12 +320,20 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name,
     group->obj_type = H5I_GROUP;
     group->u.group.gapl_id = FAIL;
     group->u.group.gcpl_id = FAIL;
-    group->domain = parent->domain; /* Store pointer to file that the opened Group is within */
 
-    /* Locate the Group */
-    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_callback, NULL, group->URI);
+    /* Copy information about file the group is in */
+    group->domain = parent->domain;
+    parent->domain->u.file.ref_count++;
+    
+    loc_info.URI = group->URI;
+    loc_info.domain = group->domain;
+
+    /* Locate group and set domain */
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL, &loc_info);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate group by path");
+
+    group->domain = loc_info.domain;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Found group by given path\n\n");
@@ -584,6 +595,10 @@ RV_group_close(void *grp, hid_t dxpl_id, void **req)
         if (_grp->u.group.gcpl_id != H5P_GROUP_CREATE_DEFAULT && H5Pclose(_grp->u.group.gcpl_id) < 0)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close GCPL");
     } /* end if */
+
+    if (RV_file_close(_grp->domain, H5P_DEFAULT, NULL) < 0) {
+        FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");
+    }
 
     RV_free(_grp);
     _grp = NULL;

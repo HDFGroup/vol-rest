@@ -458,6 +458,7 @@ typedef struct RV_object_t RV_object_t;
 
 typedef struct RV_file_t {
     unsigned  intent;
+    unsigned  ref_count;
     char     *filepath_name;
     hid_t     fcpl_id;
     hid_t     fapl_id;
@@ -505,6 +506,13 @@ struct RV_object_t {
     } u;
 };
 
+/* A strcture which is filled out by a callback that reads
+ * the server's response, containing information that uniquely
+ * identifies an object by URI and the domain containing it. */
+typedef struct loc_info {
+    char *URI;
+    RV_object_t *domain;
+} loc_info;
 
 /****************************
  *                          *
@@ -530,6 +538,9 @@ herr_t RV_parse_response(char *HTTP_response, void *callback_data_in, void *call
 
 /* Callback for RV_parse_response() to capture an object's URI */
 herr_t RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+
+/* Callback for RV_parse_response() to capture an object's URI and domain, for external links */
+herr_t RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 
 /* Helper function to find an object given a starting object to search from and a path */
 htri_t RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,

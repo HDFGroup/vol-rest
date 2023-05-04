@@ -105,12 +105,14 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
 
     new_attribute->URI[0] = '\0';
     new_attribute->obj_type = H5I_ATTR;
-    new_attribute->domain = parent->domain; /* Store pointer to file that the newly-created attribute is in */
     new_attribute->u.attribute.dtype_id = FAIL;
     new_attribute->u.attribute.space_id = FAIL;
     new_attribute->u.attribute.aapl_id = FAIL;
     new_attribute->u.attribute.acpl_id = FAIL;
     new_attribute->u.attribute.attr_name = NULL;
+    
+    new_attribute->domain = parent->domain;
+    parent->domain->u.file.ref_count++;
 
     /* If this is a call to H5Acreate_by_name, locate the real parent object */
     if (H5VL_OBJECT_BY_NAME == loc_params->type) {
@@ -418,12 +420,14 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
 
     attribute->URI[0] = '\0';
     attribute->obj_type = H5I_ATTR;
-    attribute->domain = parent->domain; /* Store pointer to file that the opened Dataset is within */
     attribute->u.attribute.dtype_id = FAIL;
     attribute->u.attribute.space_id = FAIL;
     attribute->u.attribute.aapl_id = FAIL;
     attribute->u.attribute.acpl_id = FAIL;
     attribute->u.attribute.attr_name = NULL;
+
+    attribute->domain = parent->domain;
+    parent->domain->u.file.ref_count++;
 
     /* Set the parent object's type and URI in the attribute's appropriate fields */
     switch (loc_params->type) {
@@ -446,6 +450,8 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
 
             attribute->u.attribute.parent_obj_type = H5I_UNINIT;
 
+            /* External links to attributes are not supported, so there is no need to use 
+             * RV_copy_object_URI_and_domain_callback */
             search_ret = RV_find_object_by_path(parent, loc_params->loc_data.loc_by_name.name, &attribute->u.attribute.parent_obj_type,
                     RV_copy_object_URI_callback, NULL, attribute->u.attribute.parent_obj_URI);
             if (!search_ret || search_ret < 0)
@@ -1386,6 +1392,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                        hid_t dxpl_id, void **req)
 {
     RV_object_t *loc_obj = (RV_object_t *) obj;
+    RV_object_t *attr_iter_obj_typed = NULL;
     H5I_type_t   parent_obj_type = H5I_UNINIT;
     size_t       host_header_len = 0;
     hid_t        attr_iter_object_id = H5I_INVALID_HID;
@@ -1757,33 +1764,35 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
                     memcpy(attr_iter_object, loc_obj, sizeof(RV_object_t));
 
+                    attr_iter_obj_typed = (RV_object_t*) attr_iter_object;
+
                     /* Since we already have the attribute's parent object, but still need an hid_t for it
                      * to pass to the user's object, we will just copy the current object, making sure to
                      * increment the ref. counts for the object's fields so that closing it at the end of
                      * this function does not close the fields themselves in the real object, such as a
                      * dataset's dataspace.
                      */
+
+                    /* Increment refs for top-level file */
+                    if (parent_obj_type == H5I_FILE    || 
+                        parent_obj_type == H5I_GROUP   || 
+                        parent_obj_type == H5I_DATASET || 
+                        parent_obj_type == H5I_DATATYPE) {
+                            
+                        loc_obj->domain->u.file.ref_count++;
+                    }
+
+                    /* Increment refs for specific type */
                     switch (parent_obj_type) {
                         case H5I_FILE:
-                            /* Copy fapl, fcpl, and filepath name to new object */
-                            RV_object_t *attr_iter_obj = (RV_object_t*) attr_iter_object;
-                            if (H5I_INVALID_HID == (attr_iter_obj->u.file.fapl_id = H5Pcopy(loc_obj->u.file.fapl_id)))
-                                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FAPL");
-                            if (H5I_INVALID_HID == (attr_iter_obj->u.file.fcpl_id = H5Pcopy(loc_obj->u.file.fcpl_id)))
-                                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FCPL");
-                            if (NULL == (attr_iter_obj->u.file.filepath_name = RV_malloc(strlen(loc_obj->u.file.filepath_name) + 1)))
-                                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for copied filepath_name object");
-
-                            strncpy(attr_iter_obj->u.file.filepath_name, \
-                                    loc_obj->u.file.filepath_name, \
-                                    strlen(loc_obj->u.file.filepath_name) + 1);
-                            break;
                         case H5I_GROUP:
+
                             if (H5Iinc_ref(loc_obj->u.group.gcpl_id) < 0)
                                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL, "can't increment field's ref. count for copy of attribute's parent group");
                             break;
 
                         case H5I_DATATYPE:
+                            
                             if (H5Iinc_ref(loc_obj->u.datatype.dtype_id) < 0)
                                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL, "can't increment field's ref. count for copy of attribute's parent datatype");
                             if (H5Iinc_ref(loc_obj->u.datatype.tcpl_id) < 0)
@@ -1791,6 +1800,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                             break;
 
                         case H5I_DATASET:
+
                             if (H5Iinc_ref(loc_obj->u.dataset.dtype_id) < 0)
                                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL, "can't increment field's ref. count for copy of attribute's parent dataset");
                             if (H5Iinc_ref(loc_obj->u.dataset.space_id) < 0)
@@ -2129,6 +2139,9 @@ RV_attr_close(void *attr, hid_t dxpl_id, void **req)
         if (_attr->u.attribute.acpl_id != H5P_ATTRIBUTE_CREATE_DEFAULT && H5Pclose(_attr->u.attribute.acpl_id) < 0)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close ACPL");
     } /* end if */
+
+    if (RV_file_close(_attr->domain, H5P_DEFAULT, NULL) < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCLOSEOBJ, FAIL, "couldn't close attr domain");
 
     RV_free(_attr);
     _attr = NULL;
