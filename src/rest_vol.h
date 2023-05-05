@@ -541,7 +541,8 @@ herr_t RV_parse_response(char *HTTP_response, void *callback_data_in, void *call
 herr_t RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 
 /* Callback for RV_parse_response() to capture an object's creation properties */
-herr_t RV_copy_creation_properties_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_copy_creation_properties_callback(char *HTTP_response, void *callback_data_in,
+                                            void *callback_data_out);
 /* Callback for RV_parse_response() to capture an object's URI and domain, for external links */
 herr_t RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callback_data_in,
                                               void *callback_data_out);

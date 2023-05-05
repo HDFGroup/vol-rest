@@ -38,7 +38,7 @@ static herr_t RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_
                                             char **buf_out, size_t *buf_out_len);
 static herr_t RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len, rv_obj_ref_t **buf_out,
                                             size_t *buf_out_len);
-                                            
+
 /* H5Dscatter() callback for dataset reads */
 static herr_t dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *op_data);
 
