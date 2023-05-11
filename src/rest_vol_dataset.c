@@ -300,9 +300,9 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     RV_object_t *parent   = (RV_object_t *)obj;
     RV_object_t *dataset  = NULL;
     H5I_type_t   obj_type = H5I_UNINIT;
-    loc_info     loc_info;
     htri_t       search_ret;
     void        *ret_value = NULL;
+    loc_info     loc_info_out;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset open call with following parameters:\n");
@@ -331,16 +331,17 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     dataset->domain = parent->domain;
     parent->domain->u.file.ref_count++;
 
-    loc_info.URI    = dataset->URI;
-    loc_info.domain = dataset->domain;
+    loc_info_out.URI    = dataset->URI;
+    loc_info_out.domain = dataset->domain;
+    loc_info_out.GCPL_base64 = NULL;
 
     /* Locate dataset and set domain */
-    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL,
-                                        &loc_info);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_loc_info_callback, NULL,
+                                        &loc_info_out);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate dataset by path");
 
-    dataset->domain = loc_info.domain;
+    dataset->domain = loc_info_out.domain;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Found dataset by given path\n\n");

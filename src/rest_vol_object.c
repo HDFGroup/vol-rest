@@ -253,6 +253,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
     herr_t       ret_value = SUCCEED;
     loc_info     loc_info;
 
+    loc_info.GCPL_base64 = NULL;
     loc_info.domain = loc_obj->domain;
     loc_obj->domain->u.file.ref_count++;
 
@@ -363,13 +364,14 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                     printf("-> H5Oget_info_by_name(): locating object by given path\n\n");
 #endif
 
+                    
                     loc_info.URI = temp_URI;
                     /* loc_info.domain was copied at function start */
 
                     /* Locate group and set domain */
                     search_ret =
                         RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type,
-                                               RV_copy_object_URI_and_domain_callback, NULL, &loc_info);
+                                               RV_copy_object_loc_info_callback, NULL, &loc_info);
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, NULL, "can't locate object by path");
 
@@ -526,6 +528,7 @@ done:
     } /* end if */
 
     RV_file_close(loc_info.domain, H5P_DEFAULT, NULL);
+    free(loc_info.GCPL_base64);
 
     PRINT_ERROR_STACK;
 

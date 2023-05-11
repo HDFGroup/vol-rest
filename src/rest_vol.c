@@ -1695,120 +1695,6 @@ done:
 } /* end RV_parse_response() */
 
 /*-------------------------------------------------------------------------
- * Function:    RV_copy_object_URI_and_domain_callback
- *
- * Purpose:     Copies information from response to provided buffers.
- *
- *              This function should be used in place of
- *              RV_copy_object_URI_callback wherever the object
- *              may be an external link, whose domain is different
- *              from the domain of its parent object.
- *
- *              callback_data_out is expected to be a pointer to an array
- *              of two pointers, the first being the address of a buffer for the URI,
- *              and the second being the address of a pointer to a domain buffer of the target object.
- *
- *              callback_data_is provided inside RV_find_object_by_path.
- *
- * Return:      Non-negative on success/Negative on failure
- *
- * Programmer:  Matthew Larson
- *              April, 2023
- */
-herr_t
-RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
-{
-    yajl_val    parse_tree       = NULL, key_obj;
-    char       *parsed_id_string = NULL;
-    herr_t      ret_value        = SUCCEED;
-    loc_info   *loc_info_out     = (loc_info *)callback_data_out;
-    RV_object_t found_domain;
-    bool        is_external_domain = false;
-
-    /* Parse domain information from response */
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Retrieving object's domain from server's HTTP response\n\n");
-#endif
-
-    if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
-    if (!loc_info_out)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL");
-
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
-
-    /* Retrieve domain path */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, domain_keys, yajl_t_string)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse domain");
-
-    if (!YAJL_IS_STRING(key_obj))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain is not a string");
-
-    if (NULL == (found_domain.u.file.filepath_name = YAJL_GET_STRING(key_obj)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "domain was NULL");
-
-    /* Retrieve domain id */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, root_id_keys, yajl_t_string)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse domain id");
-
-    if (!YAJL_IS_STRING(key_obj))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain id is not a string");
-
-    if (NULL == (parsed_id_string = YAJL_GET_STRING(key_obj)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain id is NULL");
-
-    if (strlen(parsed_id_string) > URI_MAX_LENGTH)
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "parsed domain id too large");
-
-    if (NULL == strncpy(found_domain.URI, parsed_id_string, URI_MAX_LENGTH))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to copy memory for domain id");
-
-    /* If retrieved domain is different than the domain through which this object
-     * was accessed, replace the returned object's domain. */
-    is_external_domain =
-        strcmp(found_domain.u.file.filepath_name, loc_info_out->domain->u.file.filepath_name);
-
-    if (is_external_domain) {
-        RV_object_t *new_domain = NULL;
-
-        if (NULL == (new_domain = RV_malloc(sizeof(RV_object_t))))
-            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL, "failed to allocate memory for new domain");
-
-        memcpy(new_domain, &found_domain, sizeof(RV_object_t));
-
-        /* Wait until after heap allocation to set self pointer */
-        new_domain->domain   = new_domain;
-        new_domain->obj_type = H5I_FILE;
-
-        if (NULL ==
-            (new_domain->u.file.filepath_name = RV_malloc(strlen(found_domain.u.file.filepath_name) + 1)))
-            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL,
-                            "failed to allocate memory for new domain path");
-
-        strncpy(new_domain->u.file.filepath_name, found_domain.u.file.filepath_name,
-                strlen(found_domain.u.file.filepath_name) + 1);
-
-        new_domain->u.file.intent    = loc_info_out->domain->u.file.intent;
-        new_domain->u.file.fapl_id   = H5Pcopy(loc_info_out->domain->u.file.fapl_id);
-        new_domain->u.file.fcpl_id   = H5Pcopy(loc_info_out->domain->u.file.fcpl_id);
-        new_domain->u.file.ref_count = 1;
-
-        RV_file_close(loc_info_out->domain, H5P_DEFAULT, NULL);
-
-        loc_info_out->domain = new_domain;
-    }
-
-    ret_value = RV_copy_object_URI_callback(HTTP_response, NULL, loc_info_out->URI);
-
-done:
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
-
-    return ret_value;
-}
-
-/*-------------------------------------------------------------------------
  * Function:    RV_copy_object_URI_callback
  *
  * Purpose:     A callback for RV_parse_response which will, given a
@@ -2417,13 +2303,17 @@ done:
 } /* end RV_find_object_by_path() */
 
 /*-------------------------------------------------------------------------
- * Function:    RV_copy_creation_properties_callback
+ * Function:    RV_parse_creation_properties_callback
  *
- * Purpose:     Callback for RV_parse_response to get the
- *              creationProperties field in the response.
- *
- *              Allocates memory at *callback_data_out that must be
- *              freed by caller.
+ * Purpose:     Helper function to try to parse creation properties
+ *              from given parse tree, into ptr at address GCPL_buf.
+ * 
+ *              This is a separate function to allow it to fail
+ *              gracefully when the object we're operating on
+ *              doesn't have a creation properties field.
+ * 
+ *              If it succeeds, it will allocate memory at 
+ *              *GCPL_buf that must be freed by user. 
  *
  * Return:      Non-negative on success/Negative on failure
  *
@@ -2431,26 +2321,16 @@ done:
  *              May, 2023
  */
 herr_t
-RV_copy_creation_properties_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
-{
-    yajl_val parse_tree = NULL, key_obj;
-    char    *parsed_string;
-    char   **buf_out   = (char **)callback_data_out;
-    herr_t   ret_value = SUCCEED;
+RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf) {
+    herr_t ret_value = SUCCEED;
+    yajl_val key_obj = NULL;
+    char *parsed_string = NULL;
+    
+    if (!parse_tree)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parse tree was NULL");
 
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Retrieving object's creation properties from server's HTTP response\n\n");
-#endif
-
-    if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
-    if (!buf_out)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL");
-
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
-
-    key_obj = yajl_tree_get(parse_tree, object_creation_properties_keys, yajl_t_string);
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, object_creation_properties_keys, yajl_t_string)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse creationProperties");
 
     if (!YAJL_IS_STRING(key_obj))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned creationProperties is not a string");
@@ -2458,18 +2338,146 @@ RV_copy_creation_properties_callback(char *HTTP_response, void *callback_data_in
     if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "creationProperties was NULL");
 
-    if (NULL == (*buf_out = RV_malloc(strlen(parsed_string) + 1)))
+    if (NULL == (*GCPL_buf = RV_malloc(strlen(parsed_string) + 1)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "failed to allocate memory for creationProperties");
 
-    if (NULL == (memcpy(*buf_out, parsed_string, strlen(parsed_string) + 1)))
+    if (NULL == (memcpy(*GCPL_buf, parsed_string, strlen(parsed_string) + 1)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "failed to copy creationProperties");
 
+done: 
+
+    if (ret_value < 0) {
+        free(*GCPL_buf);
+        *GCPL_buf = NULL;
+    }
+
+    return ret_value;
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_copy_object_loc_info_callback
+ *
+ * Purpose:     Callback for RV_parse_response to populate 
+ *              a loc_info struct. Sets NULL for any fields not
+ *              found in the particular response. 
+ *
+ *              Allocates memory at *callback_data_out for each 
+ *              found field that must be freed by caller.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              May, 2023
+ */
+herr_t
+RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+{
+    yajl_val parse_tree = NULL, key_obj;
+    char    *parsed_string;
+    loc_info *loc_info_out = (loc_info *) callback_data_out;
+    herr_t   ret_value = SUCCEED;
+    
+    char *GCPL_buf = NULL;
+
+    char *parsed_id_string = NULL;
+    bool is_external_domain = false;
+    RV_object_t found_domain;
+    RV_object_t *new_domain = NULL;
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Retrieving object's creation properties from server's HTTP response\n\n");
+#endif
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
+    if (!loc_info_out)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL");
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
+
+    /* Not all objects have a creationProperties field, so fail this gracefully */
+    H5E_BEGIN_TRY {
+        RV_parse_creation_properties_callback(parse_tree, &GCPL_buf);
+    } H5E_END_TRY
+
+    if (GCPL_buf != NULL) {
+        loc_info_out->GCPL_base64 = GCPL_buf;
+    }
+
+    /* Retrieve domain path */
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, domain_keys, yajl_t_string)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse domain");
+
+    if (!YAJL_IS_STRING(key_obj))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain is not a string");
+
+    if (NULL == (found_domain.u.file.filepath_name = YAJL_GET_STRING(key_obj)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "domain was NULL");
+
+    /* Retrieve domain id */
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, root_id_keys, yajl_t_string)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse domain id");
+
+    if (!YAJL_IS_STRING(key_obj))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain id is not a string");
+
+    if (NULL == (parsed_id_string = YAJL_GET_STRING(key_obj)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain id is NULL");
+
+    if (strlen(parsed_id_string) > URI_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "parsed domain id too large");
+
+    if (NULL == strncpy(found_domain.URI, parsed_id_string, URI_MAX_LENGTH))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to copy memory for domain id");
+
+    is_external_domain =
+        strcmp(found_domain.u.file.filepath_name, loc_info_out->domain->u.file.filepath_name);
+
+    /* If retrieved domain is different than the domain through which this object
+     * was accessed, replace the returned object's domain. */
+    if (is_external_domain) {
+        if (NULL == (new_domain = RV_malloc(sizeof(RV_object_t))))
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL, "failed to allocate memory for new domain");
+
+        memcpy(new_domain, &found_domain, sizeof(RV_object_t));
+
+        /* Wait until after heap allocation to set self pointer */
+        new_domain->domain   = new_domain;
+        new_domain->obj_type = H5I_FILE;
+
+        if (NULL ==
+            (new_domain->u.file.filepath_name = RV_malloc(strlen(found_domain.u.file.filepath_name) + 1)))
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL,
+                            "failed to allocate memory for new domain path");
+
+        strncpy(new_domain->u.file.filepath_name, found_domain.u.file.filepath_name,
+                strlen(found_domain.u.file.filepath_name) + 1);
+
+        new_domain->u.file.intent    = loc_info_out->domain->u.file.intent;
+        new_domain->u.file.fapl_id   = H5Pcopy(loc_info_out->domain->u.file.fapl_id);
+        new_domain->u.file.fcpl_id   = H5Pcopy(loc_info_out->domain->u.file.fcpl_id);
+        new_domain->u.file.ref_count = 1;
+
+        RV_file_close(loc_info_out->domain, H5P_DEFAULT, NULL);
+
+        loc_info_out->domain = new_domain;
+    }
+
+    /* URI */
+    ret_value = RV_copy_object_URI_callback(HTTP_response, NULL, loc_info_out->URI);
 done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
+    if (ret_value < 0) {
+        free(GCPL_buf);
+        GCPL_buf = NULL;
+        loc_info_out->GCPL_base64 = NULL;
+    }
+
     return ret_value;
-} /* end RV_copy_creation_properties_callback() */
+} /* end RV_copy_object_loc_info_callback() */
 
 /*-------------------------------------------------------------------------
  * Function:    RV_parse_dataspace
