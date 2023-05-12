@@ -507,10 +507,12 @@ struct RV_object_t {
 };
 
 /* A structure which is filled out by a callback that reads
- * the server's response, containing information that uniquely
- * identifies an object by URI and the domain containing it. */
+ * the server's response. If a field was not contained in a
+ * server's response, its pointer will be NULL, and this
+ * must be checked after the callback is used. */
 typedef struct loc_info {
     char        *URI;
+    char        *GCPL_base64;
     RV_object_t *domain;
 } loc_info;
 
@@ -540,9 +542,8 @@ herr_t RV_parse_response(char *HTTP_response, void *callback_data_in, void *call
 /* Callback for RV_parse_response() to capture an object's URI */
 herr_t RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 
-/* Callback for RV_parse_response() to capture an object's URI and domain, for external links */
-herr_t RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callback_data_in,
-                                              void *callback_data_out);
+/* Callback for RV_parse_response() to capture an object's creation properties */
+herr_t RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 
 /* Helper function to find an object given a starting object to search from and a path */
 htri_t RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
@@ -555,6 +556,10 @@ hid_t RV_parse_dataspace(char *space);
 
 /* Helper function to interpret a dataspace's shape and convert it into JSON */
 herr_t RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **maxdims_body);
+
+/* Helper functions to base64 encode/decode a binary buffer */
+herr_t RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size);
+herr_t RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size);
 
 #ifdef __cplusplus
 }

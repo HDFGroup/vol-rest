@@ -458,7 +458,7 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
             attribute->u.attribute.parent_obj_type = H5I_UNINIT;
 
             /* External links to attributes are not supported, so there is no need to use
-             * RV_copy_object_URI_and_domain_callback */
+             * a callback that checks for a different domain */
             search_ret = RV_find_object_by_path(
                 parent, loc_params->loc_data.loc_by_name.name, &attribute->u.attribute.parent_obj_type,
                 RV_copy_object_URI_callback, NULL, attribute->u.attribute.parent_obj_URI);

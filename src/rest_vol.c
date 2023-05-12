@@ -104,6 +104,9 @@ const char *root_id_keys[] = {"root", (const char *)0};
 /* JSON key to retrieve the ID of an object from the server */
 const char *object_id_keys[] = {"id", (const char *)0};
 
+/* JSON keys to retrieve information about creation properties of an object */
+const char *object_creation_properties_keys[] = {"creationProperties", (const char *)0};
+
 /* JSON key to retrieve the ID of a link from the server */
 const char *link_id_keys[] = {"link", "id", (const char *)0};
 
@@ -118,6 +121,11 @@ const char *dataspace_max_dims_keys[] = {"shape", "maxdims", (const char *)0};
 
 /* JSON keys to retrieve the path of a domain */
 const char *domain_keys[] = {"domain", (const char *)0};
+
+/* Default size for the buffer to allocate during base64-encoding if the caller
+ * of RV_base64_encode supplies a 0-sized buffer.
+ */
+#define BASE64_ENCODE_DEFAULT_BUFFER_SIZE 33554432 /* 32MB */
 
 /* Internal initialization/termination functions which are called by
  * the public functions H5rest_init() and H5rest_term() */
@@ -137,6 +145,10 @@ static size_t H5_rest_curl_write_data_callback(char *buffer, size_t size, size_t
 
 /* Helper function to URL-encode an entire pathname by URL-encoding each of its separate components */
 static char *H5_rest_url_encode_path(const char *path);
+
+/* Helper functions to base64 encode/decode a binary buffer */
+herr_t RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size);
+herr_t RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size);
 
 /* The REST VOL connector's class structure. */
 static const H5VL_class_t H5VL_rest_g = {
@@ -1683,120 +1695,6 @@ done:
 } /* end RV_parse_response() */
 
 /*-------------------------------------------------------------------------
- * Function:    RV_copy_object_URI_and_domain_callback
- *
- * Purpose:     Copies information from response to provided buffers.
- *
- *              This function should be used in place of
- *              RV_copy_object_URI_callback wherever the object
- *              may be an external link, whose domain is different
- *              from the domain of its parent object.
- *
- *              callback_data_out is expected to be a pointer to an array
- *              of two pointers, the first being the address of a buffer for the URI,
- *              and the second being the address of a pointer to a domain buffer of the target object.
- *
- *              callback_data_is provided inside RV_find_object_by_path.
- *
- * Return:      Non-negative on success/Negative on failure
- *
- * Programmer:  Matthew Larson
- *              April, 2023
- */
-herr_t
-RV_copy_object_URI_and_domain_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
-{
-    yajl_val    parse_tree       = NULL, key_obj;
-    char       *parsed_id_string = NULL;
-    herr_t      ret_value        = SUCCEED;
-    loc_info   *loc_info_out     = (loc_info *)callback_data_out;
-    RV_object_t found_domain;
-    bool        is_external_domain = false;
-
-    /* Parse domain information from response */
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Retrieving object's domain from server's HTTP response\n\n");
-#endif
-
-    if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
-    if (!loc_info_out)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL");
-
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
-
-    /* Retrieve domain path */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, domain_keys, yajl_t_string)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse domain");
-
-    if (!YAJL_IS_STRING(key_obj))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain is not a string");
-
-    if (NULL == (found_domain.u.file.filepath_name = YAJL_GET_STRING(key_obj)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "domain was NULL");
-
-    /* Retrieve domain id */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, root_id_keys, yajl_t_string)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse domain id");
-
-    if (!YAJL_IS_STRING(key_obj))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain id is not a string");
-
-    if (NULL == (parsed_id_string = YAJL_GET_STRING(key_obj)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain id is NULL");
-
-    if (strlen(parsed_id_string) > URI_MAX_LENGTH)
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "parsed domain id too large");
-
-    if (NULL == strncpy(found_domain.URI, parsed_id_string, URI_MAX_LENGTH))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to copy memory for domain id");
-
-    /* If retrieved domain is different than the domain through which this object
-     * was accessed, replace the returned object's domain. */
-    is_external_domain =
-        strcmp(found_domain.u.file.filepath_name, loc_info_out->domain->u.file.filepath_name);
-
-    if (is_external_domain) {
-        RV_object_t *new_domain = NULL;
-
-        if (NULL == (new_domain = RV_malloc(sizeof(RV_object_t))))
-            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL, "failed to allocate memory for new domain");
-
-        memcpy(new_domain, &found_domain, sizeof(RV_object_t));
-
-        /* Wait until after heap allocation to set self pointer */
-        new_domain->domain   = new_domain;
-        new_domain->obj_type = H5I_FILE;
-
-        if (NULL ==
-            (new_domain->u.file.filepath_name = RV_malloc(strlen(found_domain.u.file.filepath_name) + 1)))
-            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL,
-                            "failed to allocate memory for new domain path");
-
-        strncpy(new_domain->u.file.filepath_name, found_domain.u.file.filepath_name,
-                strlen(found_domain.u.file.filepath_name) + 1);
-
-        new_domain->u.file.intent    = loc_info_out->domain->u.file.intent;
-        new_domain->u.file.fapl_id   = H5Pcopy(loc_info_out->domain->u.file.fapl_id);
-        new_domain->u.file.fcpl_id   = H5Pcopy(loc_info_out->domain->u.file.fcpl_id);
-        new_domain->u.file.ref_count = 1;
-
-        RV_file_close(loc_info_out->domain, H5P_DEFAULT, NULL);
-
-        loc_info_out->domain = new_domain;
-    }
-
-    ret_value = RV_copy_object_URI_callback(HTTP_response, NULL, loc_info_out->URI);
-
-done:
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
-
-    return ret_value;
-}
-
-/*-------------------------------------------------------------------------
  * Function:    RV_copy_object_URI_callback
  *
  * Purpose:     A callback for RV_parse_response which will, given a
@@ -2405,6 +2303,186 @@ done:
 } /* end RV_find_object_by_path() */
 
 /*-------------------------------------------------------------------------
+ * Function:    RV_parse_creation_properties_callback
+ *
+ * Purpose:     Helper function to try to parse creation properties
+ *              from given parse tree, into ptr at address GCPL_buf.
+ *
+ *              This is a separate function to allow it to fail
+ *              gracefully when the object we're operating on
+ *              doesn't have a creation properties field.
+ *
+ *              If it succeeds, it will allocate memory at
+ *              *GCPL_buf that must be freed by user.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              May, 2023
+ */
+herr_t
+RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf)
+{
+    herr_t   ret_value     = SUCCEED;
+    yajl_val key_obj       = NULL;
+    char    *parsed_string = NULL;
+
+    if (!parse_tree)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parse tree was NULL");
+
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, object_creation_properties_keys, yajl_t_string)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse creationProperties");
+
+    if (!YAJL_IS_STRING(key_obj))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned creationProperties is not a string");
+
+    if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "creationProperties was NULL");
+
+    if (NULL == (*GCPL_buf = RV_malloc(strlen(parsed_string) + 1)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "failed to allocate memory for creationProperties");
+
+    if (NULL == (memcpy(*GCPL_buf, parsed_string, strlen(parsed_string) + 1)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "failed to copy creationProperties");
+
+done:
+
+    if (ret_value < 0) {
+        free(*GCPL_buf);
+        *GCPL_buf = NULL;
+    }
+
+    return ret_value;
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_copy_object_loc_info_callback
+ *
+ * Purpose:     Callback for RV_parse_response to populate
+ *              a loc_info struct. Sets NULL for any fields not
+ *              found in the particular response.
+ *
+ *              Allocates memory at *callback_data_out for each
+ *              found field that must be freed by caller.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              May, 2023
+ */
+herr_t
+RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+{
+    yajl_val  parse_tree = NULL, key_obj;
+    char     *parsed_string;
+    loc_info *loc_info_out = (loc_info *)callback_data_out;
+    herr_t    ret_value    = SUCCEED;
+
+    char *GCPL_buf = NULL;
+
+    char        *parsed_id_string   = NULL;
+    bool         is_external_domain = false;
+    RV_object_t  found_domain;
+    RV_object_t *new_domain = NULL;
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Retrieving object's creation properties from server's HTTP response\n\n");
+#endif
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
+    if (!loc_info_out)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL");
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
+
+    /* Not all objects have a creationProperties field, so fail this gracefully */
+    H5E_BEGIN_TRY
+    {
+        RV_parse_creation_properties_callback(parse_tree, &GCPL_buf);
+    }
+    H5E_END_TRY
+
+    if (GCPL_buf != NULL) {
+        loc_info_out->GCPL_base64 = GCPL_buf;
+    }
+
+    /* Retrieve domain path */
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, domain_keys, yajl_t_string)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse domain");
+
+    if (!YAJL_IS_STRING(key_obj))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain is not a string");
+
+    if (NULL == (found_domain.u.file.filepath_name = YAJL_GET_STRING(key_obj)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "domain was NULL");
+
+    /* Retrieve domain id */
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, root_id_keys, yajl_t_string)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse domain id");
+
+    if (!YAJL_IS_STRING(key_obj))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain id is not a string");
+
+    if (NULL == (parsed_id_string = YAJL_GET_STRING(key_obj)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain id is NULL");
+
+    if (strlen(parsed_id_string) > URI_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "parsed domain id too large");
+
+    if (NULL == strncpy(found_domain.URI, parsed_id_string, URI_MAX_LENGTH))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to copy memory for domain id");
+
+    is_external_domain =
+        strcmp(found_domain.u.file.filepath_name, loc_info_out->domain->u.file.filepath_name);
+
+    /* If retrieved domain is different than the domain through which this object
+     * was accessed, replace the returned object's domain. */
+    if (is_external_domain) {
+        if (NULL == (new_domain = RV_malloc(sizeof(RV_object_t))))
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL, "failed to allocate memory for new domain");
+
+        memcpy(new_domain, &found_domain, sizeof(RV_object_t));
+
+        /* Wait until after heap allocation to set self pointer */
+        new_domain->domain   = new_domain;
+        new_domain->obj_type = H5I_FILE;
+
+        if (NULL ==
+            (new_domain->u.file.filepath_name = RV_malloc(strlen(found_domain.u.file.filepath_name) + 1)))
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL,
+                            "failed to allocate memory for new domain path");
+
+        strncpy(new_domain->u.file.filepath_name, found_domain.u.file.filepath_name,
+                strlen(found_domain.u.file.filepath_name) + 1);
+
+        new_domain->u.file.intent    = loc_info_out->domain->u.file.intent;
+        new_domain->u.file.fapl_id   = H5Pcopy(loc_info_out->domain->u.file.fapl_id);
+        new_domain->u.file.fcpl_id   = H5Pcopy(loc_info_out->domain->u.file.fcpl_id);
+        new_domain->u.file.ref_count = 1;
+
+        RV_file_close(loc_info_out->domain, H5P_DEFAULT, NULL);
+
+        loc_info_out->domain = new_domain;
+    }
+
+    /* URI */
+    ret_value = RV_copy_object_URI_callback(HTTP_response, NULL, loc_info_out->URI);
+done:
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    if (ret_value < 0) {
+        free(GCPL_buf);
+        GCPL_buf                  = NULL;
+        loc_info_out->GCPL_base64 = NULL;
+    }
+
+    return ret_value;
+} /* end RV_copy_object_loc_info_callback() */
+
+/*-------------------------------------------------------------------------
  * Function:    RV_parse_dataspace
  *
  * Purpose:     Given a JSON representation of an HDF5 dataspace, parse the
@@ -2761,6 +2839,238 @@ done:
     return ret_value;
 } /* end RV_convert_dataspace_shape_to_JSON() */
 
+/*-------------------------------------------------------------------------
+ * Function:    RV_base64_encode
+ *
+ * Purpose:     A helper function to base64 encode the given buffer. This
+ *              is used specifically when dealing with writing data to a
+ *              dataset using a point selection, and when sending plist
+ *              information to the server.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              January, 2018
+ */
+herr_t
+RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size)
+{
+    const uint8_t *buf       = (const uint8_t *)in;
+    const char     charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    uint32_t       three_byte_set;
+    uint8_t        c0, c1, c2, c3;
+    size_t         i;
+    size_t         nalloc;
+    size_t         out_index = 0;
+    int            npad;
+    herr_t         ret_value = SUCCEED;
+
+    if (!in)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "input buffer pointer was NULL");
+    if (!out)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer pointer was NULL");
+
+    /* If the caller has specified a 0-sized buffer, allocate one and set nalloc
+     * so that the following 'nalloc *= 2' calls don't result in 0-sized
+     * allocations.
+     */
+    if (!out_size || (out_size && !*out_size)) {
+        nalloc = BASE64_ENCODE_DEFAULT_BUFFER_SIZE;
+        if (NULL == (*out = (char *)RV_malloc(nalloc)))
+            FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL,
+                            "can't allocate space for base64-encoding output buffer");
+    } /* end if */
+    else
+        nalloc = *out_size;
+
+    for (i = 0; i < in_size; i += 3) {
+        three_byte_set = ((uint32_t)buf[i]) << 16;
+
+        if (i + 1 < in_size)
+            three_byte_set += ((uint32_t)buf[i + 1]) << 8;
+
+        if (i + 2 < in_size)
+            three_byte_set += buf[i + 2];
+
+        /* Split 3-byte number into four 6-bit groups for encoding */
+        c0 = (uint8_t)(three_byte_set >> 18) & 0x3f;
+        c1 = (uint8_t)(three_byte_set >> 12) & 0x3f;
+        c2 = (uint8_t)(three_byte_set >> 6) & 0x3f;
+        c3 = (uint8_t)three_byte_set & 0x3f;
+
+        CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 2, H5E_RESOURCE, FAIL);
+
+        (*out)[out_index++] = charset[c0];
+        (*out)[out_index++] = charset[c1];
+
+        if (i + 1 < in_size) {
+            CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
+
+            (*out)[out_index++] = charset[c2];
+        } /* end if */
+
+        if (i + 2 < in_size) {
+            CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
+
+            (*out)[out_index++] = charset[c3];
+        } /* end if */
+    }     /* end for */
+
+    /* Add trailing padding when out_index does not fall on the beginning of a 4-byte set */
+    npad = (4 - (out_index % 4)) % 4;
+    while (npad) {
+        CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
+
+        (*out)[out_index++] = '=';
+
+        npad--;
+    } /* end while */
+
+    CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
+
+    (*out)[out_index] = '\0';
+
+    if (out_size)
+        *out_size = out_index;
+
+done:
+    return ret_value;
+} /* end RV_base64_encode() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_base64_decode
+ *
+ * Purpose:     A helper function to base64 decode the given buffer. This
+ *              is used specifically when dealing with writing data to a
+ *              dataset using a point selection, and when sending plist
+ *              information to the server.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              May, 2023
+ */
+herr_t
+RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size)
+{
+    uint8_t   *buf       = (uint8_t *)in;
+    const char charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    uint32_t   four_byte_set;
+    uint8_t    c0, c1, c2, c3;
+    size_t     nalloc    = 0;
+    size_t     out_index = 0;
+    herr_t     ret_value = SUCCEED;
+
+    if (!in)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "input buffer pointer was NULL");
+    if (!out)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer pointer was NULL");
+
+    /* If the caller has specified a 0-sized buffer, allocate one and set nalloc
+     * so that the following 'nalloc *= 2' calls don't result in 0-sized
+     * allocations.
+     */
+    if (!out_size || (out_size && !*out_size)) {
+        nalloc = BASE64_ENCODE_DEFAULT_BUFFER_SIZE;
+        if (NULL == (*out = (char *)RV_malloc(nalloc)))
+            FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL,
+                            "can't allocate space for base64-encoding output buffer");
+    } /* end if */
+    else
+        nalloc = *out_size;
+
+    for (size_t i = 0; i < in_size; i += 4) {
+        four_byte_set = ((uint32_t)buf[i]) << 24;
+
+        if (i + 1 < in_size)
+            four_byte_set += ((uint32_t)buf[i + 1]) << 16;
+
+        if (i + 2 < in_size)
+            four_byte_set += ((uint32_t)buf[i + 2]) << 8;
+
+        if (i + 3 < in_size)
+            four_byte_set += ((uint32_t)buf[i + 3]);
+
+        if (((char)buf[i + 3]) == '=') {
+            /* Two characters of padding */
+
+            /* Ignore last two padding chars */
+            c0 = (uint8_t)(four_byte_set >> 24);
+            c1 = (uint8_t)(four_byte_set >> 16);
+
+            c0 = (uint8_t)(strchr(charset, c0) - charset);
+            c1 = (uint8_t)(strchr(charset, c1) - charset);
+
+            four_byte_set = (((uint32_t)c0) << 6) | (((uint32_t)c1) << 0);
+
+            /* Remove 4 trailing bits due to padding */
+            four_byte_set = four_byte_set >> 4;
+
+            c0 = (uint8_t)(four_byte_set >> 8);
+            c1 = (uint8_t)(four_byte_set >> 0);
+
+            CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
+            (*out)[out_index++] = c1;
+        }
+        else if (((char)buf[i + 2]) == '=') {
+            /* One character of padding */
+
+            /* Ignore last one padding char */
+            c0 = (uint8_t)(four_byte_set >> 24);
+            c1 = (uint8_t)(four_byte_set >> 16);
+            c2 = (uint8_t)(four_byte_set >> 8);
+
+            c0 = (uint8_t)(strchr(charset, c0) - charset);
+            c1 = (uint8_t)(strchr(charset, c1) - charset);
+            c2 = (uint8_t)(strchr(charset, c2) - charset);
+
+            four_byte_set = (((uint32_t)c0) << 12) | (((uint32_t)c1) << 6) | (((uint32_t)c2) << 0);
+
+            /* Remove 2 trailing bits due to padding */
+            four_byte_set = four_byte_set >> 2;
+
+            c0 = (uint8_t)(four_byte_set >> 16);
+            c1 = (uint8_t)(four_byte_set >> 8);
+            c2 = (uint8_t)(four_byte_set >> 0);
+
+            CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 2, H5E_RESOURCE, FAIL);
+            (*out)[out_index++] = c1;
+            (*out)[out_index++] = c2;
+        }
+        else {
+            /* 0 bytes of padding */
+            c0 = (uint8_t)(four_byte_set >> 24);
+            c1 = (uint8_t)(four_byte_set >> 16);
+            c2 = (uint8_t)(four_byte_set >> 8);
+            c3 = (uint8_t)(four_byte_set >> 0);
+
+            c0 = (uint8_t)(strchr(charset, c0) - charset);
+            c1 = (uint8_t)(strchr(charset, c1) - charset);
+            c2 = (uint8_t)(strchr(charset, c2) - charset);
+            c3 = (uint8_t)(strchr(charset, c3) - charset);
+
+            four_byte_set = (((uint32_t)c0) << 18) | (((uint32_t)c1) << 12) | (((uint32_t)c2) << 6) |
+                            (((uint32_t)c3) << 0);
+
+            c0 = (uint8_t)(four_byte_set >> 24); // 0
+            c1 = (uint8_t)(four_byte_set >> 16);
+            c2 = (uint8_t)(four_byte_set >> 8);
+            c3 = (uint8_t)(four_byte_set >> 0);
+
+            CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 3, H5E_RESOURCE, FAIL);
+            (*out)[out_index++] = c1;
+            (*out)[out_index++] = c2;
+            (*out)[out_index++] = c3;
+        }
+    } /* end for */
+
+    (*out)[out_index++] = '\0';
+
+    if (out_size)
+        *out_size = out_index;
+done:
+    return ret_value;
+} /* end RV_base64_decode() */
 /*************************************************
  * The following two routines allow the REST VOL *
  * connector to be dynamically loaded by HDF5.   *

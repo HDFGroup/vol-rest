@@ -35,9 +35,17 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
 {
     RV_object_t *new_file = NULL;
     size_t       name_length;
-    size_t       host_header_len = 0;
-    char        *host_header     = NULL;
-    void        *ret_value       = NULL;
+    size_t       host_header_len         = 0;
+    size_t       base64_buf_size         = 0;
+    size_t       plist_nalloc            = 0;
+    size_t       create_request_nalloc   = 0;
+    size_t       create_request_body_len = 0;
+    char        *host_header             = NULL;
+    char        *base64_plist_buffer     = NULL;
+    char        *fmt_string              = NULL;
+    char        *create_request_body     = NULL;
+    void        *ret_value               = NULL;
+    void        *binary_plist_buffer     = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file create call with following parameters:\n");
@@ -175,12 +183,48 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
         } /* end if */
     }     /* end if */
 
+    if (H5Pencode2(fcpl_id, binary_plist_buffer, &plist_nalloc, H5P_DEFAULT) < 0)
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTENCODE, NULL, "can't determine size needed for encoded gcpl");
+
+    if ((binary_plist_buffer = RV_malloc(plist_nalloc)) == NULL)
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTALLOC, FAIL, "can't allocate space for encoded gcpl");
+
+    if (H5Pencode2(fcpl_id, binary_plist_buffer, &plist_nalloc, H5P_DEFAULT) < 0)
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTENCODE, NULL, "can't encode gcpl");
+
+    if (RV_base64_encode(binary_plist_buffer, plist_nalloc, &base64_plist_buffer, &base64_buf_size) < 0)
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTENCODE, NULL, "failed to base64 encode plist binary");
+
+    fmt_string = "{"
+                 "\"group\": {"
+                 "\"creationProperties\": \"%s\""
+                 "}"
+                 "}";
+
+    create_request_nalloc = strlen(fmt_string) + base64_buf_size + 1;
+
+    if (NULL == (create_request_body = (char *)RV_malloc(create_request_nalloc)))
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for file create request body");
+
+    if ((create_request_body_len =
+             snprintf(create_request_body, create_request_nalloc, fmt_string, base64_plist_buffer)) < 0)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error");
+
+    if ((size_t)create_request_body_len >= create_request_nalloc)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL,
+                        "group link create request body size exceeded allocated buffer size");
+
+    upload_info uinfo;
+    uinfo.buffer      = create_request_body;
+    uinfo.buffer_size = create_request_body_len;
+    uinfo.bytes_sent  = 0;
+
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP PUT request: %s",
                         curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, NULL))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, &uinfo))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL PUT data: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, 0))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)create_request_body_len))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL PUT data size: %s", curl_err_buf);
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -216,6 +260,10 @@ done:
 
     if (host_header)
         RV_free(host_header);
+
+    RV_free(base64_plist_buffer);
+    RV_free(binary_plist_buffer);
+    RV_free(create_request_body);
 
     /* Clean up allocated file object if there was an issue */
     if (new_file && !ret_value)

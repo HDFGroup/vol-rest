@@ -45,13 +45,17 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     RV_object_t *new_group             = NULL;
     size_t       create_request_nalloc = 0;
     size_t       host_header_len       = 0;
+    size_t       base64_buf_size       = 0;
+    size_t       plist_nalloc          = 0;
     char        *host_header           = NULL;
     char        *create_request_body   = NULL;
     char        *path_dirname          = NULL;
+    char        *base64_plist_buffer   = NULL;
     char         target_URI[URI_MAX_LENGTH];
     char         request_url[URL_MAX_LENGTH];
     int          create_request_body_len = 0;
     int          url_len                 = 0;
+    void        *binary_plist_buffer     = NULL;
     void        *ret_value               = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -168,18 +172,35 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
                                        "\"link\": {"
                                        "\"id\": \"%s\", "
                                        "\"name\": \"%s\""
-                                       "}"
+                                       "},"
+                                       "\"creationProperties\": \"%s\""
                                        "}";
 
         /* Form the request body to link the new group to the parent object */
+
+        /* Encode GCPL to send to server */
+        if (H5Pencode2(gcpl_id, binary_plist_buffer, &plist_nalloc, H5P_DEFAULT) < 0)
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTENCODE, NULL, "can't determine size needed for encoded gcpl");
+
+        if ((binary_plist_buffer = RV_malloc(plist_nalloc)) == NULL)
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTALLOC, FAIL, "can't allocate space for encoded gcpl");
+
+        if (H5Pencode2(gcpl_id, binary_plist_buffer, &plist_nalloc, H5P_DEFAULT) < 0)
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTENCODE, NULL, "can't encode gcpl");
+
+        if (RV_base64_encode(binary_plist_buffer, plist_nalloc, &base64_plist_buffer, &base64_buf_size) < 0)
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTENCODE, NULL, "failed to base64 encode plist binary");
+
         create_request_nalloc = strlen(fmt_string) + strlen(path_basename) +
-                                (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + 1;
+                                (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + base64_buf_size +
+                                1;
         if (NULL == (create_request_body = (char *)RV_malloc(create_request_nalloc)))
             FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL,
                             "can't allocate space for group create request body");
 
         if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string,
-                                                empty_dirname ? parent->URI : target_URI, path_basename)) < 0)
+                                                empty_dirname ? parent->URI : target_URI, path_basename,
+                                                (char *)base64_plist_buffer)) < 0)
             FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error");
 
         if ((size_t)create_request_body_len >= create_request_nalloc)
@@ -275,6 +296,11 @@ done:
         if (RV_group_close(new_group, FAIL, NULL) < 0)
             FUNC_DONE_ERROR(H5E_SYM, H5E_CANTCLOSEOBJ, NULL, "can't close group");
 
+    if (base64_plist_buffer)
+        RV_free(base64_plist_buffer);
+    if (binary_plist_buffer)
+        RV_free(binary_plist_buffer);
+
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
@@ -302,12 +328,16 @@ void *
 RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id,
               void **req)
 {
-    RV_object_t *parent   = (RV_object_t *)obj;
-    RV_object_t *group    = NULL;
-    H5I_type_t   obj_type = H5I_UNINIT;
-    loc_info     loc_info;
+    RV_object_t *parent = (RV_object_t *)obj;
+    RV_object_t *group  = NULL;
+    loc_info     loc_info_out;
     htri_t       search_ret;
     void        *ret_value = NULL;
+    // char        *base64_binary_gcpl = NULL;
+    void   *binary_gcpl      = NULL;
+    size_t *binary_gcpl_size = 0;
+
+    H5I_type_t obj_type = H5I_UNINIT;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received group open call with following parameters:\n");
@@ -334,20 +364,36 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
     group->domain = parent->domain;
     parent->domain->u.file.ref_count++;
 
-    loc_info.URI    = group->URI;
-    loc_info.domain = group->domain;
-
     /* Locate group and set domain */
-    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_URI_and_domain_callback, NULL,
-                                        &loc_info);
+
+    loc_info_out.URI         = group->URI;
+    loc_info_out.domain      = group->domain;
+    loc_info_out.GCPL_base64 = NULL;
+
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_loc_info_callback, NULL,
+                                        &loc_info_out);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate group by path");
 
-    group->domain = loc_info.domain;
+    group->domain = loc_info_out.domain;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Found group by given path\n\n");
 #endif
+
+    /* Decode creation properties */
+    if (loc_info_out.GCPL_base64 == NULL) {
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTDECODE, NULL,
+                        "failed to retrieve creation properties from response");
+    }
+
+    if (RV_base64_decode(loc_info_out.GCPL_base64, strlen(loc_info_out.GCPL_base64), &binary_gcpl,
+                         &binary_gcpl_size) < 0)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTDECODE, NULL, "can't decode gcpl from base64");
+
+    /* Set up a GCPL for the group so that H5Gget_create_plist() will function correctly */
+    if (0 > (group->u.group.gcpl_id = H5Pdecode(binary_gcpl)))
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTDECODE, NULL, "can't decode creation property list from binary");
 
     /* Copy the GAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * group access property list functions will function correctly
@@ -358,12 +404,6 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
     } /* end if */
     else
         group->u.group.gapl_id = H5P_GROUP_ACCESS_DEFAULT;
-
-    /* Set up a GCPL for the group so that H5Gget_create_plist() will function correctly */
-    /* XXX: Because the HDF5 REST API does not support storing creationProperties for groups,
-     * the GCPL on re-open must be default.*/
-    if ((group->u.group.gcpl_id = H5Pcreate(H5P_GROUP_CREATE)) < 0)
-        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create GCPL for group");
 
     ret_value = (void *)group;
 
@@ -385,6 +425,10 @@ done:
             FUNC_DONE_ERROR(H5E_SYM, H5E_CANTCLOSEOBJ, NULL, "can't close group");
 
     PRINT_ERROR_STACK;
+
+    RV_free(loc_info_out.GCPL_base64);
+    // RV_free(base64_binary_gcpl);
+    RV_free(binary_gcpl);
 
     return ret_value;
 } /* end RV_group_open() */
