@@ -331,8 +331,8 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     dataset->domain = parent->domain;
     parent->domain->u.file.ref_count++;
 
-    loc_info_out.URI    = dataset->URI;
-    loc_info_out.domain = dataset->domain;
+    loc_info_out.URI         = dataset->URI;
+    loc_info_out.domain      = dataset->domain;
     loc_info_out.GCPL_base64 = NULL;
 
     /* Locate dataset and set domain */

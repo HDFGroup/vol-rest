@@ -2307,13 +2307,13 @@ done:
  *
  * Purpose:     Helper function to try to parse creation properties
  *              from given parse tree, into ptr at address GCPL_buf.
- * 
+ *
  *              This is a separate function to allow it to fail
  *              gracefully when the object we're operating on
  *              doesn't have a creation properties field.
- * 
- *              If it succeeds, it will allocate memory at 
- *              *GCPL_buf that must be freed by user. 
+ *
+ *              If it succeeds, it will allocate memory at
+ *              *GCPL_buf that must be freed by user.
  *
  * Return:      Non-negative on success/Negative on failure
  *
@@ -2321,11 +2321,12 @@ done:
  *              May, 2023
  */
 herr_t
-RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf) {
-    herr_t ret_value = SUCCEED;
-    yajl_val key_obj = NULL;
-    char *parsed_string = NULL;
-    
+RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf)
+{
+    herr_t   ret_value     = SUCCEED;
+    yajl_val key_obj       = NULL;
+    char    *parsed_string = NULL;
+
     if (!parse_tree)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parse tree was NULL");
 
@@ -2344,7 +2345,7 @@ RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf) {
     if (NULL == (memcpy(*GCPL_buf, parsed_string, strlen(parsed_string) + 1)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "failed to copy creationProperties");
 
-done: 
+done:
 
     if (ret_value < 0) {
         free(*GCPL_buf);
@@ -2357,11 +2358,11 @@ done:
 /*-------------------------------------------------------------------------
  * Function:    RV_copy_object_loc_info_callback
  *
- * Purpose:     Callback for RV_parse_response to populate 
+ * Purpose:     Callback for RV_parse_response to populate
  *              a loc_info struct. Sets NULL for any fields not
- *              found in the particular response. 
+ *              found in the particular response.
  *
- *              Allocates memory at *callback_data_out for each 
+ *              Allocates memory at *callback_data_out for each
  *              found field that must be freed by caller.
  *
  * Return:      Non-negative on success/Negative on failure
@@ -2372,16 +2373,16 @@ done:
 herr_t
 RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
-    yajl_val parse_tree = NULL, key_obj;
-    char    *parsed_string;
-    loc_info *loc_info_out = (loc_info *) callback_data_out;
-    herr_t   ret_value = SUCCEED;
-    
+    yajl_val  parse_tree = NULL, key_obj;
+    char     *parsed_string;
+    loc_info *loc_info_out = (loc_info *)callback_data_out;
+    herr_t    ret_value    = SUCCEED;
+
     char *GCPL_buf = NULL;
 
-    char *parsed_id_string = NULL;
-    bool is_external_domain = false;
-    RV_object_t found_domain;
+    char        *parsed_id_string   = NULL;
+    bool         is_external_domain = false;
+    RV_object_t  found_domain;
     RV_object_t *new_domain = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -2397,9 +2398,11 @@ RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, vo
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
     /* Not all objects have a creationProperties field, so fail this gracefully */
-    H5E_BEGIN_TRY {
+    H5E_BEGIN_TRY
+    {
         RV_parse_creation_properties_callback(parse_tree, &GCPL_buf);
-    } H5E_END_TRY
+    }
+    H5E_END_TRY
 
     if (GCPL_buf != NULL) {
         loc_info_out->GCPL_base64 = GCPL_buf;
@@ -2472,7 +2475,7 @@ done:
 
     if (ret_value < 0) {
         free(GCPL_buf);
-        GCPL_buf = NULL;
+        GCPL_buf                  = NULL;
         loc_info_out->GCPL_base64 = NULL;
     }
 

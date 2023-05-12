@@ -254,7 +254,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
     loc_info     loc_info;
 
     loc_info.GCPL_base64 = NULL;
-    loc_info.domain = loc_obj->domain;
+    loc_info.domain      = loc_obj->domain;
     loc_obj->domain->u.file.ref_count++;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -364,7 +364,6 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                     printf("-> H5Oget_info_by_name(): locating object by given path\n\n");
 #endif
 
-                    
                     loc_info.URI = temp_URI;
                     /* loc_info.domain was copied at function start */
 
