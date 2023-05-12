@@ -111,7 +111,7 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
      */
     if (H5VL_LINK_CREATE_HARD == args->op_type) {
         /* Pre-fetch the target object's relevant information in the case of hard link creation */
-        hard_link_target_obj            = args->args.hard.curr_obj;
+        hard_link_target_obj = args->args.hard.curr_obj ? args->args.hard.curr_obj : new_link_loc_obj;
         hard_link_target_obj_loc_params = &args->args.hard.curr_loc_params;
 
         /* If link_loc_new_obj was NULL, H5L_SAME_LOC was specified as the new link's loc_id.
