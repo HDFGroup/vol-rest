@@ -361,6 +361,9 @@ extern const char *object_id_keys[];
 extern const char *link_class_keys[];
 extern const char *link_class_keys2[];
 
+/* JSON key to retrieve the version of server from a request to a file. */
+extern const char *server_version_keys[];
+
 /* A global struct containing the buffer which cURL will write its
  * responses out to after making a call to the server. The buffer
  * in this struct is allocated upon connector initialization and is
@@ -448,6 +451,13 @@ typedef struct {
     size_t      bytes_sent;
 } upload_info;
 
+/* Structure that keeps track of semantic version. */
+typedef struct server_api_version {
+    size_t major;
+    size_t minor;
+    size_t patch;
+} server_api_version;
+
 /*
  * Definitions for the basic objects which the REST VOL uses
  * to represent various HDF5 objects internally. The base object
@@ -457,11 +467,12 @@ typedef struct {
 typedef struct RV_object_t RV_object_t;
 
 typedef struct RV_file_t {
-    unsigned intent;
-    unsigned ref_count;
-    char    *filepath_name;
-    hid_t    fcpl_id;
-    hid_t    fapl_id;
+    unsigned           intent;
+    unsigned           ref_count;
+    char              *filepath_name;
+    hid_t              fcpl_id;
+    hid_t              fapl_id;
+    server_api_version server_version;
 } RV_file_t;
 
 typedef struct RV_group_t {
@@ -544,6 +555,9 @@ herr_t RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, 
 
 /* Callback for RV_parse_response() to capture an object's creation properties */
 herr_t RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+
+/* Callback for RV_parse_response() to capture the version of the server api */
+herr_t RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 
 /* Helper function to find an object given a starting object to search from and a path */
 htri_t RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
