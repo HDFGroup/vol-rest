@@ -84,6 +84,10 @@ size_t H5_rest_curr_alloc_bytes;
  */
 struct response_buffer response_buffer;
 
+/* Structure to keep track of server version that REST VOL is communicating with.
+ * Updated each time a file is updated or opened. */
+server_api_version server_version;
+
 /* Authentication information for authenticating
  * with Active Directory.
  */
@@ -126,6 +130,9 @@ const char *domain_keys[] = {"domain", (const char *)0};
  * of RV_base64_encode supplies a 0-sized buffer.
  */
 #define BASE64_ENCODE_DEFAULT_BUFFER_SIZE 33554432 /* 32MB */
+
+/* JSON key to retrieve the version of server from a request to a file. */
+const char *server_version_keys[] = {"version", (const char *)0};
 
 /* Internal initialization/termination functions which are called by
  * the public functions H5rest_init() and H5rest_term() */
@@ -3071,6 +3078,72 @@ RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size)
 done:
     return ret_value;
 } /* end RV_base64_decode() */
+/* Helper function to store the version of the external HSDS server */
+herr_t
+RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callback_data_out) {
+    yajl_val    parse_tree       = NULL, key_obj;
+    herr_t      ret_value        = SUCCEED;
+    server_api_version *server_version = (server_api_version *) callback_data_out;
+
+    char       *version_response = NULL;
+    char       *version_field    = NULL;
+    char       *saveptr;
+    int         numeric_version_field    = 0;
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Retrieving server version from server's HTTP response\n\n");
+#endif
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
+
+    if (!server_version)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "server version buffer was NULL");
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
+
+    /* Retrieve version */
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, server_version_keys, yajl_t_string)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse server version");
+
+    if (!YAJL_IS_STRING(key_obj))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "parsed server version is not a string");
+
+    if (NULL == (version_response = YAJL_GET_STRING(key_obj)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server version was NULL");
+
+    /* Parse server version into struct */
+    if (NULL == (version_field = strtok_r(version_response, ".", &saveptr)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server major version field was NULL");
+
+    if ((numeric_version_field = strtol(version_field, NULL, 10)) < 0)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid server major version");
+
+    server_version->major = (size_t) numeric_version_field;
+
+    if (NULL == (version_field = strtok_r(NULL, ".", &saveptr)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server minor version field was NULL");
+
+    if ((numeric_version_field = strtol(version_field, NULL, 10)) < 0)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid server minor version");
+
+    server_version->minor = (size_t) numeric_version_field;
+
+    if (NULL == (version_field = strtok_r(NULL, ".", &saveptr)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server patch version field was NULL");
+
+    if ((numeric_version_field = strtol(version_field, NULL, 10)) < 0)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid server patch version");
+
+    server_version->patch = (size_t) numeric_version_field;
+
+done:
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    return ret_value;
+}
 /*************************************************
  * The following two routines allow the REST VOL *
  * connector to be dynamically loaded by HDF5.   *
