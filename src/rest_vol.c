@@ -3080,15 +3080,16 @@ done:
 } /* end RV_base64_decode() */
 /* Helper function to store the version of the external HSDS server */
 herr_t
-RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callback_data_out) {
-    yajl_val    parse_tree       = NULL, key_obj;
-    herr_t      ret_value        = SUCCEED;
-    server_api_version *server_version = (server_api_version *) callback_data_out;
+RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+{
+    yajl_val            parse_tree     = NULL, key_obj;
+    herr_t              ret_value      = SUCCEED;
+    server_api_version *server_version = (server_api_version *)callback_data_out;
 
-    char       *version_response = NULL;
-    char       *version_field    = NULL;
-    char       *saveptr;
-    int         numeric_version_field    = 0;
+    char *version_response = NULL;
+    char *version_field    = NULL;
+    char *saveptr;
+    int   numeric_version_field = 0;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving server version from server's HTTP response\n\n");
@@ -3120,7 +3121,7 @@ RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callb
     if ((numeric_version_field = strtol(version_field, NULL, 10)) < 0)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid server major version");
 
-    server_version->major = (size_t) numeric_version_field;
+    server_version->major = (size_t)numeric_version_field;
 
     if (NULL == (version_field = strtok_r(NULL, ".", &saveptr)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server minor version field was NULL");
@@ -3128,7 +3129,7 @@ RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callb
     if ((numeric_version_field = strtol(version_field, NULL, 10)) < 0)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid server minor version");
 
-    server_version->minor = (size_t) numeric_version_field;
+    server_version->minor = (size_t)numeric_version_field;
 
     if (NULL == (version_field = strtok_r(NULL, ".", &saveptr)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server patch version field was NULL");
@@ -3136,7 +3137,7 @@ RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callb
     if ((numeric_version_field = strtol(version_field, NULL, 10)) < 0)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid server patch version");
 
-    server_version->patch = (size_t) numeric_version_field;
+    server_version->patch = (size_t)numeric_version_field;
 
 done:
     if (parse_tree)

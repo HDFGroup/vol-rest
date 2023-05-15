@@ -245,7 +245,8 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't parse new file's URI");
 
     /* Store server version */
-    if (RV_parse_response(response_buffer.buffer, NULL, &new_file->u.file.server_version, RV_parse_server_version) < 0)
+    if (RV_parse_response(response_buffer.buffer, NULL, &new_file->u.file.server_version,
+                          RV_parse_server_version) < 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't parse server  version");
 
     ret_value = (void *)new_file;
@@ -391,7 +392,8 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTOPENFILE, NULL, "can't parse file's URI");
 
     /* Store server version */
-    if (RV_parse_response(response_buffer.buffer, NULL, &file->u.file.server_version, RV_parse_server_version) < 0)
+    if (RV_parse_response(response_buffer.buffer, NULL, &file->u.file.server_version,
+                          RV_parse_server_version) < 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't parse server version");
 
     /* Copy the FAPL if it wasn't H5P_DEFAULT, else set up a default one so that

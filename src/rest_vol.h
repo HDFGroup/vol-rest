@@ -467,11 +467,11 @@ typedef struct server_api_version {
 typedef struct RV_object_t RV_object_t;
 
 typedef struct RV_file_t {
-    unsigned intent;
-    unsigned ref_count;
-    char    *filepath_name;
-    hid_t    fcpl_id;
-    hid_t    fapl_id;
+    unsigned           intent;
+    unsigned           ref_count;
+    char              *filepath_name;
+    hid_t              fcpl_id;
+    hid_t              fapl_id;
     server_api_version server_version;
 } RV_file_t;
 
