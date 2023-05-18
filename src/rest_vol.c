@@ -1599,14 +1599,14 @@ done:
     return ret_value;
 } /* end H5_rest_url_encode_path() */
 
-/* Helper function to determine an object's type by its assigned URI */
+/* Helper function to parse an object's type by server response */
 herr_t
 RV_parse_type(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
-    yajl_val parse_tree = NULL, key_obj;
-    char    *parsed_object_string;
-    H5I_type_t    *object_type   = (H5I_type_t *) callback_data_out;
-    herr_t   ret_value = SUCCEED;
+    yajl_val    parse_tree = NULL, key_obj;
+    char       *parsed_object_string;
+    H5I_type_t *object_type = (H5I_type_t *)callback_data_out;
+    herr_t      ret_value   = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving object's class from server's HTTP response\n\n");
@@ -1620,8 +1620,7 @@ RV_parse_type(char *HTTP_response, void *callback_data_in, void *callback_data_o
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-
-    const char *object_class_keys[] = {"class", (const char *) 0};
+    const char *object_class_keys[] = {"class", (const char *)0};
 
     if (NULL == (key_obj = yajl_tree_get(parse_tree, object_class_keys, yajl_t_string))) {
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "couldn't parse object class");
@@ -1635,20 +1634,23 @@ RV_parse_type(char *HTTP_response, void *callback_data_in, void *callback_data_o
 
     if (!strcmp(parsed_object_string, "group")) {
         *object_type = H5I_GROUP;
-    } else if (!strcmp(parsed_object_string, "dataset")) {
+    }
+    else if (!strcmp(parsed_object_string, "dataset")) {
         *object_type = H5I_DATASET;
-    } else if (!strcmp(parsed_object_string, "datatype")) {
+    }
+    else if (!strcmp(parsed_object_string, "datatype")) {
         *object_type = H5I_DATATYPE;
-    } else {
+    }
+    else {
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed object class is not recognized");
     }
-    
+
 done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
     return ret_value;
-} /* end RV_copy_object_URI_parse_callback() */
+} /* end RV_parse_type */
 
 /*---------------------------------------------------------------------------
  * Function:    H5_rest_get_conn_cls
@@ -1874,7 +1876,7 @@ done:
         yajl_tree_free(parse_tree);
 
     return ret_value;
-} /* end RV_copy_object_URI_parse_callback() */                                                                                                            \
+} /* end RV_copy_object_URI_parse_callback() */
 
 /*-------------------------------------------------------------------------
  * Function:    RV_find_object_by_path1
@@ -1930,8 +1932,8 @@ done:
  */
 htri_t
 RV_find_object_by_path1(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
-                       herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
-                       void *callback_data_out)
+                        herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
+                        void *callback_data_out)
 {
     RV_object_t *external_file         = NULL;
     hbool_t      is_relative_path      = FALSE;
@@ -2046,7 +2048,7 @@ RV_find_object_by_path1(RV_object_t *parent_obj, const char *obj_path, H5I_type_
              * there.
              */
             search_ret = RV_find_object_by_path1(parent_obj, path_dirname, &obj_type,
-                                                RV_copy_object_URI_callback, NULL, temp_URI);
+                                                 RV_copy_object_URI_callback, NULL, temp_URI);
             if (!search_ret || search_ret < 0)
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL,
                                 "can't locate parent group for object of unknown type");
@@ -2168,7 +2170,7 @@ RV_find_object_by_path1(RV_object_t *parent_obj, const char *obj_path, H5I_type_
         }     /* end if */
 
         search_ret = RV_find_object_by_path1(parent_obj, obj_path, target_object_type, obj_found_callback,
-                                            callback_data_in, callback_data_out);
+                                             callback_data_in, callback_data_out);
         if (!search_ret || search_ret < 0)
             FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate target object by path");
 
@@ -2360,7 +2362,6 @@ done:
     return ret_value;
 } /* end RV_find_object_by_path1() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_find_object_by_path2
  *
@@ -2389,8 +2390,8 @@ done:
  */
 htri_t
 RV_find_object_by_path2(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
-                       herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
-                       void *callback_data_out)
+                        herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
+                        void *callback_data_out)
 {
     RV_object_t *external_file         = NULL;
     hbool_t      is_relative_path      = FALSE;
@@ -2472,17 +2473,14 @@ RV_find_object_by_path2(RV_object_t *parent_obj, const char *obj_path, H5I_type_
     if (NULL == (url_encoded_path_name = H5_rest_url_encode_path(obj_path)))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path");
 
-    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/?h5path=%s%s%s&follow_soft_links=1&follow_external_links=1",
-                            base_URL, 
-                            url_encoded_path_name,
-                            is_relative_path ? "&search_root_object=" : "",
-                            is_relative_path ? parent_obj->URI : "")) <
-        0)
+    if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
+                            "%s/?h5path=%s%s%s&follow_soft_links=1&follow_external_links=1", base_URL,
+                            url_encoded_path_name, is_relative_path ? "&search_root_object=" : "",
+                            is_relative_path ? parent_obj->URI : "")) < 0)
         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
     if (url_len >= URL_MAX_LENGTH)
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
-                        "link GET request URL size exceeded maximum URL size");
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link GET request URL size exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving link type for link to target object at URL %s\n\n", request_url);

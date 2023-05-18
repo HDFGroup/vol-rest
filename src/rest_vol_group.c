@@ -514,10 +514,10 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
                            loc_params->loc_data.loc_by_name.name);
 #endif
 
-                    loc_info_out.URI    = temp_URI;
-                    loc_info_out.domain = loc_obj->domain;
+                    loc_info_out.URI         = temp_URI;
+                    loc_info_out.domain      = loc_obj->domain;
                     loc_info_out.GCPL_base64 = NULL;
-                    
+
                     search_ret =
                         RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type,
                                                RV_copy_object_loc_info_callback, NULL, &loc_info_out);

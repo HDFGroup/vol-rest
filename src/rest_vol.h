@@ -210,20 +210,20 @@
             current_symbol = *advancement_ptr++;                                                             \
                                                                                                              \
             /* If we reached the end of string before finding the end of the JSON object section, something  \
-             * is wrong. Most likely the JSON is misformatted, with a stray '{' in the section somewhere.                     \
+             * is wrong. Most likely the JSON is misformatted, with a stray '{' in the section somewhere.    \
              */                                                                                              \
             if (!current_symbol)                                                                             \
                 FUNC_GOTO_ERROR(ERR_MAJOR, H5E_PARSEERROR, ret_value,                                        \
                                 "can't locate end of section - misformatted JSON likely");                   \
                                                                                                              \
             /* If we encounter a " in the buffer, we assume that this is a JSON string and we suspend        \
-             * processing of '{' and '}' symbols until the matching " is found that ends the JSON string.                             \
-             * Note however that it is possible for the JSON string to have an escaped \" combination within                                 \
-             * it, in which case this is not the ending " and we will still suspend processing. Note further                                      \
-             * that the JSON string may also have the escaped \\ sequence within it as well. Since it is                                            \
-             * safer to search forward in the string buffer (as we know the next character must be valid or                                               \
-             * the NUL terminator) we check each character for the presence of a \ symbol, and if the                                                        \
-             * following character is \ or ", we just skip ahead two characters and continue on.                                                                       \
+             * processing of '{' and '}' symbols until the matching " is found that ends the JSON string.    \
+             * Note however that it is possible for the JSON string to have an escaped \" combination within \
+             * it, in which case this is not the ending " and we will still suspend processing. Note further \
+             * that the JSON string may also have the escaped \\ sequence within it as well. Since it is     \
+             * safer to search forward in the string buffer (as we know the next character must be valid or  \
+             * the NUL terminator) we check each character for the presence of a \ symbol, and if the        \
+             * following character is \ or ", we just skip ahead two characters and continue on.             \
              */                                                                                              \
             if (current_symbol == '\\') {                                                                    \
                 if (*advancement_ptr == '\\' || *advancement_ptr == '"') {                                   \
@@ -561,12 +561,12 @@ herr_t RV_parse_server_version(char *HTTP_response, void *callback_data_in, void
 
 /* Helper function to find an object given a starting object to search from and a path */
 htri_t RV_find_object_by_path2(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
-                              herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
-                              void *callback_data_out);
+                               herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
+                               void *callback_data_out);
 
 htri_t RV_find_object_by_path1(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
-                              herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
-                              void *callback_data_out);
+                               herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
+                               void *callback_data_out);
 /* Helper function to parse a JSON string representing an HDF5 Dataspace and
  * setup an hid_t for the Dataspace */
 hid_t RV_parse_dataspace(char *space);
@@ -578,11 +578,16 @@ herr_t RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, cha
 herr_t RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size);
 herr_t RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size);
 
-// Set things to uninit when using old?
-#define RV_find_object_by_path(parent_obj, obj_path, target_object_type, obj_found_callback, callback_data_in, callback_data_out) \
-    (((RV_object_t*) parent_obj)->domain->u.file.server_version.major >= 1 || ((RV_object_t*) parent_obj)->domain->u.file.server_version.minor >= 8) ?              \
-        RV_find_object_by_path2(parent_obj, obj_path, target_object_type, obj_found_callback, callback_data_in, callback_data_out) : \
-        RV_find_object_by_path1(parent_obj, obj_path, target_object_type, obj_found_callback, callback_data_in, callback_data_out) \
+/* HSDS version 0.8.0 introduced support for server-side following of symbolic links 
+ * If the server is an earlier version, do it on the client side */
+#define RV_find_object_by_path(parent_obj, obj_path, target_object_type, obj_found_callback,                 \
+                               callback_data_in, callback_data_out)                                          \
+    (((RV_object_t *)parent_obj)->domain->u.file.server_version.major >= 1 ||                                \
+     ((RV_object_t *)parent_obj)->domain->u.file.server_version.minor >= 8)                                  \
+        ? RV_find_object_by_path2(parent_obj, obj_path, target_object_type, obj_found_callback,              \
+                                  callback_data_in, callback_data_out)                                       \
+        : RV_find_object_by_path1(parent_obj, obj_path, target_object_type, obj_found_callback,              \
+                                  callback_data_in, callback_data_out)
 
 #ifdef __cplusplus
 }

@@ -128,17 +128,6 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, NULL,
                             "can't locate object that attribute is to be attached to");
 
-
-                            /*
-                            
-                            (if (parent_obj->domain->u.file.server_version.major >= 1 || parent_obj->domain->u.file.server_version.minor >= 8) {             \
-        RV_find_object_by_path2(parent_obj, obj_path, target_object_type, obj_found_callback, callback_data_in, callback_data_out) \
-    } else {                                                                                                                        \
-        RV_find_object_by_path1(parent_obj, obj_path, target_object_type, obj_found_callback, callback_data_in, callback_data_out) \
-    } )    
-
-                            */
-
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> H5Acreate_by_name(): found attribute's parent object by given path\n");
         printf("-> H5Acreate_by_name(): new attribute's parent object URI: %s\n",
@@ -237,10 +226,6 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
      */
     if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, attr_name, (int)attr_name_len)))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, NULL, "can't URL-encode attribute name");
-
-    //if (0 > RV_get_type_from_URI(new_attribute->u.attribute.parent_obj_URI,
-                                 //&new_attribute->u.attribute.parent_obj_type))
-        //FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't get parent type from URI");
 
     /* Redirect cURL from the base URL to
      * "/groups/<id>/attributes/<attr name>",
@@ -480,11 +465,6 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
             if (!search_ret || search_ret < 0)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, NULL,
                                 "can't locate object that attribute is attached to");
-
-            //if (0 > RV_get_type_from_URI(attribute->u.attribute.parent_obj_URI,
-                                        // &attribute->u.attribute.parent_obj_type))
-                //FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL,
-                                //"failed to get type of attribute's parent by URI");
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> H5Aopen_by_name(): found attribute's parent object by given path\n");
@@ -1466,9 +1446,6 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type &&
         H5I_DATATYPE != loc_obj->obj_type && H5I_DATASET != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file, group, datatype or dataset");
-
-    //if (0 > RV_get_type_from_URI(loc_obj->URI, &parent_obj_type))
-        //FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't get parent type from URI");
 
     switch (args->op_type) {
         /* H5Adelete (_by_name/_by_idx) */
