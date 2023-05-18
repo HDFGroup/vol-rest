@@ -162,7 +162,7 @@ static const H5VL_class_t H5VL_rest_g = {
     HDF5_VOL_REST_VERSION,      /* Connector struct version number       */
     HDF5_VOL_REST_CLS_VAL,      /* Connector value                       */
     HDF5_VOL_REST_NAME,         /* Connector name                        */
-    HDF5_VOL_REST_CONN_VERSION, /* Connector version #                   */
+    HDF5_VOL_REST_CONN_VERSION, /* Connector version # */
     H5VL_VOL_REST_CAP_FLAGS,    /* Connector capability flags            */
     H5_rest_init,               /* Connector initialization function     */
     H5_rest_term,               /* Connector termination function        */
@@ -1599,6 +1599,57 @@ done:
     return ret_value;
 } /* end H5_rest_url_encode_path() */
 
+/* Helper function to determine an object's type by its assigned URI */
+herr_t
+RV_parse_type(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+{
+    yajl_val parse_tree = NULL, key_obj;
+    char    *parsed_object_string;
+    H5I_type_t    *object_type   = (H5I_type_t *) callback_data_out;
+    herr_t   ret_value = SUCCEED;
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Retrieving object's class from server's HTTP response\n\n");
+#endif
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
+    if (!object_type)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL");
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
+
+
+    const char *object_class_keys[] = {"class", (const char *) 0};
+
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, object_class_keys, yajl_t_string))) {
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "couldn't parse object class");
+    }
+
+    if (!YAJL_IS_STRING(key_obj))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed object class is not a string");
+
+    if (NULL == (parsed_object_string = YAJL_GET_STRING(key_obj)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed object class is NULL");
+
+    if (!strcmp(parsed_object_string, "group")) {
+        *object_type = H5I_GROUP;
+    } else if (!strcmp(parsed_object_string, "dataset")) {
+        *object_type = H5I_DATASET;
+    } else if (!strcmp(parsed_object_string, "datatype")) {
+        *object_type = H5I_DATATYPE;
+    } else {
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed object class is not recognized");
+    }
+    
+done:
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    return ret_value;
+} /* end RV_copy_object_URI_parse_callback() */
+
 /*---------------------------------------------------------------------------
  * Function:    H5_rest_get_conn_cls
  *
@@ -1829,48 +1880,22 @@ done:
  * Function:    RV_find_object_by_path
  *
  * Purpose:     Given a pathname, this function is responsible for making
- *              HTTP GET requests to the server in order to retrieve
- *              information about an object. It is also responsible for
- *              retrieving a link's value when a pathname refers to a soft
- *              link to an object and then making the appropriate HTTP GET
- *              request using the link's value as the real pathname to the
- *              object.
+ *              an HTTP GET request to the server in order to retrieve
+ *              information about an object.
  *
- *              Note that in order to support improved performance from the
- *              client side, a server operation was added to directly
- *              retrieve an object by using the "h5path" request parameter
- *              in the URL. If the request is using a relative path and the
- *              object being looked for is not a group, the "grpid"
- *              parameter must be added as well in order to supply the
- *              server with the URI of the object which the path is
- *              relative from. Previously, the approach to finding an
- *              object was to traverse links in the file, but this caused
+ *              This function uses the h5path parameter in
+ *              its request, so if the provided path is to a symbolic link,
+ *              the server will follow that link until it encounters the
+ *              final object by hard link, and respond with information about
+ *              that object.
+ *
+ *              Previously, the approach to finding an object was to
+ *              recursively traverse links in the file, but this caused
  *              too much communication between client and server and would
  *              start to become problematic for deeply-nested objects.
  *
- *              There are two main cases that have to be handled in this
- *              function, the case where the caller knows the type of the
- *              object being searched for and the case where the caller
- *              does not. In the end, both cases will make a final request
- *              to retrieve the desired information about the resulting
- *              target object, but the two cases arrive in different ways.
- *              If the type of the target object is not known, or if it
- *              is possible for there to be a soft link among the path to
- *              the target object, the target object type parameter should
- *              be passed as H5I_UNINIT. This is the safest case and should
- *              generally always be passed, unless the caller is
- *              absolutely sure that the path given points directly to an
- *              object of the given type, without soft links included
- *              along the way.
- *
- *              While the type of the target object is unknown, this
- *              function will keep locating the group that the link to the
- *              target object is contained within, resolving soft links as
- *              it is processing, until it locates the final hard link to
- *              the target object, at which point it will set the resulting
- *              type. Once the type of the target object is known, we can
- *              directly make the HTTP GET request to retrieve the object's
- *              information.
+ *              The type of the retrieved object will be stored at the
+ *              provided target_object_type field.
  *
  * Return:      Non-negative on success, negative on failure
  *
@@ -1888,12 +1913,14 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
     char        *host_header           = NULL;
     char        *path_dirname          = NULL;
     char        *tmp_link_val          = NULL;
-    char        *url_encoded_link_name = NULL;
     char        *url_encoded_path_name = NULL;
+    char        *ext_filename          = NULL;
+    char        *ext_obj_path          = NULL;
     char         request_url[URL_MAX_LENGTH];
     long         http_response;
-    int          url_len   = 0;
-    htri_t       ret_value = FAIL;
+    int          url_len = 0;
+
+    htri_t ret_value = FAIL;
 
     if (!parent_obj)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object pointer was NULL");
@@ -1957,334 +1984,81 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
                 obj_path++;
     } /* end else */
 
-    /* If the target object type was specified as H5I_UNINIT and was not changed due to one of
-     * the optimizations above, we must determine the target object's type before making the
-     * appropriate GET request to the server. Otherwise, the target object type is known, so
-     * we skip ahead to the GET request and optional callback function.
-     */
-    if (H5I_UNINIT == *target_object_type) {
-        H5L_info2_t link_info;
-        const char *ext_filename = NULL;
-        const char *ext_obj_path = NULL;
-        hbool_t     empty_dirname;
-        htri_t      search_ret;
-        char       *pobj_URI = parent_obj->URI;
-        char        temp_URI[URI_MAX_LENGTH];
+    if (NULL == (url_encoded_path_name = H5_rest_url_encode_path(obj_path)))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path");
+
+    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/?h5path=%s%s%s&follow_soft_links=1&follow_external_links=1",
+                            base_URL, 
+                            url_encoded_path_name,
+                            is_relative_path ? "&search_root_object=" : "",
+                            is_relative_path ? parent_obj->URI : "")) <
+        0)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+    if (url_len >= URL_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                        "link GET request URL size exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
-        printf("-> Unknown target object type; retrieving object type\n\n");
+    printf("-> Retrieving link type for link to target object at URL %s\n\n", request_url);
 #endif
 
-        /* In case the user specified a path which contains multiple groups on the way to the
-         * one which the object in question should be under, extract out the path to the final
-         * group in the chain */
-        if (NULL == (path_dirname = H5_rest_dirname(obj_path)))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get path dirname");
-        empty_dirname = !strcmp(path_dirname, "");
+    /* Setup cURL for making GET requests */
+
+    /* Setup the host header */
+    host_header_len = strlen(parent_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
+    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
+
+    strcpy(host_header, host_string);
+
+    curl_headers =
+        curl_slist_append(curl_headers, strncat(host_header, parent_obj->domain->u.file.filepath_name,
+                                                host_header_len - strlen(host_string) - 1));
+
+    /* Disable use of Expect: 100 Continue HTTP response */
+    curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
+                        curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
 
 #ifdef RV_CONNECTOR_DEBUG
-        printf("-> Retrieving URI for final group in path chain\n\n");
+    printf("   /**********************************\\\n");
+    printf("-> | Making GET request to the server |\n");
+    printf("   \\**********************************/\n\n");
 #endif
 
-        if (!empty_dirname) {
-            H5I_type_t obj_type = H5I_GROUP;
+    CURL_PERFORM(curl, H5E_LINK, H5E_PATH, FALSE);
 
-            /* If the path to the final group in the chain wasn't empty, get the URI of the final
-             * group and search for the object in question within that group. Otherwise, the
-             * supplied parent group is the one that should be housing the object, so search from
-             * there.
-             */
-            search_ret = RV_find_object_by_path(parent_obj, path_dirname, &obj_type,
-                                                RV_copy_object_URI_callback, NULL, temp_URI);
-            if (!search_ret || search_ret < 0)
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL,
-                                "can't locate parent group for object of unknown type");
+    if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get HTTP response code");
 
-            pobj_URI = temp_URI;
-        } /* end if */
-
-        /* Retrieve the link for the target object from the parent group and check to see if it
-         * is a hard, soft or external link. If it is a hard link, we can directly make the request
-         * to retrieve the target object's information. Otherwise, we need to do some extra processing
-         * to retrieve the actual path to the target object.
-         */
-
-        /* URL-encode the link name so that the resulting URL for the link GET operation doesn't
-         * contain any illegal characters
-         */
-        if (NULL == (url_encoded_link_name = curl_easy_escape(curl, H5_rest_basename(obj_path), 0)))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
-
-        if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links/%s", base_URL, pobj_URI,
-                                url_encoded_link_name)) < 0)
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-        if (url_len >= URL_MAX_LENGTH)
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
-                            "link GET request URL size exceeded maximum URL size");
+    ret_value = HTTP_SUCCESS(http_response);
 
 #ifdef RV_CONNECTOR_DEBUG
-        printf("-> Retrieving link type for link to target object of unknown type at URL %s\n\n",
-               request_url);
+    printf("-> Object %s\n\n", ret_value ? "found" : "not found");
 #endif
 
-        /* Setup cURL for making GET requests */
+    if (ret_value > 0) {
 
-        /* Setup the host header */
-        host_header_len = strlen(parent_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-        if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
+        if (obj_found_callback && RV_parse_response(response_buffer.buffer, callback_data_in,
+                                                    callback_data_out, obj_found_callback) < 0) {
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CALLBACK, FAIL, "can't perform callback operation");
+        }
 
-        strcpy(host_header, host_string);
-
-        curl_headers =
-            curl_slist_append(curl_headers, strncat(host_header, parent_obj->domain->u.file.filepath_name,
-                                                    host_header_len - strlen(host_string) - 1));
-
-        /* Disable use of Expect: 100 Continue HTTP response */
-        curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
-                            curl_err_buf);
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-        printf("   /**********************************\\\n");
-        printf("-> | Making GET request to the server |\n");
-        printf("   \\**********************************/\n\n");
-#endif
-
-        CURL_PERFORM(curl, H5E_LINK, H5E_PATH, FALSE);
-
-        if (RV_parse_response(response_buffer.buffer, NULL, &link_info, RV_get_link_info_callback) < 0)
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link type");
-
-        /* Clean up the cURL headers to prevent issues in recursive call */
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-
-        if (H5L_TYPE_HARD == link_info.type) {
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Link was a hard link; retrieving target object's info\n\n");
-#endif
-
-            if (RV_parse_response(response_buffer.buffer, NULL, target_object_type,
-                                  RV_get_link_obj_type_callback) < 0)
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve hard link's target object type");
-        } /* end if */
-        else {
-            size_t link_val_len = 0;
-
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Link was a %s link; retrieving link's value\n\n",
-                   H5L_TYPE_SOFT == link_info.type ? "soft" : "external");
-#endif
-
-            if (RV_parse_response(response_buffer.buffer, &link_val_len, NULL, RV_get_link_val_callback) < 0)
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve size of link's value");
-
-            if (NULL == (tmp_link_val = RV_malloc(link_val_len)))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link's value");
-
-            if (RV_parse_response(response_buffer.buffer, &link_val_len, tmp_link_val,
-                                  RV_get_link_val_callback) < 0)
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link's value");
-
-            if (H5L_TYPE_EXTERNAL == link_info.type) {
-                /* Unpack the external link's value buffer */
-                if (H5Lunpack_elink_val(tmp_link_val, link_val_len, NULL, &ext_filename, &ext_obj_path) < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't unpack external link's value buffer");
-
-                /* Attempt to open the file referenced by the external link using the same access flags as
-                 * used to open the file that the link resides within.
-                 */
-                if (NULL ==
-                    (external_file = RV_file_open(ext_filename, parent_obj->domain->u.file.intent,
-                                                  parent_obj->domain->u.file.fapl_id, H5P_DEFAULT, NULL)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTOPENOBJ, FAIL,
-                                    "can't open file referenced by external link");
-
-                parent_obj = external_file;
-                obj_path   = ext_obj_path;
-            } /* end if */
-            else {
-                obj_path = tmp_link_val;
-            } /* end else */
-        }     /* end if */
-
-        search_ret = RV_find_object_by_path(parent_obj, obj_path, target_object_type, obj_found_callback,
-                                            callback_data_in, callback_data_out);
-        if (!search_ret || search_ret < 0)
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate target object by path");
-
-        ret_value = search_ret;
     } /* end if */
-    else {
-        /* Make the final HTTP GET request to retrieve information about the target object */
 
-        /* Craft the request URL based on the type of the object we're looking for and whether or not
-         * the path given is a relative path or not.
-         */
-        switch (*target_object_type) {
-            case H5I_FILE:
-            case H5I_GROUP:
-                /* Handle the special case for the paths "." and "/" */
-                if (!strcmp(obj_path, ".") || !strcmp(obj_path, "/")) {
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL,
-                                            parent_obj->URI)) < 0)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+    char uri[URI_MAX_LENGTH];
 
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
-                                        "link GET request URL size exceeded maximum URL size");
-                } /* end if */
-                else {
-                    if (NULL == (url_encoded_path_name = H5_rest_url_encode_path(obj_path)))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path");
-
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s?h5path=%s", base_URL,
-                                            is_relative_path ? parent_obj->URI : "", url_encoded_path_name)) <
-                        0)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
-                                        "link GET request URL size exceeded maximum URL size");
-                } /* end else */
-
-                break;
-
-            case H5I_DATATYPE:
-                /* Handle the special case for the paths "." and "/" */
-                if (!strcmp(obj_path, ".") || !strcmp(obj_path, "/")) {
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL,
-                                            parent_obj->URI)) < 0)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
-                                        "link GET request URL size exceeded maximum URL size");
-                } /* end if */
-                else {
-                    if (NULL == (url_encoded_path_name = H5_rest_url_encode_path(obj_path)))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path");
-
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/?%s%s%sh5path=%s",
-                                            base_URL, is_relative_path ? "grpid=" : "",
-                                            is_relative_path ? parent_obj->URI : "",
-                                            is_relative_path ? "&" : "", url_encoded_path_name)) < 0)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
-                                        "link GET request URL size exceeded maximum URL size");
-                } /* end else */
-
-                break;
-
-            case H5I_DATASET:
-                /* Handle the special case for the paths "." and "/" */
-                if (!strcmp(obj_path, ".") || !strcmp(obj_path, "/")) {
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL,
-                                            parent_obj->URI)) < 0)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
-                                        "link GET request URL size exceeded maximum URL size");
-                } /* end if */
-                else {
-                    if (NULL == (url_encoded_path_name = H5_rest_url_encode_path(obj_path)))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path");
-
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/?%s%s%sh5path=%s",
-                                            base_URL, is_relative_path ? "grpid=" : "",
-                                            is_relative_path ? parent_obj->URI : "",
-                                            is_relative_path ? "&" : "", url_encoded_path_name)) < 0)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
-                                        "link GET request URL size exceeded maximum URL size");
-                } /* end else */
-
-                break;
-
-            case H5I_ATTR:
-            case H5I_UNINIT:
-            case H5I_BADID:
-            case H5I_DATASPACE:
-            case H5I_VFL:
-            case H5I_VOL:
-            case H5I_GENPROP_CLS:
-            case H5I_GENPROP_LST:
-            case H5I_ERROR_CLASS:
-            case H5I_ERROR_MSG:
-            case H5I_ERROR_STACK:
-            case H5I_NTYPES:
-            default:
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL,
-                                "target object not a group, datatype or dataset");
-        } /* end switch */
-
-#ifdef RV_CONNECTOR_DEBUG
-        printf("-> Searching for object by URL: %s\n\n", request_url);
-#endif
-
-        /* Setup cURL for making GET requests */
-
-        /* Setup the host header */
-        host_header_len = strlen(parent_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-        if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
-
-        strcpy(host_header, host_string);
-
-        curl_headers =
-            curl_slist_append(curl_headers, strncat(host_header, parent_obj->domain->u.file.filepath_name,
-                                                    host_header_len - strlen(host_string) - 1));
-
-        /* Disable use of Expect: 100 Continue HTTP response */
-        curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
-                            curl_err_buf);
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-        printf("   /**********************************\\\n");
-        printf("-> | Making GET request to the server |\n");
-        printf("   \\**********************************/\n\n");
-#endif
-
-        CURL_PERFORM_NO_ERR(curl, FAIL);
-
-        if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
-            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get HTTP response code");
-
-        ret_value = HTTP_SUCCESS(http_response);
-
-#ifdef RV_CONNECTOR_DEBUG
-        printf("-> Object %s\n\n", ret_value ? "found" : "not found");
-#endif
-
-        if (ret_value > 0) {
-            if (obj_found_callback && RV_parse_response(response_buffer.buffer, callback_data_in,
-                                                        callback_data_out, obj_found_callback) < 0) {
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, FAIL, "can't perform callback operation");
-            }
-
-        } /* end if */
-    }     /* end else */
-
+    if (0 > RV_parse_response(response_buffer.buffer, NULL, uri, RV_copy_object_URI_callback))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "failed to get URI");
+    if (0 > RV_parse_response(response_buffer.buffer, NULL, target_object_type, RV_parse_type))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "failed to get type from URI");
 done:
     if (tmp_link_val)
         RV_free(tmp_link_val);
@@ -2292,8 +2066,6 @@ done:
         RV_free(host_header);
     if (url_encoded_path_name)
         RV_free(url_encoded_path_name);
-    if (url_encoded_link_name)
-        curl_free(url_encoded_link_name);
     if (path_dirname)
         RV_free(path_dirname);
 

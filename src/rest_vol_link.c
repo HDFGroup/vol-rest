@@ -79,19 +79,18 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
                hid_t lapl_id, hid_t dxpl_id, void **req)
 {
     H5VL_loc_params_t *hard_link_target_obj_loc_params = NULL;
-    ;
-    RV_object_t *new_link_loc_obj = (RV_object_t *)obj;
-    upload_info  uinfo;
-    size_t       create_request_nalloc = 0;
-    size_t       host_header_len       = 0;
-    void        *hard_link_target_obj;
-    char        *host_header         = NULL;
-    char        *create_request_body = NULL;
-    char         request_url[URL_MAX_LENGTH];
-    char        *url_encoded_link_name   = NULL;
-    int          create_request_body_len = 0;
-    int          url_len                 = 0;
-    herr_t       ret_value               = SUCCEED;
+    RV_object_t       *new_link_loc_obj                = (RV_object_t *)obj;
+    upload_info        uinfo;
+    size_t             create_request_nalloc = 0;
+    size_t             host_header_len       = 0;
+    void              *hard_link_target_obj;
+    char              *host_header         = NULL;
+    char              *create_request_body = NULL;
+    char               request_url[URL_MAX_LENGTH];
+    char              *url_encoded_link_name   = NULL;
+    int                create_request_body_len = 0;
+    int                url_len                 = 0;
+    herr_t             ret_value               = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received link create call with following parameters:\n");

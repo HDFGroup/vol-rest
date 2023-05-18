@@ -328,7 +328,7 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
 {
     RV_object_t *parent   = (RV_object_t *)obj;
     RV_object_t *datatype = NULL;
-    H5I_type_t   obj_type = H5I_UNINIT;
+    H5I_type_t   obj_type = H5I_DATATYPE;
     loc_info     loc_info;
     htri_t       search_ret;
     void        *ret_value = NULL;

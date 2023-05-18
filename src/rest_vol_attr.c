@@ -227,6 +227,10 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
     if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, attr_name, (int)attr_name_len)))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, NULL, "can't URL-encode attribute name");
 
+    //if (0 > RV_get_type_from_URI(new_attribute->u.attribute.parent_obj_URI,
+                                 //&new_attribute->u.attribute.parent_obj_type))
+        //FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't get parent type from URI");
+
     /* Redirect cURL from the base URL to
      * "/groups/<id>/attributes/<attr name>",
      * "/datatypes/<id>/attributes/<attr name>"
@@ -465,6 +469,11 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
             if (!search_ret || search_ret < 0)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, NULL,
                                 "can't locate object that attribute is attached to");
+
+            //if (0 > RV_get_type_from_URI(attribute->u.attribute.parent_obj_URI,
+                                        // &attribute->u.attribute.parent_obj_type))
+                //FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL,
+                                //"failed to get type of attribute's parent by URI");
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> H5Aopen_by_name(): found attribute's parent object by given path\n");
@@ -1447,6 +1456,9 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
         H5I_DATATYPE != loc_obj->obj_type && H5I_DATASET != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file, group, datatype or dataset");
 
+    //if (0 > RV_get_type_from_URI(loc_obj->URI, &parent_obj_type))
+        //FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't get parent type from URI");
+
     switch (args->op_type) {
         /* H5Adelete (_by_name/_by_idx) */
         case H5VL_ATTR_DELETE: {
@@ -1829,12 +1841,35 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                     /* Increment refs for specific type */
                     switch (parent_obj_type) {
                         case H5I_FILE:
+                            /* Copy fapl, fcpl, and filepath name to new object */
+                            RV_object_t *attr_iter_obj = (RV_object_t *)attr_iter_object;
+
+                            if (H5I_INVALID_HID ==
+                                (attr_iter_obj->u.file.fapl_id = H5Pcopy(loc_obj->u.file.fapl_id)))
+                                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FAPL");
+                            if (H5I_INVALID_HID ==
+                                (attr_iter_obj->u.file.fcpl_id = H5Pcopy(loc_obj->u.file.fcpl_id)))
+                                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FCPL");
+                            if (NULL == (attr_iter_obj->u.file.filepath_name =
+                                             RV_malloc(strlen(loc_obj->u.file.filepath_name) + 1)))
+                                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL,
+                                                "can't allocate space for copied filepath_name object");
+
+                            strncpy(attr_iter_obj->u.file.filepath_name, loc_obj->u.file.filepath_name,
+                                    strlen(loc_obj->u.file.filepath_name) + 1);
+
+                            /* This is a copy of the file, not a reference to the same memory */
+                            loc_obj->domain->u.file.ref_count--;
+                            break;
                         case H5I_GROUP:
 
-                            if (H5Iinc_ref(loc_obj->u.group.gcpl_id) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL,
-                                                "can't increment field's ref. count for copy of attribute's "
-                                                "parent group");
+                            if (loc_obj->u.group.gcpl_id != H5P_GROUP_CREATE_DEFAULT) {
+                                if (H5Iinc_ref(loc_obj->u.group.gcpl_id) < 0)
+                                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL,
+                                                    "can't increment field's ref. count for copy of "
+                                                    "attribute's parent group");
+                            }
+
                             break;
 
                         case H5I_DATATYPE:
