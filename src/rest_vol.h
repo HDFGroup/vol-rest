@@ -560,10 +560,13 @@ herr_t RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data
 herr_t RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 
 /* Helper function to find an object given a starting object to search from and a path */
-htri_t RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
+htri_t RV_find_object_by_path2(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
                               herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
                               void *callback_data_out);
 
+htri_t RV_find_object_by_path1(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
+                              herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
+                              void *callback_data_out);
 /* Helper function to parse a JSON string representing an HDF5 Dataspace and
  * setup an hid_t for the Dataspace */
 hid_t RV_parse_dataspace(char *space);
@@ -574,6 +577,12 @@ herr_t RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, cha
 /* Helper functions to base64 encode/decode a binary buffer */
 herr_t RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size);
 herr_t RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size);
+
+// Set things to uninit when using old?
+#define RV_find_object_by_path(parent_obj, obj_path, target_object_type, obj_found_callback, callback_data_in, callback_data_out) \
+    (((RV_object_t*) parent_obj)->domain->u.file.server_version.major >= 1 || ((RV_object_t*) parent_obj)->domain->u.file.server_version.minor >= 8) ?              \
+        RV_find_object_by_path2(parent_obj, obj_path, target_object_type, obj_found_callback, callback_data_in, callback_data_out) : \
+        RV_find_object_by_path1(parent_obj, obj_path, target_object_type, obj_found_callback, callback_data_in, callback_data_out) \
 
 #ifdef __cplusplus
 }

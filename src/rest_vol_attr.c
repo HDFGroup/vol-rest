@@ -128,6 +128,17 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, NULL,
                             "can't locate object that attribute is to be attached to");
 
+
+                            /*
+                            
+                            (if (parent_obj->domain->u.file.server_version.major >= 1 || parent_obj->domain->u.file.server_version.minor >= 8) {             \
+        RV_find_object_by_path2(parent_obj, obj_path, target_object_type, obj_found_callback, callback_data_in, callback_data_out) \
+    } else {                                                                                                                        \
+        RV_find_object_by_path1(parent_obj, obj_path, target_object_type, obj_found_callback, callback_data_in, callback_data_out) \
+    } )    
+
+                            */
+
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> H5Acreate_by_name(): found attribute's parent object by given path\n");
         printf("-> H5Acreate_by_name(): new attribute's parent object URI: %s\n",
