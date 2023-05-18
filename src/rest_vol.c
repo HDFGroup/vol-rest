@@ -2475,7 +2475,7 @@ RV_find_object_by_path2(RV_object_t *parent_obj, const char *obj_path, H5I_type_
 
     if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
                             "%s/?h5path=%s%s%s&follow_soft_links=1&follow_external_links=1", base_URL,
-                            url_encoded_path_name, is_relative_path ? "&search_root_object=" : "",
+                            url_encoded_path_name, is_relative_path ? "&parent_id=" : "",
                             is_relative_path ? parent_obj->URI : "")) < 0)
         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
@@ -2536,10 +2536,6 @@ RV_find_object_by_path2(RV_object_t *parent_obj, const char *obj_path, H5I_type_
 
     } /* end if */
 
-    char uri[URI_MAX_LENGTH];
-
-    if (0 > RV_parse_response(response_buffer.buffer, NULL, uri, RV_copy_object_URI_callback))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "failed to get URI");
     if (0 > RV_parse_response(response_buffer.buffer, NULL, target_object_type, RV_parse_type))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "failed to get type from URI");
 done:

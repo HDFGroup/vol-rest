@@ -578,7 +578,7 @@ herr_t RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, cha
 herr_t RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size);
 herr_t RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size);
 
-/* HSDS version 0.8.0 introduced support for server-side following of symbolic links 
+/* HSDS version 0.8.0 introduced support for server-side following of symbolic links
  * If the server is an earlier version, do it on the client side */
 #define RV_find_object_by_path(parent_obj, obj_path, target_object_type, obj_found_callback,                 \
                                callback_data_in, callback_data_out)                                          \
