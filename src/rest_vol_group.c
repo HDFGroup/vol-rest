@@ -503,6 +503,7 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
                 case H5VL_OBJECT_BY_NAME: {
                     H5I_type_t obj_type = H5I_GROUP;
                     htri_t     search_ret;
+                    loc_info   loc_info_out;
                     char       temp_URI[URI_MAX_LENGTH];
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -513,11 +514,17 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
                            loc_params->loc_data.loc_by_name.name);
 #endif
 
+                    loc_info_out.URI         = temp_URI;
+                    loc_info_out.domain      = loc_obj->domain;
+                    loc_info_out.GCPL_base64 = NULL;
+
                     search_ret =
                         RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type,
-                                               RV_copy_object_URI_callback, NULL, temp_URI);
+                                               RV_copy_object_loc_info_callback, NULL, &loc_info_out);
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate group");
+
+                    loc_obj->domain = loc_info_out.domain;
 
 #ifdef RV_CONNECTOR_DEBUG
                     printf("-> H5Gget_info_by_name(): found group's parent object by given path\n");
