@@ -84,10 +84,6 @@ size_t H5_rest_curr_alloc_bytes;
  */
 struct response_buffer response_buffer;
 
-/* Structure to keep track of server version that REST VOL is communicating with.
- * Updated each time a file is updated or opened. */
-server_api_version server_version;
-
 /* Authentication information for authenticating
  * with Active Directory.
  */
@@ -126,6 +122,12 @@ const char *dataspace_max_dims_keys[] = {"shape", "maxdims", (const char *)0};
 /* JSON keys to retrieve the path of a domain */
 const char *domain_keys[] = {"domain", (const char *)0};
 
+/* JSON keys to retrieve a list of attributes */
+const char *attributes_keys[] = {"attributes", (const char *)0};
+
+/* JSON keys to retrieve a list of links */
+const char *links_keys[] = {"links", (const char *)0};
+
 /* Default size for the buffer to allocate during base64-encoding if the caller
  * of RV_base64_encode supplies a 0-sized buffer.
  */
@@ -153,9 +155,11 @@ static size_t H5_rest_curl_write_data_callback(char *buffer, size_t size, size_t
 /* Helper function to URL-encode an entire pathname by URL-encoding each of its separate components */
 static char *H5_rest_url_encode_path(const char *path);
 
-/* Helper functions to base64 encode/decode a binary buffer */
-herr_t RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size);
-herr_t RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size);
+/* Helper function to parse an object's type from server response */
+herr_t RV_parse_type(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+
+/* Helper function to parse an object's creation properties from server response */
+herr_t RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf);
 
 /* The REST VOL connector's class structure. */
 static const H5VL_class_t H5VL_rest_g = {
@@ -419,10 +423,10 @@ H5_rest_init(hid_t vipl_id)
     const char *URL = getenv("HSDS_ENDPOINT");
 
     if (URL && !strncmp(URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
-        char *socket_path = "/tmp/hs/sn_1.sock";
+        const char *socket_path = "/tmp/hs/sn_1.sock";
 
         if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UNIX_SOCKET_PATH, socket_path))
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL socket path header: %s",
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL socket path header: %s",
                             curl_err_buf);
     }
 
@@ -1599,7 +1603,7 @@ done:
     return ret_value;
 } /* end H5_rest_url_encode_path() */
 
-/* Helper function to parse an object's type by server response */
+/* Helper function to parse an object's type from server response */
 herr_t
 RV_parse_type(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
@@ -2579,11 +2583,12 @@ done:
  *              May, 2023
  */
 herr_t
-RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf)
+RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf_out)
 {
-    herr_t   ret_value     = SUCCEED;
-    yajl_val key_obj       = NULL;
-    char    *parsed_string = NULL;
+    herr_t   ret_value      = SUCCEED;
+    yajl_val key_obj        = NULL;
+    char    *parsed_string  = NULL;
+    char    *GCPL_buf_local = NULL;
 
     if (!parse_tree)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parse tree was NULL");
@@ -2597,17 +2602,21 @@ RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf)
     if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "creationProperties was NULL");
 
-    if (NULL == (*GCPL_buf = RV_malloc(strlen(parsed_string) + 1)))
+    if (NULL == (GCPL_buf_local = RV_malloc(strlen(parsed_string) + 1)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "failed to allocate memory for creationProperties");
 
-    if (NULL == (memcpy(*GCPL_buf, parsed_string, strlen(parsed_string) + 1)))
+    if (NULL == (memcpy(GCPL_buf_local, parsed_string, strlen(parsed_string) + 1)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "failed to copy creationProperties");
+
+    if (NULL == (*GCPL_buf_out = GCPL_buf_local))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
+                        "failed to copy pointer to allocated creationProperties");
 
 done:
 
     if (ret_value < 0) {
-        free(*GCPL_buf);
-        *GCPL_buf = NULL;
+        free(GCPL_buf_local);
+        GCPL_buf_local = NULL;
     }
 
     return ret_value;
@@ -2739,6 +2748,163 @@ done:
 
     return ret_value;
 } /* end RV_copy_object_loc_info_callback() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_copy_link_name_by_index
+ *
+ * Purpose:     This callback is used to copy the name of an link
+ *              in the server's response by index. It allocates heap memory for the name,
+ *              and returns a pointer to the memory by callback_data_out.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              May, 2023
+ */
+herr_t
+RV_copy_link_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+{
+    yajl_val           parse_tree = NULL, key_obj = NULL, link_obj = NULL;
+    const char        *parsed_link_name = NULL;
+    H5VL_loc_by_idx_t *idx_params       = (H5VL_loc_by_idx_t *)callback_data_in;
+    hsize_t            index            = idx_params->n;
+    char             **link_name        = (char **)callback_data_out;
+    const char        *curr_key         = NULL;
+    herr_t             ret_value        = SUCCEED;
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
+
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, links_keys, yajl_t_array)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to parse links");
+
+    if (key_obj->u.array.len == 0)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed link array was empty");
+
+    if (index >= key_obj->u.array.len)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "requested link index was out of bounds");
+
+    switch (idx_params->order) {
+        case (H5_ITER_DEC):
+            if (NULL == (link_obj = key_obj->u.array.values[key_obj->u.object.len - 1 - index]))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected link was NULL");
+            break;
+
+        case (H5_ITER_NATIVE):
+        case (H5_ITER_INC):
+        case (H5_ITER_N):
+        case (H5_ITER_UNKNOWN):
+        default: {
+            if (NULL == (link_obj = key_obj->u.array.values[index]))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected link was NULL");
+            break;
+        }
+    }
+
+    /* Iterate through key/value pairs in link response to find name */
+    for (size_t i = 0; i < link_obj->u.object.len; i++) {
+        curr_key = link_obj->u.object.keys[i];
+
+        if (!strcmp(curr_key, "title"))
+            if (NULL == (parsed_link_name = YAJL_GET_STRING(link_obj->u.object.values[i])))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to get link name");
+    }
+
+    if (NULL == parsed_link_name)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "server response didn't contain link name");
+
+    if (NULL == (*link_name = RV_malloc(strlen(parsed_link_name) + 1)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to allocate memory for link name");
+
+    if (NULL == (memcpy(*link_name, parsed_link_name, strlen(parsed_link_name) + 1)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to copy link name");
+
+done:
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    if (ret_value < 0) {
+        RV_free(*link_name);
+        *link_name = NULL;
+    }
+
+    return ret_value;
+} /* end RV_copy_link_name_by_index() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_copy_attribute_name_by_index
+ *
+ * Purpose:     This callback is used to copy the name of an attribute
+ *              in the server's response by index. It allocates heap memory for the name,
+ *              and returns a pointer to the memory by callback_data_out.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              May, 2023
+ */
+herr_t
+RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+{
+    yajl_val           parse_tree = NULL, key_obj;
+    char              *parsed_string;
+    H5VL_loc_by_idx_t *idx_params = (H5VL_loc_by_idx_t *)callback_data_in;
+    hsize_t            index      = idx_params->n;
+    char             **attr_name  = (char **)callback_data_out;
+    herr_t             ret_value  = SUCCEED;
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
+
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, attributes_keys, yajl_t_object)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to parse attributes");
+
+    if (key_obj->u.object.len == 0)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed attribute array was empty");
+
+    if (index >= key_obj->u.object.len)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "requested attribute index was out of bounds");
+
+    switch (idx_params->order) {
+        case (H5_ITER_DEC):
+            if (NULL == (parsed_string = key_obj->u.object.keys[key_obj->u.object.len - 1 - index]))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected attribute had NULL name");
+            break;
+
+        case (H5_ITER_NATIVE):
+        case (H5_ITER_INC):
+        case (H5_ITER_N):
+        case (H5_ITER_UNKNOWN):
+        default: {
+            if (NULL == (parsed_string = key_obj->u.object.keys[index]))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected attribute had NULL name");
+            break;
+        }
+    }
+
+    if (NULL == (*attr_name = RV_malloc(strlen(parsed_string) + 1)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to allocate memory for attribute name");
+
+    if (NULL == (memcpy(*attr_name, parsed_string, strlen(parsed_string) + 1)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to copy attribute name");
+
+done:
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    if (ret_value < 0) {
+        RV_free(*attr_name);
+        *attr_name = NULL;
+    }
+
+    return ret_value;
+} /* end RV_copy_attribute_name_by_index() */
 
 /*-------------------------------------------------------------------------
  * Function:    RV_parse_dataspace
@@ -3211,13 +3377,13 @@ done:
 herr_t
 RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size)
 {
-    uint8_t   *buf       = (uint8_t *)in;
-    const char charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    uint32_t   four_byte_set;
-    uint8_t    c0, c1, c2, c3;
-    size_t     nalloc    = 0;
-    size_t     out_index = 0;
-    herr_t     ret_value = SUCCEED;
+    const uint8_t *buf       = (const uint8_t *)in;
+    const char     charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    uint32_t       four_byte_set;
+    uint8_t        c0, c1, c2, c3;
+    size_t         nalloc    = 0;
+    size_t         out_index = 0;
+    herr_t         ret_value = SUCCEED;
 
     if (!in)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "input buffer pointer was NULL");
@@ -3268,7 +3434,7 @@ RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size)
             c1 = (uint8_t)(four_byte_set >> 0);
 
             CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 1, H5E_RESOURCE, FAIL);
-            (*out)[out_index++] = c1;
+            (*out)[out_index++] = (char)c1;
         }
         else if (((char)buf[i + 2]) == '=') {
             /* One character of padding */
@@ -3292,8 +3458,8 @@ RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size)
             c2 = (uint8_t)(four_byte_set >> 0);
 
             CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 2, H5E_RESOURCE, FAIL);
-            (*out)[out_index++] = c1;
-            (*out)[out_index++] = c2;
+            (*out)[out_index++] = (char)c1;
+            (*out)[out_index++] = (char)c2;
         }
         else {
             /* 0 bytes of padding */
@@ -3316,9 +3482,9 @@ RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size)
             c3 = (uint8_t)(four_byte_set >> 0);
 
             CHECKED_REALLOC_NO_PTR(*out, nalloc, out_index + 3, H5E_RESOURCE, FAIL);
-            (*out)[out_index++] = c1;
-            (*out)[out_index++] = c2;
-            (*out)[out_index++] = c3;
+            (*out)[out_index++] = (char)c1;
+            (*out)[out_index++] = (char)c2;
+            (*out)[out_index++] = (char)c3;
         }
     } /* end for */
 
@@ -3369,7 +3535,7 @@ RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callb
     if (NULL == (version_field = strtok_r(version_response, ".", &saveptr)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server major version field was NULL");
 
-    if ((numeric_version_field = strtol(version_field, NULL, 10)) < 0)
+    if ((numeric_version_field = (int)strtol(version_field, NULL, 10)) < 0)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid server major version");
 
     server_version->major = (size_t)numeric_version_field;
@@ -3377,7 +3543,7 @@ RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callb
     if (NULL == (version_field = strtok_r(NULL, ".", &saveptr)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server minor version field was NULL");
 
-    if ((numeric_version_field = strtol(version_field, NULL, 10)) < 0)
+    if ((numeric_version_field = (int)strtol(version_field, NULL, 10)) < 0)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid server minor version");
 
     server_version->minor = (size_t)numeric_version_field;
@@ -3385,7 +3551,7 @@ RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callb
     if (NULL == (version_field = strtok_r(NULL, ".", &saveptr)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server patch version field was NULL");
 
-    if ((numeric_version_field = strtol(version_field, NULL, 10)) < 0)
+    if ((numeric_version_field = (int)strtol(version_field, NULL, 10)) < 0)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid server patch version");
 
     server_version->patch = (size_t)numeric_version_field;

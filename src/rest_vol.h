@@ -364,6 +364,12 @@ extern const char *link_class_keys2[];
 /* JSON key to retrieve the version of server from a request to a file. */
 extern const char *server_version_keys[];
 
+/* JSON keys to retrieve a list of attributes */
+extern const char *attributes_keys[];
+
+/* JSON keys to retrieve a list of links */
+extern const char *links_keys[];
+
 /* A global struct containing the buffer which cURL will write its
  * responses out to after making a call to the server. The buffer
  * in this struct is allocated upon connector initialization and is
@@ -556,13 +562,19 @@ herr_t RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, 
 /* Callback for RV_parse_response() to capture an object's creation properties */
 herr_t RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 
+/* Callback for RV_parse_response() to access the name of the n-th returned attribute */
+herr_t RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+
+/* Callback for RV_parse_response() to access the name of the n-th returned link */
+herr_t RV_copy_link_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+
 /* Callback for RV_parse_response() to capture the version of the server api */
 herr_t RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 
 /* Helper function to find an object given a starting object to search from and a path */
 htri_t RV_find_object_by_path2(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
-                               herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
-                               void *callback_data_out);
+                                herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
+                                void *callback_data_out);
 
 htri_t RV_find_object_by_path1(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
                                herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
@@ -578,12 +590,15 @@ herr_t RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, cha
 herr_t RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size);
 herr_t RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size);
 
+#define SERVER_VERSION_MATCHES_OR_EXCEEDS(version, major_needed, minor_needed, patch_needed)                 \
+    (version.major > major_needed) || (version.major == major_needed && version.minor > minor_needed) ||     \
+        (version.major == major_needed && version.minor == minor_needed && version.patch >= patch_needed)
+
 /* HSDS version 0.8.0 introduced support for server-side following of symbolic links
  * If the server is an earlier version, do it on the client side */
 #define RV_find_object_by_path(parent_obj, obj_path, target_object_type, obj_found_callback,                 \
                                callback_data_in, callback_data_out)                                          \
-    (((RV_object_t *)parent_obj)->domain->u.file.server_version.major >= 1 ||                                \
-     ((RV_object_t *)parent_obj)->domain->u.file.server_version.minor >= 8)                                  \
+    (SERVER_VERSION_MATCHES_OR_EXCEEDS(((RV_object_t *)parent_obj)->domain->u.file.server_version, 0, 8, 0)) \
         ? RV_find_object_by_path2(parent_obj, obj_path, target_object_type, obj_found_callback,              \
                                   callback_data_in, callback_data_out)                                       \
         : RV_find_object_by_path1(parent_obj, obj_path, target_object_type, obj_found_callback,              \

@@ -183,7 +183,7 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTENCODE, NULL, "can't determine size needed for encoded gcpl");
 
         if ((binary_plist_buffer = RV_malloc(plist_nalloc)) == NULL)
-            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTALLOC, FAIL, "can't allocate space for encoded gcpl");
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTALLOC, NULL, "can't allocate space for encoded gcpl");
 
         if (H5Pencode2(gcpl_id, binary_plist_buffer, &plist_nalloc, H5P_DEFAULT) < 0)
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTENCODE, NULL, "can't encode gcpl");
@@ -387,8 +387,8 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
                         "failed to retrieve creation properties from response");
     }
 
-    if (RV_base64_decode(loc_info_out.GCPL_base64, strlen(loc_info_out.GCPL_base64), &binary_gcpl,
-                         &binary_gcpl_size) < 0)
+    if (RV_base64_decode(loc_info_out.GCPL_base64, strlen(loc_info_out.GCPL_base64), (char **)&binary_gcpl,
+                         binary_gcpl_size) < 0)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTDECODE, NULL, "can't decode gcpl from base64");
 
     /* Set up a GCPL for the group so that H5Gget_create_plist() will function correctly */
@@ -541,6 +541,9 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL,
                                         "H5Gget_info_by_name request URL size exceeded maximum URL size");
+
+                    if (loc_info_out.GCPL_base64)
+                        RV_free(loc_info_out.GCPL_base64);
 
                     break;
                 } /* H5VL_OBJECT_BY_NAME */

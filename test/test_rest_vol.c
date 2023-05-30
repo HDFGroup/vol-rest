@@ -2493,16 +2493,16 @@ test_create_attribute_on_root(void)
 #endif
 
         if ((/*attr_id = */ H5Aopen_by_idx(file_id, "/", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT,
-                                           H5P_DEFAULT)) >= 0) {
+                                           H5P_DEFAULT)) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
 
         if ((/*attr_id2 = */ H5Aopen_by_idx(file_id, "/", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT,
-                                            H5P_DEFAULT)) >= 0) {
+                                            H5P_DEFAULT)) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
     }
@@ -2723,17 +2723,17 @@ test_create_attribute_on_dataset(void)
 
         if ((/*attr_id = */ H5Aopen_by_idx(
                 file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATASET_DSET_NAME,
-                H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) >= 0) {
+                H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
 
         if ((/*attr_id2 = */ H5Aopen_by_idx(
                 file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATASET_DSET_NAME,
-                H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) >= 0) {
+                H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
     }
@@ -3357,10 +3357,10 @@ test_get_attribute_info(void)
         puts("Retrieving attribute's info with H5Aget_info_by_idx\n");
 #endif
 
-        if (H5Aget_info_by_idx(container_group, "/", H5_INDEX_NAME, H5_ITER_INC, 0, &attr_info,
-                               H5P_DEFAULT) >= 0) {
+        if (H5Aget_info_by_idx(container_group, "/", H5_INDEX_NAME, H5_ITER_INC, 0, &attr_info, H5P_DEFAULT) <
+            0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
     }
@@ -3750,9 +3750,9 @@ test_get_attribute_name(void)
     H5E_BEGIN_TRY
     {
         if (H5Aget_name_by_idx(file_id, ATTRIBUTE_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, name_buf,
-                               (size_t)name_buf_size + 1, H5P_DEFAULT) >= 0) {
+                               (size_t)name_buf_size + 1, H5P_DEFAULT) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
     }

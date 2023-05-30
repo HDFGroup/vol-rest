@@ -53,7 +53,6 @@ const char *link_domain_keys[]  = {"link", "h5domain", (const char *)0};
 const char *link_domain_keys2[] = {"h5domain", (const char *)0};
 
 /* JSON keys to retrieve all of the information from a link when doing link iteration */
-const char *links_keys[]              = {"links", (const char *)0};
 const char *link_title_keys[]         = {"title", (const char *)0};
 const char *link_creation_time_keys[] = {"created", (const char *)0};
 
@@ -609,9 +608,16 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
             by_idx_data.is_recursive               = FALSE;
             by_idx_data.index_type                 = loc_params->loc_data.loc_by_idx.idx_type;
             by_idx_data.iter_order                 = loc_params->loc_data.loc_by_idx.order;
-            by_idx_data.idx_p                      = &loc_params->loc_data.loc_by_idx.n;
             by_idx_data.iter_function.link_iter_op = NULL;
             by_idx_data.op_data                    = NULL;
+
+            /* Avoid compiler warnings about const pointer reassignment */
+            hsize_t idx_p;
+
+            if (0 > memcpy(&idx_p, &loc_params->loc_data.loc_by_idx.n, sizeof(hsize_t)))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "failed to copy loc by idx info");
+
+            by_idx_data.idx_p = &idx_p;
 
             /*
              * Setup information to be passed back from link name retrieval callback

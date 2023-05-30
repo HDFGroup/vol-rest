@@ -329,7 +329,7 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
     RV_object_t *parent   = (RV_object_t *)obj;
     RV_object_t *datatype = NULL;
     H5I_type_t   obj_type = H5I_UNINIT;
-    loc_info     loc_info;
+    loc_info     loc_info_out;
     htri_t       search_ret;
     void        *ret_value = NULL;
 
@@ -358,17 +358,17 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
     datatype->domain = parent->domain;
     parent->domain->u.file.ref_count++;
 
-    loc_info.URI         = datatype->URI;
-    loc_info.domain      = datatype->domain;
-    loc_info.GCPL_base64 = NULL;
+    loc_info_out.URI         = datatype->URI;
+    loc_info_out.domain      = datatype->domain;
+    loc_info_out.GCPL_base64 = NULL;
 
     /* Locate datatype and set domain */
-    search_ret =
-        RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_loc_info_callback, NULL, &loc_info);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_loc_info_callback, NULL,
+                                        &loc_info_out);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't locate datatype by path");
 
-    datatype->domain = loc_info.domain;
+    datatype->domain = loc_info_out.domain;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Found datatype by given path\n\n");

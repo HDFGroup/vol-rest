@@ -3269,7 +3269,8 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                                         "this should not happen!");
 
                     size_t out_string_new_len =
-                        buf_ptrdiff + ((size_t)((ndims * MAX_NUM_LENGTH) + (ndims) + (ndims > 1 ? 3 : 1)));
+                        (size_t)buf_ptrdiff +
+                        ((size_t)((ndims * MAX_NUM_LENGTH) + (ndims) + (ndims > 1 ? 3 : 1)));
 
                     CHECKED_REALLOC(out_string, out_string_len, out_string_new_len, out_string_curr_pos,
                                     H5E_DATASPACE, FAIL);
@@ -3340,7 +3341,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
                                     "can't allocate space for hyperslab selection 'block' values");
 
-                size_t body_size = ndims * MAX_NUM_LENGTH + ndims;
+                size_t body_size = (size_t)ndims * MAX_NUM_LENGTH + ndims;
 
                 if (NULL == (start_body = (char *)RV_calloc(body_size)))
                     FUNC_GOTO_ERROR(
