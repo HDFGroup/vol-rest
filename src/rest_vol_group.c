@@ -328,8 +328,8 @@ void *
 RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id,
               void **req)
 {
-    RV_object_t *parent = (RV_object_t *)obj;
-    RV_object_t *group  = NULL;
+    RV_object_t *parent       = (RV_object_t *)obj;
+    RV_object_t *group        = NULL;
     loc_info     loc_info_out = {0};
     htri_t       search_ret;
     void        *ret_value = NULL;
@@ -454,7 +454,7 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
     int          url_len   = 0;
     herr_t       ret_value = SUCCEED;
 
-    loc_info   loc_info_out;
+    loc_info loc_info_out;
     memset(&loc_info_out, 0, sizeof(loc_info));
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -619,7 +619,7 @@ done:
         RV_free(loc_info_out.GCPL_base64);
         loc_info_out.GCPL_base64 = NULL;
     }
-        
+
     if (host_header)
         RV_free(host_header);
 

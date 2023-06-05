@@ -573,8 +573,8 @@ herr_t RV_parse_server_version(char *HTTP_response, void *callback_data_in, void
 
 /* Helper function to find an object given a starting object to search from and a path */
 htri_t RV_find_object_by_path2(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
-                                herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
-                                void *callback_data_out);
+                               herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
+                               void *callback_data_out);
 
 htri_t RV_find_object_by_path1(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
                                herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,

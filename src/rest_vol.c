@@ -2765,17 +2765,17 @@ herr_t
 RV_copy_link_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
     yajl_val           parse_tree = NULL, key_obj = NULL, link_obj = NULL;
-    const char        *parsed_link_name = NULL;
+    const char        *parsed_link_name   = NULL;
     char              *parsed_link_buffer = NULL;
-    H5VL_loc_by_idx_t *idx_params       = (H5VL_loc_by_idx_t *)callback_data_in;
-    hsize_t            index            = idx_params->n;
-    char             **link_name        = (char **)callback_data_out;
-    const char        *curr_key         = NULL;
-    herr_t             ret_value        = SUCCEED;
+    H5VL_loc_by_idx_t *idx_params         = (H5VL_loc_by_idx_t *)callback_data_in;
+    hsize_t            index              = idx_params->n;
+    char             **link_name          = (char **)callback_data_out;
+    const char        *curr_key           = NULL;
+    herr_t             ret_value          = SUCCEED;
 
     if (!link_name)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given link_name ptr was NULL");
-        
+
     if (!HTTP_response)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
 
@@ -2856,13 +2856,13 @@ done:
 herr_t
 RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
-    yajl_val           parse_tree = NULL, key_obj;
-    char              *parsed_string = NULL;
+    yajl_val           parse_tree           = NULL, key_obj;
+    char              *parsed_string        = NULL;
     char              *parsed_string_buffer = NULL;
-    H5VL_loc_by_idx_t *idx_params = (H5VL_loc_by_idx_t *)callback_data_in;
-    hsize_t            index      = idx_params->n;
-    char             **attr_name  = (char **)callback_data_out;
-    herr_t             ret_value  = SUCCEED;
+    H5VL_loc_by_idx_t *idx_params           = (H5VL_loc_by_idx_t *)callback_data_in;
+    hsize_t            index                = idx_params->n;
+    char             **attr_name            = (char **)callback_data_out;
+    herr_t             ret_value            = SUCCEED;
 
     if (!attr_name)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given attr_name was NULL");

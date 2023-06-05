@@ -608,7 +608,7 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
             by_idx_data.is_recursive               = FALSE;
             by_idx_data.index_type                 = loc_params->loc_data.loc_by_idx.idx_type;
             by_idx_data.iter_order                 = loc_params->loc_data.loc_by_idx.order;
-            by_idx_data.idx_p = &loc_params->loc_data.loc_by_idx.n;
+            by_idx_data.idx_p                      = &loc_params->loc_data.loc_by_idx.n;
             by_idx_data.iter_function.link_iter_op = NULL;
             by_idx_data.op_data                    = NULL;
 
