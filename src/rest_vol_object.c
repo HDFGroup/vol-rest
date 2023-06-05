@@ -450,7 +450,6 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
                 /* H5Oget_info_by_idx */
                 case H5VL_OBJECT_BY_IDX: {
-                    H5VL_loc_by_idx_t idx_args;
                     htri_t            search_ret;
                     char              temp_URI[URI_MAX_LENGTH];
                     const char       *request_idx_type       = NULL;
@@ -537,11 +536,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
                     CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
 
-                    /* Avoid compiler warnings about const pointer reassignment */
-                    if (0 > memcpy(&idx_args, &loc_params->loc_data.loc_by_idx, sizeof(H5VL_loc_by_idx_t)))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "failed to copy loc by idx info");
-
-                    if (0 > RV_parse_response(response_buffer.buffer, (void *)&idx_args, &found_object_name,
+                    if (0 > RV_parse_response(response_buffer.buffer, (void *)&loc_params->loc_data.loc_by_idx, &found_object_name,
                                               RV_copy_link_name_by_index))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "failed to retrieve link names");
 

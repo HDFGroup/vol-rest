@@ -330,7 +330,7 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
 {
     RV_object_t *parent = (RV_object_t *)obj;
     RV_object_t *group  = NULL;
-    loc_info     loc_info_out;
+    loc_info     loc_info_out = {0};
     htri_t       search_ret;
     void        *ret_value = NULL;
     // char        *base64_binary_gcpl = NULL;
@@ -454,6 +454,9 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
     int          url_len   = 0;
     herr_t       ret_value = SUCCEED;
 
+    loc_info   loc_info_out;
+    memset(&loc_info_out, 0, sizeof(loc_info));
+
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received group get call with following parameters:\n");
     printf("     - Group get call type: %s\n\n", group_get_type_to_string(args->op_type));
@@ -503,7 +506,6 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
                 case H5VL_OBJECT_BY_NAME: {
                     H5I_type_t obj_type = H5I_GROUP;
                     htri_t     search_ret;
-                    loc_info   loc_info_out;
                     char       temp_URI[URI_MAX_LENGTH];
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -542,8 +544,10 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL,
                                         "H5Gget_info_by_name request URL size exceeded maximum URL size");
 
-                    if (loc_info_out.GCPL_base64)
+                    if (loc_info_out.GCPL_base64) {
                         RV_free(loc_info_out.GCPL_base64);
+                        loc_info_out.GCPL_base64 = NULL;
+                    }
 
                     break;
                 } /* H5VL_OBJECT_BY_NAME */
@@ -611,6 +615,11 @@ done:
     printf("-> Group get response buffer:\n%s\n\n", response_buffer.buffer);
 #endif
 
+    if (loc_info_out.GCPL_base64) {
+        RV_free(loc_info_out.GCPL_base64);
+        loc_info_out.GCPL_base64 = NULL;
+    }
+        
     if (host_header)
         RV_free(host_header);
 

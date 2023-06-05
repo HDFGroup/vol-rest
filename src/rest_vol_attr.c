@@ -480,7 +480,6 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
 
         /* H5Aopen_by_idx */
         case H5VL_OBJECT_BY_IDX: {
-            H5VL_loc_by_idx_t idx_args;
             htri_t            search_ret;
 
             const char *request_idx_type = NULL;
@@ -506,18 +505,22 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
                     FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "unsupported index type specified");
                     break;
             }
+            
+            /* Make additional request to server to determine attribute name by index */
+            if (!strcmp(loc_params->loc_data.loc_by_idx.name, ".")) {
+                attribute->u.attribute.parent_obj_type = parent->obj_type;
+                strncpy(attribute->u.attribute.parent_obj_URI, parent->URI, URI_MAX_LENGTH);
 
-            attribute->u.attribute.parent_obj_type = H5I_UNINIT;
+            } else {
+                search_ret = RV_find_object_by_path(
+                    parent, loc_params->loc_data.loc_by_idx.name, &attribute->u.attribute.parent_obj_type,
+                    RV_copy_object_URI_callback, NULL, attribute->u.attribute.parent_obj_URI);
 
-            /* Make additional request to server to determine attribute name */
-            search_ret = RV_find_object_by_path(
-                parent, loc_params->loc_data.loc_by_name.name, &attribute->u.attribute.parent_obj_type,
-                RV_copy_object_URI_callback, NULL, attribute->u.attribute.parent_obj_URI);
-
-            if (!search_ret || search_ret < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, NULL,
-                                "can't locate object that attribute is attached to");
-
+                if (!search_ret || search_ret < 0)
+                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, NULL,
+                                    "can't locate object that attribute is attached to");    
+            }
+            
             /* Setup the host header */
             host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
@@ -586,18 +589,19 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
 
             CURL_PERFORM(curl, H5E_ATTR, H5E_CANTGET, NULL);
 
-            /* Avoid compiler warnings about const pointer reassignment */
-            if (0 > memcpy(&idx_args, &loc_params->loc_data.loc_by_idx, sizeof(H5VL_loc_by_idx_t)))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, NULL, "failed to copy loc by idx info");
-
-            if (0 > RV_parse_response(response_buffer.buffer, (void *)&idx_args, &found_attr_name,
+            if (0 > RV_parse_response(response_buffer.buffer, (void *)&loc_params->loc_data.loc_by_idx, &found_attr_name,
                                       RV_copy_attribute_name_by_index))
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_PARSEERROR, NULL, "failed to retrieve attribute names");
 
-            if (host_header)
+            if (host_header) {
                 RV_free(host_header);
-            if (url_encoded_attr_name)
+                host_header = NULL;
+            }
+                
+            if (url_encoded_attr_name) {
                 curl_free(url_encoded_attr_name);
+                url_encoded_attr_name = NULL;
+            }
 
             if (curl_headers) {
                 curl_slist_free_all(curl_headers);

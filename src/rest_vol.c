@@ -2590,6 +2590,8 @@ RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf_out)
     char    *parsed_string  = NULL;
     char    *GCPL_buf_local = NULL;
 
+    if (!GCPL_buf_out)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given GCPL buffer was NULL");
     if (!parse_tree)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parse tree was NULL");
 
@@ -2608,9 +2610,7 @@ RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf_out)
     if (NULL == (memcpy(GCPL_buf_local, parsed_string, strlen(parsed_string) + 1)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "failed to copy creationProperties");
 
-    if (NULL == (*GCPL_buf_out = GCPL_buf_local))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
-                        "failed to copy pointer to allocated creationProperties");
+    *GCPL_buf_out = GCPL_buf_local;
 
 done:
 
@@ -2766,12 +2766,16 @@ RV_copy_link_name_by_index(char *HTTP_response, void *callback_data_in, void *ca
 {
     yajl_val           parse_tree = NULL, key_obj = NULL, link_obj = NULL;
     const char        *parsed_link_name = NULL;
+    char              *parsed_link_buffer = NULL;
     H5VL_loc_by_idx_t *idx_params       = (H5VL_loc_by_idx_t *)callback_data_in;
     hsize_t            index            = idx_params->n;
     char             **link_name        = (char **)callback_data_out;
     const char        *curr_key         = NULL;
     herr_t             ret_value        = SUCCEED;
 
+    if (!link_name)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given link_name ptr was NULL");
+        
     if (!HTTP_response)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
 
@@ -2795,11 +2799,13 @@ RV_copy_link_name_by_index(char *HTTP_response, void *callback_data_in, void *ca
 
         case (H5_ITER_NATIVE):
         case (H5_ITER_INC):
+            if (NULL == (link_obj = key_obj->u.array.values[index]))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected link was NULL");
+            break;
         case (H5_ITER_N):
         case (H5_ITER_UNKNOWN):
         default: {
-            if (NULL == (link_obj = key_obj->u.array.values[index]))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected link was NULL");
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid iteration order");
             break;
         }
     }
@@ -2816,11 +2822,12 @@ RV_copy_link_name_by_index(char *HTTP_response, void *callback_data_in, void *ca
     if (NULL == parsed_link_name)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "server response didn't contain link name");
 
-    if (NULL == (*link_name = RV_malloc(strlen(parsed_link_name) + 1)))
+    if (NULL == (parsed_link_buffer = RV_malloc(strlen(parsed_link_name) + 1)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to allocate memory for link name");
 
-    if (NULL == (memcpy(*link_name, parsed_link_name, strlen(parsed_link_name) + 1)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to copy link name");
+    memcpy(parsed_link_buffer, parsed_link_name, strlen(parsed_link_name) + 1);
+
+    *link_name = parsed_link_buffer;
 
 done:
     if (parse_tree)
@@ -2850,11 +2857,15 @@ herr_t
 RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
     yajl_val           parse_tree = NULL, key_obj;
-    char              *parsed_string;
+    char              *parsed_string = NULL;
+    char              *parsed_string_buffer = NULL;
     H5VL_loc_by_idx_t *idx_params = (H5VL_loc_by_idx_t *)callback_data_in;
     hsize_t            index      = idx_params->n;
     char             **attr_name  = (char **)callback_data_out;
     herr_t             ret_value  = SUCCEED;
+
+    if (!attr_name)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given attr_name was NULL");
 
     if (!HTTP_response)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
@@ -2888,12 +2899,12 @@ RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, voi
         }
     }
 
-    if (NULL == (*attr_name = RV_malloc(strlen(parsed_string) + 1)))
+    if (NULL == (parsed_string_buffer = RV_malloc(strlen(parsed_string) + 1)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to allocate memory for attribute name");
 
-    if (NULL == (memcpy(*attr_name, parsed_string, strlen(parsed_string) + 1)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to copy attribute name");
+    memcpy(parsed_string_buffer, parsed_string, strlen(parsed_string) + 1);
 
+    *attr_name = parsed_string_buffer;
 done:
     if (parse_tree)
         yajl_tree_free(parse_tree);

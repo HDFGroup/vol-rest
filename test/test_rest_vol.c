@@ -403,9 +403,7 @@ char filename[FILENAME_MAX_LENGTH];
 
 #define H5L_SAME_LOC_TEST_DSET_SPACE_RANK 2
 #define H5L_SAME_LOC_TEST_GROUP_NAME      "h5l_same_loc_test_group"
-#if 0
 #define H5L_SAME_LOC_TEST_LINK_NAME1 "h5l_same_loc_test_link1"
-#endif
 #define H5L_SAME_LOC_TEST_LINK_NAME2 "h5l_same_loc_test_link2"
 #define H5L_SAME_LOC_TEST_DSET_NAME  "h5l_same_loc_test_dset"
 
@@ -2481,25 +2479,23 @@ test_create_attribute_on_root(void)
 
     H5E_BEGIN_TRY
     {
-#if 0
         if (H5Aclose(attr_id) < 0)
             TEST_ERROR
         if (H5Aclose(attr_id2) < 0)
             TEST_ERROR
-#endif
 
 #ifdef RV_CONNECTOR_DEBUG
         puts("Attempting to open the attributes with H5Aopen_by_idx\n");
 #endif
 
-        if ((/*attr_id = */ H5Aopen_by_idx(file_id, "/", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT,
+        if ((attr_id = H5Aopen_by_idx(file_id, "/", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT,
                                            H5P_DEFAULT)) < 0) {
             H5_FAILED();
             printf("    failed to open attribute by index!\n");
             goto error;
         }
 
-        if ((/*attr_id2 = */ H5Aopen_by_idx(file_id, "/", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT,
+        if ((attr_id2 = H5Aopen_by_idx(file_id, "/", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT,
                                             H5P_DEFAULT)) < 0) {
             H5_FAILED();
             printf("    failed to open attribute by index!\n");
@@ -2710,18 +2706,16 @@ test_create_attribute_on_dataset(void)
 
     H5E_BEGIN_TRY
     {
-#if 0
         if (H5Aclose(attr_id) < 0)
             TEST_ERROR
         if (H5Aclose(attr_id2) < 0)
             TEST_ERROR
-#endif
 
 #ifdef RV_CONNECTOR_DEBUG
         puts("Attempting to open the attributes with H5Aopen_by_idx\n");
 #endif
 
-        if ((/*attr_id = */ H5Aopen_by_idx(
+        if ((attr_id = H5Aopen_by_idx(
                 file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATASET_DSET_NAME,
                 H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
             H5_FAILED();
@@ -2729,7 +2723,7 @@ test_create_attribute_on_dataset(void)
             goto error;
         }
 
-        if ((/*attr_id2 = */ H5Aopen_by_idx(
+        if ((attr_id2 = H5Aopen_by_idx(
                 file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATASET_DSET_NAME,
                 H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
             H5_FAILED();
@@ -2963,28 +2957,26 @@ test_create_attribute_on_datatype(void)
 
     H5E_BEGIN_TRY
     {
-#if 0
         if (H5Aclose(attr_id) < 0)
             TEST_ERROR
         if (H5Aclose(attr_id2) < 0)
             TEST_ERROR
-#endif
 
 #ifdef RV_CONNECTOR_DEBUG
         puts("Attempting to open the attributes with H5Aopen_by_idx\n");
 #endif
 
-        if ((/*attr_id = */ H5Aopen_by_idx(type_id, "/" ATTRIBUTE_CREATE_ON_DATATYPE_DTYPE_NAME,
-                                           H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) >= 0) {
+        if ((attr_id = H5Aopen_by_idx(type_id, ".",
+                                           H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
 
-        if ((/*attr_id2 = */ H5Aopen_by_idx(type_id, "/" ATTRIBUTE_CREATE_ON_DATATYPE_DTYPE_NAME,
-                                            H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) >= 0) {
+        if ((attr_id2 = H5Aopen_by_idx(type_id, ".",
+                                            H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
     }
@@ -10371,7 +10363,7 @@ test_create_hard_link_same_loc(void)
         goto error;
     }
 
-#if 0 /* Library functionality for this part of the test is broken */
+/* Library functionality for this part of the test is broken */
 #ifdef RV_CONNECTOR_DEBUG
     puts("Calling H5Lcreate_hard with H5L_SAME_LOC as first parameter\n");
 #endif
@@ -10394,7 +10386,7 @@ test_create_hard_link_same_loc(void)
         printf("    link did not exist\n");
         goto error;
     }
-#endif
+
 
 #ifdef RV_CONNECTOR_DEBUG
     puts("Calling H5Lcreate_hard with H5L_SAME_LOC as second parameter\n");
