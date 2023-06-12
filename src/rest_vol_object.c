@@ -477,13 +477,13 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                     switch (loc_params->loc_data.loc_by_idx.idx_type) {
                         case (H5_INDEX_CRT_ORDER):
                             if (SERVER_VERSION_MATCHES_OR_EXCEEDS(loc_obj->domain->u.file.server_version, 0,
-                                                                  7, 3)) {
+                                                                  8, 0)) {
                                 request_idx_type = "&CreateOrder=1";
                             }
                             else {
                                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL,
                                                 "indexing by creation order not supported by server versions "
-                                                "before 0.7.3");
+                                                "before 0.8.0");
                             }
 
                             break;

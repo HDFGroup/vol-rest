@@ -2929,12 +2929,15 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t t
 
     /* If the DCPL was not specified as H5P_DEFAULT, form the Dataset Creation Properties portion of the
      * Dataset create request */
-    if (H5P_DATASET_CREATE_DEFAULT != dcpl)
+    if (H5P_DATASET_CREATE_DEFAULT != dcpl) {
+        if ((H5Pget_layout(dcpl) == H5D_CONTIGUOUS) && !SERVER_VERSION_MATCHES_OR_EXCEEDS(pobj->domain->u.file.server_version, 0, 8, 0))
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_UNSUPPORTED, FAIL, "layout H5D_CONTIGUOUS is unsupported for server versions before 0.8.0");
+
         if (RV_convert_dataset_creation_properties_to_JSON(dcpl, &creation_properties_body,
                                                            &creation_properties_body_len) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL,
                             "can't convert Dataset Creation Properties to JSON representation");
-
+    }
     /* If this isn't an H5Dcreate_anon call, create a link for the Dataset to
      * link it into the file structure */
     if (name) {

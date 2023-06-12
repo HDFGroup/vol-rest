@@ -435,6 +435,7 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
     attribute->u.attribute.aapl_id   = FAIL;
     attribute->u.attribute.acpl_id   = FAIL;
     attribute->u.attribute.attr_name = NULL;
+    attribute->u.attribute.parent_obj_type = H5I_UNINIT;
 
     attribute->domain = parent->domain;
     parent->domain->u.file.ref_count++;
@@ -486,13 +487,13 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
 
             switch (loc_params->loc_data.loc_by_idx.idx_type) {
                 case (H5_INDEX_CRT_ORDER):
-                    if (SERVER_VERSION_MATCHES_OR_EXCEEDS(parent->domain->u.file.server_version, 0, 7, 3)) {
+                    if (SERVER_VERSION_MATCHES_OR_EXCEEDS(parent->domain->u.file.server_version, 0, 8, 0)) {
                         request_idx_type = "&CreateOrder=1";
                     }
                     else {
                         FUNC_GOTO_ERROR(
                             H5E_ATTR, H5E_UNSUPPORTED, NULL,
-                            "indexing by creation order not supported by server versions before 0.7.3");
+                            "indexing by creation order not supported by server versions before 0.8.0");
                     }
 
                     break;
@@ -1404,13 +1405,13 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                     switch (loc_params->loc_data.loc_by_idx.idx_type) {
                         case (H5_INDEX_CRT_ORDER):
                             if (SERVER_VERSION_MATCHES_OR_EXCEEDS(loc_obj->domain->u.file.server_version, 0,
-                                                                  7, 3)) {
+                                                                  8, 0)) {
                                 request_idx_type = "&CreateOrder=1";
                             }
                             else {
                                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL,
                                                 "indexing by creation order not supported by server versions "
-                                                "before 0.7.3");
+                                                "before 0.8.0");
                             }
 
                             break;
@@ -1624,7 +1625,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                             else {
                                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL,
                                                 "indexing by creation order not supported by server versions "
-                                                "before 0.7.3");
+                                                "before 0.8.0");
                             }
 
                             break;

@@ -2741,7 +2741,7 @@ done:
         yajl_tree_free(parse_tree);
 
     if (ret_value < 0) {
-        free(GCPL_buf);
+        RV_free(GCPL_buf);
         GCPL_buf                  = NULL;
         loc_info_out->GCPL_base64 = NULL;
     }
