@@ -428,13 +428,13 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
     if (NULL == (attribute = (RV_object_t *)RV_malloc(sizeof(*attribute))))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute object");
 
-    attribute->URI[0]                = '\0';
-    attribute->obj_type              = H5I_ATTR;
-    attribute->u.attribute.dtype_id  = FAIL;
-    attribute->u.attribute.space_id  = FAIL;
-    attribute->u.attribute.aapl_id   = FAIL;
-    attribute->u.attribute.acpl_id   = FAIL;
-    attribute->u.attribute.attr_name = NULL;
+    attribute->URI[0]                      = '\0';
+    attribute->obj_type                    = H5I_ATTR;
+    attribute->u.attribute.dtype_id        = FAIL;
+    attribute->u.attribute.space_id        = FAIL;
+    attribute->u.attribute.aapl_id         = FAIL;
+    attribute->u.attribute.acpl_id         = FAIL;
+    attribute->u.attribute.attr_name       = NULL;
     attribute->u.attribute.parent_obj_type = H5I_UNINIT;
 
     attribute->domain = parent->domain;
