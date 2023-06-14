@@ -549,33 +549,10 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
              * or
              * "/datasets/<id>/attributes/<attr name>",
              * depending on the type of the object the attribute is attached to. */
-            switch (attribute->u.attribute.parent_obj_type) {
-                case H5I_FILE:
-                case H5I_GROUP:
-                    parent_obj_type_header = "groups";
-                    break;
-                case H5I_DATATYPE:
-                    parent_obj_type_header = "datatypes";
-                    break;
-                case H5I_DATASET:
-                    parent_obj_type_header = "datasets";
-                    break;
-                case H5I_ATTR:
-                case H5I_UNINIT:
-                case H5I_BADID:
-                case H5I_DATASPACE:
-                case H5I_VFL:
-                case H5I_VOL:
-                case H5I_GENPROP_CLS:
-                case H5I_GENPROP_LST:
-                case H5I_ERROR_CLASS:
-                case H5I_ERROR_MSG:
-                case H5I_ERROR_STACK:
-                case H5I_NTYPES:
-                default:
-                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL,
-                                    "parent object not a group, datatype or dataset");
-            }
+            if (RV_set_object_type_header(attribute->u.attribute.parent_obj_type, &parent_obj_type_header) <
+                0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL,
+                                "parent object not a group, datatype or dataset");
 
             if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s?%s&include_attrs=1", base_URL,
                                     parent_obj_type_header, attribute->u.attribute.parent_obj_URI,
@@ -655,32 +632,8 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
      * or
      * "/datasets/<id>/attributes/<attr name>",
      * depending on the type of the object the attribute is attached to. */
-    switch (attribute->u.attribute.parent_obj_type) {
-        case H5I_FILE:
-        case H5I_GROUP:
-            parent_obj_type_header = "groups";
-            break;
-        case H5I_DATATYPE:
-            parent_obj_type_header = "datatypes";
-            break;
-        case H5I_DATASET:
-            parent_obj_type_header = "datasets";
-            break;
-        case H5I_ATTR:
-        case H5I_UNINIT:
-        case H5I_BADID:
-        case H5I_DATASPACE:
-        case H5I_VFL:
-        case H5I_VOL:
-        case H5I_GENPROP_CLS:
-        case H5I_GENPROP_LST:
-        case H5I_ERROR_CLASS:
-        case H5I_ERROR_MSG:
-        case H5I_ERROR_STACK:
-        case H5I_NTYPES:
-        default:
-            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "parent object not a group, datatype or dataset");
-    }
+    if (RV_set_object_type_header(attribute->u.attribute.parent_obj_type, &parent_obj_type_header) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "parent object not a group, datatype or dataset");
 
     if ((url_len =
              snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL, parent_obj_type_header,
@@ -1457,33 +1410,9 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                      * or
                      * "/datasets/<id>/attributes/<attr name>",
                      * depending on the type of the object the attribute is attached to. */
-                    switch (parent_obj_type) {
-                        case H5I_FILE:
-                        case H5I_GROUP:
-                            parent_obj_type_header = "groups";
-                            break;
-                        case H5I_DATATYPE:
-                            parent_obj_type_header = "datatypes";
-                            break;
-                        case H5I_DATASET:
-                            parent_obj_type_header = "datasets";
-                            break;
-                        case H5I_ATTR:
-                        case H5I_UNINIT:
-                        case H5I_BADID:
-                        case H5I_DATASPACE:
-                        case H5I_VFL:
-                        case H5I_VOL:
-                        case H5I_GENPROP_CLS:
-                        case H5I_GENPROP_LST:
-                        case H5I_ERROR_CLASS:
-                        case H5I_ERROR_MSG:
-                        case H5I_ERROR_STACK:
-                        case H5I_NTYPES:
-                        default:
-                            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                                            "parent object not a group, datatype or dataset");
-                    }
+                    if (RV_set_object_type_header(parent_obj_type, &parent_obj_type_header) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
+                                        "can't get path header from parent object type");
 
                     if ((url_len =
                              snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s?%s&include_attrs=1", base_URL,
@@ -1667,33 +1596,9 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                      * or
                      * "/datasets/<id>/attributes/<attr name>",
                      * depending on the type of the object the attribute is attached to. */
-                    switch (parent_obj_type) {
-                        case H5I_FILE:
-                        case H5I_GROUP:
-                            parent_obj_type_header = "groups";
-                            break;
-                        case H5I_DATATYPE:
-                            parent_obj_type_header = "datatypes";
-                            break;
-                        case H5I_DATASET:
-                            parent_obj_type_header = "datasets";
-                            break;
-                        case H5I_ATTR:
-                        case H5I_UNINIT:
-                        case H5I_BADID:
-                        case H5I_DATASPACE:
-                        case H5I_VFL:
-                        case H5I_VOL:
-                        case H5I_GENPROP_CLS:
-                        case H5I_GENPROP_LST:
-                        case H5I_ERROR_CLASS:
-                        case H5I_ERROR_MSG:
-                        case H5I_ERROR_STACK:
-                        case H5I_NTYPES:
-                        default:
-                            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                                            "parent object not a group, datatype or dataset");
-                    }
+                    if (RV_set_object_type_header(parent_obj_type, &parent_obj_type_header) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
+                                        "parent object not a group, datatype or dataset");
 
                     if ((url_len =
                              snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s?%s&include_attrs=1", base_URL,

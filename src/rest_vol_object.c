@@ -564,33 +564,9 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, FAIL, "can't locate object by path");
 
-                    switch (obj_type) {
-                        case H5I_FILE:
-                        case H5I_GROUP:
-                            parent_obj_type_header = "groups";
-                            break;
-                        case H5I_DATATYPE:
-                            parent_obj_type_header = "datatypes";
-                            break;
-                        case H5I_DATASET:
-                            parent_obj_type_header = "datasets";
-                            break;
-                        case H5I_ATTR:
-                        case H5I_UNINIT:
-                        case H5I_BADID:
-                        case H5I_DATASPACE:
-                        case H5I_VFL:
-                        case H5I_VOL:
-                        case H5I_GENPROP_CLS:
-                        case H5I_GENPROP_LST:
-                        case H5I_ERROR_CLASS:
-                        case H5I_ERROR_MSG:
-                        case H5I_ERROR_STACK:
-                        case H5I_NTYPES:
-                        default:
-                            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL,
-                                            "object at index not a group, datatype or dataset");
-                    }
+                    if (RV_set_object_type_header(obj_type, &parent_obj_type_header) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL,
+                                        "object at index not a group, datatype or dataset");
 
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s", base_URL,
                                             parent_obj_type_header, loc_info_out.URI)) < 0)
