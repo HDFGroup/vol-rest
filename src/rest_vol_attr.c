@@ -140,10 +140,11 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
         strncpy(new_attribute->u.attribute.parent_obj_URI, parent->URI, URI_MAX_LENGTH);
     } /* end else */
 
-
     /* See HSDS#223 */
-    if ((H5I_DATATYPE == new_attribute->u.attribute.parent_obj_type) && !(SERVER_VERSION_MATCHES_OR_EXCEEDS(parent->domain->u.file.server_version, 0, 8, 0)))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL, "server versions before 0.8.0 cannot properly create attributes on datatypes");
+    if ((H5I_DATATYPE == new_attribute->u.attribute.parent_obj_type) &&
+        !(SERVER_VERSION_MATCHES_OR_EXCEEDS(parent->domain->u.file.server_version, 0, 8, 0)))
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL,
+                        "server versions before 0.8.0 cannot properly create attributes on datatypes");
 
     /* Copy the AAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * attribute access property lists functions will function correctly

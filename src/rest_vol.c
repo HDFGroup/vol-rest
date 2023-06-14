@@ -2729,14 +2729,15 @@ RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, vo
         new_domain->u.file.fcpl_id   = H5Pcopy(loc_info_out->domain->u.file.fcpl_id);
         new_domain->u.file.ref_count = 1;
 
-        /* Assume that original domain and external domain have the same server version. 
+        /* Assume that original domain and external domain have the same server version.
          * This will always be true unless it becomes possible for external links to point to
          * objects on different servers entirely. */
-        memcpy(&new_domain->u.file.server_version, &loc_info_out->domain->u.file.server_version, sizeof(server_api_version));
+        memcpy(&new_domain->u.file.server_version, &loc_info_out->domain->u.file.server_version,
+               sizeof(server_api_version));
 
         if (RV_file_close(loc_info_out->domain, H5P_DEFAULT, NULL) < 0)
             FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL,
-                "failed to allocate memory for new domain path");
+                            "failed to allocate memory for new domain path");
 
         loc_info_out->domain = new_domain;
     }

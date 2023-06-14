@@ -396,7 +396,8 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
         if (0 > (group->u.group.gcpl_id = H5Pdecode(binary_gcpl)))
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTDECODE, NULL,
                             "can't decode creation property list from binary");
-    } else {
+    }
+    else {
         /* Server versions before 0.8.0 do not store GCPL; return default */
         if ((group->u.group.gcpl_id = H5Pcreate(H5P_GROUP_CREATE)) < 0)
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create GCPL for group");
