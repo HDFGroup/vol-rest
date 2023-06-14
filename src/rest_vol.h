@@ -370,6 +370,18 @@ extern const char *attributes_keys[];
 /* JSON keys to retrieve a list of links */
 extern const char *links_keys[];
 
+/* JSON keys to retrieve all of the information from a link when doing link iteration */
+extern const char *link_title_keys[];
+extern const char *link_creation_time_keys[];
+
+/* JSON keys to retrieve the collection that a hard link belongs to
+ * (the type of object it points to), "groups", "datasets" or "datatypes"
+ */
+extern const char *link_collection_keys2[];
+
+/* TODO */
+extern const char *hrefs_keys[];
+
 /* A global struct containing the buffer which cURL will write its
  * responses out to after making a call to the server. The buffer
  * in this struct is allocated upon connector initialization and is
@@ -396,43 +408,6 @@ typedef struct link_name_by_idx_data {
     size_t link_name_len;
     char  *link_name;
 } link_name_by_idx_data;
-
-/*
- * A struct which is filled out and passed to the link and attribute
- * iteration callback functions when calling
- * H5Literate(_by_name)/H5Lvisit(_by_name) or H5Aiterate(_by_name).
- */
-typedef struct iter_data {
-    H5_iter_order_t iter_order;
-    H5_index_t      index_type;
-    hbool_t         is_recursive;
-    hsize_t        *idx_p;
-    hid_t           iter_obj_id;
-    void           *op_data;
-
-    union {
-        H5A_operator2_t attr_iter_op;
-        H5L_iterate_t   link_iter_op;
-    } iter_function;
-} iter_data;
-
-/*
- * A struct which is filled out during link iteration and contains
- * all of the information needed to iterate through links by both
- * alphabetical order and link creation order in increasing and
- * decreasing fashion.
- */
-typedef struct link_table_entry link_table_entry;
-struct link_table_entry {
-    H5L_info2_t link_info;
-    double      crt_time;
-    char        link_name[LINK_NAME_MAX_LENGTH];
-
-    struct {
-        link_table_entry *subgroup_link_table;
-        size_t            num_entries;
-    } subgroup;
-};
 
 /*
  * A struct which is filled out during attribute iteration and
@@ -523,6 +498,66 @@ struct RV_object_t {
     } u;
 };
 
+/*
+ * A struct which is filled out and passed to the
+ * iteration callback functions when calling
+ * H5Literate(_by_name)/H5Lvisit(_by_name), H5Aiterate(_by_name), or H5Ovisit(_by_name)
+ */
+typedef struct iter_data {
+    H5_iter_order_t iter_order;
+    H5_index_t      index_type;
+    hbool_t         is_recursive;
+    hsize_t        *idx_p;
+    hid_t           iter_obj_id;
+    unsigned        oinfo_fields;
+    void           *op_data;
+    RV_object_t    *iter_obj_parent;
+
+    union {
+        H5A_operator2_t attr_iter_op;
+        H5L_iterate_t   link_iter_op;
+        H5O_iterate2_t  object_iter_op;
+    } iter_function;
+} iter_data;
+
+/*
+ * A struct which is filled out during link iteration and contains
+ * all of the information needed to iterate through links by both
+ * alphabetical order and link creation order in increasing and
+ * decreasing fashion.
+ */
+typedef struct link_table_entry link_table_entry;
+struct link_table_entry {
+    H5L_info2_t link_info;
+    double      crt_time;
+    char        link_name[LINK_NAME_MAX_LENGTH];
+
+    struct {
+        link_table_entry *subgroup_link_table;
+        size_t            num_entries;
+    } subgroup;
+};
+
+/*
+ * A struct which is filled out during object iteration and contains
+ * all of the information needed to iterate through objects by both
+ * alphabetical order and object creation order in increasing and
+ * decreasing fashion.
+ */
+typedef struct object_table_entry object_table_entry;
+struct object_table_entry {
+    H5O_info2_t object_info;
+    H5L_info2_t link_info;
+    double      crt_time;
+    char        object_URI[URI_MAX_LENGTH];
+    char        link_name[LINK_NAME_MAX_LENGTH];
+
+    struct {
+        object_table_entry *subgroup_object_table;
+        size_t              num_entries;
+    } subgroup;
+};
+
 /* A structure which is filled out by a callback that reads
  * the server's response. If a field was not contained in a
  * server's response, its pointer will be NULL, and this
@@ -571,6 +606,9 @@ herr_t RV_copy_link_name_by_index(char *HTTP_response, void *callback_data_in, v
 /* Callback for RV_parse_response() to capture the version of the server api */
 herr_t RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 
+/* Callback for RV_parse_response() to copy the id of a hard link to a buffer */
+herr_t RV_copy_link_URI_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+
 /* Helper function to find an object given a starting object to search from and a path */
 
 htri_t RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
@@ -588,7 +626,13 @@ herr_t RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, cha
 herr_t RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size);
 herr_t RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size);
 
-/* TODO */
+/* Comparison function to compare two string keys in an rv_hash_table_t. */
+int H5_rest_compare_string_keys(void *value1, void *value2);
+
+/* Helper function to free keys in the visited link hash table used by link iteration. */
+void RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
+
+/* Helper to turn an object type into a string for a server request */
 herr_t RV_set_object_type_header(H5I_type_t parent_obj_type, char **parent_obj_type_header);
 
 #define SERVER_VERSION_MATCHES_OR_EXCEEDS(version, major_needed, minor_needed, patch_needed)                 \

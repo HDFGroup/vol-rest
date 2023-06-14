@@ -41,14 +41,16 @@ hid_t H5_rest_id_g = H5I_UNINIT;
 static hbool_t H5_rest_initialized_g = FALSE;
 
 /* Identifiers for HDF5's error API */
-hid_t H5_rest_err_stack_g               = H5I_INVALID_HID;
-hid_t H5_rest_err_class_g               = H5I_INVALID_HID;
-hid_t H5_rest_obj_err_maj_g             = H5I_INVALID_HID;
-hid_t H5_rest_parse_err_min_g           = H5I_INVALID_HID;
-hid_t H5_rest_link_table_err_min_g      = H5I_INVALID_HID;
-hid_t H5_rest_link_table_iter_err_min_g = H5I_INVALID_HID;
-hid_t H5_rest_attr_table_err_min_g      = H5I_INVALID_HID;
-hid_t H5_rest_attr_table_iter_err_min_g = H5I_INVALID_HID;
+hid_t H5_rest_err_stack_g                 = H5I_INVALID_HID;
+hid_t H5_rest_err_class_g                 = H5I_INVALID_HID;
+hid_t H5_rest_obj_err_maj_g               = H5I_INVALID_HID;
+hid_t H5_rest_parse_err_min_g             = H5I_INVALID_HID;
+hid_t H5_rest_link_table_err_min_g        = H5I_INVALID_HID;
+hid_t H5_rest_link_table_iter_err_min_g   = H5I_INVALID_HID;
+hid_t H5_rest_attr_table_err_min_g        = H5I_INVALID_HID;
+hid_t H5_rest_attr_table_iter_err_min_g   = H5I_INVALID_HID;
+hid_t H5_rest_object_table_err_min_g      = H5I_INVALID_HID;
+hid_t H5_rest_object_table_iter_err_min_g = H5I_INVALID_HID;
 
 /*
  * The CURL pointer used for all cURL operations.
@@ -127,6 +129,15 @@ const char *attributes_keys[] = {"attributes", (const char *)0};
 
 /* JSON keys to retrieve a list of links */
 const char *links_keys[] = {"links", (const char *)0};
+
+/* JSON keys to retrieve all of the information from a link when doing link iteration */
+const char *link_title_keys[]         = {"title", (const char *)0};
+const char *link_creation_time_keys[] = {"created", (const char *)0};
+
+/* JSON keys to retrieve the collection that a hard link belongs to
+ * (the type of object it points to), "groups", "datasets" or "datatypes"
+ */
+const char *link_collection_keys2[] = {"collection", (const char *)0};
 
 /* Default size for the buffer to allocate during base64-encoding if the caller
  * of RV_base64_encode supplies a 0-sized buffer.
@@ -464,6 +475,13 @@ H5_rest_init(hid_t vipl_id)
     if ((H5_rest_attr_table_iter_err_min_g =
              H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't iterate through attribute table")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create message for attribute iteration error");
+    if ((H5_rest_object_table_err_min_g =
+             H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't build table of objects for iteration")) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL,
+                        "can't create error message for object table build error");
+    if ((H5_rest_object_table_iter_err_min_g =
+             H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't iterate through object table")) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create message for object iteration error");
 
     /* Initialized */
     H5_rest_initialized_g = TRUE;
@@ -2560,6 +2578,82 @@ done:
 } /* end RV_copy_link_name_by_index() */
 
 /*-------------------------------------------------------------------------
+ * Function:    RV_copy_link_URI_by_index
+ *
+ * Purpose:     This callback is used to copy the URI of an link
+ *              in the server's response by index, to a provided buffer.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              May, 2023
+ */
+herr_t
+RV_copy_link_URI_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+{
+    yajl_val           parse_tree = NULL, key_obj = NULL, link_obj = NULL;
+    const char        *parsed_link_URI = NULL;
+    H5VL_loc_by_idx_t *idx_params      = (H5VL_loc_by_idx_t *)callback_data_in;
+    hsize_t            index           = idx_params->n;
+    char             **link_URI        = (char **)callback_data_out;
+    const char        *curr_key        = NULL;
+    herr_t             ret_value       = SUCCEED;
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
+
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, links_keys, yajl_t_array)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to parse links");
+
+    if (key_obj->u.array.len == 0)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed link array was empty");
+
+    if (index >= key_obj->u.array.len)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "requested link index was out of bounds");
+
+    switch (idx_params->order) {
+        case (H5_ITER_DEC):
+            if (NULL == (link_obj = key_obj->u.array.values[key_obj->u.object.len - 1 - index]))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected link was NULL");
+            break;
+
+        case (H5_ITER_NATIVE):
+        case (H5_ITER_INC):
+        case (H5_ITER_N):
+        case (H5_ITER_UNKNOWN):
+        default: {
+            if (NULL == (link_obj = key_obj->u.array.values[index]))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected link was NULL");
+            break;
+        }
+    }
+
+    /* Iterate through key/value pairs in link response to find URI */
+    for (size_t i = 0; i < link_obj->u.object.len; i++) {
+        curr_key = link_obj->u.object.keys[i];
+
+        if (!strcmp(curr_key, "id"))
+            if (NULL == (parsed_link_URI = YAJL_GET_STRING(link_obj->u.object.values[i])))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to get link URI");
+    }
+
+    if (NULL == parsed_link_URI)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "server response didn't contain link URI");
+
+    if (NULL == (memcpy(*link_URI, parsed_link_URI, strlen(parsed_link_URI) + 1)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to copy link URI");
+
+done:
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    return ret_value;
+} /* end RV_copy_link_URI_by_index() */
+
+/*-------------------------------------------------------------------------
  * Function:    RV_copy_attribute_name_by_index
  *
  * Purpose:     This callback is used to copy the name of an attribute
@@ -3292,7 +3386,61 @@ done:
     return ret_value;
 }
 
-/* TODO */
+/*-------------------------------------------------------------------------
+ * Function:    H5_rest_compare_string_keys
+ *
+ * Purpose:     Comparison function to compare two string keys in an
+ *              rv_hash_table_t. This function is mostly used when
+ *              attempting to determine object uniqueness by some
+ *              information from the server, such as an object ID.
+ *
+ * Return:      Non-zero if the two string keys are equal/Zero if the two
+ *              string keys are not equal
+ *
+ * Programmer:  Jordan Henderson
+ *              May, 2018
+ */
+int
+H5_rest_compare_string_keys(void *value1, void *value2)
+{
+    const char *val1 = (const char *)value1;
+    const char *val2 = (const char *)value2;
+
+    return !strcmp(val1, val2);
+} /* end H5_rest_compare_string_keys() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_free_visited_link_hash_table_key
+ *
+ * Purpose:     Helper function to free keys in the visited link hash table
+ *              used by link iteration.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              June, 2018
+ */
+void
+RV_free_visited_link_hash_table_key(rv_hash_table_key_t value)
+{
+    RV_free(value);
+    value = NULL;
+} /* end RV_free_visited_link_hash_table_key() */
+
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_set_object_type_header
+ *
+ * Purpose:     Helper function to turn an object type into a string for
+ *              a request to the server. Requires the address of a pointer
+ *              to return the string. The given pointer should not point at
+ *              any allocated memory, as its old value is overwritten.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              May, 2023
+ */
 herr_t
 RV_set_object_type_header(H5I_type_t parent_obj_type, char **parent_obj_type_header)
 {
@@ -3329,7 +3477,7 @@ RV_set_object_type_header(H5I_type_t parent_obj_type, char **parent_obj_type_hea
     }
 done:
     return (ret_value);
-}
+} /* end RV_set_object_type_header */
 
 /*************************************************
  * The following two routines allow the REST VOL *
