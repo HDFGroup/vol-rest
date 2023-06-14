@@ -396,6 +396,10 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
         if (0 > (group->u.group.gcpl_id = H5Pdecode(binary_gcpl)))
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTDECODE, NULL,
                             "can't decode creation property list from binary");
+    } else {
+        /* Server versions before 0.8.0 do not store GCPL; return default */
+        if ((group->u.group.gcpl_id = H5Pcreate(H5P_GROUP_CREATE)) < 0)
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create GCPL for group");
     }
 
     /* Copy the GAPL if it wasn't H5P_DEFAULT, else set up a default one so that
@@ -472,17 +476,6 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
     switch (args->op_type) {
         /* H5Gget_create_plist */
         case H5VL_GROUP_GET_GCPL: {
-
-            if (H5I_INVALID_HID == H5Pget_class(loc_obj->u.group.gcpl_id)) {
-                /* Group has been closed and re-opened, and newer server version is needed to support
-                 * retrieving GCPL */
-                if (!(SERVER_VERSION_MATCHES_OR_EXCEEDS(loc_obj->domain->u.file.server_version, 0, 8, 0))) {
-                    FUNC_GOTO_ERROR(
-                        H5E_PLIST, H5E_UNSUPPORTED, FAIL,
-                        "get GCPL after re-open is not supported by server versions before 0.8.0");
-                }
-            }
-
             hid_t *ret_id = &args->args.get_gcpl.gcpl_id;
 
             if ((*ret_id = H5Pcopy(loc_obj->u.group.gcpl_id)) < 0)
