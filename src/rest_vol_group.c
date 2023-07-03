@@ -388,8 +388,8 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
                             "failed to retrieve creation properties from response");
         }
 
-        if (RV_base64_decode(loc_info_out.GCPL_base64, strlen(loc_info_out.GCPL_base64), (char **) &binary_gcpl,
-                             binary_gcpl_size) < 0)
+        if (RV_base64_decode(loc_info_out.GCPL_base64, strlen(loc_info_out.GCPL_base64),
+                             (char **)&binary_gcpl, binary_gcpl_size) < 0)
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTDECODE, NULL, "can't decode gcpl from base64");
 
         /* Set up a GCPL for the group, so that API calls like H5Gget_create_plist() will work */

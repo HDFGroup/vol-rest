@@ -717,8 +717,8 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
     size_t       host_header_len = 0;
     hid_t        iter_object_id  = H5I_INVALID_HID;
     char         visit_by_name_URI[URI_MAX_LENGTH];
-    const char        *target_object_name = NULL;
-    H5O_info2_t oinfo;
+    const char  *target_object_name = NULL;
+    H5O_info2_t  oinfo;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received object-specific call with following parameters:\n");
@@ -747,7 +747,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
 
         /* H5Ovisit(_by_name) */
         case H5VL_OBJECT_VISIT: {
-            const char       *parent_object_header = NULL;
+            const char *parent_object_header = NULL;
             iter_data   object_iter_data;
             hsize_t     idx_p = 0;
 
@@ -860,7 +860,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
-                    /* Make a request to figure out how to open iter object, set header string, 
+                    /* Make a request to figure out how to open iter object, set header string,
                      * and iter object type */
                     if (RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name,
                                                &iter_object_type, RV_copy_object_URI_callback, NULL,
@@ -1597,7 +1597,7 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
 
                 char *id_end_ptr = strstr(link_id_ptr, "\"");
 
-                size_t id_len = (size_t) (id_end_ptr - link_id_ptr);
+                size_t id_len = (size_t)(id_end_ptr - link_id_ptr);
 
                 memcpy(table[i].object_URI, link_id_ptr, id_len);
                 table[i].object_URI[id_len] = '\0';
@@ -1630,7 +1630,7 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
         table[i].subgroup.subgroup_object_table = NULL;
         if (is_recursive && (H5L_TYPE_HARD == table[i].link_info.type)) {
             char *link_collection;
-            
+
             if (NULL == (link_field_obj = yajl_tree_get(link_obj, link_collection_keys2, yajl_t_string)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link collection failed");
 

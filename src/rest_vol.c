@@ -1498,16 +1498,17 @@ H5_rest_url_encode_path(const char *_path)
     char     *url_encoded_path_component = NULL;
     char     *token;
     char     *cur_pos;
-    char     *path = NULL; _path;
-    char     *tmp_buffer = NULL;
-    char     *ret_value  = NULL;
+    char     *path = NULL;
+    _path;
+    char *tmp_buffer = NULL;
+    char *ret_value  = NULL;
 
     if (!_path)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "path was NULL");
 
     if ((path = RV_malloc(strlen(_path) + 1)) == NULL)
         FUNC_GOTO_ERROR(H5E_PATH, H5E_CANTALLOC, NULL, "can't allocate memory for path copy");
-    
+
     strncpy(path, _path, strlen(_path) + 1);
 
     /* Retrieve the length of the possible path prefix, which could be something like '/', '.', etc. */
@@ -1972,8 +1973,8 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
     char              *path_dirname          = NULL;
     char              *tmp_link_val          = NULL;
     char              *url_encoded_path_name = NULL;
-    const char              *ext_filename          = NULL;
-    const char              *ext_obj_path          = NULL;
+    const char        *ext_filename          = NULL;
+    const char        *ext_obj_path          = NULL;
     char               request_url[URL_MAX_LENGTH];
     long               http_response;
     int                url_len = 0;
@@ -1997,7 +1998,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
 #endif
 
     version = parent_obj->domain->u.file.server_version;
-    
+
     /* In order to not confuse the server, make sure the path has no leading spaces */
     while (*obj_path == ' ')
         obj_path++;
@@ -2065,10 +2066,10 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
 
         if (H5I_UNINIT == *target_object_type) {
             /* Set up intermediate request to get information about object type via link */
-            hbool_t     empty_dirname;
-            htri_t      search_ret;
-            char       *pobj_URI = parent_obj->URI;
-            char        temp_URI[URI_MAX_LENGTH];
+            hbool_t empty_dirname;
+            htri_t  search_ret;
+            char   *pobj_URI = parent_obj->URI;
+            char    temp_URI[URI_MAX_LENGTH];
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Unknown target object type; retrieving object type\n\n");
@@ -2245,8 +2246,8 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
 
                 if (H5L_TYPE_EXTERNAL == link_info.type) {
                     /* Unpack the external link's value buffer */
-                    if (H5Lunpack_elink_val(tmp_link_val, link_val_len, NULL, &ext_filename, (const char **) &ext_obj_path) <
-                        0)
+                    if (H5Lunpack_elink_val(tmp_link_val, link_val_len, NULL, &ext_filename,
+                                            (const char **)&ext_obj_path) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL,
                                         "can't unpack external link's value buffer");
 
@@ -2477,8 +2478,7 @@ RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, vo
                sizeof(server_api_version));
 
         if (RV_file_close(loc_info_out->domain, H5P_DEFAULT, NULL) < 0)
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
-                            "failed to allocate memory for new domain path");
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "failed to allocate memory for new domain path");
 
         loc_info_out->domain = new_domain;
     }
@@ -2594,8 +2594,6 @@ done:
     return ret_value;
 } /* end RV_copy_link_name_by_index() */
 
-
-
 /*-------------------------------------------------------------------------
  * Function:    RV_copy_attribute_name_by_index
  *
@@ -2612,7 +2610,7 @@ herr_t
 RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
     yajl_val           parse_tree           = NULL, key_obj;
-    const char              *parsed_string        = NULL;
+    const char        *parsed_string        = NULL;
     char              *parsed_string_buffer = NULL;
     H5VL_loc_by_idx_t *idx_params           = (H5VL_loc_by_idx_t *)callback_data_in;
     hsize_t            index                = idx_params->n;
@@ -2657,7 +2655,6 @@ RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, voi
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid iteration order");
             break;
         }
-
     }
 
     if (NULL == (parsed_string_buffer = RV_malloc(strlen(parsed_string) + 1)))
@@ -3375,7 +3372,6 @@ RV_free_visited_link_hash_table_key(rv_hash_table_key_t value)
     RV_free(value);
     value = NULL;
 } /* end RV_free_visited_link_hash_table_key() */
-
 
 /*-------------------------------------------------------------------------
  * Function:    RV_set_object_type_header

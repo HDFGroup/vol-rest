@@ -99,7 +99,8 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
     if (lcpl_id == H5I_INVALID_HID)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LCPL");
 
-    if (loc_params->type == H5VL_OBJECT_BY_NAME && H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+    if (loc_params->type == H5VL_OBJECT_BY_NAME &&
+        H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
     if (loc_params->type == H5VL_OBJECT_BY_IDX && H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
@@ -216,10 +217,12 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
 
         /* H5Lcreate_soft */
         case H5VL_LINK_CREATE_SOFT: {
-            if (loc_params->type == H5VL_OBJECT_BY_NAME && H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+            if (loc_params->type == H5VL_OBJECT_BY_NAME &&
+                H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
-            if (loc_params->type == H5VL_OBJECT_BY_IDX && H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
+            if (loc_params->type == H5VL_OBJECT_BY_IDX &&
+                H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
             const char *link_target = args->args.soft.target;
