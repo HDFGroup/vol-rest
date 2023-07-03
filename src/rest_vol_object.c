@@ -84,6 +84,10 @@ RV_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opene
     switch (loc_params->type) {
         /* H5Oopen */
         case H5VL_OBJECT_BY_NAME: {
+            // TODO: Proper way to verify a plist?
+            if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
+
             htri_t search_ret;
 
             /* Retrieve the type of object being dealt with by querying the server */
@@ -370,6 +374,10 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
                 /* H5Oget_info_by_name */
                 case H5VL_OBJECT_BY_NAME: {
+                    // TODO: Proper way to verify a plist?
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
                     htri_t search_ret;
                     char   temp_URI[URI_MAX_LENGTH];
 
@@ -464,6 +472,10 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
                 /* H5Oget_info_by_idx */
                 case H5VL_OBJECT_BY_IDX: {
+                    // TODO: Proper way to verify a plist?
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
                     htri_t      search_ret;
                     char        temp_URI[URI_MAX_LENGTH];
                     const char *request_idx_type       = NULL;
@@ -844,6 +856,10 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                 } /* end H5Ovisit H5VL_OBJECT_BY_SELF */
 
                 case (H5VL_OBJECT_BY_NAME): {
+                    // TODO: Proper way to verify a plist?
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
                     /* Make a request to figure out how to open iter object, set header string, 
                      * and iter object type */
                     if (RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name,

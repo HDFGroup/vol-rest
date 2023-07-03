@@ -116,6 +116,10 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
 
     /* If this is a call to H5Acreate_by_name, locate the real parent object */
     if (H5VL_OBJECT_BY_NAME == loc_params->type) {
+        // TODO: Proper way to verify a plist?
+        if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
+
         htri_t search_ret;
 
         new_attribute->u.attribute.parent_obj_type = H5I_UNINIT;
@@ -136,6 +140,12 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
 #endif
     } /* end if */
     else {
+        if (H5VL_OBJECT_BY_IDX == loc_params->type) {
+            // TODO: Proper way to verify a plist?
+            if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+        }
+
         new_attribute->u.attribute.parent_obj_type = parent->obj_type;
         strncpy(new_attribute->u.attribute.parent_obj_URI, parent->URI, URI_MAX_LENGTH);
     } /* end else */
@@ -457,6 +467,11 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
 
         /* H5Aopen_by_name */
         case H5VL_OBJECT_BY_NAME: {
+
+            // TODO: Proper way to verify a plist?
+            if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
+
             htri_t search_ret;
 
             /* If this is a call to H5Aopen_by_name, locate the real object that the attribute
@@ -487,6 +502,10 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
 
         /* H5Aopen_by_idx */
         case H5VL_OBJECT_BY_IDX: {
+            // TODO: Proper way to verify a plist?
+            if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
+
             htri_t search_ret;
 
             const char *request_idx_type = NULL;
@@ -1260,6 +1279,10 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
 
                 /* H5Aget_info_by_name */
                 case H5VL_OBJECT_BY_NAME: {
+                    // TODO: Proper way to verify a plist?
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+                    
                     const char *attr_name       = args->args.get_info.attr_name;
                     H5I_type_t  parent_obj_type = H5I_UNINIT;
                     htri_t      search_ret;
@@ -1352,6 +1375,10 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
 
                 /* H5Aget_info_by_idx */
                 case H5VL_OBJECT_BY_IDX: {
+                    // TODO: Proper way to verify a plist?
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
                     H5I_type_t parent_obj_type = H5I_UNINIT;
                     htri_t     search_ret;
                     char       parent_obj_URI[URI_MAX_LENGTH];
@@ -1536,6 +1563,10 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
 
                 /* H5Aget_name_by_idx */
                 case H5VL_OBJECT_BY_IDX: {
+                    // TODO: Proper way to verify a plist?
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
                     H5I_type_t parent_obj_type = H5I_UNINIT;
                     htri_t     search_ret;
                     char       parent_obj_URI[URI_MAX_LENGTH];
@@ -1772,6 +1803,10 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
                 /* H5Adelete_by_name */
                 case H5VL_OBJECT_BY_NAME: {
+                    // TODO: Proper way to verify a plist?
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
                     htri_t search_ret;
 
                     attr_name = args->args.del.name;
@@ -1936,6 +1971,10 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
                 /* H5Aexists_by_name */
                 case H5VL_OBJECT_BY_NAME: {
+                    // TODO: Proper way to verify a plist?
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
                     htri_t search_ret;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -2217,6 +2256,10 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
                 /* H5Aiterate_by_name */
                 case H5VL_OBJECT_BY_NAME: {
+                    // TODO: Proper way to verify a plist?
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
                     htri_t search_ret;
 
 #ifdef RV_CONNECTOR_DEBUG

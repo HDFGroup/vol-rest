@@ -95,6 +95,16 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
     printf("     - Default LAPL? %s\n\n", (H5P_LINK_ACCESS_DEFAULT == lapl_id) ? "yes" : "no");
 #endif
 
+    // TODO: Proper way to verify a plist?
+    if (lcpl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LCPL");
+
+    if (loc_params->type == H5VL_OBJECT_BY_NAME && H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
+    if (loc_params->type == H5VL_OBJECT_BY_IDX && H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
     /* Since the usage of the H5L_SAME_LOC macro for hard link creation may cause new_link_loc_obj to
      * be NULL, do some special-case handling for the Hard Link creation case
      */
@@ -146,6 +156,7 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
                 } /* H5VL_OBJECT_BY_SELF */
 
                 case H5VL_OBJECT_BY_NAME: {
+
                     H5I_type_t obj_type = H5I_UNINIT;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -205,6 +216,12 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
 
         /* H5Lcreate_soft */
         case H5VL_LINK_CREATE_SOFT: {
+            if (loc_params->type == H5VL_OBJECT_BY_NAME && H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
+            if (loc_params->type == H5VL_OBJECT_BY_IDX && H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
             const char *link_target = args->args.soft.target;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -474,6 +491,10 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
             switch (loc_params->type) {
                 /* H5Lget_info */
                 case H5VL_OBJECT_BY_NAME: {
+                    // TODO: Proper way to verify a plist?
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
                     /* In case the user specified a path which contains any groups on the way to the
                      * link in question, extract out the path to the final group in the chain */
                     if (NULL == (link_dir_name = H5_rest_dirname(loc_params->loc_data.loc_by_name.name)))
@@ -677,6 +698,10 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
             switch (loc_params->type) {
                 /* H5Lget_val */
                 case H5VL_OBJECT_BY_NAME: {
+                    // TODO: Proper way to verify a plist?
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
                     /* In case the user specified a path which contains any groups on the way to the
                      * link in question, extract out the path to the final group in the chain */
                     if (NULL == (link_dir_name = H5_rest_dirname(loc_params->loc_data.loc_by_name.name)))
@@ -849,6 +874,10 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
             switch (loc_params->type) {
                 /* H5Ldelete */
                 case H5VL_OBJECT_BY_NAME: {
+                    // TODO: Proper way to verify a plist?
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
                     /* In case the user specified a path which contains multiple groups on the way to the
                      * link in question, extract out the path to the final group in the chain */
                     if (NULL == (link_path_dirname = H5_rest_dirname(loc_params->loc_data.loc_by_name.name)))
@@ -1064,6 +1093,10 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
 
                 /* H5Literate_by_name/H5Lvisit_by_name */
                 case H5VL_OBJECT_BY_NAME: {
+                    // TODO: Proper way to verify a plist?
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
 #ifdef RV_CONNECTOR_DEBUG
                     printf("-> Opening group for link iteration to generate an hid_t and work around VOL "
                            "layer\n\n");
