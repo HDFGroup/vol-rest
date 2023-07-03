@@ -393,7 +393,7 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
     size_t       attr_name_len   = 0;
     size_t       host_header_len = 0;
     char        *host_header     = NULL;
-    const char  *found_attr_name = NULL;
+    char  *found_attr_name = NULL;
     char         request_url[URL_MAX_LENGTH];
     char        *url_encoded_attr_name  = NULL;
     const char  *parent_obj_type_header = NULL;
@@ -573,7 +573,7 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
 
             CURL_PERFORM(curl, H5E_ATTR, H5E_CANTGET, NULL);
 
-            if (0 > RV_parse_response(response_buffer.buffer, (void *)&loc_params->loc_data.loc_by_idx,
+            if (0 > RV_parse_response(response_buffer.buffer, (const void *) &loc_params->loc_data.loc_by_idx,
                                       &found_attr_name, RV_copy_attribute_name_by_index))
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_PARSEERROR, NULL, "failed to retrieve attribute names");
 
@@ -620,7 +620,7 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
      * operation contains no illegal characters
      */
 
-    char *target_attr_name = found_attr_name ? found_attr_name : attr_name;
+    const char *target_attr_name = found_attr_name ? (const char *) found_attr_name : attr_name;
 
     attr_name_len = strlen(target_attr_name);
     if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, target_attr_name, (int)attr_name_len)))
@@ -1368,7 +1368,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                                 request_idx_type = "&CreateOrder=1";
                             }
                             else {
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL,
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL,
                                                 "indexing by creation order not supported by server versions "
                                                 "before 0.8.0");
                             }
@@ -1558,7 +1558,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                                 request_idx_type = "&CreateOrder=1";
                             }
                             else {
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL,
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL,
                                                 "indexing by creation order not supported by server versions "
                                                 "before 0.8.0");
                             }

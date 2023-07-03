@@ -664,7 +664,7 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
                                   RV_get_link_name_by_idx_callback) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link name by index");
 
-            *ret_size = (ssize_t)link_name_data.link_name_len;
+            *ret_size = (size_t)link_name_data.link_name_len;
 
             break;
         } /* H5VL_LINK_GET_NAME */

@@ -871,7 +871,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
          * go ahead and allocate a buffer 4/3 the size of the given write buffer
          * in order to try and avoid reallocations inside the encoding function.
          */
-        value_body_len = ((double)4.0 / 3.0) * write_body_len;
+        value_body_len = (size_t) ((4.0 / 3.0) * (double) write_body_len);
         if (NULL == (base64_encoded_value = RV_malloc(value_body_len)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
                             "can't allocate temporary buffer for base64-encoded write buffer");
@@ -3346,7 +3346,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
                                     "can't allocate space for hyperslab selection 'block' values");
 
-                size_t body_size = (size_t)ndims * MAX_NUM_LENGTH + ndims;
+                size_t body_size = (size_t) ndims * MAX_NUM_LENGTH + (size_t) ndims;
 
                 if (NULL == (start_body = (char *)RV_calloc(body_size)))
                     FUNC_GOTO_ERROR(

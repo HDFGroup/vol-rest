@@ -606,9 +606,6 @@ herr_t RV_copy_link_name_by_index(char *HTTP_response, void *callback_data_in, v
 /* Callback for RV_parse_response() to capture the version of the server api */
 herr_t RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callback_data_out);
 
-/* Callback for RV_parse_response() to copy the id of a hard link to a buffer */
-herr_t RV_copy_link_URI_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out);
-
 /* Helper function to find an object given a starting object to search from and a path */
 
 htri_t RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
@@ -633,7 +630,7 @@ int H5_rest_compare_string_keys(void *value1, void *value2);
 void RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
 
 /* Helper to turn an object type into a string for a server request */
-herr_t RV_set_object_type_header(H5I_type_t parent_obj_type, char **parent_obj_type_header);
+herr_t RV_set_object_type_header(H5I_type_t parent_obj_type, const char **parent_obj_type_header);
 
 #define SERVER_VERSION_MATCHES_OR_EXCEEDS(version, major_needed, minor_needed, patch_needed)                 \
     (version.major > major_needed) || (version.major == major_needed && version.minor > minor_needed) ||     \

@@ -289,8 +289,8 @@ attr_info(hid_t loc_id, const char *name, const H5A_info_t *ainfo, void *opdata)
 
     if (H5T_FLOAT == H5Tget_class(atype)) {
         printf("Type : FLOAT \n");
-        npoints     = H5Sget_simple_extent_npoints(aspace);
-        float_array = (float *)malloc(sizeof(float) * (int)npoints);
+        npoints     = (size_t) H5Sget_simple_extent_npoints(aspace);
+        float_array = (float *)malloc(sizeof(float) * (size_t)npoints);
         ret         = H5Aread(attr, atype, float_array);
         printf("Values : ");
         for (i = 0; i < (int)npoints; i++)

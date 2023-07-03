@@ -495,7 +495,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                                 request_idx_type = "&CreateOrder=1";
                             }
                             else {
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, NULL,
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL,
                                                 "indexing by creation order not supported by server versions "
                                                 "before 0.8.0");
                             }
@@ -705,7 +705,8 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
     size_t       host_header_len = 0;
     hid_t        iter_object_id  = H5I_INVALID_HID;
     char         visit_by_name_URI[URI_MAX_LENGTH];
-    char        *target_object_name = NULL;
+    const char        *target_object_name = NULL;
+    H5O_info2_t oinfo;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received object-specific call with following parameters:\n");
@@ -734,9 +735,8 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
 
         /* H5Ovisit(_by_name) */
         case H5VL_OBJECT_VISIT: {
-            char       *parent_object_header = NULL;
+            const char       *parent_object_header = NULL;
             iter_data   object_iter_data;
-            H5O_info2_t oinfo;
             hsize_t     idx_p = 0;
 
             object_iter_data.index_type                   = args->args.visit.idx_type;
@@ -844,8 +844,8 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                 } /* end H5Ovisit H5VL_OBJECT_BY_SELF */
 
                 case (H5VL_OBJECT_BY_NAME): {
-                    // make a request in order to figure out how to open the iter object, set header string,
-                    // and iter object type
+                    /* Make a request to figure out how to open iter object, set header string, 
+                     * and iter object type */
                     if (RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name,
                                                &iter_object_type, RV_copy_object_URI_callback, NULL,
                                                visit_by_name_URI) < 0)
@@ -1015,7 +1015,6 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             if (callback_ret < 0) {
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CALLBACK, callback_ret,
                                 "H5Oiterate/H5Ovisit (_by_name) user callback failed for target object ");
-                // A return value > 0 from callback ends iteration early
             }
             else if (callback_ret > 0) {
                 FUNC_GOTO_DONE(callback_ret);
@@ -1070,7 +1069,6 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                 case H5I_DATASET:
                 case H5I_DATATYPE:
                     /* Execute callback on object */
-                    H5O_info2_t oinfo;
 
                     if (RV_parse_response(response_buffer.buffer, NULL, &oinfo, RV_get_object_info_callback) <
                         0)
@@ -1285,11 +1283,6 @@ H5_rest_cmp_objects_by_creation_order_inc(const void *object1, const void *objec
 
     return ((_object1->crt_time > _object2->crt_time) - (_object1->crt_time < _object2->crt_time));
 } /* end H5_rest_cmp_objects_by_creation_order_inc() */
-
-void
-RV_free_visited_object_hash_table_key(rv_hash_table_key_t value)
-{
-}
 
 /*-------------------------------------------------------------------------
  * Function:    RV_object_iter_callback
@@ -1566,9 +1559,6 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
 
                 /* Getting the link URI from the manually-manipulated links section requires a unique callback
                  */
-                // if (RV_parse_response(HTTP_buffer, &loc_params, &table[i].object_URI,
-                // RV_copy_link_URI_by_index) < 0) FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "failed to get
-                // object URI from hard link");
                 char *link_id_ptr = link_section_start;
 
                 char recent1 = '\0';
@@ -1586,12 +1576,12 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
                     link_id_ptr++;
                 }
 
-                // curr points at d in "id":
-                link_id_ptr += 5; // points at first letter of id
-                // traverse until ending quote
+                /* Move the pointer from the "d" in "id" the start of the id itself in the response. */
+                link_id_ptr += 5;
+
                 char *id_end_ptr = strstr(link_id_ptr, "\"");
 
-                size_t id_len = id_end_ptr - link_id_ptr;
+                size_t id_len = (size_t) (id_end_ptr - link_id_ptr);
 
                 memcpy(table[i].object_URI, link_id_ptr, id_len);
                 table[i].object_URI[id_len] = '\0';
@@ -1624,8 +1614,7 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
         table[i].subgroup.subgroup_object_table = NULL;
         if (is_recursive && (H5L_TYPE_HARD == table[i].link_info.type)) {
             char *link_collection;
-            int   url_len = 0;
-
+            
             if (NULL == (link_field_obj = yajl_tree_get(link_obj, link_collection_keys2, yajl_t_string)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link collection failed");
 

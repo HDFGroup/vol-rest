@@ -542,6 +542,12 @@ done:
         if (H5_rest_attr_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_attr_table_iter_err_min_g) < 0)
             FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
                             "can't unregister error message for iterating over attribute table");
+        if (H5_rest_attr_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_object_table_err_min_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
+                            "can't unregister error message for build object table");
+        if (H5_rest_attr_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_object_table_iter_err_min_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
+                            "can't unregister error message for iterating over object table");
 
         if (H5Eunregister_class(H5_rest_err_class_g) < 0)
             FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister from HDF5 error API");
@@ -1482,7 +1488,7 @@ H5_rest_dirname(const char *path)
  *              January, 2018
  */
 static char *
-H5_rest_url_encode_path(const char *path)
+H5_rest_url_encode_path(const char *_path)
 {
     ptrdiff_t buf_ptrdiff;
     size_t    bytes_nalloc;
@@ -1492,14 +1498,20 @@ H5_rest_url_encode_path(const char *path)
     char     *url_encoded_path_component = NULL;
     char     *token;
     char     *cur_pos;
+    char     *path = NULL; _path;
     char     *tmp_buffer = NULL;
     char     *ret_value  = NULL;
 
-    if (!path)
+    if (!_path)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "path was NULL");
 
+    if ((path = RV_malloc(strlen(_path) + 1)) == NULL)
+        FUNC_GOTO_ERROR(H5E_PATH, H5E_CANTALLOC, NULL, "can't allocate memory for path copy");
+    
+    strncpy(path, _path, strlen(_path) + 1);
+
     /* Retrieve the length of the possible path prefix, which could be something like '/', '.', etc. */
-    cur_pos = (char *)path;
+    cur_pos = path;
     while (*cur_pos && !isalnum(*cur_pos))
         cur_pos++;
     path_prefix_len = (size_t)(cur_pos - path);
@@ -1617,6 +1629,8 @@ done:
         RV_free(tmp_buffer);
     if (path_copy)
         RV_free(path_copy);
+    if (path)
+        RV_free(path);
 
     return ret_value;
 } /* end H5_rest_url_encode_path() */
@@ -1958,12 +1972,12 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
     char              *path_dirname          = NULL;
     char              *tmp_link_val          = NULL;
     char              *url_encoded_path_name = NULL;
-    char              *ext_filename          = NULL;
-    char              *ext_obj_path          = NULL;
+    const char              *ext_filename          = NULL;
+    const char              *ext_obj_path          = NULL;
     char               request_url[URL_MAX_LENGTH];
     long               http_response;
     int                url_len = 0;
-    server_api_version version = parent_obj->domain->u.file.server_version;
+    server_api_version version;
 
     htri_t ret_value = FAIL;
 
@@ -1982,6 +1996,8 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
            object_type_to_string(parent_obj->obj_type), parent_obj->URI);
 #endif
 
+    version = parent_obj->domain->u.file.server_version;
+    
     /* In order to not confuse the server, make sure the path has no leading spaces */
     while (*obj_path == ' ')
         obj_path++;
@@ -2049,8 +2065,6 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
 
         if (H5I_UNINIT == *target_object_type) {
             /* Set up intermediate request to get information about object type via link */
-            const char *ext_filename = NULL;
-            const char *ext_obj_path = NULL;
             hbool_t     empty_dirname;
             htri_t      search_ret;
             char       *pobj_URI = parent_obj->URI;
@@ -2100,7 +2114,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
             /* Craft the request URL based on the type of the object we're looking for and whether or not
              * the path given is a relative path or not.
              */
-            char *parent_obj_type_header = NULL;
+            const char *parent_obj_type_header = NULL;
 
             if (RV_set_object_type_header(*target_object_type, &parent_obj_type_header) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL,
@@ -2231,7 +2245,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
 
                 if (H5L_TYPE_EXTERNAL == link_info.type) {
                     /* Unpack the external link's value buffer */
-                    if (H5Lunpack_elink_val(tmp_link_val, link_val_len, NULL, &ext_filename, &ext_obj_path) <
+                    if (H5Lunpack_elink_val(tmp_link_val, link_val_len, NULL, &ext_filename, (const char **) &ext_obj_path) <
                         0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL,
                                         "can't unpack external link's value buffer");
@@ -2335,15 +2349,14 @@ RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf_out)
     if (NULL == (GCPL_buf_local = RV_malloc(strlen(parsed_string) + 1)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "failed to allocate memory for creationProperties");
 
-    if (NULL == (memcpy(GCPL_buf_local, parsed_string, strlen(parsed_string) + 1)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "failed to copy creationProperties");
+    memcpy(GCPL_buf_local, parsed_string, strlen(parsed_string) + 1);
 
     *GCPL_buf_out = GCPL_buf_local;
 
 done:
 
     if (ret_value < 0) {
-        free(GCPL_buf_local);
+        RV_free(GCPL_buf_local);
         GCPL_buf_local = NULL;
     }
 
@@ -2464,7 +2477,7 @@ RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, vo
                sizeof(server_api_version));
 
         if (RV_file_close(loc_info_out->domain, H5P_DEFAULT, NULL) < 0)
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL,
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
                             "failed to allocate memory for new domain path");
 
         loc_info_out->domain = new_domain;
@@ -2504,16 +2517,21 @@ RV_copy_link_name_by_index(char *HTTP_response, void *callback_data_in, void *ca
     const char        *parsed_link_name   = NULL;
     char              *parsed_link_buffer = NULL;
     H5VL_loc_by_idx_t *idx_params         = (H5VL_loc_by_idx_t *)callback_data_in;
-    hsize_t            index              = idx_params->n;
+    hsize_t            index              = 0;
     char             **link_name          = (char **)callback_data_out;
     const char        *curr_key           = NULL;
     herr_t             ret_value          = SUCCEED;
+
+    if (!idx_params)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given index params ptr was NULL");
 
     if (!link_name)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given link_name ptr was NULL");
 
     if (!HTTP_response)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
+
+    index = idx_params->n;
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
@@ -2549,7 +2567,6 @@ RV_copy_link_name_by_index(char *HTTP_response, void *callback_data_in, void *ca
     /* Iterate through key/value pairs in link response to find name */
     for (size_t i = 0; i < link_obj->u.object.len; i++) {
         curr_key = link_obj->u.object.keys[i];
-
         if (!strcmp(curr_key, "title"))
             if (NULL == (parsed_link_name = YAJL_GET_STRING(link_obj->u.object.values[i])))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to get link name");
@@ -2570,88 +2587,14 @@ done:
         yajl_tree_free(parse_tree);
 
     if (ret_value < 0) {
-        RV_free(*link_name);
-        *link_name = NULL;
+        RV_free(parsed_link_buffer);
+        parsed_link_buffer = NULL;
     }
 
     return ret_value;
 } /* end RV_copy_link_name_by_index() */
 
-/*-------------------------------------------------------------------------
- * Function:    RV_copy_link_URI_by_index
- *
- * Purpose:     This callback is used to copy the URI of an link
- *              in the server's response by index, to a provided buffer.
- *
- * Return:      Non-negative on success/Negative on failure
- *
- * Programmer:  Matthew Larson
- *              May, 2023
- */
-herr_t
-RV_copy_link_URI_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out)
-{
-    yajl_val           parse_tree = NULL, key_obj = NULL, link_obj = NULL;
-    const char        *parsed_link_URI = NULL;
-    H5VL_loc_by_idx_t *idx_params      = (H5VL_loc_by_idx_t *)callback_data_in;
-    hsize_t            index           = idx_params->n;
-    char             **link_URI        = (char **)callback_data_out;
-    const char        *curr_key        = NULL;
-    herr_t             ret_value       = SUCCEED;
 
-    if (!HTTP_response)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
-
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
-
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, links_keys, yajl_t_array)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to parse links");
-
-    if (key_obj->u.array.len == 0)
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed link array was empty");
-
-    if (index >= key_obj->u.array.len)
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "requested link index was out of bounds");
-
-    switch (idx_params->order) {
-        case (H5_ITER_DEC):
-            if (NULL == (link_obj = key_obj->u.array.values[key_obj->u.object.len - 1 - index]))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected link was NULL");
-            break;
-
-        case (H5_ITER_NATIVE):
-        case (H5_ITER_INC):
-        case (H5_ITER_N):
-        case (H5_ITER_UNKNOWN):
-        default: {
-            if (NULL == (link_obj = key_obj->u.array.values[index]))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected link was NULL");
-            break;
-        }
-    }
-
-    /* Iterate through key/value pairs in link response to find URI */
-    for (size_t i = 0; i < link_obj->u.object.len; i++) {
-        curr_key = link_obj->u.object.keys[i];
-
-        if (!strcmp(curr_key, "id"))
-            if (NULL == (parsed_link_URI = YAJL_GET_STRING(link_obj->u.object.values[i])))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to get link URI");
-    }
-
-    if (NULL == parsed_link_URI)
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "server response didn't contain link URI");
-
-    if (NULL == (memcpy(*link_URI, parsed_link_URI, strlen(parsed_link_URI) + 1)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to copy link URI");
-
-done:
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
-
-    return ret_value;
-} /* end RV_copy_link_URI_by_index() */
 
 /*-------------------------------------------------------------------------
  * Function:    RV_copy_attribute_name_by_index
@@ -2669,7 +2612,7 @@ herr_t
 RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
     yajl_val           parse_tree           = NULL, key_obj;
-    char              *parsed_string        = NULL;
+    const char              *parsed_string        = NULL;
     char              *parsed_string_buffer = NULL;
     H5VL_loc_by_idx_t *idx_params           = (H5VL_loc_by_idx_t *)callback_data_in;
     hsize_t            index                = idx_params->n;
@@ -2695,20 +2638,26 @@ RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, voi
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "requested attribute index was out of bounds");
 
     switch (idx_params->order) {
+
         case (H5_ITER_DEC):
             if (NULL == (parsed_string = key_obj->u.object.keys[key_obj->u.object.len - 1 - index]))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected attribute had NULL name");
             break;
 
         case (H5_ITER_NATIVE):
-        case (H5_ITER_INC):
-        case (H5_ITER_N):
-        case (H5_ITER_UNKNOWN):
-        default: {
+        case (H5_ITER_INC): {
             if (NULL == (parsed_string = key_obj->u.object.keys[index]))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected attribute had NULL name");
             break;
         }
+
+        case (H5_ITER_N):
+        case (H5_ITER_UNKNOWN):
+        default: {
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid iteration order");
+            break;
+        }
+
     }
 
     if (NULL == (parsed_string_buffer = RV_malloc(strlen(parsed_string) + 1)))
@@ -3442,7 +3391,7 @@ RV_free_visited_link_hash_table_key(rv_hash_table_key_t value)
  *              May, 2023
  */
 herr_t
-RV_set_object_type_header(H5I_type_t parent_obj_type, char **parent_obj_type_header)
+RV_set_object_type_header(H5I_type_t parent_obj_type, const char **parent_obj_type_header)
 {
     herr_t ret_value = SUCCEED;
 

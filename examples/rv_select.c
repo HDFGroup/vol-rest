@@ -103,7 +103,7 @@ main(void)
      */
     vector[0] = vector[MSPACE1_DIM - 1] = -1;
     for (i = 1; i < MSPACE1_DIM - 1; i++)
-        vector[i] = i;
+        vector[i] = (int) i;
 
     username = getenv("HSDS_USERNAME");
 

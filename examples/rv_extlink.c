@@ -530,7 +530,7 @@ plist_link_example(void)
     hid_t file_id;
     hid_t group_id, group2_id;
     hid_t gapl_id;
-    char *path = NULL;
+    const char *path = NULL;
 
     /* Define the link class that we'll use to register "plist
      * links" using the callback we defined above.
