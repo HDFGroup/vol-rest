@@ -183,7 +183,7 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTENCODE, NULL, "can't determine size needed for encoded gcpl");
 
         if ((binary_plist_buffer = RV_malloc(plist_nalloc)) == NULL)
-            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTALLOC, FAIL, "can't allocate space for encoded gcpl");
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTALLOC, NULL, "can't allocate space for encoded gcpl");
 
         if (H5Pencode2(gcpl_id, binary_plist_buffer, &plist_nalloc, H5P_DEFAULT) < 0)
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTENCODE, NULL, "can't encode gcpl");
@@ -328,9 +328,9 @@ void *
 RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t gapl_id, hid_t dxpl_id,
               void **req)
 {
-    RV_object_t *parent = (RV_object_t *)obj;
-    RV_object_t *group  = NULL;
-    loc_info     loc_info_out;
+    RV_object_t *parent       = (RV_object_t *)obj;
+    RV_object_t *group        = NULL;
+    loc_info     loc_info_out = {0};
     htri_t       search_ret;
     void        *ret_value = NULL;
     // char        *base64_binary_gcpl = NULL;
@@ -381,19 +381,27 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
     printf("-> Found group by given path\n\n");
 #endif
 
-    /* Decode creation properties */
-    if (loc_info_out.GCPL_base64 == NULL) {
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTDECODE, NULL,
-                        "failed to retrieve creation properties from response");
+    /* Decode creation properties, if server supports them */
+    if (SERVER_VERSION_MATCHES_OR_EXCEEDS(parent->domain->u.file.server_version, 0, 8, 0)) {
+        if (loc_info_out.GCPL_base64 == NULL) {
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTDECODE, NULL,
+                            "failed to retrieve creation properties from response");
+        }
+
+        if (RV_base64_decode(loc_info_out.GCPL_base64, strlen(loc_info_out.GCPL_base64),
+                             (char **)&binary_gcpl, binary_gcpl_size) < 0)
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTDECODE, NULL, "can't decode gcpl from base64");
+
+        /* Set up a GCPL for the group, so that API calls like H5Gget_create_plist() will work */
+        if (0 > (group->u.group.gcpl_id = H5Pdecode(binary_gcpl)))
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTDECODE, NULL,
+                            "can't decode creation property list from binary");
     }
-
-    if (RV_base64_decode(loc_info_out.GCPL_base64, strlen(loc_info_out.GCPL_base64), &binary_gcpl,
-                         &binary_gcpl_size) < 0)
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTDECODE, NULL, "can't decode gcpl from base64");
-
-    /* Set up a GCPL for the group so that H5Gget_create_plist() will function correctly */
-    if (0 > (group->u.group.gcpl_id = H5Pdecode(binary_gcpl)))
-        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTDECODE, NULL, "can't decode creation property list from binary");
+    else {
+        /* Server versions before 0.8.0 do not store GCPL; return default */
+        if ((group->u.group.gcpl_id = H5Pcreate(H5P_GROUP_CREATE)) < 0)
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create GCPL for group");
+    }
 
     /* Copy the GAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * group access property list functions will function correctly
@@ -427,6 +435,7 @@ done:
     PRINT_ERROR_STACK;
 
     RV_free(loc_info_out.GCPL_base64);
+    loc_info_out.GCPL_base64 = NULL;
     // RV_free(base64_binary_gcpl);
     RV_free(binary_gcpl);
 
@@ -453,6 +462,9 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
     char         request_url[URL_MAX_LENGTH];
     int          url_len   = 0;
     herr_t       ret_value = SUCCEED;
+
+    loc_info loc_info_out;
+    memset(&loc_info_out, 0, sizeof(loc_info));
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received group get call with following parameters:\n");
@@ -501,9 +513,12 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
 
                 /* H5Gget_info_by_name */
                 case H5VL_OBJECT_BY_NAME: {
+
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
                     H5I_type_t obj_type = H5I_GROUP;
                     htri_t     search_ret;
-                    loc_info   loc_info_out;
                     char       temp_URI[URI_MAX_LENGTH];
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -541,6 +556,11 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL,
                                         "H5Gget_info_by_name request URL size exceeded maximum URL size");
+
+                    if (loc_info_out.GCPL_base64) {
+                        RV_free(loc_info_out.GCPL_base64);
+                        loc_info_out.GCPL_base64 = NULL;
+                    }
 
                     break;
                 } /* H5VL_OBJECT_BY_NAME */
@@ -607,6 +627,11 @@ done:
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Group get response buffer:\n%s\n\n", response_buffer.buffer);
 #endif
+
+    if (loc_info_out.GCPL_base64) {
+        RV_free(loc_info_out.GCPL_base64);
+        loc_info_out.GCPL_base64 = NULL;
+    }
 
     if (host_header)
         RV_free(host_header);

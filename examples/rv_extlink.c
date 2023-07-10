@@ -527,10 +527,10 @@ static hid_t UD_plist_traverse(const char *link_name, hid_t cur_group, const voi
 static void
 plist_link_example(void)
 {
-    hid_t file_id;
-    hid_t group_id, group2_id;
-    hid_t gapl_id;
-    char *path = NULL;
+    hid_t       file_id;
+    hid_t       group_id, group2_id;
+    hid_t       gapl_id;
+    const char *path = NULL;
 
     /* Define the link class that we'll use to register "plist
      * links" using the callback we defined above.

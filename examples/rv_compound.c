@@ -67,7 +67,7 @@ main(void)
      */
     for (i = 0; i < LENGTH; i++) {
         s1[i].a = i;
-        s1[i].b = i * i;
+        s1[i].b = (float)(i * i);
         s1[i].c = 1. / (i + 1);
     }
 

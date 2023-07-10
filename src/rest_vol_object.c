@@ -70,13 +70,17 @@ RV_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opene
     switch (loc_params->type) {
         /* H5Oopen */
         case H5VL_OBJECT_BY_NAME: {
+
+            if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
+
             htri_t search_ret;
 
             /* Retrieve the type of object being dealt with by querying the server */
             search_ret = RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type,
                                                 NULL, NULL, NULL);
             if (!search_ret || search_ret < 0)
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_PATH, NULL, "can't find object by name");
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, NULL, "can't find object by name");
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Found object by given path\n\n");
@@ -249,12 +253,13 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
     size_t       host_header_len = 0;
     char        *host_header     = NULL;
     char         request_url[URL_MAX_LENGTH];
-    int          url_len   = 0;
-    herr_t       ret_value = SUCCEED;
-    loc_info     loc_info;
+    char        *found_object_name = NULL;
+    int          url_len           = 0;
+    herr_t       ret_value         = SUCCEED;
+    loc_info     loc_info_out;
 
-    loc_info.GCPL_base64 = NULL;
-    loc_info.domain      = loc_obj->domain;
+    loc_info_out.GCPL_base64 = NULL;
+    loc_info_out.domain      = loc_obj->domain;
     loc_obj->domain->u.file.ref_count++;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -355,6 +360,10 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
                 /* H5Oget_info_by_name */
                 case H5VL_OBJECT_BY_NAME: {
+
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
                     htri_t search_ret;
                     char   temp_URI[URI_MAX_LENGTH];
 
@@ -364,15 +373,15 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                     printf("-> H5Oget_info_by_name(): locating object by given path\n\n");
 #endif
 
-                    loc_info.URI = temp_URI;
-                    /* loc_info.domain was copied at function start */
+                    loc_info_out.URI = temp_URI;
+                    /* loc_info_out.domain was copied at function start */
 
                     /* Locate group and set domain */
                     search_ret =
                         RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type,
-                                               RV_copy_object_loc_info_callback, NULL, &loc_info);
+                                               RV_copy_object_loc_info_callback, NULL, &loc_info_out);
                     if (!search_ret || search_ret < 0)
-                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, NULL, "can't locate object by path");
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, FAIL, "can't locate object by path");
 
 #ifdef RV_CONNECTOR_DEBUG
                     printf("-> H5Oget_info_by_name(): found object by given path\n");
@@ -449,7 +458,136 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
                 /* H5Oget_info_by_idx */
                 case H5VL_OBJECT_BY_IDX: {
-                    FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Oget_info_by_idx is unsupported");
+
+                    if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
+                    htri_t      search_ret;
+                    char        temp_URI[URI_MAX_LENGTH];
+                    const char *request_idx_type       = NULL;
+                    const char *parent_obj_type_header = NULL;
+
+                    obj_type = H5I_UNINIT;
+
+#ifdef RV_CONNECTOR_DEBUG
+                    printf("-> H5Oget_info_by_idx(): locating object by given path\n\n");
+#endif
+
+                    loc_info_out.URI = temp_URI;
+                    /* loc_info_out.domain was copied at function start */
+
+                    /* Locate group and set domain */
+                    search_ret =
+                        RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type,
+                                               RV_copy_object_loc_info_callback, NULL, &loc_info_out);
+                    if (!search_ret || search_ret < 0)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, FAIL, "can't locate object by path");
+
+                    if (obj_type != H5I_GROUP && obj_type != H5I_FILE)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, FAIL, "specified name did not lead to a group");
+
+                    switch (loc_params->loc_data.loc_by_idx.idx_type) {
+                        case (H5_INDEX_CRT_ORDER):
+                            if (SERVER_VERSION_MATCHES_OR_EXCEEDS(loc_obj->domain->u.file.server_version, 0,
+                                                                  8, 0)) {
+                                request_idx_type = "&CreateOrder=1";
+                            }
+                            else {
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL,
+                                                "indexing by creation order not supported by server versions "
+                                                "before 0.8.0");
+                            }
+
+                            break;
+                        case (H5_INDEX_NAME):
+                            request_idx_type = "";
+                            break;
+                        case (H5_INDEX_N):
+                        case (H5_INDEX_UNKNOWN):
+                        default:
+                            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                            "unsupported index type specified");
+                            break;
+                    }
+
+                    if (!search_ret || search_ret < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_PATH, FAIL, "can't locate parent object");
+
+                    /* Setup the host header */
+                    host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
+                    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request Host header");
+
+                    strcpy(host_header, host_string);
+
+                    curl_headers = curl_slist_append(
+                        curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name,
+                                              host_header_len - strlen(host_string) - 1));
+
+                    /* Disable use of Expect: 100 Continue HTTP response */
+                    curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links?%s", base_URL,
+                                            temp_URI, request_idx_type)) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                                        "attribute open URL exceeded maximum URL size");
+
+                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
+                                        curl_err_buf);
+                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL,
+                                        "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
+                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
+                                        curl_err_buf);
+
+                    CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
+
+                    if (0 > RV_parse_response(response_buffer.buffer,
+                                              (void *)&loc_params->loc_data.loc_by_idx, &found_object_name,
+                                              RV_copy_link_name_by_index))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "failed to retrieve link names");
+
+                    if (host_header) {
+                        RV_free(host_header);
+                        host_header = NULL;
+                    }
+
+                    if (curl_headers) {
+                        curl_slist_free_all(curl_headers);
+                        curl_headers = NULL;
+                    } /* end if */
+
+                    /* Use name of link to get object URI for final request */
+
+                    if (loc_info_out.GCPL_base64) {
+                        RV_free(loc_info_out.GCPL_base64);
+                        loc_info_out.GCPL_base64 = NULL;
+                    }
+
+                    search_ret =
+                        RV_find_object_by_path(loc_obj, found_object_name, &obj_type,
+                                               RV_copy_object_loc_info_callback, NULL, &loc_info_out);
+                    if (!search_ret || search_ret < 0)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, FAIL, "can't locate object by path");
+
+                    if (RV_set_object_type_header(obj_type, &parent_obj_type_header) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL,
+                                        "object at index not a group, datatype or dataset");
+
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s", base_URL,
+                                            parent_obj_type_header, loc_info_out.URI)) < 0)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
+                                        "H5Oget_info_by_name request URL size exceeded maximum URL size");
+
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
 
@@ -461,16 +599,16 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
             /* Make a GET request to the server to retrieve the number of attributes attached to the object */
 
             /* Setup the host header */
-            host_header_len = strlen(loc_info.domain->u.file.filepath_name) + strlen(host_string) + 1;
+            host_header_len = strlen(loc_info_out.domain->u.file.filepath_name) + strlen(host_string) + 1;
             if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL,
                                 "can't allocate space for request Host header");
 
             strcpy(host_header, host_string);
 
-            curl_headers =
-                curl_slist_append(curl_headers, strncat(host_header, loc_info.domain->u.file.filepath_name,
-                                                        host_header_len - strlen(host_string) - 1));
+            curl_headers = curl_slist_append(curl_headers,
+                                             strncat(host_header, loc_info_out.domain->u.file.filepath_name,
+                                                     host_header_len - strlen(host_string) - 1));
 
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
@@ -526,8 +664,13 @@ done:
         curl_headers = NULL;
     } /* end if */
 
-    RV_file_close(loc_info.domain, H5P_DEFAULT, NULL);
-    free(loc_info.GCPL_base64);
+    if (found_object_name) {
+        RV_free(found_object_name);
+        found_object_name = NULL;
+    }
+
+    RV_file_close(loc_info_out.domain, H5P_DEFAULT, NULL);
+    RV_free(loc_info_out.GCPL_base64);
 
     PRINT_ERROR_STACK;
 
@@ -579,8 +722,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
 
         /* H5Ovisit(_by_name) */
         case H5VL_OBJECT_VISIT:
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL,
-                            "H5Ovisit and H5Ovisit_by_name are unsupported");
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Ovisit is unsupported");
             break;
 
         /* H5Oflush */
@@ -598,6 +740,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
     } /* end switch */
 
 done:
+
     PRINT_ERROR_STACK;
 
     return ret_value;
@@ -720,6 +863,21 @@ RV_get_object_info_callback(char *HTTP_response, void *callback_data_in, void *c
     printf("-> Object had %llu attributes attached to it\n\n", obj_info->num_attrs);
 #endif
 
+    /* Retrieve the object's class */
+    switch (object_id[0]) {
+        case 'd':
+            obj_info->type = H5O_TYPE_DATASET;
+            break;
+        case 't':
+            obj_info->type = H5O_TYPE_NAMED_DATATYPE;
+            break;
+        case 'g':
+            obj_info->type = H5O_TYPE_GROUP;
+            break;
+        default:
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "get object info called on invalid object type");
+            break;
+    }
 done:
     if (parse_tree)
         yajl_tree_free(parse_tree);

@@ -871,7 +871,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
          * go ahead and allocate a buffer 4/3 the size of the given write buffer
          * in order to try and avoid reallocations inside the encoding function.
          */
-        value_body_len = ((double)4.0 / 3.0) * write_body_len;
+        value_body_len = (size_t)((4.0 / 3.0) * (double)write_body_len);
         if (NULL == (base64_encoded_value = RV_malloc(value_body_len)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
                             "can't allocate temporary buffer for base64-encoded write buffer");
@@ -2929,12 +2929,17 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t t
 
     /* If the DCPL was not specified as H5P_DEFAULT, form the Dataset Creation Properties portion of the
      * Dataset create request */
-    if (H5P_DATASET_CREATE_DEFAULT != dcpl)
+    if (H5P_DATASET_CREATE_DEFAULT != dcpl) {
+        if ((H5Pget_layout(dcpl) == H5D_CONTIGUOUS) &&
+            !(SERVER_VERSION_MATCHES_OR_EXCEEDS(pobj->domain->u.file.server_version, 0, 8, 0)))
+            FUNC_GOTO_ERROR(H5E_PLIST, H5E_UNSUPPORTED, FAIL,
+                            "layout H5D_CONTIGUOUS is unsupported for server versions before 0.8.0");
+
         if (RV_convert_dataset_creation_properties_to_JSON(dcpl, &creation_properties_body,
                                                            &creation_properties_body_len) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL,
                             "can't convert Dataset Creation Properties to JSON representation");
-
+    }
     /* If this isn't an H5Dcreate_anon call, create a link for the Dataset to
      * link it into the file structure */
     if (name) {
@@ -3269,7 +3274,8 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                                         "this should not happen!");
 
                     size_t out_string_new_len =
-                        buf_ptrdiff + ((size_t)((ndims * MAX_NUM_LENGTH) + (ndims) + (ndims > 1 ? 3 : 1)));
+                        (size_t)buf_ptrdiff +
+                        ((size_t)((ndims * MAX_NUM_LENGTH) + (ndims) + (ndims > 1 ? 3 : 1)));
 
                     CHECKED_REALLOC(out_string, out_string_len, out_string_new_len, out_string_curr_pos,
                                     H5E_DATASPACE, FAIL);
@@ -3340,7 +3346,7 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
                                     "can't allocate space for hyperslab selection 'block' values");
 
-                size_t body_size = ndims * MAX_NUM_LENGTH + ndims;
+                size_t body_size = (size_t)ndims * MAX_NUM_LENGTH + (size_t)ndims;
 
                 if (NULL == (start_body = (char *)RV_calloc(body_size)))
                     FUNC_GOTO_ERROR(

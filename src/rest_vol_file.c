@@ -39,10 +39,10 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
     size_t       base64_buf_size         = 0;
     size_t       plist_nalloc            = 0;
     size_t       create_request_nalloc   = 0;
-    size_t       create_request_body_len = 0;
+    int          create_request_body_len = 0;
     char        *host_header             = NULL;
     char        *base64_plist_buffer     = NULL;
-    char        *fmt_string              = NULL;
+    const char  *fmt_string              = NULL;
     char        *create_request_body     = NULL;
     void        *ret_value               = NULL;
     void        *binary_plist_buffer     = NULL;
@@ -187,7 +187,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTENCODE, NULL, "can't determine size needed for encoded gcpl");
 
     if ((binary_plist_buffer = RV_malloc(plist_nalloc)) == NULL)
-        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTALLOC, FAIL, "can't allocate space for encoded gcpl");
+        FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTALLOC, NULL, "can't allocate space for encoded gcpl");
 
     if (H5Pencode2(fcpl_id, binary_plist_buffer, &plist_nalloc, H5P_DEFAULT) < 0)
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTENCODE, NULL, "can't encode gcpl");
@@ -216,7 +216,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
 
     upload_info uinfo;
     uinfo.buffer      = create_request_body;
-    uinfo.buffer_size = create_request_body_len;
+    uinfo.buffer_size = (size_t)create_request_body_len;
     uinfo.bytes_sent  = 0;
 
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
@@ -616,8 +616,8 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
         /* H5Fdelete */
         case H5VL_FILE_DELETE: {
-            long  http_response;
-            char *filename = args->args.del.filename;
+            long        http_response;
+            const char *filename = args->args.del.filename;
 
             name_length = strlen(filename);
 
@@ -625,7 +625,7 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             host_header_len = name_length + strlen(host_string) + 1;
 
             if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL,
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
                                 "can't allocate space for request Host header");
 
             strcpy(host_header, host_string);
@@ -636,15 +636,15 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL,
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL,
                                 "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);
 
-            CURL_PERFORM(curl, H5E_FILE, H5E_CLOSEERROR, NULL);
+            CURL_PERFORM(curl, H5E_FILE, H5E_CLOSEERROR, FAIL);
 
             break;
         } /* H5VL_FILE_DELETE */
@@ -667,7 +667,7 @@ done:
 
     /* Restore CUSTOMREQUEST to internal default */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP DELETE request: %s",
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP DELETE request: %s",
                         curl_err_buf);
 
     if (host_header) {

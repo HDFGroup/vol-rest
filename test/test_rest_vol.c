@@ -403,11 +403,9 @@ char filename[FILENAME_MAX_LENGTH];
 
 #define H5L_SAME_LOC_TEST_DSET_SPACE_RANK 2
 #define H5L_SAME_LOC_TEST_GROUP_NAME      "h5l_same_loc_test_group"
-#if 0
-#define H5L_SAME_LOC_TEST_LINK_NAME1 "h5l_same_loc_test_link1"
-#endif
-#define H5L_SAME_LOC_TEST_LINK_NAME2 "h5l_same_loc_test_link2"
-#define H5L_SAME_LOC_TEST_DSET_NAME  "h5l_same_loc_test_dset"
+#define H5L_SAME_LOC_TEST_LINK_NAME1      "h5l_same_loc_test_link1"
+#define H5L_SAME_LOC_TEST_LINK_NAME2      "h5l_same_loc_test_link2"
+#define H5L_SAME_LOC_TEST_DSET_NAME       "h5l_same_loc_test_dset"
 
 #define SOFT_LINK_EXISTING_RELATIVE_TEST_DSET_SPACE_RANK 2
 #define SOFT_LINK_EXISTING_RELATIVE_TEST_SUBGROUP_NAME   "soft_link_to_existing_relative_path_test"
@@ -2481,28 +2479,26 @@ test_create_attribute_on_root(void)
 
     H5E_BEGIN_TRY
     {
-#if 0
         if (H5Aclose(attr_id) < 0)
             TEST_ERROR
         if (H5Aclose(attr_id2) < 0)
             TEST_ERROR
-#endif
 
 #ifdef RV_CONNECTOR_DEBUG
         puts("Attempting to open the attributes with H5Aopen_by_idx\n");
 #endif
 
-        if ((/*attr_id = */ H5Aopen_by_idx(file_id, "/", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT,
-                                           H5P_DEFAULT)) >= 0) {
+        if ((attr_id =
+                 H5Aopen_by_idx(file_id, "/", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
 
-        if ((/*attr_id2 = */ H5Aopen_by_idx(file_id, "/", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT,
-                                            H5P_DEFAULT)) >= 0) {
+        if ((attr_id2 =
+                 H5Aopen_by_idx(file_id, "/", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
     }
@@ -2710,30 +2706,28 @@ test_create_attribute_on_dataset(void)
 
     H5E_BEGIN_TRY
     {
-#if 0
         if (H5Aclose(attr_id) < 0)
             TEST_ERROR
         if (H5Aclose(attr_id2) < 0)
             TEST_ERROR
-#endif
 
 #ifdef RV_CONNECTOR_DEBUG
         puts("Attempting to open the attributes with H5Aopen_by_idx\n");
 #endif
 
-        if ((/*attr_id = */ H5Aopen_by_idx(
-                file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATASET_DSET_NAME,
-                H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) >= 0) {
+        if ((attr_id = H5Aopen_by_idx(file_id,
+                                      "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATASET_DSET_NAME,
+                                      H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
 
-        if ((/*attr_id2 = */ H5Aopen_by_idx(
-                file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATASET_DSET_NAME,
-                H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) >= 0) {
+        if ((attr_id2 = H5Aopen_by_idx(
+                 file_id, "/" ATTRIBUTE_TEST_GROUP_NAME "/" ATTRIBUTE_CREATE_ON_DATASET_DSET_NAME,
+                 H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
     }
@@ -2963,28 +2957,26 @@ test_create_attribute_on_datatype(void)
 
     H5E_BEGIN_TRY
     {
-#if 0
         if (H5Aclose(attr_id) < 0)
             TEST_ERROR
         if (H5Aclose(attr_id2) < 0)
             TEST_ERROR
-#endif
 
 #ifdef RV_CONNECTOR_DEBUG
         puts("Attempting to open the attributes with H5Aopen_by_idx\n");
 #endif
 
-        if ((/*attr_id = */ H5Aopen_by_idx(type_id, "/" ATTRIBUTE_CREATE_ON_DATATYPE_DTYPE_NAME,
-                                           H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) >= 0) {
+        if ((attr_id =
+                 H5Aopen_by_idx(type_id, ".", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
 
-        if ((/*attr_id2 = */ H5Aopen_by_idx(type_id, "/" ATTRIBUTE_CREATE_ON_DATATYPE_DTYPE_NAME,
-                                            H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) >= 0) {
+        if ((attr_id2 =
+                 H5Aopen_by_idx(type_id, ".", H5_INDEX_NAME, H5_ITER_INC, 0, H5P_DEFAULT, H5P_DEFAULT)) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
     }
@@ -3357,10 +3349,10 @@ test_get_attribute_info(void)
         puts("Retrieving attribute's info with H5Aget_info_by_idx\n");
 #endif
 
-        if (H5Aget_info_by_idx(container_group, "/", H5_INDEX_NAME, H5_ITER_INC, 0, &attr_info,
-                               H5P_DEFAULT) >= 0) {
+        if (H5Aget_info_by_idx(container_group, "/", H5_INDEX_NAME, H5_ITER_INC, 0, &attr_info, H5P_DEFAULT) <
+            0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
     }
@@ -3750,9 +3742,9 @@ test_get_attribute_name(void)
     H5E_BEGIN_TRY
     {
         if (H5Aget_name_by_idx(file_id, ATTRIBUTE_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0, name_buf,
-                               (size_t)name_buf_size + 1, H5P_DEFAULT) >= 0) {
+                               (size_t)name_buf_size + 1, H5P_DEFAULT) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded!\n");
+            printf("    failed to open attribute by index!\n");
             goto error;
         }
     }
@@ -10371,12 +10363,13 @@ test_create_hard_link_same_loc(void)
         goto error;
     }
 
-#if 0 /* Library functionality for this part of the test is broken */
+/* Library functionality for this part of the test is broken */
 #ifdef RV_CONNECTOR_DEBUG
     puts("Calling H5Lcreate_hard with H5L_SAME_LOC as first parameter\n");
 #endif
 
-    if (H5Lcreate_hard(H5L_SAME_LOC, H5L_SAME_LOC_TEST_DSET_NAME, group_id, H5L_SAME_LOC_TEST_LINK_NAME1, H5P_DEFAULT, H5P_DEFAULT) < 0) {
+    if (H5Lcreate_hard(H5L_SAME_LOC, H5L_SAME_LOC_TEST_DSET_NAME, group_id, H5L_SAME_LOC_TEST_LINK_NAME1,
+                       H5P_DEFAULT, H5P_DEFAULT) < 0) {
         H5_FAILED();
         printf("    couldn't create first link\n");
         goto error;
@@ -10394,7 +10387,6 @@ test_create_hard_link_same_loc(void)
         printf("    link did not exist\n");
         goto error;
     }
-#endif
 
 #ifdef RV_CONNECTOR_DEBUG
     puts("Calling H5Lcreate_hard with H5L_SAME_LOC as second parameter\n");
@@ -15106,9 +15098,9 @@ test_object_visit(void)
 #endif
 
         if (H5Ovisit3(container_group, H5_INDEX_NAME, H5_ITER_INC, object_visit_callback, NULL,
-                      H5O_INFO_ALL) >= 0) {
+                      H5O_INFO_ALL) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded\n");
+            printf("    H5Ovisit failed!\n");
             goto error;
         }
 
@@ -15117,9 +15109,9 @@ test_object_visit(void)
 #endif
 
         if (H5Ovisit_by_name3(file_id, "/" OBJECT_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC,
-                              object_visit_callback, NULL, H5O_INFO_ALL, H5P_DEFAULT) >= 0) {
+                              object_visit_callback, NULL, H5O_INFO_ALL, H5P_DEFAULT) < 0) {
             H5_FAILED();
-            printf("    unsupported API succeeded\n");
+            printf("    H5Ovisit failed!\n");
             goto error;
         }
     }
