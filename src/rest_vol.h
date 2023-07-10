@@ -379,9 +379,6 @@ extern const char *link_creation_time_keys[];
  */
 extern const char *link_collection_keys2[];
 
-/* TODO */
-extern const char *hrefs_keys[];
-
 /* A global struct containing the buffer which cURL will write its
  * responses out to after making a call to the server. The buffer
  * in this struct is allocated upon connector initialization and is
@@ -509,14 +506,11 @@ typedef struct iter_data {
     hbool_t         is_recursive;
     hsize_t        *idx_p;
     hid_t           iter_obj_id;
-    unsigned        oinfo_fields;
     void           *op_data;
-    RV_object_t    *iter_obj_parent;
 
     union {
         H5A_operator2_t attr_iter_op;
         H5L_iterate_t   link_iter_op;
-        H5O_iterate2_t  object_iter_op;
     } iter_function;
 } iter_data;
 
@@ -535,26 +529,6 @@ struct link_table_entry {
     struct {
         link_table_entry *subgroup_link_table;
         size_t            num_entries;
-    } subgroup;
-};
-
-/*
- * A struct which is filled out during object iteration and contains
- * all of the information needed to iterate through objects by both
- * alphabetical order and object creation order in increasing and
- * decreasing fashion.
- */
-typedef struct object_table_entry object_table_entry;
-struct object_table_entry {
-    H5O_info2_t object_info;
-    H5L_info2_t link_info;
-    double      crt_time;
-    char        object_URI[URI_MAX_LENGTH];
-    char        link_name[LINK_NAME_MAX_LENGTH];
-
-    struct {
-        object_table_entry *subgroup_object_table;
-        size_t              num_entries;
     } subgroup;
 };
 
@@ -622,12 +596,6 @@ herr_t RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, cha
 /* Helper functions to base64 encode/decode a binary buffer */
 herr_t RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size);
 herr_t RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size);
-
-/* Comparison function to compare two string keys in an rv_hash_table_t. */
-int H5_rest_compare_string_keys(void *value1, void *value2);
-
-/* Helper function to free keys in the visited link hash table used by link iteration. */
-void RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
 
 /* Helper to turn an object type into a string for a server request */
 herr_t RV_set_object_type_header(H5I_type_t parent_obj_type, const char **parent_obj_type_header);

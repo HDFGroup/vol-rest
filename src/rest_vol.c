@@ -49,8 +49,6 @@ hid_t H5_rest_link_table_err_min_g        = H5I_INVALID_HID;
 hid_t H5_rest_link_table_iter_err_min_g   = H5I_INVALID_HID;
 hid_t H5_rest_attr_table_err_min_g        = H5I_INVALID_HID;
 hid_t H5_rest_attr_table_iter_err_min_g   = H5I_INVALID_HID;
-hid_t H5_rest_object_table_err_min_g      = H5I_INVALID_HID;
-hid_t H5_rest_object_table_iter_err_min_g = H5I_INVALID_HID;
 
 /*
  * The CURL pointer used for all cURL operations.
@@ -126,18 +124,6 @@ const char *domain_keys[] = {"domain", (const char *)0};
 
 /* JSON keys to retrieve a list of attributes */
 const char *attributes_keys[] = {"attributes", (const char *)0};
-
-/* JSON keys to retrieve a list of links */
-const char *links_keys[] = {"links", (const char *)0};
-
-/* JSON keys to retrieve all of the information from a link when doing link iteration */
-const char *link_title_keys[]         = {"title", (const char *)0};
-const char *link_creation_time_keys[] = {"created", (const char *)0};
-
-/* JSON keys to retrieve the collection that a hard link belongs to
- * (the type of object it points to), "groups", "datasets" or "datatypes"
- */
-const char *link_collection_keys2[] = {"collection", (const char *)0};
 
 /* Default size for the buffer to allocate during base64-encoding if the caller
  * of RV_base64_encode supplies a 0-sized buffer.
@@ -475,13 +461,6 @@ H5_rest_init(hid_t vipl_id)
     if ((H5_rest_attr_table_iter_err_min_g =
              H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't iterate through attribute table")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create message for attribute iteration error");
-    if ((H5_rest_object_table_err_min_g =
-             H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't build table of objects for iteration")) < 0)
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL,
-                        "can't create error message for object table build error");
-    if ((H5_rest_object_table_iter_err_min_g =
-             H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't iterate through object table")) < 0)
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create message for object iteration error");
 
     /* Initialized */
     H5_rest_initialized_g = TRUE;
@@ -542,12 +521,6 @@ done:
         if (H5_rest_attr_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_attr_table_iter_err_min_g) < 0)
             FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
                             "can't unregister error message for iterating over attribute table");
-        if (H5_rest_attr_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_object_table_err_min_g) < 0)
-            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
-                            "can't unregister error message for build object table");
-        if (H5_rest_attr_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_object_table_iter_err_min_g) < 0)
-            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
-                            "can't unregister error message for iterating over object table");
 
         if (H5Eunregister_class(H5_rest_err_class_g) < 0)
             FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister from HDF5 error API");
@@ -3330,47 +3303,6 @@ done:
 
     return ret_value;
 }
-
-/*-------------------------------------------------------------------------
- * Function:    H5_rest_compare_string_keys
- *
- * Purpose:     Comparison function to compare two string keys in an
- *              rv_hash_table_t. This function is mostly used when
- *              attempting to determine object uniqueness by some
- *              information from the server, such as an object ID.
- *
- * Return:      Non-zero if the two string keys are equal/Zero if the two
- *              string keys are not equal
- *
- * Programmer:  Jordan Henderson
- *              May, 2018
- */
-int
-H5_rest_compare_string_keys(void *value1, void *value2)
-{
-    const char *val1 = (const char *)value1;
-    const char *val2 = (const char *)value2;
-
-    return !strcmp(val1, val2);
-} /* end H5_rest_compare_string_keys() */
-
-/*-------------------------------------------------------------------------
- * Function:    RV_free_visited_link_hash_table_key
- *
- * Purpose:     Helper function to free keys in the visited link hash table
- *              used by link iteration.
- *
- * Return:      Non-negative on success/Negative on failure
- *
- * Programmer:  Jordan Henderson
- *              June, 2018
- */
-void
-RV_free_visited_link_hash_table_key(rv_hash_table_key_t value)
-{
-    RV_free(value);
-    value = NULL;
-} /* end RV_free_visited_link_hash_table_key() */
 
 /*-------------------------------------------------------------------------
  * Function:    RV_set_object_type_header
