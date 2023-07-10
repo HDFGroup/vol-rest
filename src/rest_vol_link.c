@@ -35,7 +35,7 @@ static herr_t RV_build_link_table(char *HTTP_response, hbool_t is_recursive,
 static void   RV_free_link_table(link_table_entry *link_table, size_t num_entries);
 static herr_t RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_data *iter_data,
                                      const char *cur_link_rel_path);
-static void RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
+static void   RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
 
 /* Comparison function to compare two string keys in an rv_hash_table_t. */
 static int H5_rest_compare_string_keys(void *value1, void *value2);
@@ -104,7 +104,6 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
     printf("     - Default LAPL? %s\n\n", (H5P_LINK_ACCESS_DEFAULT == lapl_id) ? "yes" : "no");
 #endif
 
-    
     if (lcpl_id == H5I_INVALID_HID)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LCPL");
 
@@ -496,7 +495,7 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
             switch (loc_params->type) {
                 /* H5Lget_info */
                 case H5VL_OBJECT_BY_NAME: {
-                    
+
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -703,7 +702,7 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
             switch (loc_params->type) {
                 /* H5Lget_val */
                 case H5VL_OBJECT_BY_NAME: {
-                    
+
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -879,7 +878,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
             switch (loc_params->type) {
                 /* H5Ldelete */
                 case H5VL_OBJECT_BY_NAME: {
-                    
+
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -1098,7 +1097,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
 
                 /* H5Literate_by_name/H5Lvisit_by_name */
                 case H5VL_OBJECT_BY_NAME: {
-                    
+
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 

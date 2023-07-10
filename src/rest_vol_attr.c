@@ -116,7 +116,7 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
 
     /* If this is a call to H5Acreate_by_name, locate the real parent object */
     if (H5VL_OBJECT_BY_NAME == loc_params->type) {
-        
+
         if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
 
@@ -141,7 +141,7 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
     } /* end if */
     else {
         if (H5VL_OBJECT_BY_IDX == loc_params->type) {
-            
+
             if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
         }
@@ -468,7 +468,6 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
         /* H5Aopen_by_name */
         case H5VL_OBJECT_BY_NAME: {
 
-            
             if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
 
@@ -502,7 +501,7 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
 
         /* H5Aopen_by_idx */
         case H5VL_OBJECT_BY_IDX: {
-            
+
             if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
 
@@ -1279,7 +1278,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
 
                 /* H5Aget_info_by_name */
                 case H5VL_OBJECT_BY_NAME: {
-                    
+
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -1375,7 +1374,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
 
                 /* H5Aget_info_by_idx */
                 case H5VL_OBJECT_BY_IDX: {
-                    
+
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -1568,7 +1567,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
 
                 /* H5Aget_name_by_idx */
                 case H5VL_OBJECT_BY_IDX: {
-                    
+
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -1677,7 +1676,6 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                         curl_free(url_encoded_attr_name);
                         url_encoded_attr_name = NULL;
                     }
-                        
 
                     if (curl_headers) {
                         curl_slist_free_all(curl_headers);
@@ -1812,7 +1810,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
                 /* H5Adelete_by_name */
                 case H5VL_OBJECT_BY_NAME: {
-                    
+
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -1980,7 +1978,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
                 /* H5Aexists_by_name */
                 case H5VL_OBJECT_BY_NAME: {
-                    
+
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -2265,7 +2263,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
                 /* H5Aiterate_by_name */
                 case H5VL_OBJECT_BY_NAME: {
-                    
+
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 

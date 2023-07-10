@@ -41,14 +41,14 @@ hid_t H5_rest_id_g = H5I_UNINIT;
 static hbool_t H5_rest_initialized_g = FALSE;
 
 /* Identifiers for HDF5's error API */
-hid_t H5_rest_err_stack_g                 = H5I_INVALID_HID;
-hid_t H5_rest_err_class_g                 = H5I_INVALID_HID;
-hid_t H5_rest_obj_err_maj_g               = H5I_INVALID_HID;
-hid_t H5_rest_parse_err_min_g             = H5I_INVALID_HID;
-hid_t H5_rest_link_table_err_min_g        = H5I_INVALID_HID;
-hid_t H5_rest_link_table_iter_err_min_g   = H5I_INVALID_HID;
-hid_t H5_rest_attr_table_err_min_g        = H5I_INVALID_HID;
-hid_t H5_rest_attr_table_iter_err_min_g   = H5I_INVALID_HID;
+hid_t H5_rest_err_stack_g               = H5I_INVALID_HID;
+hid_t H5_rest_err_class_g               = H5I_INVALID_HID;
+hid_t H5_rest_obj_err_maj_g             = H5I_INVALID_HID;
+hid_t H5_rest_parse_err_min_g           = H5I_INVALID_HID;
+hid_t H5_rest_link_table_err_min_g      = H5I_INVALID_HID;
+hid_t H5_rest_link_table_iter_err_min_g = H5I_INVALID_HID;
+hid_t H5_rest_attr_table_err_min_g      = H5I_INVALID_HID;
+hid_t H5_rest_attr_table_iter_err_min_g = H5I_INVALID_HID;
 
 /*
  * The CURL pointer used for all cURL operations.
@@ -1471,14 +1471,14 @@ H5_rest_url_encode_path(const char *_path)
     char     *url_encoded_path_component = NULL;
     char     *token;
     char     *cur_pos;
-    char     *path = NULL;
-    char *tmp_buffer = NULL;
-    char *ret_value  = NULL;
+    char     *path       = NULL;
+    char     *tmp_buffer = NULL;
+    char     *ret_value  = NULL;
 
     if (!_path)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "path was NULL");
 
-    path = (char*) _path;
+    path = (char *)_path;
 
     /* Retrieve the length of the possible path prefix, which could be something like '/', '.', etc. */
     cur_pos = path;

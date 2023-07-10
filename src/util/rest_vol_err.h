@@ -42,12 +42,12 @@ extern hid_t H5_rest_attr_table_iter_err_min_g;
 #define HDF5_VOL_REST_LIB_NAME     "HDF5 REST VOL"
 #define HDF5_VOL_REST_LIB_VER      "1.0.0"
 
-#define H5E_OBJECT               H5_rest_obj_err_maj_g
-#define H5E_PARSEERROR           H5_rest_parse_err_min_g
-#define H5E_CANTBUILDLINKTABLE   H5_rest_link_table_err_min_g
-#define H5E_CANTBUILDATTRTABLE   H5_rest_attr_table_err_min_g
-#define H5E_LINKITERERROR        H5_rest_link_table_iter_err_min_g
-#define H5E_ATTRITERERROR        H5_rest_attr_table_iter_err_min_g
+#define H5E_OBJECT             H5_rest_obj_err_maj_g
+#define H5E_PARSEERROR         H5_rest_parse_err_min_g
+#define H5E_CANTBUILDLINKTABLE H5_rest_link_table_err_min_g
+#define H5E_CANTBUILDATTRTABLE H5_rest_attr_table_err_min_g
+#define H5E_LINKITERERROR      H5_rest_link_table_iter_err_min_g
+#define H5E_ATTRITERERROR      H5_rest_attr_table_iter_err_min_g
 
 #define SUCCEED 0
 #define FAIL    (-1)

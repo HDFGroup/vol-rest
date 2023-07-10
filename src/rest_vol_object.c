@@ -70,7 +70,7 @@ RV_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opene
     switch (loc_params->type) {
         /* H5Oopen */
         case H5VL_OBJECT_BY_NAME: {
-            
+
             if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
 
@@ -360,7 +360,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
                 /* H5Oget_info_by_name */
                 case H5VL_OBJECT_BY_NAME: {
-                    
+
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -458,7 +458,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
                 /* H5Oget_info_by_idx */
                 case H5VL_OBJECT_BY_IDX: {
-                    
+
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -692,9 +692,8 @@ herr_t
 RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_specific_args_t *args,
                    hid_t dxpl_id, void **req)
 {
-    RV_object_t *loc_obj          = (RV_object_t *)obj;
-    herr_t       ret_value        = SUCCEED;
-
+    RV_object_t *loc_obj   = (RV_object_t *)obj;
+    herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received object-specific call with following parameters:\n");
