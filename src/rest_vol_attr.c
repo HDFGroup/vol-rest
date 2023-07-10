@@ -116,7 +116,7 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
 
     /* If this is a call to H5Acreate_by_name, locate the real parent object */
     if (H5VL_OBJECT_BY_NAME == loc_params->type) {
-        // TODO: Proper way to verify a plist?
+        
         if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
 
@@ -141,9 +141,9 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
     } /* end if */
     else {
         if (H5VL_OBJECT_BY_IDX == loc_params->type) {
-            // TODO: Proper way to verify a plist?
+            
             if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
         }
 
         new_attribute->u.attribute.parent_obj_type = parent->obj_type;
@@ -468,7 +468,7 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
         /* H5Aopen_by_name */
         case H5VL_OBJECT_BY_NAME: {
 
-            // TODO: Proper way to verify a plist?
+            
             if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
 
@@ -502,7 +502,7 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
 
         /* H5Aopen_by_idx */
         case H5VL_OBJECT_BY_IDX: {
-            // TODO: Proper way to verify a plist?
+            
             if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
 
@@ -1279,7 +1279,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
 
                 /* H5Aget_info_by_name */
                 case H5VL_OBJECT_BY_NAME: {
-                    // TODO: Proper way to verify a plist?
+                    
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -1375,7 +1375,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
 
                 /* H5Aget_info_by_idx */
                 case H5VL_OBJECT_BY_IDX: {
-                    // TODO: Proper way to verify a plist?
+                    
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -1466,10 +1466,15 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                                               &found_attr_name, RV_copy_attribute_name_by_index))
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_PARSEERROR, FAIL, "failed to retrieve attribute names");
 
-                    if (host_header)
+                    if (host_header) {
                         RV_free(host_header);
-                    if (url_encoded_attr_name)
+                        host_header = NULL;
+                    }
+
+                    if (url_encoded_attr_name) {
                         curl_free(url_encoded_attr_name);
+                        url_encoded_attr_name = NULL;
+                    }
 
                     if (curl_headers) {
                         curl_slist_free_all(curl_headers);
@@ -1563,7 +1568,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
 
                 /* H5Aget_name_by_idx */
                 case H5VL_OBJECT_BY_IDX: {
-                    // TODO: Proper way to verify a plist?
+                    
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -1663,12 +1668,16 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                         name_buf[name_buf_size - 1] = '\0';
                     } /* end if */
 
-                    if (host_header)
+                    if (host_header) {
                         RV_free(host_header);
-                    host_header = NULL;
+                        host_header = NULL;
+                    }
 
-                    if (url_encoded_attr_name)
+                    if (url_encoded_attr_name) {
                         curl_free(url_encoded_attr_name);
+                        url_encoded_attr_name = NULL;
+                    }
+                        
 
                     if (curl_headers) {
                         curl_slist_free_all(curl_headers);
@@ -1803,7 +1812,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
                 /* H5Adelete_by_name */
                 case H5VL_OBJECT_BY_NAME: {
-                    // TODO: Proper way to verify a plist?
+                    
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -1971,7 +1980,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
                 /* H5Aexists_by_name */
                 case H5VL_OBJECT_BY_NAME: {
-                    // TODO: Proper way to verify a plist?
+                    
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -2256,7 +2265,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
                 /* H5Aiterate_by_name */
                 case H5VL_OBJECT_BY_NAME: {
-                    // TODO: Proper way to verify a plist?
+                    
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 

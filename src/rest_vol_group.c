@@ -513,7 +513,7 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
 
                 /* H5Gget_info_by_name */
                 case H5VL_OBJECT_BY_NAME: {
-                    // TODO: Proper way to verify a plist?
+                    
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 

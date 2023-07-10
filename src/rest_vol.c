@@ -1499,17 +1499,13 @@ H5_rest_url_encode_path(const char *_path)
     char     *token;
     char     *cur_pos;
     char     *path = NULL;
-    _path;
     char *tmp_buffer = NULL;
     char *ret_value  = NULL;
 
     if (!_path)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "path was NULL");
 
-    if ((path = RV_malloc(strlen(_path) + 1)) == NULL)
-        FUNC_GOTO_ERROR(H5E_PATH, H5E_CANTALLOC, NULL, "can't allocate memory for path copy");
-
-    strncpy(path, _path, strlen(_path) + 1);
+    path = (char*) _path;
 
     /* Retrieve the length of the possible path prefix, which could be something like '/', '.', etc. */
     cur_pos = path;
@@ -1630,8 +1626,6 @@ done:
         RV_free(tmp_buffer);
     if (path_copy)
         RV_free(path_copy);
-    if (path)
-        RV_free(path);
 
     return ret_value;
 } /* end H5_rest_url_encode_path() */
@@ -2613,7 +2607,7 @@ RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, voi
     const char        *parsed_string        = NULL;
     char              *parsed_string_buffer = NULL;
     H5VL_loc_by_idx_t *idx_params           = (H5VL_loc_by_idx_t *)callback_data_in;
-    hsize_t            index                = idx_params->n;
+    hsize_t            index                = 0;
     char             **attr_name            = (char **)callback_data_out;
     herr_t             ret_value            = SUCCEED;
 
@@ -2622,6 +2616,9 @@ RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, voi
 
     if (!HTTP_response)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
+
+    if (!idx_params)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given index params ptr was NULL");
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
@@ -2634,6 +2631,8 @@ RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, voi
 
     if (index >= key_obj->u.object.len)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "requested attribute index was out of bounds");
+
+    index = idx_params->n;
 
     switch (idx_params->order) {
 
@@ -2668,7 +2667,7 @@ done:
         yajl_tree_free(parse_tree);
 
     if (ret_value < 0) {
-        RV_free(*attr_name);
+        RV_free(parsed_string_buffer);
         *attr_name = NULL;
     }
 

@@ -84,7 +84,7 @@ RV_object_open(void *obj, const H5VL_loc_params_t *loc_params, H5I_type_t *opene
     switch (loc_params->type) {
         /* H5Oopen */
         case H5VL_OBJECT_BY_NAME: {
-            // TODO: Proper way to verify a plist?
+            
             if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
 
@@ -374,7 +374,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
                 /* H5Oget_info_by_name */
                 case H5VL_OBJECT_BY_NAME: {
-                    // TODO: Proper way to verify a plist?
+                    
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -472,7 +472,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
                 /* H5Oget_info_by_idx */
                 case H5VL_OBJECT_BY_IDX: {
-                    // TODO: Proper way to verify a plist?
+                    
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_idx.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -684,7 +684,7 @@ done:
     }
 
     RV_file_close(loc_info_out.domain, H5P_DEFAULT, NULL);
-    free(loc_info_out.GCPL_base64);
+    RV_free(loc_info_out.GCPL_base64);
 
     PRINT_ERROR_STACK;
 
@@ -710,7 +710,6 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
     herr_t       ret_value        = SUCCEED;
     H5I_type_t   iter_object_type = H5I_UNINIT;
     void        *iter_object      = NULL;
-    char        *iter_object_name = NULL;
     int          url_len          = 0;
     char         request_url[URL_MAX_LENGTH];
     char        *host_header     = NULL;
@@ -749,7 +748,6 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
         case H5VL_OBJECT_VISIT: {
             const char *parent_object_header = NULL;
             iter_data   object_iter_data;
-            hsize_t     idx_p = 0;
 
             object_iter_data.index_type                   = args->args.visit.idx_type;
             object_iter_data.iter_order                   = args->args.visit.order;
@@ -757,7 +755,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             object_iter_data.iter_function.object_iter_op = args->args.visit.op;
             object_iter_data.op_data                      = args->args.visit.op_data;
             object_iter_data.is_recursive                 = true;
-            object_iter_data.idx_p                        = &idx_p;
+            object_iter_data.idx_p                        = 0;
 
             if (!object_iter_data.iter_function.object_iter_op)
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "no object iteration function specified");
@@ -768,6 +766,8 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                     /* Since the VOL doesn't directly pass down the group's hid_t, explicitly open the group
                      * here so that a valid hid_t can be passed to the user's link iteration callback.
                      */
+                    
+                    /* TODO: Replace this with H5VLwrap_register */
 
                     switch (loc_obj->obj_type) {
                         case H5I_FILE:
@@ -856,7 +856,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                 } /* end H5Ovisit H5VL_OBJECT_BY_SELF */
 
                 case (H5VL_OBJECT_BY_NAME): {
-                    // TODO: Proper way to verify a plist?
+                    
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -1084,22 +1084,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
 
                 case H5I_DATASET:
                 case H5I_DATATYPE:
-                    /* Execute callback on object */
-
-                    if (RV_parse_response(response_buffer.buffer, NULL, &oinfo, RV_get_object_info_callback) <
-                        0)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't iterate over links");
-
-                    if (!iter_object_name)
-                        FUNC_GOTO_ERROR(
-                            H5E_LINK, H5E_CANTGET, FAIL,
-                            "H5Ovisit not by name is unsupported for direct use on non-group objects");
-
-                    if (object_iter_data.iter_function.object_iter_op(iter_object_id, iter_object_name,
-                                                                      &oinfo, object_iter_data.op_data) < 0)
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL,
-                                        "failed to perform object visit callback");
-
+                    /* No iteration */
                     break;
 
                 default:
@@ -1269,6 +1254,21 @@ RV_get_object_info_callback(char *HTTP_response, void *callback_data_in, void *c
     printf("-> Object had %llu attributes attached to it\n\n", obj_info->num_attrs);
 #endif
 
+    /* Retrieve the object's class */
+    switch (object_id[0]) {
+        case 'd':
+            obj_info->type = H5O_TYPE_DATASET;
+            break;
+        case 't':
+            obj_info->type = H5O_TYPE_NAMED_DATATYPE;
+            break;
+        case 'g':
+            obj_info->type = H5O_TYPE_GROUP;
+            break;
+        default:
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "get object info called on invalid object type");
+            break;
+    }
 done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
