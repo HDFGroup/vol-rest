@@ -41,14 +41,16 @@ hid_t H5_rest_id_g = H5I_UNINIT;
 static hbool_t H5_rest_initialized_g = FALSE;
 
 /* Identifiers for HDF5's error API */
-hid_t H5_rest_err_stack_g               = H5I_INVALID_HID;
-hid_t H5_rest_err_class_g               = H5I_INVALID_HID;
-hid_t H5_rest_obj_err_maj_g             = H5I_INVALID_HID;
-hid_t H5_rest_parse_err_min_g           = H5I_INVALID_HID;
-hid_t H5_rest_link_table_err_min_g      = H5I_INVALID_HID;
-hid_t H5_rest_link_table_iter_err_min_g = H5I_INVALID_HID;
-hid_t H5_rest_attr_table_err_min_g      = H5I_INVALID_HID;
-hid_t H5_rest_attr_table_iter_err_min_g = H5I_INVALID_HID;
+hid_t H5_rest_err_stack_g                 = H5I_INVALID_HID;
+hid_t H5_rest_err_class_g                 = H5I_INVALID_HID;
+hid_t H5_rest_obj_err_maj_g               = H5I_INVALID_HID;
+hid_t H5_rest_parse_err_min_g             = H5I_INVALID_HID;
+hid_t H5_rest_link_table_err_min_g        = H5I_INVALID_HID;
+hid_t H5_rest_link_table_iter_err_min_g   = H5I_INVALID_HID;
+hid_t H5_rest_attr_table_err_min_g        = H5I_INVALID_HID;
+hid_t H5_rest_attr_table_iter_err_min_g   = H5I_INVALID_HID;
+hid_t H5_rest_object_table_err_min_g      = H5I_INVALID_HID;
+hid_t H5_rest_object_table_iter_err_min_g = H5I_INVALID_HID;
 
 /*
  * The CURL pointer used for all cURL operations.
@@ -122,7 +124,16 @@ const char *dataspace_max_dims_keys[] = {"shape", "maxdims", (const char *)0};
 /* JSON keys to retrieve the path of a domain */
 const char *domain_keys[] = {"domain", (const char *)0};
 
-/* JSON keys to retrieve a list of attributes */
+/* JSON keys to retrieve all of the information from a link when doing link iteration */
+const char *links_keys[]              = {"links", (const char *)0};
+const char *link_title_keys[]         = {"title", (const char *)0};
+const char *link_creation_time_keys[] = {"created", (const char *)0};
+
+/* JSON keys to retrieve the collection that a hard link belongs to
+ * (the type of object it points to), "groups", "datasets" or "datatypes"
+ */
+const char *link_collection_keys2[] = {"collection", (const char *)0};
+
 const char *attributes_keys[] = {"attributes", (const char *)0};
 
 /* Default size for the buffer to allocate during base64-encoding if the caller
@@ -461,6 +472,13 @@ H5_rest_init(hid_t vipl_id)
     if ((H5_rest_attr_table_iter_err_min_g =
              H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't iterate through attribute table")) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create message for attribute iteration error");
+    if ((H5_rest_object_table_err_min_g =
+             H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't build table of objects for iteration")) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL,
+                        "can't create error message for object table build error");
+    if ((H5_rest_object_table_iter_err_min_g =
+             H5Ecreate_msg(H5_rest_err_class_g, H5E_MINOR, "Can't iterate through object table")) < 0)
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't create message for object iteration error");
 
     /* Initialized */
     H5_rest_initialized_g = TRUE;
@@ -521,6 +539,12 @@ done:
         if (H5_rest_attr_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_attr_table_iter_err_min_g) < 0)
             FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
                             "can't unregister error message for iterating over attribute table");
+        if (H5_rest_object_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_object_table_err_min_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
+                            "can't unregister error message for build object table");
+        if (H5_rest_object_table_iter_err_min_g >= 0 && H5Eclose_msg(H5_rest_object_table_iter_err_min_g) < 0)
+            FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL,
+                            "can't unregister error message for iterating over object table");
 
         if (H5Eunregister_class(H5_rest_err_class_g) < 0)
             FUNC_DONE_ERROR(H5E_VOL, H5E_CLOSEERROR, FAIL, "can't unregister from HDF5 error API");
@@ -1882,6 +1906,7 @@ done:
     return ret_value;
 } /* end RV_copy_object_URI_parse_callback() */
 
+
 /*-------------------------------------------------------------------------
  * Function:    RV_find_object_by_path
  *
@@ -2153,7 +2178,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
     printf("   \\**********************************/\n\n");
 #endif
 
-    CURL_PERFORM(curl, H5E_LINK, H5E_PATH, FALSE);
+    CURL_PERFORM(curl, H5E_LINK, H5E_PATH, FAIL);
 
     if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get HTTP response code");
@@ -3236,6 +3261,7 @@ RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size)
 done:
     return ret_value;
 } /* end RV_base64_decode() */
+
 /* Helper function to store the version of the external HSDS server */
 herr_t
 RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callback_data_out)
@@ -3371,3 +3397,44 @@ H5PLget_plugin_info(void)
 {
     return &H5VL_rest_g;
 } /* end H5PLget_plugin_info() */
+
+/*-------------------------------------------------------------------------
+ * Function:    H5_rest_compare_string_keys
+ *
+ * Purpose:     Comparison function to compare two string keys in an
+ *              rv_hash_table_t. This function is mostly used when
+ *              attempting to determine object uniqueness by some
+ *              information from the server, such as an object ID.
+ *
+ * Return:      Non-zero if the two string keys are equal/Zero if the two
+ *              string keys are not equal
+ *
+ * Programmer:  Jordan Henderson
+ *              May, 2018
+ */
+int
+H5_rest_compare_string_keys(void *value1, void *value2)
+{
+    const char *val1 = (const char *)value1;
+    const char *val2 = (const char *)value2;
+
+    return !strcmp(val1, val2);
+} /* end H5_rest_compare_string_keys() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_free_visited_link_hash_table_key
+ *
+ * Purpose:     Helper function to free keys in the visited link hash table
+ *              used by link iteration.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Jordan Henderson
+ *              June, 2018
+ */
+void
+RV_free_visited_link_hash_table_key(rv_hash_table_key_t value)
+{
+    RV_free(value);
+    value = NULL;
+} /* end RV_free_visited_link_hash_table_key() */
