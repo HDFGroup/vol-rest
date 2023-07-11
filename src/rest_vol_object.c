@@ -899,6 +899,9 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Ovisit(_by_name) on attribute is currently unsupported");
                     }
                         
+                    if (RV_set_object_type_header(iter_object_type, &object_type_header) < 0)
+                        FUNC_DONE_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid object type provided to H5Ovisit_by_name");
+
                     switch (iter_object_type) {
                         case H5I_FILE:
                         case H5I_GROUP:
@@ -908,8 +911,6 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, FAIL,
                                                 "can't open object iteration group");
 
-                            object_type_header = "groups";
-                            iter_object_type     = H5I_GROUP;
                             break;
 
                         case H5I_DATASET:
@@ -919,8 +920,6 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, FAIL,
                                                 "can't open object iteration dataset");
 
-                            object_type_header = "datasets";
-                            iter_object_type     = H5I_DATASET;
                             break;
 
                         case H5I_DATATYPE:
@@ -930,8 +929,6 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, FAIL,
                                                 "can't open object iteration dataset");
 
-                            object_type_header = "datatypes";
-                            iter_object_type     = H5I_DATATYPE;
                             break;
 
                         case H5I_ATTR: {
@@ -1481,7 +1478,8 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
     int                 url_len     = 0;
     H5I_type_t          obj_type    = H5I_UNINIT;
     char               *host_header = NULL;
-
+    RV_object_t *subgroup = NULL;
+    
     if (!HTTP_response)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response was NULL");
     if (!object_table)
@@ -1555,7 +1553,20 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
         if (NULL == (link_name = YAJL_GET_STRING(link_field_obj)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link name was NULL");
 
-        strncpy(table[i].link_name, link_name, LINK_NAME_MAX_LENGTH);
+        if (strlen(link_name) + 1 > LINK_NAME_MAX_LENGTH)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "retrieved link name was too long");
+
+        if (object_iter_data->iter_obj_parent->obj_type == H5I_FILE) {
+            char abs_link_name[LINK_NAME_MAX_LENGTH];
+
+            abs_link_name[0] = '/';
+            abs_link_name[1] = '\0';
+            strcat(abs_link_name, link_name);
+
+            strncpy(table[i].link_name, abs_link_name, LINK_NAME_MAX_LENGTH);
+        } else {
+            strncpy(table[i].link_name, link_name, LINK_NAME_MAX_LENGTH);
+        }
 
         /* Get the current link's creation time */
         if (NULL == (link_field_obj = yajl_tree_get(link_obj, link_creation_time_keys, yajl_t_number)))
@@ -1734,15 +1745,38 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
 
                     CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
 
+                    /* Use the group we are recursing into as the parent during the recursion */
+                    if ((subgroup = RV_malloc(sizeof(RV_object_t))) == NULL)   
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "can't allocate memory for subgroup");
+
+                    memcpy(subgroup->URI, table[i].object_URI, URI_MAX_LENGTH);
+                    subgroup->domain = object_iter_data->iter_obj_parent->domain;
+                    subgroup->obj_type = H5I_GROUP;
+                    subgroup->u.group.gcpl_id = H5P_DEFAULT;
+                    subgroup->u.group.gapl_id = H5P_DEFAULT;
+
+                    object_iter_data->iter_obj_parent->domain->u.file.ref_count++;
+                    
+                    iter_data subtable_iter_data;
+
+                    memcpy(&subtable_iter_data, object_iter_data, sizeof(iter_data));
+
+                    subtable_iter_data.iter_obj_parent = subgroup;
+
                     if (RV_build_object_table(
                             response_buffer.buffer, true, sort_func, &table[i].subgroup.subgroup_object_table,
-                            &table[i].subgroup.num_entries, object_iter_data, visited_link_table) < 0)
+                            &table[i].subgroup.num_entries, &subtable_iter_data, visited_link_table) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL,
                                         "can't build link table for subgroup '%s'", table[i].link_name);
 
                     if (url_encoded_link_name) {
                         curl_free(url_encoded_link_name);
                         url_encoded_link_name = NULL;
+                    }
+
+                    if (subgroup) {
+                        RV_group_close(subgroup, H5P_DEFAULT, NULL);
+                        subgroup = NULL;
                     }
 
                 } /* end if */
@@ -1785,6 +1819,8 @@ done:
     if (ret_value < 0)
         RV_free(table);
 
+    if (subgroup)
+        RV_group_close(subgroup, H5P_DEFAULT, NULL);
     if (url_encoded_link_name)
         curl_free(url_encoded_link_name);
     if (parse_tree)
