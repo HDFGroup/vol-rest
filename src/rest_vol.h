@@ -513,7 +513,6 @@ struct RV_object_t {
     } u;
 };
 
-
 /*
  * A struct which is filled out and passed to the link and attribute
  * iteration callback functions when calling
@@ -525,17 +524,16 @@ typedef struct iter_data {
     hbool_t         is_recursive;
     hsize_t        *idx_p;
     hid_t           iter_obj_id;
-    unsigned oinfo_fields;
+    unsigned        oinfo_fields;
     void           *op_data;
     RV_object_t    *iter_obj_parent;
-    
+
     union {
         H5A_operator2_t attr_iter_op;
         H5L_iterate_t   link_iter_op;
-        H5O_iterate2_t object_iter_op;
+        H5O_iterate2_t  object_iter_op;
     } iter_function;
 } iter_data;
-
 
 /*
  * A struct which is filled out during object iteration and contains
@@ -628,7 +626,7 @@ int H5_rest_compare_string_keys(void *value1, void *value2);
 /* Helper to turn an object type into a string for a server request */
 herr_t RV_set_object_type_header(H5I_type_t parent_obj_type, const char **parent_obj_type_header);
 
-void  RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
+void RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
 
 #define SERVER_VERSION_MATCHES_OR_EXCEEDS(version, major_needed, minor_needed, patch_needed)                 \
     (version.major > major_needed) || (version.major == major_needed && version.minor > minor_needed) ||     \

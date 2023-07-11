@@ -710,18 +710,18 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
 {
     RV_object_t *loc_obj   = (RV_object_t *)obj;
     herr_t       ret_value = SUCCEED;
-    
-    H5VL_loc_params_t *attr_loc_params = NULL;
-    H5I_type_t   iter_object_type = H5I_UNINIT;
-    H5O_info2_t  oinfo;
-    RV_object_t *iter_object = NULL;
-    RV_object_t *attr_object = NULL;
-    hid_t        iter_object_id  = H5I_INVALID_HID;
-    char         visit_by_name_URI[URI_MAX_LENGTH];
-    char         request_url[URL_MAX_LENGTH];
-    char        *host_header     = NULL;
-    int          url_len          = 0;
-    size_t       host_header_len = 0;
+
+    H5VL_loc_params_t *attr_loc_params  = NULL;
+    H5I_type_t         iter_object_type = H5I_UNINIT;
+    H5O_info2_t        oinfo;
+    RV_object_t       *iter_object    = NULL;
+    RV_object_t       *attr_object    = NULL;
+    hid_t              iter_object_id = H5I_INVALID_HID;
+    char               visit_by_name_URI[URI_MAX_LENGTH];
+    char               request_url[URL_MAX_LENGTH];
+    char              *host_header     = NULL;
+    int                url_len         = 0;
+    size_t             host_header_len = 0;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received object-specific call with following parameters:\n");
@@ -762,14 +762,15 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             object_iter_data.idx_p                        = 0;
 
             if (loc_obj->obj_type == H5I_ATTR)
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Ovisit(_by_name) on an attribute is unsupported");
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL,
+                                "H5Ovisit(_by_name) on an attribute is unsupported");
 
             if (!object_iter_data.iter_function.object_iter_op)
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "no object iteration function specified");
 
             switch (loc_params->type) {
                 case (H5VL_OBJECT_BY_SELF): {
-                    
+
                     if (RV_set_object_type_header(loc_obj->obj_type, &object_type_header) < 0)
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "bad object type");
 
@@ -779,12 +780,13 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                      * this function does not close the fields themselves in the real object, such as a
                      * dataset's dataspace.
                      */
-                    
+
                     /* Increment refs for top-level file */
                     loc_obj->domain->u.file.ref_count++;
 
                     if ((iter_object = RV_malloc(sizeof(RV_object_t))) == NULL)
-                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "couldn't allocate space for iteration object");
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL,
+                                        "couldn't allocate space for iteration object");
 
                     memcpy(iter_object, loc_obj, sizeof(RV_object_t));
 
@@ -792,7 +794,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                     switch (loc_obj->obj_type) {
                         case H5I_FILE:
                             /* Copy fapl, fcpl, and filepath name to new object */
-                            
+
                             if (H5I_INVALID_HID ==
                                 (iter_object->u.file.fapl_id = H5Pcopy(loc_obj->u.file.fapl_id)))
                                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FAPL");
@@ -810,7 +812,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                             /* This is a copy of the file, not a reference to the same memory */
                             loc_obj->domain->u.file.ref_count--;
                             iter_object->u.file.ref_count = 1;
-                            iter_object_type = H5I_FILE;
+                            iter_object_type              = H5I_FILE;
                             break;
                         case H5I_GROUP:
                             if (loc_obj->u.group.gcpl_id != H5P_GROUP_CREATE_DEFAULT) {
@@ -820,7 +822,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                                                     "object");
                             }
 
-                            iter_object_type     = H5I_GROUP;
+                            iter_object_type = H5I_GROUP;
                             break;
 
                         case H5I_DATASET:
@@ -842,7 +844,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                                                 "can't increment field's ref. count for copy of  "
                                                 "dataset");
 
-                            iter_object_type     = H5I_DATASET;
+                            iter_object_type = H5I_DATASET;
                             break;
 
                         case H5I_DATATYPE:
@@ -855,11 +857,12 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                                                 "can't increment field's ref. count for copy of  "
                                                 "datatype");
 
-                            iter_object_type     = H5I_DATATYPE;
+                            iter_object_type = H5I_DATATYPE;
                             break;
 
                         case H5I_ATTR: {
-                            FUNC_GOTO_ERROR(H5E_UNSUPPORTED, H5E_UNSUPPORTED, FAIL, "H5Ovisit on attribute is currently unsupported");
+                            FUNC_GOTO_ERROR(H5E_UNSUPPORTED, H5E_UNSUPPORTED, FAIL,
+                                            "H5Ovisit on attribute is currently unsupported");
                             break;
                         } /* end H5Ovisit on H5I_ATTR case */
 
@@ -873,7 +876,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                 } /* end H5Ovisit H5VL_OBJECT_BY_SELF */
 
                 case (H5VL_OBJECT_BY_NAME): {
-                    
+
                     if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
 
@@ -882,26 +885,29 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                     if (RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name,
                                                &iter_object_type, RV_copy_object_URI_callback, NULL,
                                                visit_by_name_URI) < 0) {
-                                                                         
-                        /* If object was not found by name, try to open it as an attribute */           
+
+                        /* If object was not found by name, try to open it as an attribute */
 
                         if ((attr_loc_params = RV_calloc(sizeof(H5VL_loc_params_t))) == NULL)
-                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "can't allocate memory for attribute loc params");
+                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL,
+                                            "can't allocate memory for attribute loc params");
 
                         attr_loc_params->type = H5VL_OBJECT_BY_SELF;
 
                         if (NULL == (attr_object = RV_attr_open(loc_obj, attr_loc_params,
-                                                                     loc_params->loc_data.loc_by_name.name,
-                                                                     H5P_DEFAULT, H5P_DEFAULT, NULL)))
+                                                                loc_params->loc_data.loc_by_name.name,
+                                                                H5P_DEFAULT, H5P_DEFAULT, NULL)))
 
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
-                                        "failed to get URI of visited object by name");
+                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
+                                            "failed to get URI of visited object by name");
 
-                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Ovisit(_by_name) on attribute is currently unsupported");
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL,
+                                        "H5Ovisit(_by_name) on attribute is currently unsupported");
                     }
-                        
+
                     if (RV_set_object_type_header(iter_object_type, &object_type_header) < 0)
-                        FUNC_DONE_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "invalid object type provided to H5Ovisit_by_name");
+                        FUNC_DONE_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL,
+                                        "invalid object type provided to H5Ovisit_by_name");
 
                     switch (iter_object_type) {
                         case H5I_FILE:
@@ -934,7 +940,8 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
 
                         case H5I_ATTR: {
                             /* The object where the attribute is attached will be iterated */
-                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "H5Ovisit on an attribute is unsupported");
+                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL,
+                                            "H5Ovisit on an attribute is unsupported");
                             break;
                         } /* end switch for attr parent type */
 
@@ -942,7 +949,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL,
                                             "invalid parent object type supplied for visit");
                             break;
-                    } 
+                    }
 
                     break;
                 } /* end H5Ovisit_by_name */
@@ -956,7 +963,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             object_iter_data.iter_obj_parent = iter_object;
 
             if (url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s", base_URL, object_type_header,
-                                    object_iter_data.iter_obj_parent->URI) < 0)
+                                   object_iter_data.iter_obj_parent->URI) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
             if (url_len >= URL_MAX_LENGTH)
@@ -998,7 +1005,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             H5E_END_TRY;
 
             /* Register an hid_t for the iteration object */
-            if ((iter_object_id = H5VLwrap_register((void*) iter_object, iter_object_type)) < 0)
+            if ((iter_object_id = H5VLwrap_register((void *)iter_object, iter_object_type)) < 0)
                 FUNC_GOTO_ERROR(H5E_ID, H5E_CANTREGISTER, FAIL,
                                 "can't create ID for object to be iterated over");
             object_iter_data.iter_obj_id = iter_object_id;
@@ -1040,7 +1047,8 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             printf("   \\**********************************/\n\n");
 #endif
 
-            /* Do a first request to populate obj info in order to execute the callback on the top-level given object */
+            /* Do a first request to populate obj info in order to execute the callback on the top-level given
+             * object */
             CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
 
             if (RV_parse_response(response_buffer.buffer, NULL, &oinfo, RV_get_object_info_callback) < 0)
@@ -1062,22 +1070,21 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             switch (iter_object_type) {
                 case H5I_FILE:
                 case H5I_GROUP:
-                    if (url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s%s", 
-                        base_URL, 
-                        object_type_header,
-                        object_iter_data.iter_obj_parent->URI,
-                        (!strcmp(object_type_header, "groups") ? "/links" : "")) < 0)
+                    if (url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s%s", base_URL,
+                                           object_type_header, object_iter_data.iter_obj_parent->URI,
+                                           (!strcmp(object_type_header, "groups") ? "/links" : "")) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
-                                "H5Oiterate/visit request URL size exceeded maximum URL size");
+                                        "H5Oiterate/visit request URL size exceeded maximum URL size");
 
                     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
+                                        curl_err_buf);
 
                     CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
-                    
+
                     if (RV_parse_response(response_buffer.buffer, &object_iter_data, NULL,
                                           RV_object_iter_callback) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't iterate over links");
@@ -1139,7 +1146,8 @@ done:
             default:
                 break;
         }
-    } else {
+    }
+    else {
         /* If execution failed before the wrap, free the RV_object_t block directly*/
         RV_free(iter_object);
     }
@@ -1470,8 +1478,8 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
     int                 url_len     = 0;
     H5I_type_t          obj_type    = H5I_UNINIT;
     char               *host_header = NULL;
-    RV_object_t *subgroup = NULL;
-    
+    RV_object_t        *subgroup    = NULL;
+
     if (!HTTP_response)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response was NULL");
     if (!object_table)
@@ -1556,7 +1564,8 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
             strcat(abs_link_name, link_name);
 
             strncpy(table[i].link_name, abs_link_name, LINK_NAME_MAX_LENGTH);
-        } else {
+        }
+        else {
             strncpy(table[i].link_name, link_name, LINK_NAME_MAX_LENGTH);
         }
 
@@ -1601,22 +1610,25 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
         /* Get the URI of the object the current link points to */
         switch (table[i].link_info.type) {
             case H5L_TYPE_HARD: {
-                char *object_URI = NULL;
-                size_t id_len = 0;
+                char  *object_URI = NULL;
+                size_t id_len     = 0;
 
                 if (NULL == (link_field_obj = yajl_tree_get(link_obj, object_id_keys, yajl_t_string)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "failed to parse object URI from hard link");
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL,
+                                    "failed to parse object URI from hard link");
 
                 if (NULL == (object_URI = YAJL_GET_STRING(link_field_obj)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "object URI parsed from hard link was NULL");
-                
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL,
+                                    "object URI parsed from hard link was NULL");
+
                 id_len = strlen(object_URI);
 
                 if (id_len > URI_MAX_LENGTH - 1)
-                    FUNC_DONE_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "parsed object URI exceeded maximum length!");
+                    FUNC_DONE_ERROR(H5E_LINK, H5E_BADVALUE, FAIL,
+                                    "parsed object URI exceeded maximum length!");
 
                 memcpy(table[i].object_URI, object_URI, id_len + 1);
-                
+
                 break;
             }
             case H5L_TYPE_SOFT:
@@ -1738,17 +1750,18 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
                     CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
 
                     /* Use the group we are recursing into as the parent during the recursion */
-                    if ((subgroup = RV_malloc(sizeof(RV_object_t))) == NULL)   
-                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "can't allocate memory for subgroup");
+                    if ((subgroup = RV_malloc(sizeof(RV_object_t))) == NULL)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL,
+                                        "can't allocate memory for subgroup");
 
                     memcpy(subgroup->URI, table[i].object_URI, URI_MAX_LENGTH);
-                    subgroup->domain = object_iter_data->iter_obj_parent->domain;
-                    subgroup->obj_type = H5I_GROUP;
+                    subgroup->domain          = object_iter_data->iter_obj_parent->domain;
+                    subgroup->obj_type        = H5I_GROUP;
                     subgroup->u.group.gcpl_id = H5P_DEFAULT;
                     subgroup->u.group.gapl_id = H5P_DEFAULT;
 
                     object_iter_data->iter_obj_parent->domain->u.file.ref_count++;
-                    
+
                     iter_data subtable_iter_data;
 
                     memcpy(&subtable_iter_data, object_iter_data, sizeof(iter_data));

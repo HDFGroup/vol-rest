@@ -36,7 +36,6 @@ static void   RV_free_link_table(link_table_entry *link_table, size_t num_entrie
 static herr_t RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_data *iter_data,
                                      const char *cur_link_rel_path);
 
-
 /* Qsort callbacks to sort links by name or creation order */
 static int H5_rest_cmp_links_by_creation_order_inc(const void *link1, const void *link2);
 static int H5_rest_cmp_links_by_creation_order_dec(const void *link1, const void *link2);

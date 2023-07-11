@@ -1906,7 +1906,6 @@ done:
     return ret_value;
 } /* end RV_copy_object_URI_parse_callback() */
 
-
 /*-------------------------------------------------------------------------
  * Function:    RV_find_object_by_path
  *
