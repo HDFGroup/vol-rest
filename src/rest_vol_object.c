@@ -809,6 +809,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
 
                             /* This is a copy of the file, not a reference to the same memory */
                             loc_obj->domain->u.file.ref_count--;
+                            iter_object->u.file.ref_count = 1;
                             iter_object_type = H5I_FILE;
                             break;
                         case H5I_GROUP:
@@ -958,8 +959,6 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                                     object_iter_data.iter_obj_parent->URI) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-            // (!strcmp(object_type_header, "groups")) ? "/links" : "")
-
             if (url_len >= URL_MAX_LENGTH)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                 "H5Oiterate/visit request URL size exceeded maximum URL size");
@@ -1005,13 +1004,6 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             object_iter_data.iter_obj_id = iter_object_id;
 
             /* Unlike H5Lvisit, H5Ovisit executes the provided callback on the directly specified object. */
-
-            /* Why FOBP? We can just make a request to the URI with whatever fields we want directly. */
-            /*
-            if (RV_find_object_by_path(object_iter_data.iter_obj_parent, ".", &iter_object_type,
-                                       RV_get_object_info_callback, NULL, &oinfo) < 0)
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to get object info");
-            */
 
             /* Make GET request to server */
 
