@@ -123,12 +123,13 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
 
     if (name) {
         /* Parent name is included if it is not the root and the datatype is opened by relative path */
-        hbool_t include_parent_name = strcmp(parent->handle_path, "/") && (name[0] != '/'); 
+        hbool_t include_parent_name = strcmp(parent->handle_path, "/") && (name[0] != '/');
 
-        path_size = (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(name) + 1 : 1 + strlen(name) + 1);
-        
+        path_size =
+            (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(name) + 1 : 1 + strlen(name) + 1);
+
         if ((new_datatype->handle_path = RV_malloc(path_size)) == NULL)
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
 
         if (include_parent_name) {
             strncpy(new_datatype->handle_path, parent->handle_path, strlen(parent->handle_path));
@@ -392,12 +393,13 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
 
     if (name) {
         /* Parent name is included if it is not the root and the datatype is opened by relative path */
-        hbool_t include_parent_name = strcmp(parent->handle_path, "/") && (name[0] != '/'); 
+        hbool_t include_parent_name = strcmp(parent->handle_path, "/") && (name[0] != '/');
 
-        path_size = (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(name) + 1 : 1 + strlen(name) + 1);
-        
+        path_size =
+            (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(name) + 1 : 1 + strlen(name) + 1);
+
         if ((datatype->handle_path = RV_malloc(path_size)) == NULL)
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
 
         if (include_parent_name) {
             strncpy(datatype->handle_path, parent->handle_path, strlen(parent->handle_path));

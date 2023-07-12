@@ -76,7 +76,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
     new_file->u.file.fapl_id       = FAIL;
     new_file->u.file.fcpl_id       = FAIL;
     new_file->u.file.ref_count     = 1;
-    new_file->handle_path = "/";
+    new_file->handle_path          = "/";
 
     /* Copy the FAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Fget_access_plist() will function correctly. Note that due to the nature
@@ -344,8 +344,8 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     file->u.file.fapl_id       = FAIL;
     file->u.file.fcpl_id       = FAIL;
     file->u.file.ref_count     = 1;
-    file->handle_path = "/";
-    
+    file->handle_path          = "/";
+
     /* Store self-referential pointer in the domain field for this object
      * to simplify code for other types of objects
      */

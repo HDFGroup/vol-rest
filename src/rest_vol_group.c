@@ -47,8 +47,8 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     size_t       host_header_len       = 0;
     size_t       base64_buf_size       = 0;
     size_t       plist_nalloc          = 0;
-    size_t path_size = 0;
-    size_t path_len = 0;
+    size_t       path_size             = 0;
+    size_t       path_len              = 0;
     char        *host_header           = NULL;
     char        *create_request_body   = NULL;
     char        *path_dirname          = NULL;
@@ -98,12 +98,13 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
 
     if (name) {
         /* Parent name is included if it is not the root and the group is opened by relative path */
-        hbool_t include_parent_name = strcmp(parent->handle_path, "/") && (name[0] != '/'); 
+        hbool_t include_parent_name = strcmp(parent->handle_path, "/") && (name[0] != '/');
 
-        path_size = (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(name) + 1 : 1 + strlen(name) + 1);
-        
+        path_size =
+            (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(name) + 1 : 1 + strlen(name) + 1);
+
         if ((new_group->handle_path = RV_malloc(path_size)) == NULL)
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
 
         if (include_parent_name) {
             strncpy(new_group->handle_path, parent->handle_path, strlen(parent->handle_path));
@@ -120,7 +121,6 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
         path_len += (strlen(name) + 1);
     }
 
-    
     /* Copy the GAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * group access property list functions will function correctly
      */
@@ -366,11 +366,11 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
     htri_t       search_ret;
     void        *ret_value = NULL;
     // char        *base64_binary_gcpl = NULL;
-    void   *binary_gcpl      = NULL;
-    size_t *binary_gcpl_size = 0;
-    size_t path_size = 0;
-    size_t path_len = 0;
-    H5I_type_t obj_type = H5I_UNINIT;
+    void      *binary_gcpl      = NULL;
+    size_t    *binary_gcpl_size = 0;
+    size_t     path_size        = 0;
+    size_t     path_len         = 0;
+    H5I_type_t obj_type         = H5I_UNINIT;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received group open call with following parameters:\n");
@@ -404,12 +404,13 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
 
     if (name) {
         /* Parent name is included if it is not the root and the group is opened by relative path */
-        hbool_t include_parent_name = strcmp(parent->handle_path, "/") && (name[0] != '/'); 
+        hbool_t include_parent_name = strcmp(parent->handle_path, "/") && (name[0] != '/');
 
-        path_size = (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(name) + 1 : 1 + strlen(name) + 1);
-        
+        path_size =
+            (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(name) + 1 : 1 + strlen(name) + 1);
+
         if ((group->handle_path = RV_malloc(path_size)) == NULL)
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
 
         if (include_parent_name) {
             strncpy(group->handle_path, parent->handle_path, strlen(parent->handle_path));
