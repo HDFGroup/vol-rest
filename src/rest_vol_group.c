@@ -47,6 +47,8 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     size_t       host_header_len       = 0;
     size_t       base64_buf_size       = 0;
     size_t       plist_nalloc          = 0;
+    size_t path_size = 0;
+    size_t path_len = 0;
     char        *host_header           = NULL;
     char        *create_request_body   = NULL;
     char        *path_dirname          = NULL;
@@ -81,6 +83,9 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     if (NULL == (new_group = (RV_object_t *)RV_malloc(sizeof(*new_group))))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group object");
 
+    if (!parent->handle_path)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_BADVALUE, NULL, "parent object has NULL path");
+
     new_group->URI[0]          = '\0';
     new_group->obj_type        = H5I_GROUP;
     new_group->u.group.gapl_id = FAIL;
@@ -89,6 +94,33 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     new_group->domain = parent->domain;
     parent->domain->u.file.ref_count++;
 
+    new_group->handle_path = NULL;
+
+    if (name) {
+        /* Parent name is included if it is not the root and the group is opened by relative path */
+        hbool_t include_parent_name = strcmp(parent->handle_path, "/") && (name[0] != '/'); 
+
+        path_size = (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(name) + 1 : 1 + strlen(name) + 1);
+        
+        if ((new_group->handle_path = RV_malloc(path_size)) == NULL)
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
+
+        if (include_parent_name) {
+            strncpy(new_group->handle_path, parent->handle_path, strlen(parent->handle_path));
+            path_len += strlen(parent->handle_path);
+        }
+
+        /* Add leading slash if not in group name */
+        if (name[0] != '/') {
+            new_group->handle_path[path_len] = '/';
+            path_len += 1;
+        }
+
+        strncpy(new_group->handle_path + path_len, name, strlen(name) + 1);
+        path_len += (strlen(name) + 1);
+    }
+
+    
     /* Copy the GAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * group access property list functions will function correctly
      */
@@ -336,7 +368,8 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
     // char        *base64_binary_gcpl = NULL;
     void   *binary_gcpl      = NULL;
     size_t *binary_gcpl_size = 0;
-
+    size_t path_size = 0;
+    size_t path_len = 0;
     H5I_type_t obj_type = H5I_UNINIT;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -351,6 +384,9 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
 
+    if (!parent->handle_path)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_BADVALUE, NULL, "parent object has NULL path");
+
     /* Allocate and setup internal Group struct */
     if (NULL == (group = (RV_object_t *)RV_malloc(sizeof(*group))))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group object");
@@ -363,6 +399,32 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
     /* Copy information about file the group is in */
     group->domain = parent->domain;
     parent->domain->u.file.ref_count++;
+
+    group->handle_path = NULL;
+
+    if (name) {
+        /* Parent name is included if it is not the root and the group is opened by relative path */
+        hbool_t include_parent_name = strcmp(parent->handle_path, "/") && (name[0] != '/'); 
+
+        path_size = (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(name) + 1 : 1 + strlen(name) + 1);
+        
+        if ((group->handle_path = RV_malloc(path_size)) == NULL)
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
+
+        if (include_parent_name) {
+            strncpy(group->handle_path, parent->handle_path, strlen(parent->handle_path));
+            path_len += strlen(parent->handle_path);
+        }
+
+        /* Add leading slash if not in group name */
+        if (name[0] != '/') {
+            group->handle_path[path_len] = '/';
+            path_len += 1;
+        }
+
+        strncpy(group->handle_path + path_len, name, strlen(name) + 1);
+        path_len += (strlen(name) + 1);
+    }
 
     /* Locate group and set domain */
 
@@ -691,6 +753,8 @@ RV_group_close(void *grp, hid_t dxpl_id, void **req)
     if (RV_file_close(_grp->domain, H5P_DEFAULT, NULL) < 0) {
         FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");
     }
+
+    RV_free(_grp->handle_path);
 
     RV_free(_grp);
     _grp = NULL;

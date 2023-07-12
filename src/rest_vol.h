@@ -473,6 +473,7 @@ typedef struct RV_attr_t {
     hid_t      aapl_id;
     hid_t      acpl_id;
     char      *attr_name;
+    char      *parent_name;
 } RV_attr_t;
 
 typedef struct RV_datatype_t {
@@ -485,6 +486,7 @@ struct RV_object_t {
     RV_object_t *domain;
     H5I_type_t   obj_type;
     char         URI[URI_MAX_LENGTH];
+    char        *handle_path;
 
     union {
         RV_datatype_t datatype;

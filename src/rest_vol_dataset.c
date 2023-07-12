@@ -105,6 +105,8 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
     RV_object_t *new_dataset             = NULL;
     curl_off_t   create_request_body_len = 0;
     size_t       host_header_len         = 0;
+    size_t       path_size               = 0;
+    size_t       path_len                = 0;
     char        *host_header             = NULL;
     char        *create_request_body     = NULL;
     char         request_url[URL_MAX_LENGTH];
@@ -143,6 +145,32 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
 
     new_dataset->domain = parent->domain;
     parent->domain->u.file.ref_count++;
+
+    new_dataset->handle_path = NULL;
+
+    if (name) {
+        /* Parent name is included if it is not the root and the dataset is opened by relative path */
+        hbool_t include_parent_name = strcmp(parent->handle_path, "/") && (name[0] != '/'); 
+
+        path_size = (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(name) + 1 : 1 + strlen(name) + 1);
+        
+        if ((new_dataset->handle_path = RV_malloc(path_size)) == NULL)
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
+
+        if (include_parent_name) {
+            strncpy(new_dataset->handle_path, parent->handle_path, strlen(parent->handle_path));
+            path_len += strlen(parent->handle_path);
+        }
+
+        /* Add leading slash if not in dataset path */
+        if (name[0] != '/') {
+            new_dataset->handle_path[path_len] = '/';
+            path_len += 1;
+        }
+
+        strncpy(new_dataset->handle_path + path_len, name, strlen(name) + 1);
+        path_len += (strlen(name) + 1);
+    }
 
     /* Copy the DAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Dget_access_plist() will function correctly
@@ -303,6 +331,8 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     htri_t       search_ret;
     void        *ret_value = NULL;
     loc_info     loc_info_out;
+    size_t       path_size = 0;
+    size_t       path_len  = 0;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset open call with following parameters:\n");
@@ -330,6 +360,32 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     /* Copy information about file that the newly-created dataset is in */
     dataset->domain = parent->domain;
     parent->domain->u.file.ref_count++;
+
+    dataset->handle_path = NULL;
+
+    if (name) {
+        /* Parent name is included if it is not the root and the dataset is opened by relative path */
+        hbool_t include_parent_name = strcmp(parent->handle_path, "/") && (name[0] != '/'); 
+
+        path_size = (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(name) + 1 : 1 + strlen(name) + 1);
+        
+        if ((dataset->handle_path = RV_malloc(path_size)) == NULL)
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
+
+        if (include_parent_name) {
+            strncpy(dataset->handle_path, parent->handle_path, strlen(parent->handle_path));
+            path_len += strlen(parent->handle_path);
+        }
+
+        /* Add leading slash if not in dataset path */
+        if (name[0] != '/') {
+            dataset->handle_path[path_len] = '/';
+            path_len += 1;
+        }
+
+        strncpy(dataset->handle_path + path_len, name, strlen(name) + 1);
+        path_len += (strlen(name) + 1);
+    }
 
     loc_info_out.URI         = dataset->URI;
     loc_info_out.domain      = dataset->domain;
@@ -1169,6 +1225,7 @@ RV_dataset_close(void *dset, hid_t dxpl_id, void **req)
         FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");
     }
 
+    RV_free(_dset->handle_path);
     RV_free(_dset);
     _dset = NULL;
 

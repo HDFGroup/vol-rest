@@ -275,8 +275,35 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file, group, dataset or committed datatype");
 
     switch (args->op_type) {
+        case H5VL_OBJECT_GET_NAME: {
+            size_t copy_size = 0;
+            char *name = loc_obj->handle_path;
+
+            if (!name)
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, FAIL, "object has NULL name");
+            
+            /* Only return the name if the user provided an allocate buffer */
+            if (args->args.get_name.buf) {
+                /* Initialize entire buffer regardless of path size */
+                memset(args->args.get_name.buf, 0, args->args.get_name.buf_size);
+
+                /* If given an attribute, H5Iget_name returns the name of the object an attribute is attached to */
+                if (loc_obj->obj_type == H5I_ATTR)
+                    if ((name = loc_obj->u.attribute.parent_name) == NULL)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "attribute parent has NULL name");
+
+                copy_size = (strlen(name) < args->args.get_name.buf_size - 1) ? strlen(name) : args->args.get_name.buf_size - 1;
+                strncpy(args->args.get_name.buf, name, copy_size);
+                args->args.get_name.buf[copy_size + 1] = '\0';
+            }
+
+            if (args->args.get_name.name_len) {
+                *args->args.get_name.name_len = strlen(name);
+            }
+
+        }
+            break;
         case H5VL_OBJECT_GET_FILE:
-        case H5VL_OBJECT_GET_NAME:
         case H5VL_OBJECT_GET_TYPE:
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "unsupported object operation");
             break;

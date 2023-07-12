@@ -58,6 +58,8 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
     size_t       host_header_len       = 0;
     size_t       datatype_body_len     = 0;
     size_t       attr_name_len         = 0;
+    size_t       path_size             = 0;
+    size_t       path_len              = 0;
     char        *host_header           = NULL;
     char        *create_request_body   = NULL;
     char        *datatype_body         = NULL;
@@ -113,6 +115,41 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
 
     new_attribute->domain = parent->domain;
     parent->domain->u.file.ref_count++;
+
+    new_attribute->handle_path = NULL;
+
+    if (attr_name) {
+        /* Parent name is included if it is not the root */
+        hbool_t include_parent_name = strcmp(parent->handle_path, "/"); 
+
+        path_size = (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(attr_name) + 1 : 1 + strlen(attr_name) + 1);
+        
+        if ((new_attribute->handle_path = RV_malloc(path_size)) == NULL)
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
+
+        if (include_parent_name) {
+            strncpy(new_attribute->handle_path, parent->handle_path, strlen(parent->handle_path));
+            path_len += strlen(parent->handle_path);
+        }
+
+        /* Add leading slash if not in attribute name */
+        if (attr_name[0] != '/') {
+            new_attribute->handle_path[path_len] = '/';
+            path_len += 1;
+        }
+
+        strncpy(new_attribute->handle_path + path_len, attr_name, strlen(attr_name) + 1);
+        path_len += (strlen(attr_name) + 1);
+    }
+
+    new_attribute->u.attribute.parent_name = NULL;
+
+    if (parent->handle_path) {
+        if ((new_attribute->u.attribute.parent_name = RV_malloc(strlen(parent->handle_path) + 1)) == NULL)
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute parent name");
+
+        strncpy(new_attribute->u.attribute.parent_name, parent->handle_path, strlen(parent->handle_path) + 1);
+    }
 
     /* If this is a call to H5Acreate_by_name, locate the real parent object */
     if (H5VL_OBJECT_BY_NAME == loc_params->type) {
@@ -402,6 +439,8 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
     RV_object_t *attribute       = NULL;
     size_t       attr_name_len   = 0;
     size_t       host_header_len = 0;
+    size_t       path_size       = 0;
+    size_t       path_len        = 0;
     char        *host_header     = NULL;
     char        *found_attr_name = NULL;
     char         request_url[URL_MAX_LENGTH];
@@ -455,6 +494,41 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
 
     attribute->domain = parent->domain;
     parent->domain->u.file.ref_count++;
+
+    attribute->handle_path = NULL;
+
+    if (attr_name) {
+        /* Parent name is included if it is not the root */
+        hbool_t include_parent_name = strcmp(parent->handle_path, "/"); 
+
+        path_size = (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(attr_name) + 1 : 1 + strlen(attr_name) + 1);
+        
+        if ((attribute->handle_path = RV_malloc(path_size)) == NULL)
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
+
+        if (include_parent_name) {
+            strncpy(attribute->handle_path, parent->handle_path, strlen(parent->handle_path));
+            path_len += strlen(parent->handle_path);
+        }
+
+        /* Add leading slash if not in attribute name */
+        if (attr_name[0] != '/') {
+            attribute->handle_path[path_len] = '/';
+            path_len += 1;
+        }
+
+        strncpy(attribute->handle_path + path_len, attr_name, strlen(attr_name) + 1);
+        path_len += (strlen(attr_name) + 1);
+    }
+
+    attribute->u.attribute.parent_name = NULL;
+
+    if (parent->handle_path) {
+        if ((attribute->u.attribute.parent_name = RV_malloc(strlen(parent->handle_path) + 1)) == NULL)
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute parent name");
+
+        strncpy(attribute->u.attribute.parent_name, parent->handle_path, strlen(parent->handle_path) + 1);
+    }
 
     /* Set the parent object's type and URI in the attribute's appropriate fields */
     switch (loc_params->type) {
@@ -2170,10 +2244,17 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                     }
 
                     /* Increment refs for specific type */
+
+                    RV_object_t *attr_iter_obj = (RV_object_t *)attr_iter_object;
+
+                    if ((attr_iter_obj->handle_path = RV_malloc(strlen(loc_obj->handle_path) +1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for copy of object path");
+
+                    strncpy(attr_iter_obj->handle_path, loc_obj->handle_path, strlen(loc_obj->handle_path) + 1);
+
                     switch (parent_obj_type) {
                         case H5I_FILE:
                             /* Copy fapl, fcpl, and filepath name to new object */
-                            RV_object_t *attr_iter_obj = (RV_object_t *)attr_iter_object;
 
                             if (H5I_INVALID_HID ==
                                 (attr_iter_obj->u.file.fapl_id = H5Pcopy(loc_obj->u.file.fapl_id)))
@@ -2602,6 +2683,8 @@ RV_attr_close(void *attr, hid_t dxpl_id, void **req)
     if (RV_file_close(_attr->domain, H5P_DEFAULT, NULL) < 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCLOSEOBJ, FAIL, "couldn't close attr domain");
 
+    RV_free(_attr->u.attribute.parent_name);
+    RV_free(_attr->handle_path);
     RV_free(_attr);
     _attr = NULL;
 
