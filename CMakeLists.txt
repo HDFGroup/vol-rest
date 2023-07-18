@@ -566,6 +566,8 @@ include (${HDF5_VOL_REST_RESOURCES_DIR}/HDFCompilerFlags.cmake)
 # a pre-built HDF5 distribution
 #-----------------------------------------------------------------------------
 if (NOT PREBUILT_HDF5_DIR)
+  include_directories(${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME}/src)
+  include_directories(${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME}/src/H5FDsubfiling)
   add_subdirectory(${HDF5_DIR} ${PROJECT_BINARY_DIR}/${HDF5_DIR_NAME})
 else ()
   link_directories(${PREBUILT_HDF5_DIR}/lib)

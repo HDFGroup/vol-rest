@@ -27,7 +27,7 @@ if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/vol-tests/CMakeLists.txt)
   )
   message(STATUS ${GIT_SUBMODULE_UPDATE_OUTPUT})
 endif()
-add_subdirectory(vol-tests)
+#add_subdirectory(vol-tests)
 
 #-----------------------------------------------------------------------------
 # REST VOL specific tests

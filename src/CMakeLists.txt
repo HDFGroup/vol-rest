@@ -123,7 +123,7 @@ if (PREBUILT_HDF5_DIR)
 else ()
   add_custom_target(
     rest_vol_pubconf_depend
-    DEPENDS ${CMAKE_BINARY_DIR}/${HDF5_DIR_NAME}/H5pubconf.h
+    DEPENDS ${CMAKE_BINARY_DIR}/${HDF5_DIR_NAME}/src/H5pubconf.h
   )
 endif ()
 
