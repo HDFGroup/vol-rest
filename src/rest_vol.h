@@ -625,6 +625,9 @@ herr_t RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_
 /* Comparison function to compare two keys in an rv_hash_table_t */
 int H5_rest_compare_string_keys(void *value1, void *value2);
 
+/* Helper function to initialize an object's name based on its parent's name. */
+herr_t RV_set_object_handle_path(const char *obj_path, const char *parent_path, char **buf);
+
 /* Helper to turn an object type into a string for a server request */
 herr_t RV_set_object_type_header(H5I_type_t parent_obj_type, const char **parent_obj_type_header);
 

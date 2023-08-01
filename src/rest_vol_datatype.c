@@ -126,30 +126,8 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
 
     new_datatype->handle_path = NULL;
 
-    if (name) {
-        /* Parent name is included if it is not the root and the datatype is opened by relative path */
-        hbool_t include_parent_name = strcmp(parent->handle_path, "/") && (name[0] != '/');
-
-        path_size =
-            (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(name) + 1 : 1 + strlen(name) + 1);
-
-        if ((new_datatype->handle_path = RV_malloc(path_size)) == NULL)
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
-
-        if (include_parent_name) {
-            strncpy(new_datatype->handle_path, parent->handle_path, strlen(parent->handle_path));
-            path_len += strlen(parent->handle_path);
-        }
-
-        /* Add leading slash if not in datatype path */
-        if (name[0] != '/') {
-            new_datatype->handle_path[path_len] = '/';
-            path_len += 1;
-        }
-
-        strncpy(new_datatype->handle_path + path_len, name, strlen(name) + 1);
-        path_len += (strlen(name) + 1);
-    }
+    if (RV_set_object_handle_path(name, parent->handle_path, &new_datatype->handle_path) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't set up object path");
 
     /* Copy the TAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * datatype access property list functions will function correctly
@@ -396,30 +374,8 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
 
     datatype->handle_path = NULL;
 
-    if (name) {
-        /* Parent name is included if it is not the root and the datatype is opened by relative path */
-        hbool_t include_parent_name = strcmp(parent->handle_path, "/") && (name[0] != '/');
-
-        path_size =
-            (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(name) + 1 : 1 + strlen(name) + 1);
-
-        if ((datatype->handle_path = RV_malloc(path_size)) == NULL)
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
-
-        if (include_parent_name) {
-            strncpy(datatype->handle_path, parent->handle_path, strlen(parent->handle_path));
-            path_len += strlen(parent->handle_path);
-        }
-
-        /* Add leading slash if not in datatype path */
-        if (name[0] != '/') {
-            datatype->handle_path[path_len] = '/';
-            path_len += 1;
-        }
-
-        strncpy(datatype->handle_path + path_len, name, strlen(name) + 1);
-        path_len += (strlen(name) + 1);
-    }
+    if (RV_set_object_handle_path(name, parent->handle_path, &datatype->handle_path) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't set up object path");
 
     loc_info_out.URI         = datatype->URI;
     loc_info_out.domain      = datatype->domain;

@@ -3382,6 +3382,56 @@ done:
     return (ret_value);
 } /* end RV_set_object_type_header */
 
+/* Helper function to initialize an object's name based on its parent's name. 
+ * Allocates memory that must be closed by caller. */
+herr_t RV_set_object_handle_path(const char *obj_path, const char *parent_path, char **buf) {
+    herr_t ret_value = SUCCEED;
+    hbool_t include_parent_path = false;
+    size_t path_size = 0;
+    size_t path_len = 0;
+    char *handle_path = NULL;
+
+    /* Objects can be created/opened without reference to their path. Leave handle_path NULL in this case */
+    if (!obj_path) {
+        *buf = NULL;
+        FUNC_GOTO_DONE(SUCCEED);
+    }
+
+    /* Parent name is included if it is not the root and the object is opened by relative path */
+    include_parent_path = parent_path && strcmp(parent_path, "/") && (obj_path[0] != '/');
+
+    path_size = include_parent_path ? 
+        strlen(parent_path) + 1 + strlen(obj_path) + 1 
+        : 1 + strlen(obj_path) + 1;
+
+    if ((handle_path = RV_malloc(path_size)) == NULL)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
+
+    if (include_parent_path) {
+        strncpy(handle_path, parent_path, strlen(parent_path));
+        path_len += strlen(parent_path);
+    }
+
+    /* Add leading slash if not in group name */
+    if (obj_path[0] != '/') {
+        handle_path[path_len] = '/';
+        path_len += 1;
+    }
+
+    strncpy(handle_path + path_len, obj_path, strlen(obj_path) + 1);
+    path_len += (strlen(obj_path) + 1);
+
+    /* Make user pointer point at allocated memory */
+    *buf = handle_path;
+
+done:
+    if (ret_value < 0) {
+        RV_free(handle_path);
+        *buf = NULL;
+    }
+
+    return ret_value;
+}
 /*************************************************
  * The following two routines allow the REST VOL *
  * connector to be dynamically loaded by HDF5.   *

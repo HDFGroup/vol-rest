@@ -118,30 +118,8 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
 
     new_attribute->handle_path = NULL;
 
-    if (attr_name) {
-        /* Parent name is included if it is not the root */
-        hbool_t include_parent_name = strcmp(parent->handle_path, "/");
-
-        path_size = (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(attr_name) + 1
-                                         : 1 + strlen(attr_name) + 1);
-
-        if ((new_attribute->handle_path = RV_malloc(path_size)) == NULL)
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
-
-        if (include_parent_name) {
-            strncpy(new_attribute->handle_path, parent->handle_path, strlen(parent->handle_path));
-            path_len += strlen(parent->handle_path);
-        }
-
-        /* Add leading slash if not in attribute name */
-        if (attr_name[0] != '/') {
-            new_attribute->handle_path[path_len] = '/';
-            path_len += 1;
-        }
-
-        strncpy(new_attribute->handle_path + path_len, attr_name, strlen(attr_name) + 1);
-        path_len += (strlen(attr_name) + 1);
-    }
+    if (RV_set_object_handle_path(attr_name, parent->handle_path, &new_attribute->handle_path) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, NULL, "can't set up object path");
 
     new_attribute->u.attribute.parent_name = NULL;
 
@@ -498,30 +476,8 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
 
     attribute->handle_path = NULL;
 
-    if (attr_name) {
-        /* Parent name is included if it is not the root */
-        hbool_t include_parent_name = strcmp(parent->handle_path, "/");
-
-        path_size = (include_parent_name ? strlen(parent->handle_path) + 1 + strlen(attr_name) + 1
-                                         : 1 + strlen(attr_name) + 1);
-
-        if ((attribute->handle_path = RV_malloc(path_size)) == NULL)
-            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
-
-        if (include_parent_name) {
-            strncpy(attribute->handle_path, parent->handle_path, strlen(parent->handle_path));
-            path_len += strlen(parent->handle_path);
-        }
-
-        /* Add leading slash if not in attribute name */
-        if (attr_name[0] != '/') {
-            attribute->handle_path[path_len] = '/';
-            path_len += 1;
-        }
-
-        strncpy(attribute->handle_path + path_len, attr_name, strlen(attr_name) + 1);
-        path_len += (strlen(attr_name) + 1);
-    }
+    if (RV_set_object_handle_path(attr_name, parent->handle_path, &attribute->handle_path) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, NULL, "can't set up object path");
 
     attribute->u.attribute.parent_name = NULL;
 
