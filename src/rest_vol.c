@@ -2462,7 +2462,7 @@ RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, vo
         new_domain->u.file.fcpl_id        = H5Pcopy(loc_info_out->domain->u.file.fcpl_id);
         new_domain->u.file.ref_count      = 1;
         new_domain->u.file.server_version = found_domain.u.file.server_version;
-            
+
         /* Allocate root "path" on heap for consistency with other RV_object_t types */
         if ((new_domain->handle_path = RV_malloc(2)) == NULL)
             FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath");
