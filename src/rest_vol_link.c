@@ -35,10 +35,6 @@ static herr_t RV_build_link_table(char *HTTP_response, hbool_t is_recursive,
 static void   RV_free_link_table(link_table_entry *link_table, size_t num_entries);
 static herr_t RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_data *iter_data,
                                      const char *cur_link_rel_path);
-static void   RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
-
-/* Comparison function to compare two string keys in an rv_hash_table_t. */
-static int H5_rest_compare_string_keys(void *value1, void *value2);
 
 /* Qsort callbacks to sort links by name or creation order */
 static int H5_rest_cmp_links_by_creation_order_inc(const void *link1, const void *link2);
@@ -52,17 +48,12 @@ const char *link_path_keys2[]   = {"h5path", (const char *)0};
 const char *link_domain_keys[]  = {"link", "h5domain", (const char *)0};
 const char *link_domain_keys2[] = {"h5domain", (const char *)0};
 
-/* JSON keys to retrieve all of the information from a link when doing link iteration */
-const char *links_keys[]              = {"links", (const char *)0};
-const char *link_title_keys[]         = {"title", (const char *)0};
-const char *link_creation_time_keys[] = {"created", (const char *)0};
-
 /* JSON keys to retrieve the collection that a hard link belongs to
  * (the type of object it points to), "groups", "datasets" or "datatypes"
  */
-const char *link_collection_keys[]  = {"link", "collection", (const char *)0};
-const char *link_collection_keys2[] = {"collection", (const char *)0};
-/*-------------------------------------------------------------------------
+const char *link_collection_keys[] = {"link", "collection", (const char *)0};
+
+/*
  * Function:    RV_link_create
  *
  * Purpose:     Creates an HDF5 link in the given object by making the
@@ -2271,47 +2262,6 @@ done:
 
     return ret_value;
 } /* end RV_traverse_link_table() */
-
-/*-------------------------------------------------------------------------
- * Function:    RV_free_visited_link_hash_table_key
- *
- * Purpose:     Helper function to free keys in the visited link hash table
- *              used by link iteration.
- *
- * Return:      Non-negative on success/Negative on failure
- *
- * Programmer:  Jordan Henderson
- *              June, 2018
- */
-static void
-RV_free_visited_link_hash_table_key(rv_hash_table_key_t value)
-{
-    RV_free(value);
-    value = NULL;
-} /* end RV_free_visited_link_hash_table_key() */
-
-/*-------------------------------------------------------------------------
- * Function:    H5_rest_compare_string_keys
- *
- * Purpose:     Comparison function to compare two string keys in an
- *              rv_hash_table_t. This function is mostly used when
- *              attempting to determine object uniqueness by some
- *              information from the server, such as an object ID.
- *
- * Return:      Non-zero if the two string keys are equal/Zero if the two
- *              string keys are not equal
- *
- * Programmer:  Jordan Henderson
- *              May, 2018
- */
-static int
-H5_rest_compare_string_keys(void *value1, void *value2)
-{
-    const char *val1 = (const char *)value1;
-    const char *val2 = (const char *)value2;
-
-    return !strcmp(val1, val2);
-} /* end H5_rest_compare_string_keys() */
 
 /*-------------------------------------------------------------------------
  * Function:    H5_rest_cmp_links_by_creation_order_inc

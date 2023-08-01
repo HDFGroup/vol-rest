@@ -119,6 +119,11 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     new_datatype->domain = parent->domain;
     parent->domain->u.file.ref_count++;
 
+    if (type_id > 0) {
+        if ((new_datatype->u.datatype.dtype_id = H5Tcopy(type_id)) == H5I_INVALID_HID)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, NULL, "can't copy type id");
+    }
+
     new_datatype->handle_path = NULL;
 
     if (name) {
