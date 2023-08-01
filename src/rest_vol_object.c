@@ -1799,7 +1799,8 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
                     subgroup->obj_type        = H5I_GROUP;
                     subgroup->u.group.gcpl_id = H5P_DEFAULT;
                     subgroup->u.group.gapl_id = H5P_DEFAULT;
-                    if (RV_set_object_handle_path(link_name, object_iter_data->iter_obj_parent->handle_path, &subgroup->handle_path) < 0)
+                    if (RV_set_object_handle_path(link_name, object_iter_data->iter_obj_parent->handle_path,
+                                                  &subgroup->handle_path) < 0)
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, FAIL, "can't set up object path");
 
                     object_iter_data->iter_obj_parent->domain->u.file.ref_count++;
