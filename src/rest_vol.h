@@ -630,9 +630,10 @@ void RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
 
 #define SERVER_VERSION_MATCHES_OR_EXCEEDS(version, major_needed, minor_needed, patch_needed)                 \
     (version.major > major_needed) || (version.major == major_needed && version.minor > minor_needed) ||     \
-        (version.major == major_needed && version.minor == minor_needed && version.patch >= patch_needed) \
+        (version.major == major_needed && version.minor == minor_needed && version.patch >= patch_needed)
 
-#define SERVER_VERISON_SUPPORTS_FILL_VALUE_ENCODING(version) (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 1))
+#define SERVER_VERISON_SUPPORTS_FILL_VALUE_ENCODING(version)                                                 \
+    (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 1))
 
 #ifdef __cplusplus
 }
