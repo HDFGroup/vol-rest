@@ -381,13 +381,9 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
     printf("-> Found group by given path\n\n");
 #endif
 
-    /* Decode creation properties, if server supports them */
-    if (SERVER_VERSION_MATCHES_OR_EXCEEDS(parent->domain->u.file.server_version, 0, 8, 0)) {
-        if (loc_info_out.GCPL_base64 == NULL) {
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTDECODE, NULL,
-                            "failed to retrieve creation properties from response");
-        }
-
+    /* Decode creation properties, if server supports them and file has them */
+    if (SERVER_VERSION_MATCHES_OR_EXCEEDS(parent->domain->u.file.server_version, 0, 8, 0) &&
+        loc_info_out.GCPL_base64) {
         if (RV_base64_decode(loc_info_out.GCPL_base64, strlen(loc_info_out.GCPL_base64),
                              (char **)&binary_gcpl, binary_gcpl_size) < 0)
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTDECODE, NULL, "can't decode gcpl from base64");
