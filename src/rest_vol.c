@@ -3411,10 +3411,10 @@ RV_set_object_handle_path(const char *obj_path, const char *parent_path, char **
         include_parent_path ? strlen(parent_path) + 1 + strlen(obj_path) + 1 : 1 + strlen(obj_path) + 1;
 
     if ((handle_path = RV_malloc(path_size)) == NULL)
-        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for handle path");
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, FAIL, "can't allocate space for handle path");
 
     if (include_parent_path) {
-        strncpy(handle_path, parent_path, strlen(parent_path));
+        strncpy(handle_path, parent_path, path_size);
         path_len += strlen(parent_path);
     }
 
@@ -3427,6 +3427,8 @@ RV_set_object_handle_path(const char *obj_path, const char *parent_path, char **
     strncpy(handle_path + path_len, obj_path, strlen(obj_path) + 1);
     path_len += (strlen(obj_path) + 1);
 
+    handle_path[path_size - 1] = '\0';
+    
     /* Make user pointer point at allocated memory */
     *buf = handle_path;
 
