@@ -313,7 +313,6 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                                 ? strlen(name)
                                 : args->args.get_name.buf_size - 1;
                 strncpy(args->args.get_name.buf, name, copy_size);
-                args->args.get_name.buf[copy_size + 1] = '\0';
             }
 
             if (args->args.get_name.name_len) {
@@ -813,7 +812,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                     /* Increment refs for top-level file */
                     loc_obj->domain->u.file.ref_count++;
 
-                    if ((iter_object = RV_malloc(sizeof(RV_object_t))) == NULL)
+                    if ((iter_object = RV_calloc(sizeof(RV_object_t))) == NULL)
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL,
                                         "couldn't allocate space for iteration object");
 
