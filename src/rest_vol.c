@@ -3428,7 +3428,7 @@ RV_set_object_handle_path(const char *obj_path, const char *parent_path, char **
     path_len += (strlen(obj_path) + 1);
 
     handle_path[path_size - 1] = '\0';
-    
+
     /* Make user pointer point at allocated memory */
     *buf = handle_path;
 
