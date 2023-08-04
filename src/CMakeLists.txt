@@ -70,7 +70,6 @@ if (BUILD_STATIC_LIBS)
   if (NOT WIN32)
     target_link_libraries (${HDF5_VOL_REST_LIB_TARGET} PRIVATE dl)
   endif ()
-  set (HDF5_VOL_REST_LIBRARIES_TO_EXPORT ${HDF5_VOL_REST_LIB_TARGET} CACHE INTERNAL "Used to pass variables between directories" FORCE)
   set_target_properties (${HDF5_VOL_REST_LIB_TARGET} PROPERTIES
     FOLDER libraries
     INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>"
@@ -86,8 +85,6 @@ if (BUILD_STATIC_LIBS)
   endif ()
 
   #add_dependencies(${HDF5_VOL_REST_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
-
-  set (install_targets ${HDF5_VOL_REST_LIB_TARGET})
 endif ()
 
 if (BUILD_SHARED_LIBS)
@@ -98,7 +95,6 @@ if (BUILD_SHARED_LIBS)
   if (NOT WIN32)
     target_link_libraries (${HDF5_VOL_REST_LIBSH_TARGET} PRIVATE dl)
   endif ()
-  set (HDF5_VOL_REST_LIBRARIES_TO_EXPORT "${HDF5_VOL_REST_LIBRARIES_TO_EXPORT};${HDF5_VOL_REST_LIBSH_TARGET}" CACHE INTERNAL "Used to pass variables between directories" FORCE)
   set_target_properties (${HDF5_VOL_REST_LIBSH_TARGET} PROPERTIES
       OUTPUT_NAME ${HDF5_VOL_REST_LIB_CORENAME}
       FOLDER libraries
@@ -108,8 +104,6 @@ if (BUILD_SHARED_LIBS)
   )
 
   #add_dependencies(${HDF5_VOL_REST_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
-
-  set (install_targets ${install_targets} ${HDF5_VOL_REST_LIBSH_TARGET})
 endif ()
 
 #-----------------------------------------------------------------------------
@@ -119,6 +113,11 @@ if (PREBUILT_HDF5_DIR)
   add_custom_target(
     rest_vol_pubconf_depend
     DEPENDS ${PREBUILT_HDF5_DIR}/include/H5pubconf.h
+  )
+elseif (NOT PREBUILT_HDF5_DIR AND HDF5_FOUND)
+  add_custom_target(
+    rest_vol_pubconf_depend
+    DEPENDS ${HDF5_INCLUDE_DIRS}/H5pubconf.h
   )
 else ()
   add_custom_target(
@@ -139,12 +138,8 @@ endif ()
 #-----------------------------------------------------------------------------
 if (NOT HDF5_VOL_REST_INSTALL_NO_DEVELOPMENT)
   install (
-      FILES
-          ${HDF5_VOL_REST_PUBLIC_HEADERS}
-      DESTINATION
-          ${HDF5_VOL_REST_INSTALL_INCLUDE_DIR}
-      COMPONENT
-          headers
+      FILES ${HDF5_VOL_REST_PUBLIC_HEADERS}
+      DESTINATION ${HDF5_VOL_REST_INSTALL_INCLUDE_DIR} COMPONENT headers
   )
 endif ()
 
@@ -157,14 +152,17 @@ if (HDF5_VOL_REST_EXPORTED_TARGETS)
   endif ()
 
   install (
-      TARGETS
-          ${install_targets}
-      EXPORT
-          ${HDF5_VOL_REST_EXPORTED_TARGETS}
+      TARGETS ${HDF5_VOL_REST_LIBRARIES_TO_EXPORT}
+      EXPORT ${HDF5_VOL_REST_EXPORTED_TARGETS}
       LIBRARY DESTINATION ${HDF5_VOL_REST_INSTALL_LIB_DIR} COMPONENT libraries
       ARCHIVE DESTINATION ${HDF5_VOL_REST_INSTALL_LIB_DIR} COMPONENT libraries
       RUNTIME DESTINATION ${HDF5_VOL_REST_INSTALL_BIN_DIR} COMPONENT libraries
       FRAMEWORK DESTINATION ${HDF5_VOL_REST_INSTALL_FWRK_DIR} COMPONENT libraries
+  )
+  install (
+      EXPORT ${HDF5_VOL_REST_EXPORTED_TARGETS}
+      FILE ${HDF5_VOL_REST_EXPORTED_TARGETS}.cmake
+      DESTINATION ${HDF5_VOL_REST_INSTALL_CMAKE_DIR} COMPONENT configinstall
   )
 endif ()
 
