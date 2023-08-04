@@ -41,7 +41,7 @@ CURL_DEBUG_OPT=
 MEM_TRACK_OPT=
 THREAD_SAFE_OPT=
 PREBUILT_HDF5_OPT=
-
+PREBUILT_HDF5_DIR=
 
 echo
 echo "*************************"
@@ -133,6 +133,7 @@ while getopts "$optspec" optchar; do
         ;;
     H)
         PREBUILT_HDF5_OPT="-DPREBUILT_HDF5_DIR=$OPTARG"
+        PREBUILT_HDF5_DIR="$OPTARG"
         echo "Set HDF5 install directory to: $OPTARG"
         echo
         ;;
@@ -173,7 +174,7 @@ if [ "$NPROCS" -eq "0" ]; then
     fi
 fi
 
-# Ensure that the HDF5 and VOL tests submodules get checked out
+# Ensure that the HDF5 submodule gets checked out
 if [ -z "$(ls -A ${SCRIPT_DIR}/${HDF5_DIR})" ]; then
     git submodule init
     git submodule update
@@ -193,7 +194,7 @@ rm -f "${BUILD_DIR}/CMakeCache.txt"
 
 cd "${BUILD_DIR}"
 
-cmake -G "${CMAKE_GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${PREBUILT_HDF5_OPT}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}"
+CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "${CMAKE_GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${PREBUILT_HDF5_OPT}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}"
 
 echo "Build files have been generated for CMake generator '${CMAKE_GENERATOR}'"
 
@@ -201,5 +202,29 @@ echo "Build files have been generated for CMake generator '${CMAKE_GENERATOR}'"
 if [ "${CMAKE_GENERATOR}" = "Unix Makefiles" ]; then
   make -j${NPROCS} && make install || exit 1
 fi
+
+echo "REST VOL (and HDF5) built"
+
+# Clean out the old CMake cache
+rm -f "${BUILD_DIR}/CMakeCache.txt"
+
+# Configure vol-tests
+
+mkdir -p "${BUILD_DIR}/tests/vol-tests"
+cd "${BUILD_DIR}/tests/vol-tests"
+
+if [ -z "$PREBUILT_HDF5_DIR" ]; then
+    HDF5_INSTALL_DIR=$HDF5_DIR
+else
+    HDF5_INSTALL_DIR=$PREBUILT_HDF5_DIR
+fi
+
+CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "${CMAKE_GENERATOR}" -DHDF5_DIR=${HDF5_INSTALL_DIR} -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}/test/vol-tests"
+
+echo "Build files generated for vol-tests"
+
+make || exit 1
+ 
+echo "VOL tests built"
 
 exit 0
