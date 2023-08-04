@@ -72,6 +72,8 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     size_t       link_body_nalloc      = 0;
     size_t       host_header_len       = 0;
     size_t       datatype_body_len     = 0;
+    size_t       path_size             = 0;
+    size_t       path_len              = 0;
     char        *host_header           = NULL;
     char        *commit_request_body   = NULL;
     char        *datatype_body         = NULL;
@@ -121,6 +123,11 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
         if ((new_datatype->u.datatype.dtype_id = H5Tcopy(type_id)) == H5I_INVALID_HID)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOPY, NULL, "can't copy type id");
     }
+
+    new_datatype->handle_path = NULL;
+
+    if (RV_set_object_handle_path(name, parent->handle_path, &new_datatype->handle_path) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't set up object path");
 
     /* Copy the TAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * datatype access property list functions will function correctly
@@ -336,6 +343,8 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
     H5I_type_t   obj_type = H5I_UNINIT;
     loc_info     loc_info_out;
     htri_t       search_ret;
+    size_t       path_size = 0;
+    size_t       path_len  = 0;
     void        *ret_value = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -362,6 +371,11 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
 
     datatype->domain = parent->domain;
     parent->domain->u.file.ref_count++;
+
+    datatype->handle_path = NULL;
+
+    if (RV_set_object_handle_path(name, parent->handle_path, &datatype->handle_path) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't set up object path");
 
     loc_info_out.URI         = datatype->URI;
     loc_info_out.domain      = datatype->domain;
@@ -550,6 +564,7 @@ RV_datatype_close(void *dt, hid_t dxpl_id, void **req)
     if (RV_file_close(_dtype->domain, H5P_DEFAULT, NULL) < 0)
         FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");
 
+    RV_free(_dtype->handle_path);
     RV_free(_dtype);
     _dtype = NULL;
 

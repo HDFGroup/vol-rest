@@ -105,6 +105,8 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
     RV_object_t *new_dataset             = NULL;
     curl_off_t   create_request_body_len = 0;
     size_t       host_header_len         = 0;
+    size_t       path_size               = 0;
+    size_t       path_len                = 0;
     char        *host_header             = NULL;
     char        *create_request_body     = NULL;
     char         request_url[URL_MAX_LENGTH];
@@ -143,6 +145,11 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
 
     new_dataset->domain = parent->domain;
     parent->domain->u.file.ref_count++;
+
+    new_dataset->handle_path = NULL;
+
+    if (RV_set_object_handle_path(name, parent->handle_path, &new_dataset->handle_path) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't set up object path");
 
     /* Copy the DAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Dget_access_plist() will function correctly
@@ -303,6 +310,8 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     htri_t       search_ret;
     void        *ret_value = NULL;
     loc_info     loc_info_out;
+    size_t       path_size = 0;
+    size_t       path_len  = 0;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset open call with following parameters:\n");
@@ -330,6 +339,11 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     /* Copy information about file that the newly-created dataset is in */
     dataset->domain = parent->domain;
     parent->domain->u.file.ref_count++;
+
+    dataset->handle_path = NULL;
+
+    if (RV_set_object_handle_path(name, parent->handle_path, &dataset->handle_path) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't set up object path");
 
     loc_info_out.URI         = dataset->URI;
     loc_info_out.domain      = dataset->domain;
@@ -1169,6 +1183,7 @@ RV_dataset_close(void *dset, hid_t dxpl_id, void **req)
         FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");
     }
 
+    RV_free(_dset->handle_path);
     RV_free(_dset);
     _dset = NULL;
 

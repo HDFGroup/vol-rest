@@ -291,8 +291,36 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file, group, dataset or committed datatype");
 
     switch (args->op_type) {
+        case H5VL_OBJECT_GET_NAME: {
+            size_t copy_size = 0;
+            char  *name      = loc_obj->handle_path;
+
+            if (!name)
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, FAIL, "object has NULL name");
+
+            /* Only return the name if the user provided an allocate buffer */
+            if (args->args.get_name.buf) {
+                /* Initialize entire buffer regardless of path size */
+                memset(args->args.get_name.buf, 0, args->args.get_name.buf_size);
+
+                /* If given an attribute, H5Iget_name returns the name of the object an attribute is attached
+                 * to */
+                if (loc_obj->obj_type == H5I_ATTR)
+                    if ((name = loc_obj->u.attribute.parent_name) == NULL)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "attribute parent has NULL name");
+
+                copy_size = (strlen(name) < args->args.get_name.buf_size - 1)
+                                ? strlen(name)
+                                : args->args.get_name.buf_size - 1;
+                strncpy(args->args.get_name.buf, name, copy_size);
+            }
+
+            if (args->args.get_name.name_len) {
+                *args->args.get_name.name_len = strlen(name);
+            }
+
+        } break;
         case H5VL_OBJECT_GET_FILE:
-        case H5VL_OBJECT_GET_NAME:
         case H5VL_OBJECT_GET_TYPE:
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_UNSUPPORTED, FAIL, "unsupported object operation");
             break;
@@ -784,11 +812,17 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                     /* Increment refs for top-level file */
                     loc_obj->domain->u.file.ref_count++;
 
-                    if ((iter_object = RV_malloc(sizeof(RV_object_t))) == NULL)
+                    if ((iter_object = RV_calloc(sizeof(RV_object_t))) == NULL)
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL,
                                         "couldn't allocate space for iteration object");
 
                     memcpy(iter_object, loc_obj, sizeof(RV_object_t));
+
+                    if ((iter_object->handle_path = RV_malloc(strlen(loc_obj->handle_path) + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL,
+                                        "couldn't allocate space for iteration object path");
+
+                    memcpy(iter_object->handle_path, loc_obj->handle_path, strlen(loc_obj->handle_path) + 1);
 
                     /* Increment refs for specific type */
                     switch (loc_obj->obj_type) {
@@ -797,13 +831,13 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
 
                             if (H5I_INVALID_HID ==
                                 (iter_object->u.file.fapl_id = H5Pcopy(loc_obj->u.file.fapl_id)))
-                                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FAPL");
+                                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy FAPL");
                             if (H5I_INVALID_HID ==
                                 (iter_object->u.file.fcpl_id = H5Pcopy(loc_obj->u.file.fcpl_id)))
-                                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, NULL, "can't copy FCPL");
+                                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy FCPL");
                             if (NULL == (iter_object->u.file.filepath_name =
                                              RV_malloc(strlen(loc_obj->u.file.filepath_name) + 1)))
-                                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL,
+                                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
                                                 "can't allocate space for copied filepath_name object");
 
                             strncpy(iter_object->u.file.filepath_name, loc_obj->u.file.filepath_name,
@@ -1149,7 +1183,12 @@ done:
     }
     else {
         /* If execution failed before the wrap, free the RV_object_t block directly*/
-        RV_free(iter_object);
+        if (iter_object) {
+            if (args->op_type == H5VL_OBJECT_VISIT && loc_params->type == H5VL_OBJECT_BY_SELF) {
+                RV_free(iter_object->handle_path);
+            }
+            RV_free(iter_object);
+        }
     }
 
     PRINT_ERROR_STACK;
@@ -1759,6 +1798,9 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
                     subgroup->obj_type        = H5I_GROUP;
                     subgroup->u.group.gcpl_id = H5P_DEFAULT;
                     subgroup->u.group.gapl_id = H5P_DEFAULT;
+                    if (RV_set_object_handle_path(link_name, object_iter_data->iter_obj_parent->handle_path,
+                                                  &subgroup->handle_path) < 0)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, FAIL, "can't set up object path");
 
                     object_iter_data->iter_obj_parent->domain->u.file.ref_count++;
 

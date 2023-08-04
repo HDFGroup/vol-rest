@@ -491,6 +491,7 @@ typedef struct RV_attr_t {
     hid_t      aapl_id;
     hid_t      acpl_id;
     char      *attr_name;
+    char      *parent_name;
 } RV_attr_t;
 
 typedef struct RV_datatype_t {
@@ -503,6 +504,7 @@ struct RV_object_t {
     RV_object_t *domain;
     H5I_type_t   obj_type;
     char         URI[URI_MAX_LENGTH];
+    char        *handle_path;
 
     union {
         RV_datatype_t datatype;
@@ -622,6 +624,9 @@ herr_t RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_
 
 /* Comparison function to compare two keys in an rv_hash_table_t */
 int H5_rest_compare_string_keys(void *value1, void *value2);
+
+/* Helper function to initialize an object's name based on its parent's name. */
+herr_t RV_set_object_handle_path(const char *obj_path, const char *parent_path, char **buf);
 
 /* Helper to turn an object type into a string for a server request */
 herr_t RV_set_object_type_header(H5I_type_t parent_obj_type, const char **parent_obj_type_header);

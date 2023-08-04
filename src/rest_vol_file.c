@@ -77,6 +77,12 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
     new_file->u.file.fcpl_id       = FAIL;
     new_file->u.file.ref_count     = 1;
 
+    /* Allocate root "path" on heap for consistency with other RV_object_t types */
+    if ((new_file->handle_path = RV_malloc(2)) == NULL)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath");
+
+    strncpy(new_file->handle_path, "/", 2);
+
     /* Copy the FAPL if it wasn't H5P_DEFAULT, else set up a default one so that
      * H5Fget_access_plist() will function correctly. Note that due to the nature
      * of VOLs and needing to supply a FAPL to work correctly, the default case
@@ -343,6 +349,12 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     file->u.file.fapl_id       = FAIL;
     file->u.file.fcpl_id       = FAIL;
     file->u.file.ref_count     = 1;
+
+    /* Allocate root "path" on heap for consistency with other RV_object_t types */
+    if ((file->handle_path = RV_malloc(2)) == NULL)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath");
+
+    strncpy(file->handle_path, "/", 2);
 
     /* Store self-referential pointer in the domain field for this object
      * to simplify code for other types of objects
@@ -726,6 +738,11 @@ RV_file_close(void *file, hid_t dxpl_id, void **req)
         if (_file->u.file.filepath_name) {
             RV_free(_file->u.file.filepath_name);
             _file->u.file.filepath_name = NULL;
+        }
+
+        if (_file->handle_path) {
+            RV_free(_file->handle_path);
+            _file->handle_path = NULL;
         }
 
         RV_free(_file);
