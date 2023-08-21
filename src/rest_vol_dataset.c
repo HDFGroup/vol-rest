@@ -829,6 +829,13 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
 
         write_body_len = (size_t)file_select_npoints * dtype_size;
+        if (NULL == (write_body = (char *)RV_malloc(write_body_len)))
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                            "can't allocate space for the 'write_body' values");
+        if (H5Dgather(mem_space_id[0], buf[0], mem_type_id[0], write_body_len, write_body, NULL, write_body) <
+            0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "can't gather data to write buffer");
+        buf[0] = write_body;
     } /* end if */
     else {
         if (H5T_STD_REF_OBJ == mem_type_id[0]) {
@@ -897,6 +904,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
         printf("-> Base64-encoded data buffer: %s\n\n", base64_encoded_value);
 #endif
 
+        if (write_body)
+            RV_free(write_body);
         write_body_len = (strlen(fmt_string) - 4) + selection_body_len + value_body_len;
         if (NULL == (write_body = RV_malloc(write_body_len + 1)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for write buffer");
