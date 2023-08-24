@@ -119,6 +119,9 @@ if (NOT PREBUILT_HDF5_DIR)
   if (HDF5_ENABLE_THREADSAFE AND NOT Threads_FOUND)
     find_package(Threads)
   endif ()
+  if (NOT HDF5_FOUND)
+    set (HDF5_DIR ${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME})
+  endif ()
 endif ()
 
 find_package (CURL REQUIRED)
@@ -591,7 +594,7 @@ if (NOT PREBUILT_HDF5_DIR AND NOT HDF5_FOUND)
   include_directories(${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME}/src)
   include_directories(${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME}/src/H5FDsubfiling)
   add_subdirectory(${HDF5_DIR} ${PROJECT_BINARY_DIR}/${HDF5_DIR_NAME})
-elseif (NOT PREBUILD_HDF5_DIR AND HDF5_FOUND)
+elseif (NOT PREBUILT_HDF5_DIR AND HDF5_FOUND)
   set (HDF5_LIBRARIES_TO_EXPORT
     ${HDF5_C_HL_LIBRARIES}
     ${HDF5_C_LIBRARIES}

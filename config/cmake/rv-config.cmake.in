@@ -6,12 +6,6 @@
 string (TOUPPER @HDF5_VOL_REST_PACKAGE@ HDF5_VOL_REST_PACKAGE_NAME)
 string (TOLOWER @HDF5_VOL_REST_PACKAGE@ hdf5_vol_rest_package_name)
 
-set (${HDF5_VOL_REST_PACKAGE_NAME}_VALID_COMPONENTS
-    static
-    shared
-    C
-)
-
 #-----------------------------------------------------------------------------
 # User Options
 #-----------------------------------------------------------------------------
@@ -20,7 +14,7 @@ set (${HDF5_VOL_REST_PACKAGE_NAME}_EXPORT_LIBRARIES @HDF5_VOL_REST_LIBRARIES_TO_
 #-----------------------------------------------------------------------------
 # Directories
 #-----------------------------------------------------------------------------
-set (${HDF5_VOL_REST_PACKAGE_NAME}_INCLUDE_DIR "@PACKAGE_INCLUDE_INSTALL_DIR@" "${${HDF5_VOL_REST_PACKAGE_NAME}_MPI_C_INCLUDE_PATH}")
+set (${HDF5_VOL_REST_PACKAGE_NAME}_INCLUDE_DIR "@PACKAGE_INCLUDE_INSTALL_DIR@")
 
 set (${HDF5_VOL_REST_PACKAGE_NAME}_SHARE_DIR "@PACKAGE_SHARE_INSTALL_DIR@")
 set_and_check (${HDF5_VOL_REST_PACKAGE_NAME}_BUILD_DIR "@PACKAGE_CURRENT_BUILD_DIR@")
@@ -40,42 +34,11 @@ if (NOT TARGET "@HDF5_VOL_REST_PACKAGE@")
   include (@PACKAGE_SHARE_INSTALL_DIR@/@HDF5_VOL_REST_PACKAGE@@HDF5_VOL_REST_PACKAGE_EXT@-targets.cmake)
 endif ()
 
-# Handle default component(static) :
-if (NOT ${HDF5_VOL_REST_PACKAGE_NAME}_FIND_COMPONENTS)
-  set (${HDF5_VOL_REST_PACKAGE_NAME}_LIB_TYPE)
-  set (${HDF5_VOL_REST_PACKAGE_NAME}_FIND_COMPONENTS C static)
-  set (${HDF5_VOL_REST_PACKAGE_NAME}_FIND_REQUIRED_static_C TRUE)
+if (HDF5_VOL_REST_USE_STATIC_LIBRARIES)
+  add_library (${hdf5_vol_rest_package_name} ALIAS ${hdf5_vol_rest_package_name}-static)
+else ()
+  add_library (${hdf5_vol_rest_package_name} ALIAS ${hdf5_vol_rest_package_name}-shared)
 endif ()
-
-# Handle requested components:
-list (REMOVE_DUPLICATES ${HDF5_VOL_REST_PACKAGE_NAME}_FIND_COMPONENTS)
-foreach (comp IN LISTS ${HDF5_VOL_REST_PACKAGE_NAME}_FIND_COMPONENTS)
-  if (${comp} STREQUAL "shared")
-    list (REMOVE_ITEM ${HDF5_VOL_REST_PACKAGE_NAME}_FIND_COMPONENTS ${comp})
-    set (${HDF5_VOL_REST_PACKAGE_NAME}_LIB_TYPE ${${HDF5_VOL_REST_PACKAGE_NAME}_LIB_TYPE} ${comp})
-  elseif (${comp} STREQUAL "static")
-    list (REMOVE_ITEM ${HDF5_VOL_REST_PACKAGE_NAME}_FIND_COMPONENTS ${comp})
-    set (${HDF5_VOL_REST_PACKAGE_NAME}_LIB_TYPE ${${HDF5_VOL_REST_PACKAGE_NAME}_LIB_TYPE} ${comp})
-  endif ()
-endforeach ()
-foreach (libtype IN LISTS ${HDF5_VOL_REST_PACKAGE_NAME}_LIB_TYPE)
-  string(TOUPPER ${libtype} LIBTYPE)
-  foreach (comp IN LISTS ${HDF5_VOL_REST_PACKAGE_NAME}_FIND_COMPONENTS)
-    set (${HDF5_VOL_REST_PACKAGE_NAME}_${libtype}_${comp}_FOUND 0)
-    set (${HDF5_VOL_REST_PACKAGE_NAME}_${LIBTYPE}_${comp}_FOUND 0)
-    list (FIND ${HDF5_VOL_REST_PACKAGE_NAME}_EXPORT_LIBRARIES "${hdf5_vol_rest_package_name}-${libtype}" HAVE_COMP)
-    if (${HAVE_COMP} GREATER_EQUAL 0)
-      set (${HDF5_VOL_REST_PACKAGE_NAME}_${libtype}_${comp}_FOUND 1)
-      set (${HDF5_VOL_REST_PACKAGE_NAME}_${LIBTYPE}_${comp}_FOUND 1)
-      add_library (${HDF5_VOL_REST_PACKAGE_NAME}_${libtype}_${comp} ALIAS ${hdf5_vol_rest_package_name}-${libtype})
-      add_library (${HDF5_VOL_REST_PACKAGE_NAME}_${LIBTYPE}_${comp} ALIAS ${hdf5_vol_rest_package_name}-${libtype})
-    endif ()
-  endforeach ()
-endforeach ()
-
-foreach (libtype IN LISTS ${HDF5_VOL_REST_PACKAGE_NAME}_LIB_TYPE)
-  check_required_components(${HDF5_VOL_REST_PACKAGE_NAME}_${libtype})
-endforeach ()
 
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} @PACKAGE_SHARE_INSTALL_DIR@/..)
 find_package (YAJL REQUIRED)

@@ -33,14 +33,6 @@ foreach (example ${examples})
     TARGET_C_PROPERTIES (${example} STATIC " " " ")
     target_link_libraries (${example} PUBLIC ${HDF5_VOL_REST_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
     set_target_properties (${example} PROPERTIES FOLDER examples)
-    if (PREBUILT_HDF5_DIR)
-      target_include_directories (${example} PUBLIC ${HDF5_VOL_REST_INCLUDE_DIRECTORIES})
-    else ()
-      add_dependencies(${example} ${HDF5_VOL_REST_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
-
-      # TODO: setup all-at-once build of HDF5
-      # target_include_directories (${example} PUBLIC )
-    endif ()
   endif ()
 
   if (BUILD_SHARED_LIBS)
@@ -48,14 +40,6 @@ foreach (example ${examples})
     TARGET_C_PROPERTIES (${example}-shared SHARED " " " ")
     target_link_libraries (${example}-shared PUBLIC ${HDF5_VOL_REST_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
     set_target_properties (${example}-shared PROPERTIES FOLDER examples)
-    if (PREBUILT_HDF5_DIR)
-      target_include_directories (${example}-shared PUBLIC ${HDF5_VOL_REST_INCLUDE_DIRECTORIES})
-    else ()
-      add_dependencies(${example}-shared ${HDF5_VOL_REST_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
-
-      # TODO: setup all-at-once build of HDF5
-      # target_include_directories (${example} PUBLIC )
-    endif ()
   endif ()
 
   #-----------------------------------------------------------------------------
