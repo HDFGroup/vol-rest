@@ -17726,7 +17726,7 @@ case_string:
 #if 0
             if (0 == (rand() % 2)) {
 #endif
-        if ((datatype = H5Tcreate(H5T_STRING, (size_t)(rand() % STRING_TYPE_MAX_SIZE))) < 0) {
+        if ((datatype = H5Tcreate(H5T_STRING, (size_t)(rand() % STRING_TYPE_MAX_SIZE) + 1)) < 0) {
             H5_FAILED();
             printf("    couldn't create fixed-length string datatype\n");
             goto error;
