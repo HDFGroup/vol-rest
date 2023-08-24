@@ -42,6 +42,9 @@ MEM_TRACK_OPT=
 THREAD_SAFE_OPT=
 PREBUILT_HDF5_OPT=
 PREBUILT_HDF5_DIR=
+CURL_OPT=
+YAJL_OPT=
+YAJL_LIB_OPT=
 
 echo
 echo "*************************"
@@ -63,6 +66,10 @@ usage()
     echo
     echo "      -s      Enable linking to thread safe static hdf5 library."
     echo
+    echo "      -t      Make use of the static YAJL library. Be aware the"
+    echo "              library should be built with position independent"
+    echo "              code option enabled."
+    echo
     echo "      -G      Specify the CMake Generator to use for the build"
     echo "              files created. Default is 'Unix Makefiles'."
     echo
@@ -81,15 +88,15 @@ usage()
     echo
     echo "      -C DIR  To specify the top-level directory where cURL is"
     echo "              installed, if cURL was not installed to a system"
-    echo "              directory."
+    echo "              directory. Similar to '-DCURL_ROOT=DIR'."
     echo
     echo "      -Y DIR  To specify the top-level directory where YAJL is"
     echo "              installed, if YAJL was not installed to a system"
-    echo "              directory."
+    echo "              directory. Similar to '-DYAJL_ROOT=DIR'."
     echo
 }
 
-optspec=":hctdmsG:H:C:Y:B:P:-"
+optspec=":hctdmst:H:C:Y:B:P:-"
 while getopts "$optspec" optchar; do
     case "${optchar}" in
     h)
@@ -116,6 +123,10 @@ while getopts "$optspec" optchar; do
         echo "Enabled linking to static thread safe hdf5 library"
         echo
         ;;
+    t)  YAJL_LIB_OPT="-DYAJL_USE_STATIC_LIBRARIES=ON"
+        echo "Use the static YAJL library."
+        echo
+        ;;
     G)
         CMAKE_GENERATOR="$OPTARG"
         echo "CMake Generator set to: ${CMAKE_GENERATOR}"
@@ -138,17 +149,13 @@ while getopts "$optspec" optchar; do
         echo
         ;;
     C)
-        CURL_DIR="$OPTARG"
-        CURL_LINK="-L${CURL_DIR}/lib ${CURL_LINK}"
-        CMAKE_OPTS="--with-curl=${CURL_DIR} ${CMAKE_OPTS}"
-        echo "Libcurl directory set to: ${CURL_DIR}"
+        CURL_OPT="-DCURL_ROOT=$OPTARG"
+        echo "CURL_ROOT set to: ${OPTARG}"
         echo
         ;;
     Y)
-        YAJL_DIR="$OPTARG"
-        YAJL_LINK="-L${YAJL_DIR}/lib ${YAJL_LINK}"
-        CMAKE_OPTS="--with-yajl=${YAJL_DIR} ${CMAKE_OPTS}"
-        echo "Libyajl directory set to: ${YAJL_DIR}"
+        YAJL_OPT="-DYAJL_ROOT=$OPTARG"
+        echo "YAJL_ROOT set to: ${OPTARG}"
         echo
         ;;
     *)
@@ -194,7 +201,7 @@ rm -f "${BUILD_DIR}/CMakeCache.txt"
 
 cd "${BUILD_DIR}"
 
-CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "${CMAKE_GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${PREBUILT_HDF5_OPT}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}"
+CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "${CMAKE_GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${PREBUILT_HDF5_OPT}" "${CURL_OPT}" "${YAJL_OPT}" "${YAJL_LIB_OPT}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}"
 
 echo "Build files have been generated for CMake generator '${CMAKE_GENERATOR}'"
 

@@ -115,6 +115,15 @@ install (
 )
 
 #-----------------------------------------------------------------------------
+# Install FindYAJL.cmake
+#-----------------------------------------------------------------------------
+install (
+    FILES ${HDF5_VOL_REST_SOURCE_DIR}/CMake/FindYAJL.cmake
+    DESTINATION ${HDF5_VOL_REST_INSTALL_DATA_DIR}/cmake
+    COMPONENT configinstall
+)
+
+#-----------------------------------------------------------------------------
 # Configure the libhdf5_vol_rest.settings file for the lib info
 #-----------------------------------------------------------------------------
 if (H5_WORDS_BIGENDIAN)

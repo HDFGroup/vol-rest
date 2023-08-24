@@ -111,8 +111,19 @@ set (HDF5_BINARY_DIR                   ${HDF5_VOL_REST_BINARY_DIR}/${HDF5_DIR_NA
 set (PREBUILT_HDF5_DIR CACHE STRING "Directory of pre-built HDF5 distribution")
 
 #-----------------------------------------------------------------------------
-# Find cURL and YAJL before building
+# Find HDF5, cURL and YAJL before building
 #-----------------------------------------------------------------------------
+set (HDF5_FOUND FALSE)
+if (NOT PREBUILT_HDF5_DIR)
+  find_package(HDF5 MODULE COMPONENTS C HL)
+  if (HDF5_ENABLE_THREADSAFE AND NOT Threads_FOUND)
+    find_package(Threads)
+  endif ()
+  if (NOT HDF5_FOUND)
+    set (HDF5_DIR ${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME})
+  endif ()
+endif ()
+
 find_package (CURL REQUIRED)
 if (CURL_FOUND)
   include_directories(${CURL_INCLUDE_DIRS})
@@ -127,7 +138,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${HDF5_VOL_REST_RESOURCES_MOD_DIR}")
 find_package (YAJL REQUIRED)
 if (YAJL_FOUND)
   include_directories(${YAJL_INCLUDE_DIRS})
-  set (LINK_LIBS ${LINK_LIBS} ${YAJL_LIBRARIES})
+  set (LINK_LIBS ${LINK_LIBS} yajl)
 else ()
   message (FATAL_ERROR "YAJL not found; please check YAJL_INCLUDE_DIR")
 endif ()
@@ -179,10 +190,10 @@ if (NOT HDF5_VOL_REST_INSTALL_DATA_DIR)
       set (HDF5_VOL_REST_INSTALL_FWRK_DIR ${CMAKE_INSTALL_FRAMEWORK_PREFIX})
     endif ()
     set (HDF5_VOL_REST_INSTALL_DATA_DIR share)
-    set (HDF5_VOL_REST_INSTALL_CMAKE_DIR share/cmake)
+    set (HDF5_VOL_REST_INSTALL_CMAKE_DIR share/cmake/${HDF5_VOL_REST_LIB_CORENAME})
   else (NOT WIN32)
     set (HDF5_VOL_REST_INSTALL_DATA_DIR ".")
-    set (HDF5_VOL_REST_INSTALL_CMAKE_DIR cmake)
+    set (HDF5_VOL_REST_INSTALL_CMAKE_DIR cmake/${HDF5_VOL_REST_LIB_CORENAME})
   endif ()
 endif ()
 
@@ -361,12 +372,16 @@ if (NOT BUILD_SHARED_LIBS)
   set (HDF5_VOL_REST_ENABLE_SHARED_LIB NO)
   set (LINK_SHARED_LIBS )
 endif ()
+if (BUILD_SHARED_LIBS)
+  set (HDF5_VOL_REST_LIBRARIES_TO_EXPORT ${HDF5_VOL_REST_LIBRARIES_TO_EXPORT} ${HDF5_VOL_REST_LIBSH_TARGET} CACHE INTERNAL "Store which libraries should be exported" FORCE)
+endif ()
 
 option (BUILD_STATIC_LIBS "Build Static Libraries" OFF)
 set (HDF5_VOL_REST_ENABLE_STATIC_LIB NO)
 if (BUILD_STATIC_LIBS)
   set (HDF5_VOL_REST_ENABLE_STATIC_LIB YES)
   set (LINK_STATIC_LIBS ${LINK_LIBS})
+  set (HDF5_VOL_REST_LIBRARIES_TO_EXPORT ${HDF5_VOL_REST_LIBRARIES_TO_EXPORT} ${HDF5_VOL_REST_LIB_TARGET} CACHE INTERNAL "Store which libraries should be exported" FORCE)
 endif ()
 
 set (CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -398,12 +413,12 @@ if (HDF5_VOL_REST_ENABLE_COVERAGE)
 endif ()
 
 #-----------------------------------------------------------------------------
-# Option to use code coverage
+# Option to linking to HDF5 statically compiled with thread safe option
 #-----------------------------------------------------------------------------
 option (HDF5_VOL_REST_THREAD_SAFE "Enable linking to HDF5 statically compiled with thread safe option" OFF)
 if (HDF5_VOL_REST_THREAD_SAFE)
-	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread")
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread")
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread")
+  SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread")
 endif()
 
 #-----------------------------------------------------------------------------
@@ -450,6 +465,16 @@ if (PREBUILT_HDF5_DIR)
     ${HDF5_VOL_REST_BINARY_DIR}
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
     ${PREBUILT_HDF5_DIR}/include
+    CACHE
+    INTERNAL
+    "Include directories for HDF5 REST VOL connector"
+    )
+elseif (HDF5_FOUND)
+  set (HDF5_VOL_REST_INCLUDE_DIRECTORIES
+    ${HDF5_VOL_REST_SRC_DIR}
+    ${HDF5_VOL_REST_BINARY_DIR}
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    ${HDF5_INCLUDE_DIRS}
     CACHE
     INTERNAL
     "Include directories for HDF5 REST VOL connector"
@@ -565,10 +590,15 @@ include (${HDF5_VOL_REST_RESOURCES_DIR}/HDFCompilerFlags.cmake)
 # Build HDF5, unless the user has specified to use
 # a pre-built HDF5 distribution
 #-----------------------------------------------------------------------------
-if (NOT PREBUILT_HDF5_DIR)
+if (NOT PREBUILT_HDF5_DIR AND NOT HDF5_FOUND)
   include_directories(${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME}/src)
   include_directories(${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME}/src/H5FDsubfiling)
   add_subdirectory(${HDF5_DIR} ${PROJECT_BINARY_DIR}/${HDF5_DIR_NAME})
+elseif (NOT PREBUILT_HDF5_DIR AND HDF5_FOUND)
+  set (HDF5_LIBRARIES_TO_EXPORT
+    ${HDF5_C_HL_LIBRARIES}
+    ${HDF5_C_LIBRARIES}
+  )
 else ()
   link_directories(${PREBUILT_HDF5_DIR}/lib)
   set (HDF5_LIBRARIES_TO_EXPORT
