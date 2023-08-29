@@ -110,12 +110,7 @@ endif ()
 #-----------------------------------------------------------------------------
 # Make the REST VOL build depend on H5pubconf.h existing
 #-----------------------------------------------------------------------------
-if (PREBUILT_HDF5_DIR)
-  add_custom_target(
-    rest_vol_pubconf_depend
-    DEPENDS ${PREBUILT_HDF5_DIR}/include/H5pubconf.h
-  )
-elseif (NOT PREBUILT_HDF5_DIR AND HDF5_FOUND)
+if (HDF5_FOUND)
   add_custom_target(
     rest_vol_pubconf_depend
     DEPENDS ${HDF5_BINARY_DIR}/src/H5pubconf.h
