@@ -40,7 +40,7 @@ static herr_t RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len, r
                                             size_t *buf_out_len);
 
 /* Check if dataspace is non-contiguous for H5Dgather */
-static herr_t RVis_selection_contiguous(hid_t space_id, hbool_t* is_contiguous);
+static herr_t RVis_selection_contiguous(hid_t space_id, hbool_t *is_contiguous);
 
 /* H5Dscatter() callback for dataset reads */
 static herr_t dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *op_data);
@@ -713,7 +713,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
     H5T_class_t  dtype_class;
     curl_off_t   write_len;
     hssize_t     mem_select_npoints, file_select_npoints;
-    hbool_t      is_transfer_binary = FALSE;
+    hbool_t      is_transfer_binary      = FALSE;
     hbool_t      selection_is_contiguous = TRUE;
     htri_t       is_variable_str;
     size_t       host_header_len      = 0;
@@ -842,14 +842,13 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t mem_spac
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
                                 "can't allocate space for the 'write_body' values");
 
-            if (H5Dgather(mem_space_id[0], buf[0], mem_type_id[0], write_body_len, write_body, NULL, write_body) <
-                0)
+            if (H5Dgather(mem_space_id[0], buf[0], mem_type_id[0], write_body_len, write_body, NULL,
+                          write_body) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "can't gather data to write buffer");
 
-            buf[0] = write_body;                
+            buf[0] = write_body;
         }
 
-        
     } /* end if */
     else {
         if (H5T_STD_REF_OBJ == mem_type_id[0]) {
@@ -3749,15 +3748,16 @@ done:
 } /* end RV_convert_buffer_to_obj_refs() */
 
 /* Check if dataspace is non-contiguous for H5Dgather */
-static herr_t 
-RVis_selection_contiguous(hid_t space_id, hbool_t* is_contiguous) {
-    herr_t ret_value = SUCCEED;
-    hsize_t start[H5S_MAX_RANK];
-    hsize_t stride[H5S_MAX_RANK];
-    hsize_t count[H5S_MAX_RANK];
-    hsize_t block[H5S_MAX_RANK];
+static herr_t
+RVis_selection_contiguous(hid_t space_id, hbool_t *is_contiguous)
+{
+    herr_t       ret_value = SUCCEED;
+    hsize_t      start[H5S_MAX_RANK];
+    hsize_t      stride[H5S_MAX_RANK];
+    hsize_t      count[H5S_MAX_RANK];
+    hsize_t      block[H5S_MAX_RANK];
     H5S_sel_type sel_type;
-    int ndims = 0;
+    int          ndims = 0;
 
     *is_contiguous = TRUE;
 
@@ -3768,7 +3768,7 @@ RVis_selection_contiguous(hid_t space_id, hbool_t* is_contiguous) {
         *is_contiguous = FALSE;
         FUNC_GOTO_DONE(SUCCEED);
     }
-        
+
     if ((ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_DATASPACE, FAIL, "can't get dataspace ndims");
 
@@ -3776,8 +3776,8 @@ RVis_selection_contiguous(hid_t space_id, hbool_t* is_contiguous) {
         *is_contiguous = FALSE;
         FUNC_GOTO_DONE(SUCCEED);
     }
-    
-    for (size_t i = 0; i < (size_t) ndims; i++)
+
+    for (size_t i = 0; i < (size_t)ndims; i++)
         if (stride[i] > 1)
             *is_contiguous = FALSE;
 
