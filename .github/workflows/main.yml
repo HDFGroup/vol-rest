@@ -138,6 +138,10 @@ jobs:
       - name: Install HDF + REST VOL
         run: make install
         working-directory: ${{ github.workspace }}/hdf5/build
+
+      - name: Install valgrind
+        run: sudo apt install valgrind
+        working-directory: ${{ github.workspace }}
             
       - name: Start HSDS
         if: ${{ matrix.endpoint != 'http://127.0.0.1:5101'}}
