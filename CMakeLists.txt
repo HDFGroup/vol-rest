@@ -100,8 +100,9 @@ set (HDF5_VOL_REST_UTIL_DIR            ${HDF5_VOL_REST_SOURCE_DIR}/src/util)
 set (HDF5_VOL_REST_TEST_SRC_DIR        ${HDF5_VOL_REST_SOURCE_DIR}/test)
 set (HDF5_VOL_REST_EXAMPLES_DIR        ${HDF5_VOL_REST_SOURCE_DIR}/examples)
 set (HDF5_DIR_NAME                     "hdf5")
-set (HDF5_DIR                          ${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME})
-set (HDF5_BINARY_DIR                   ${HDF5_VOL_REST_BINARY_DIR}/${HDF5_DIR_NAME})
+set (HDF5_HL_DIR_NAME                  "hl")
+#set (HDF5_DIR                          ${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME})
+#set (HDF5_BINARY_DIR                   ${HDF5_VOL_REST_BINARY_DIR}/${HDF5_DIR_NAME})
 
 
 #-----------------------------------------------------------------------------
@@ -113,9 +114,13 @@ set (PREBUILT_HDF5_DIR CACHE STRING "Directory of pre-built HDF5 distribution")
 #-----------------------------------------------------------------------------
 # Find HDF5, cURL and YAJL before building
 #-----------------------------------------------------------------------------
-set (HDF5_FOUND FALSE)
+if (HDF5_FOUND STREQUAL "")
+  set (HDF5_FOUND FALSE)
+endif()
+
 if (NOT PREBUILT_HDF5_DIR)
   find_package(HDF5 MODULE COMPONENTS C HL)
+
   if (HDF5_ENABLE_THREADSAFE AND NOT Threads_FOUND)
     find_package(Threads)
   endif ()
@@ -288,7 +293,7 @@ macro (HDF5_VOL_REST_SET_LIB_OPTIONS libtarget libname libtype)
 endmacro (HDF5_VOL_REST_SET_LIB_OPTIONS)
 
 #-------------------------------------------------------------------------------
-macro (TARGET_C_PROPERTIES wintarget libtype addcompileflags addlinkflags)
+macro (RV_TARGET_C_PROPERTIES wintarget libtype addcompileflags addlinkflags)
   if (MSVC)
     TARGET_MSVC_PROPERTIES (${wintarget} ${libtype} "${addcompileflags} ${WIN_COMPILE_FLAGS}" "${addlinkflags} ${WIN_LINK_FLAGS}")
   else ()
@@ -459,38 +464,36 @@ configure_file (${HDF5_VOL_REST_RESOURCES_DIR}/rv_cmake_config.h.in ${HDF5_VOL_R
 #-----------------------------------------------------------------------------
 # Include the main src directory and HDF5 distribution directory
 #-----------------------------------------------------------------------------
+
+set (HDF5_VOL_REST_INCLUDE_DIRECTORIES
+    ${HDF5_VOL_REST_SRC_DIR}
+    ${HDF5_VOL_REST_BINARY_DIR}
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+)
+
 if (PREBUILT_HDF5_DIR)
-  set (HDF5_VOL_REST_INCLUDE_DIRECTORIES
-    ${HDF5_VOL_REST_SRC_DIR}
-    ${HDF5_VOL_REST_BINARY_DIR}
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+  list(APPEND HDF5_VOL_REST_INCLUDE_DIRECTORIES
     ${PREBUILT_HDF5_DIR}/include
-    CACHE
-    INTERNAL
-    "Include directories for HDF5 REST VOL connector"
-    )
+  )
 elseif (HDF5_FOUND)
-  set (HDF5_VOL_REST_INCLUDE_DIRECTORIES
-    ${HDF5_VOL_REST_SRC_DIR}
-    ${HDF5_VOL_REST_BINARY_DIR}
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+  list(APPEND HDF5_VOL_REST_INCLUDE_DIRECTORIES
     ${HDF5_INCLUDE_DIRS}
-    CACHE
-    INTERNAL
-    "Include directories for HDF5 REST VOL connector"
+    ${HDF5_BINARY_DIR}/src
+    ${HDF5_DIR}/${HDF5_HL_DIR_NAME}/src
   )
 else ()
-  set (HDF5_VOL_REST_INCLUDE_DIRECTORIES
-    ${HDF5_VOL_REST_SRC_DIR}
-    ${HDF5_VOL_REST_BINARY_DIR}
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+  list(APPEND HDF5_VOL_REST_INCLUDE_DIRECTORIES
     ${HDF5_DIR}
     ${HDF5_BINARY_DIR}
-    CACHE
-    INTERNAL
-    "Include directories for HDF5 REST VOL connector"
   )
 endif ()
+
+set(HDF5_VOL_REST_INCLUDE_DIRECTORIES 
+  ${HDF5_VOL_REST_INCLUDE_DIRECTORIES}
+    CACHE 
+    INTERNAL 
+    "Include directories for HDF5 REST VOL connector"
+)
 
 INCLUDE_DIRECTORIES (${HDF5_VOL_REST_INCLUDE_DIRECTORIES})
 
@@ -595,6 +598,8 @@ if (NOT PREBUILT_HDF5_DIR AND NOT HDF5_FOUND)
   include_directories(${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME}/src/H5FDsubfiling)
   add_subdirectory(${HDF5_DIR} ${PROJECT_BINARY_DIR}/${HDF5_DIR_NAME})
 elseif (NOT PREBUILT_HDF5_DIR AND HDF5_FOUND)
+  include_directories(${HDF5_INCLUDE_DIRS})
+
   set (HDF5_LIBRARIES_TO_EXPORT
     ${HDF5_C_HL_LIBRARIES}
     ${HDF5_C_LIBRARIES}

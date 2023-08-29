@@ -16,11 +16,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        #os: [ubuntu-latest, mac-latest]
         os: [ubuntu-latest]
         python-version: ["3.8", "3.9", "3.10"]
-        test-path: ["/rest-vol/build/bin/test_rest_vol-shared"]
-        #test-path: ["/rest-vol/build/bin/test_rest_vol-shared", "/rest-vol/build/bin/h5vl_test"]
         endpoint: ["http+unix://%2Ftmp%2Fhs%2Fsn_1.sock"]
         
     runs-on: ${{matrix.os}}
@@ -28,6 +25,7 @@ jobs:
       - name: Create environment variable setup script
         working-directory: ${{github.workspace}}
         run: |
+          echo "#! /bin/sh" >> setup_env_vars.sh
           printf '%s\n' 'echo "ADMIN_PASSWORD=admin" >> $GITHUB_ENV' >> setup_env_vars.sh
           printf '%s\n' 'export ADMIN_PASSWORD=admin' >> setup_env_vars.sh
           printf '%s\n' 'echo "ADMIN_USERNAME=admin" >> $GITHUB_ENV' >> setup_env_vars.sh
@@ -50,8 +48,8 @@ jobs:
           printf '%s\n' 'export HSDS_ENDPOINT=${{matrix.endpoint}}' >> setup_env_vars.sh
           printf '%s\n' 'echo "HDF5_VOL_CONNECTOR=REST" >> $GITHUB_ENV' >> setup_env_vars.sh
           printf '%s\n' 'export HDF5_VOL_CONNECTOR=REST ' >> setup_env_vars.sh
-          printf '%s\n' 'echo "HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol/build/bin/" >> $GITHUB_ENV' >> setup_env_vars.sh
-          printf '%s\n' 'export HDF5_PLUGIN_PATH=${{github.workspace}}/rest-vol/build/bin/' >> setup_env_vars.sh
+          printf '%s\n' 'echo "HDF5_PLUGIN_PATH=${{github.workspace}}/hdf5/build/bin/" >> $GITHUB_ENV' >> setup_env_vars.sh
+          printf '%s\n' 'export HDF5_PLUGIN_PATH=${{github.workspace}}/hdf5/build/bin/' >> setup_env_vars.sh
           printf '%s\n' 'echo "ROOT_DIR=${{github.workspace}}/hsdsdata" >> $GITHUB_ENV' >> setup_env_vars.sh
           printf '%s\n' 'export ROOT_DIR=${{github.workspace}}/hsdsdata' >> setup_env_vars.sh
           printf '%s\n' 'echo "BUCKET_NAME=hsdstest" >> $GITHUB_ENV' >> setup_env_vars.sh
@@ -81,93 +79,65 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           
-      - name: Install dependencies
+      - name: Install HSDS dependencies
         shell: bash
         run: |
           python -m pip install --upgrade pip
           python -m pip install pytest
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      - name: Install package
+
+      - name: Install HSDS package
         shell: bash
         run: |
           cd ${{github.workspace}}/hsds
           pip install -e .
           
-      - name: Run unit tests
+      - name: Run HSDS unit tests
         shell: bash
         run: |
           cd ${{github.workspace}}/hsds
           pytest
-        
-      - name: Install Autotools Dependencies (Linux, serial)
-        run: |
-           sudo apt update
-           sudo apt install automake autoconf libtool libtool-bin
-           sudo apt install gcc-11 g++-11 gfortran-11
-           echo "CC=gcc-11" >> $GITHUB_ENV
-           echo "CXX=g++-11" >> $GITHUB_ENV
-           echo "FC=gfortran-11" >> $GITHUB_ENV
-           sudo apt install libaec0 libaec-dev
            
       - name: Get REST VOL
         uses: actions/checkout@v3
         with:
           path: ${{github.workspace}}/rest-vol
-             
-      - uses: actions/cache/restore@v3
-        id: hdf5-restore
-        with:
-          key: hdf5
-          path: ${{github.workspace}}/hdf5install
           
       - uses: actions/checkout@v3
-        if: ${{!steps.hdf5-restore.outputs.cache-hit}}
         with: 
-          repository: HDFGroup/hdf5
+          repository: mattjala/hdf5 # TODO: For workflow testing
+          ref: vol_cmake # TODO: For workflow testing
           path: ${{github.workspace}}/hdf5
                    
       - name: Get REST-VOL dependencies
         run: |
-              sudo apt-get install libcurl4-openssl-dev
-              sudo apt-get install libyajl-dev
+          sudo apt-get install libcurl4-openssl-dev
+          sudo apt-get install libyajl-dev
               
-      - name: Autotools Configure HDF5
-        if: ${{!steps.hdf5-restore.outputs.cache-hit}}
+      - name: CMake Configure HDF5
         run: |
-          sh ./autogen.sh
-          ${{github.workspace}}/hdf5/configure --enable-shared --prefix=${{github.workspace}}/hdf5install
+          mkdir ./build
+          cd ./build
+          cmake -DHDF5_BUILD_HL_LIB=OFF -DHDF5_VOL_REST_ENABLE_EXAMPLES=OFF \
+          -DBUILD_SHARED_LIBS=ON -DHDF5_ENABLE_SZIP_SUPPORT=OFF \
+          -DHDF5_TEST_API=ON -DHDF5_VOL_ALLOW_EXTERNAL=ON \
+          -DHDF5_VOL_URL01=https://github.com/mattjala/vol-rest.git \
+          -DHDF5_VOL_VOL-REST_BRANCH="build_under_library" \
+          -DHDF5_VOL_VOL-REST_NAME="REST" -DHDF5_VOL_VOL-REST_TEST_PARALLEL=OFF \
+          -DHDF5_ENABLE_Z_LIB_SUPPORT=OFF -DHDF5_ALLOW_EXTERNAL_SUPPORT="GIT" \
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo -DHDF5_ENABLE_THREADSAFE=OFF \
+          -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/hdf5install \
+          ..
         shell: bash
         working-directory: ${{github.workspace}}/hdf5
         
-      - name: Autotools Build HDF5
-        if: ${{!steps.hdf5-restore.outputs.cache-hit}}
+      - name: Build HDF5 + REST VOL
         run: make
-        working-directory: ${{ github.workspace }}/hdf5
+        working-directory: ${{ github.workspace }}/hdf5/build
 
-      - name: Autotools Install
-        if: ${{!steps.hdf5-restore.outputs.cache-hit}}
+      - name: Install HDF + REST VOL
         run: make install
-        working-directory: ${{ github.workspace }}/hdf5
-      
-      - if: ${{!steps.hdf5-restore.outputs.cache-hit}}
-        name: Cache hdf5 install
-        uses: actions/cache/save@v3
-        with:
-          key: hdf5
-          path: ${{github.workspace}}/hdf5install
-          
-      - name: Clone vol-tests repo
-        uses: actions/checkout@v3
-        with:
-          path: ${{github.workspace}}/rest-vol/test/vol-tests/
-          repository: mattjala/vol-tests
-           
-      - name: Prepare directory contents
-        run: |
-              cd ${{github.workspace}}/rest-vol
-              mkdir ${{github.workspace}}/rest-vol/build
-              cd ${{github.workspace}}/rest-vol/src/hdf5
-              cp -r ${{github.workspace}}/hdf5install/* .           
+        working-directory: ${{ github.workspace }}/hdf5/build
             
       - name: Start HSDS
         if: ${{ matrix.endpoint != 'http://127.0.0.1:5101'}}
@@ -190,15 +160,16 @@ jobs:
               ${{github.workspace}}/setup_env_vars.sh
               python tests/integ/setup_test.py
         working-directory: ${{github.workspace}}/hsds
-        
-      - name: Build REST VOL (Cmake)
-        run: |
-              cd ${{github.workspace}}/rest-vol/build
-              sudo CFLAGS="-D_POSIX_C_SOURCE=199506L" cmake -DPREBUILT_HDF5_DIR=${{github.workspace}}/hdf5install -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/rest-vol/build/install ..
-              sudo make -j
-              sudo make install
-              
-      - name: Tests at ${{matrix.test-path}}
+
+      - name: Test REST VOL
+        working-directory: ${{github.workspace}}/hdf5/build/
         run: |
               ${{github.workspace}}/setup_env_vars.sh
-              ${{github.workspace}}${{matrix.test-path}}
+              valgrind --leak-check=full -s ctest -R "test_rest_vol" -VV
+
+#      TODO: Attribute, dataset, link, and testhdf5 tests currently fail
+#      - name: Test REST VOL with API
+#        run: |
+#              ${{github.workspace}}/setup_env_vars.sh
+#              valgrind --leak-check=full -s ctest -R "vol-rest" -VV
+#        working-directory: ${{github.workspace}}/hdf5/build/
