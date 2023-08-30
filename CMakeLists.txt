@@ -589,7 +589,6 @@ else ()
 
   set (HDF5_LIBRARIES_TO_EXPORT
     ${HDF5_C_HL_LIBRARIES}
-    ${HDF5_C_LIBRARIES}
   )
 endif ()
 
