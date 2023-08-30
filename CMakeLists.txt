@@ -111,13 +111,8 @@ if (HDF5_FOUND STREQUAL "")
   set (HDF5_FOUND FALSE)
 endif()
 
-find_package(HDF5 MODULE COMPONENTS C HL)
-
 if (HDF5_ENABLE_THREADSAFE AND NOT Threads_FOUND)
   find_package(Threads)
-endif ()
-if (NOT HDF5_FOUND)
-  set (HDF5_DIR ${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME})
 endif ()
 
 find_package (CURL REQUIRED)
@@ -466,13 +461,14 @@ if (HDF5_FOUND)
   list(APPEND HDF5_VOL_REST_INCLUDE_DIRECTORIES
     ${HDF5_INCLUDE_DIRS}
     ${HDF5_BINARY_DIR}/src
-    ${HDF5_DIR}/${HDF5_HL_DIR_NAME}/src
+    ${HDF5_SOURCE_DIR}/${HDF5_HL_DIR_NAME}/src
   )
 else ()
-  list(APPEND HDF5_VOL_REST_INCLUDE_DIRECTORIES
-    ${HDF5_DIR}
-    ${HDF5_BINARY_DIR}
-  )
+  message(SEND_ERROR "HDF5 not found!")  
+  #list(APPEND HDF5_VOL_REST_INCLUDE_DIRECTORIES
+    #${HDF5_DIR}
+    #${HDF5_BINARY_DIR}
+  #)
 endif ()
 
 set(HDF5_VOL_REST_INCLUDE_DIRECTORIES 
@@ -577,20 +573,13 @@ include (${HDF5_VOL_REST_RESOURCES_DIR}/HDFCompilerFlags.cmake)
 #endif ()
 
 #-----------------------------------------------------------------------------
-# Build HDF5, unless the user has specified to use
-# a pre-built HDF5 distribution
+# Include HDF5 Directories
 #-----------------------------------------------------------------------------
-if (NOT HDF5_FOUND)
-  include_directories(${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME}/src)
-  include_directories(${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME}/src/H5FDsubfiling)
-  add_subdirectory(${HDF5_DIR} ${PROJECT_BINARY_DIR}/${HDF5_DIR_NAME})
-else ()
-  include_directories(${HDF5_INCLUDE_DIRS})
+include_directories(${HDF5_INCLUDE_DIRS})
 
-  set (HDF5_LIBRARIES_TO_EXPORT
-    ${HDF5_C_HL_LIBRARIES}
-  )
-endif ()
+set (HDF5_LIBRARIES_TO_EXPORT
+  ${HDF5_C_HL_LIBRARIES}
+)
 
 #-----------------------------------------------------------------------------
 # Build the REST VOL
