@@ -96,7 +96,7 @@ usage()
     echo
 }
 
-optspec=":hctdmst:H:C:Y:B:P:-"
+optspec=":hctdmstG:H:C:Y:B:P:-"
 while getopts "$optspec" optchar; do
     case "${optchar}" in
     h)
