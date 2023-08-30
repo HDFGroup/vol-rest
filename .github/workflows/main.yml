@@ -119,6 +119,7 @@ jobs:
           mkdir ./build
           cd ./build
           cmake -DHDF5_BUILD_HL_LIB=OFF -DHDF5_VOL_REST_ENABLE_EXAMPLES=OFF \
+          -DBUILD_STATIC_LIBS=OFF \
           -DBUILD_SHARED_LIBS=ON -DHDF5_ENABLE_SZIP_SUPPORT=OFF \
           -DHDF5_TEST_API=ON -DHDF5_VOL_ALLOW_EXTERNAL=ON \
           -DHDF5_VOL_URL01=https://github.com/mattjala/vol-rest.git \
