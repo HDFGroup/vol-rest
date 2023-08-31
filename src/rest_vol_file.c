@@ -576,6 +576,7 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
     char        *host_header = NULL;
     size_t       host_header_len;
     size_t       name_length;
+    hid_t        file_id = H5I_INVALID_HID;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file-specific call with following parameters:\n");
@@ -616,11 +617,17 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             /* Initialize in case of failure */
             *ret_is_accessible = FALSE;
 
-            void *ret_file;
+            H5E_BEGIN_TRY {
+                file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id);
+            } H5E_END_TRY;
 
-            if (NULL != (ret_file = RV_file_open(filename, 0, fapl_id, dxpl_id, NULL))) {
+            if (file_id > 0) {
                 *ret_is_accessible = TRUE;
-                RV_file_close(ret_file, dxpl_id, NULL);
+                
+                if (H5Fclose(file_id) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "unable to close accessible file");
+
+                file_id = H5I_INVALID_HID;
             }
 
             break;
@@ -676,6 +683,10 @@ done:
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
+
+    if (file_id != H5I_INVALID_HID)
+        if (H5Fclose(file_id) < 0)
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "unable to close file");
 
     /* Restore CUSTOMREQUEST to internal default */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
