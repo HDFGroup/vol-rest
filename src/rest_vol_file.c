@@ -617,13 +617,15 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             /* Initialize in case of failure */
             *ret_is_accessible = FALSE;
 
-            H5E_BEGIN_TRY {
+            H5E_BEGIN_TRY
+            {
                 file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id);
-            } H5E_END_TRY;
+            }
+            H5E_END_TRY;
 
             if (file_id > 0) {
                 *ret_is_accessible = TRUE;
-                
+
                 if (H5Fclose(file_id) < 0)
                     FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "unable to close accessible file");
 
