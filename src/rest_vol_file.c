@@ -566,7 +566,7 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
 
             object_id_list id_list;
             id_list.obj_id_list = args->args.get_obj_ids.oid_list;
-            id_list.obj_count = 0;
+            id_list.obj_count   = 0;
 
             if (args->args.get_obj_ids.types & H5F_OBJ_FILE)
                 if (H5Iiterate(H5I_FILE, RV_iterate_copy_hid_cb, &id_list) < 0)
@@ -809,9 +809,11 @@ done:
  * Programmer:  Matthew Larson
  *              August, 2023
  */
-herr_t RV_iterate_copy_hid_cb(hid_t obj_id, void *udata) {
-    herr_t ret_value = SUCCEED;
-    object_id_list *id_list = (object_id_list *) udata;
+herr_t
+RV_iterate_copy_hid_cb(hid_t obj_id, void *udata)
+{
+    herr_t          ret_value = SUCCEED;
+    object_id_list *id_list   = (object_id_list *)udata;
 
     id_list->obj_id_list[id_list->obj_count] = obj_id;
 
