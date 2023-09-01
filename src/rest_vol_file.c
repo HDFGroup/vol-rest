@@ -612,9 +612,9 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             hbool_t    *ret_is_accessible = args->args.is_accessible.accessible;
             const char *filename          = args->args.is_accessible.filename;
             hid_t       fapl_id           = args->args.is_accessible.fapl_id;
-            void *ret_file = NULL;
+            void       *ret_file          = NULL;
             /* Initialize in case of failure */
-            
+
             *ret_is_accessible = FALSE;
 
             H5E_BEGIN_TRY
@@ -628,7 +628,6 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
                 if (RV_file_close(ret_file, dxpl_id, NULL) < 0)
                     FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "unable to close accessible file");
-
             }
 
             break;
