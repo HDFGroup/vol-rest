@@ -341,7 +341,7 @@
         H5VL_CAP_FLAG_OBJECT_MORE | H5VL_CAP_FLAG_CREATION_ORDER | H5VL_CAP_FLAG_ITERATE |                   \
         H5VL_CAP_FLAG_BY_IDX | H5VL_CAP_FLAG_GET_PLIST | H5VL_CAP_FLAG_EXTERNAL_LINKS |                      \
         H5VL_CAP_FLAG_HARD_LINKS | H5VL_CAP_FLAG_SOFT_LINKS | H5VL_CAP_FLAG_TRACK_TIMES |                    \
-        H5VL_CAP_FLAG_FILTERS
+        H5VL_CAP_FLAG_FILTERS | H5VL_CAP_FLAG_FILL_VALUES
 /**********************************
  *                                *
  *        Global Variables        *
@@ -718,6 +718,9 @@ herr_t RV_curl_multi_perform(CURL *curl_multi_ptr, dataset_transfer_info *transf
 #define SERVER_VERSION_MATCHES_OR_EXCEEDS(version, major_needed, minor_needed, patch_needed)                 \
     (version.major > major_needed) || (version.major == major_needed && version.minor > minor_needed) ||     \
         (version.major == major_needed && version.minor == minor_needed && version.patch >= patch_needed)
+
+#define SERVER_VERISON_SUPPORTS_FILL_VALUE_ENCODING(version)                                                 \
+    (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 1))
 
 #ifdef __cplusplus
 }

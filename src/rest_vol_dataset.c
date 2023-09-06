@@ -26,8 +26,10 @@ static herr_t RV_setup_dataset_create_request_body(void *parent_obj, const char 
                                                    hid_t space_id, hid_t lcpl_id, hid_t dcpl,
                                                    char  **create_request_body,
                                                    size_t *create_request_body_len);
+
 static herr_t RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl_id, char **creation_properties_body,
-                                                             size_t *creation_properties_body_len);
+                                                             size_t *creation_properties_body_len,
+                                                             hid_t type_id, server_api_version version);
 
 /* Helper function to convert a selection within an HDF5 Dataspace into a JSON-format string */
 static herr_t RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string,
@@ -2044,7 +2046,8 @@ done:
  */
 static herr_t
 RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_properties_body,
-                                               size_t *creation_properties_body_len)
+                                               size_t *creation_properties_body_len, hid_t type_id,
+                                               server_api_version version)
 {
     const char *const leading_string = "\"creationProperties\": {";
     H5D_alloc_time_t  alloc_time;
@@ -2056,8 +2059,11 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
     char             *out_string        = NULL;
     char *out_string_curr_pos; /* The "current position" pointer used to print to the appropriate place
                                   in the buffer and not overwrite important leading data */
-    int    bytes_printed = 0;
-    herr_t ret_value     = SUCCEED;
+    int    bytes_printed  = 0;
+    void  *fill_value     = NULL;
+    char  *encode_buf_out = NULL;
+    char  *fill_value_str = NULL;
+    herr_t ret_value      = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting dataset creation properties from DCPL to JSON\n\n");
@@ -2289,6 +2295,8 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
      ******************************************************************/
     {
         H5D_fill_value_t fill_status;
+        size_t           fill_value_size     = 0;
+        size_t           encode_buf_out_size = 0;
 
         if (H5Pfill_value_defined(dcpl, &fill_status) < 0)
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL, "can't retrieve the \"fill value defined\" status");
@@ -2312,9 +2320,73 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                 strncat(out_string_curr_pos, null_value, null_value_len);
                 out_string_curr_pos += null_value_len;
-            } /* end if */
+            }
+            else if (H5D_FILL_VALUE_USER_DEFINED == fill_status) {
+                if (!(SERVER_VERISON_SUPPORTS_FILL_VALUE_ENCODING(version)))
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL,
+                                    "server API version %zu.%zu.%zu does not support fill value encoding\n",
+                                    version.major, version.minor, version.patch);
+
+                if ((fill_value_size = H5Tget_size(type_id)) == 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get the size of fill value type");
+
+                if ((fill_value = RV_malloc(fill_value_size)) == NULL)
+                    FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't allocate space for fill value");
+
+                if (H5Pget_fill_value(dcpl, type_id, fill_value) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                                    "can't get fill value from creation properties");
+
+                if (RV_base64_encode(fill_value, fill_value_size, &encode_buf_out, &encode_buf_out_size) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTENCODE, FAIL, "can't base64-encode fill value");
+
+                /* Add encoded fill value to request body */
+                size_t fill_value_str_len =
+                    strlen(", \"fillValue\": ") + strlen("\"") + strlen(encode_buf_out) + strlen("\"");
+
+                if ((fill_value_str = RV_calloc(fill_value_str_len + 1)) == NULL)
+                    FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL,
+                                    "can't allocate space for fill value string in request body");
+
+                snprintf(fill_value_str, fill_value_str_len + 1, "%s%s%s%s", ", \"fillValue\": ", "\"",
+                         encode_buf_out, "\"");
+
+                /* Check whether the buffer needs to be grown */
+                bytes_to_print = fill_value_str_len + 1;
+
+                buf_ptrdiff = out_string_curr_pos - out_string;
+
+                if (buf_ptrdiff < 0)
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                    "unsafe cast: dataset creation properties buffer pointer difference was "
+                                    "negative - this should not happen!");
+
+                CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                out_string_curr_pos, H5E_DATASET, FAIL);
+
+                strncat(out_string, fill_value_str, fill_value_str_len);
+                out_string_curr_pos += fill_value_str_len;
+
+                /* Write the encoding used to the request body */
+                const char *encoding_property = ", \"fillValue_encoding\": \"base64\"";
+
+                bytes_to_print = strlen(encoding_property);
+
+                buf_ptrdiff = out_string_curr_pos - out_string;
+                if (buf_ptrdiff < 0)
+                    FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                                    "unsafe cast: dataset creation properties buffer pointer difference was "
+                                    "negative - this should not happen!");
+
+                CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                                out_string_curr_pos, H5E_DATASET, FAIL);
+
+                strncat(out_string, encoding_property, strlen(encoding_property));
+                out_string_curr_pos += strlen(encoding_property);
+            }
             else {
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "dataset fill values are unsupported");
+                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, FAIL,
+                                "can't retrieve the \"fill value defined\" status");
             } /* end else */
         }     /* end if */
     }
@@ -3072,6 +3144,15 @@ done:
     if (chunk_dims_string)
         RV_free(chunk_dims_string);
 
+    if (fill_value)
+        RV_free(fill_value);
+
+    if (encode_buf_out)
+        RV_free(encode_buf_out);
+
+    if (fill_value_str)
+        RV_free(fill_value_str);
+
     return ret_value;
 } /* end RV_convert_dataset_creation_properties_to_JSON() */
 
@@ -3143,7 +3224,8 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t t
                             "layout H5D_CONTIGUOUS is unsupported for server versions before 0.8.0");
 
         if (RV_convert_dataset_creation_properties_to_JSON(dcpl, &creation_properties_body,
-                                                           &creation_properties_body_len) < 0)
+                                                           &creation_properties_body_len, type_id,
+                                                           pobj->domain->u.file.server_version) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL,
                             "can't convert Dataset Creation Properties to JSON representation");
     }
