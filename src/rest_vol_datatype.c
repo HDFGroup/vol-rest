@@ -106,6 +106,9 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file");
 
+    if (tapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid TAPL");
+
     /* Allocate and setup internal Datatype struct */
     if (NULL == (new_datatype = (RV_object_t *)RV_malloc(sizeof(*new_datatype))))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for datatype object");
@@ -358,6 +361,9 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
+
+    if (tapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid TAPL");
 
     /* Allocate and setup internal Datatype struct */
     if (NULL == (datatype = (RV_object_t *)RV_malloc(sizeof(*datatype))))
