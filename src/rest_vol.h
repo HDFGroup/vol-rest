@@ -84,6 +84,8 @@
 #define HTTP_SERVER_ERROR_MIN 500 /* Minimum and maximum values for the 500 class of */
 #define HTTP_SERVER_ERROR_MAX 599 /* HTTP server error responses */
 
+#define HTTP_NO_CONTENT 204 /* HTTP server code for 'No Content' response */
+
 /* Macros to check for various classes of HTTP response */
 #define HTTP_INFORMATIONAL(status_code)                                                                      \
     (status_code >= HTTP_INFORMATIONAL_MIN && status_code <= HTTP_INFORMATIONAL_MAX)

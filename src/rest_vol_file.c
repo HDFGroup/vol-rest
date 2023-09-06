@@ -571,11 +571,14 @@ done:
 herr_t
 RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void **req)
 {
-    RV_object_t *file        = (RV_object_t *)obj;
-    herr_t       ret_value   = SUCCEED;
-    char        *host_header = NULL;
+    RV_object_t *file      = (RV_object_t *)obj;
+    herr_t       ret_value = SUCCEED;
     size_t       host_header_len;
     size_t       name_length;
+    long         http_response;
+    char        *host_header = NULL;
+    const char  *filename    = NULL;
+    char        *request_url = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file-specific call with following parameters:\n");
@@ -593,7 +596,53 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
     switch (args->op_type) {
         /* H5Fflush */
         case H5VL_FILE_FLUSH:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fflush is unsupported");
+            /* H5Fflush() may be passed an object within the domain, so explicitly target
+             * the containing domain. */
+            RV_object_t *target_domain = file->domain;
+            filename                   = target_domain->u.file.filepath_name;
+            const char *flush_string   = "/?flush=1";
+
+            name_length = strlen(filename);
+
+            /* Setup the host header */
+            host_header_len = name_length + strlen(host_string) + 1;
+
+            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for request Host header");
+
+            strcpy(host_header, host_string);
+
+            curl_headers = curl_slist_append(curl_headers, strncat(host_header, filename, name_length));
+
+            /* Disable use of Expect: 100 Continue HTTP response */
+            curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+            if (NULL == (request_url = (char *)RV_malloc(strlen(flush_string) + strlen(base_URL) + 1)))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for request URL");
+
+            snprintf(request_url, URL_MAX_LENGTH, "%s%s", base_URL, flush_string);
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
+            /* Server only checks for flush parameter on PUT operations */
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL to make HTTP PUTrequest: %s",
+                                curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)0))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL upload size: %s", curl_err_buf);
+
+            CURL_PERFORM_NO_ERR(curl, FAIL);
+
+            if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "can't get HTTP response code from cURL: %s",
+                                curl_err_buf);
+
+            if (http_response != HTTP_NO_CONTENT)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTFLUSH, FAIL, "invalid server response from flush");
+
             break;
 
         /* H5Freopen */
@@ -609,10 +658,10 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
         /* H5Fis_accessible */
         case H5VL_FILE_IS_ACCESSIBLE: {
-            hbool_t    *ret_is_accessible = args->args.is_accessible.accessible;
-            const char *filename          = args->args.is_accessible.filename;
-            hid_t       fapl_id           = args->args.is_accessible.fapl_id;
-            void       *ret_file          = NULL;
+            hbool_t *ret_is_accessible = args->args.is_accessible.accessible;
+            filename                   = args->args.is_accessible.filename;
+            hid_t fapl_id              = args->args.is_accessible.fapl_id;
+            void *ret_file             = NULL;
             /* Initialize in case of failure */
 
             *ret_is_accessible = FALSE;
@@ -635,8 +684,7 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
         /* H5Fdelete */
         case H5VL_FILE_DELETE: {
-            long        http_response;
-            const char *filename = args->args.del.filename;
+            filename = args->args.del.filename;
 
             name_length = strlen(filename);
 
@@ -692,6 +740,9 @@ done:
     if (host_header) {
         RV_free(host_header);
     }
+
+    if (request_url)
+        RV_free(request_url);
 
     return ret_value;
 } /* end RV_file_specific() */
