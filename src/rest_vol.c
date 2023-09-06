@@ -137,6 +137,9 @@ const char *link_collection_keys2[] = {"collection", (const char *)0};
 
 const char *attributes_keys[] = {"attributes", (const char *)0};
 
+/* JSON keys to retrieve allocated size */
+const char *allocated_size_keys[] = {"allocated_size", (const char *)0};
+
 /* Default size for the buffer to allocate during base64-encoding if the caller
  * of RV_base64_encode supplies a 0-sized buffer.
  */
@@ -3395,6 +3398,45 @@ RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callb
 
     server_version->patch = (size_t)numeric_version_field;
 
+done:
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    return ret_value;
+}
+
+/* Helper function to parse an object's allocated size from server response */
+herr_t
+RV_parse_allocated_size_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+{
+    yajl_val parse_tree = NULL, key_obj = NULL;
+    herr_t   ret_value      = SUCCEED;
+    size_t  *allocated_size = (size_t *)callback_data_out;
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Retrieving allocated size from server's HTTP response\n\n");
+#endif
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
+
+    if (!allocated_size)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "allocated size pointer was NULL");
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
+
+    /* Retrieve size */
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, allocated_size_keys, yajl_t_number)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to parse allocated size");
+
+    if (!YAJL_IS_INTEGER(key_obj))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "parsed allocated size is not an integer");
+
+    if (YAJL_GET_INTEGER(key_obj) < 0)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "parsed allocated size was negative");
+
+    *allocated_size = (size_t)YAJL_GET_INTEGER(key_obj);
 done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
