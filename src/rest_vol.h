@@ -86,6 +86,8 @@
 
 #define HTTP_NO_CONTENT 204 /* HTTP server code for 'No Content' response */
 
+#define DEFAULT_POLL_TIMEOUT_MS 100
+
 /* Macros to check for various classes of HTTP response */
 #define HTTP_INFORMATIONAL(status_code)                                                                      \
     (status_code >= HTTP_INFORMATIONAL_MIN && status_code <= HTTP_INFORMATIONAL_MAX)
@@ -194,9 +196,36 @@
 #define CURL_PERFORM_NO_ERR(curl_ptr, ret_value)                                                             \
     CURL_PERFORM_INTERNAL(curl_ptr, FALSE, H5E_NONE_MAJOR, H5E_NONE_MINOR, ret_value)
 
-/* Helper macro to find the matching JSON '}' symbol for a given '{' symbol. This macro is
- * used to extract out all of the JSON within a JSON object so that processing can be done
- * on it.
+/* Counterpart of CURL_PERFORM that takes a response_buffer argument,
+ * instead of using the global response buffer.
+ * Currently not used. */
+#define CURL_PERFORM_NO_GLOBAL(curl_ptr, local_response_buffer, ERR_MAJOR, ERR_MINOR, ret_value)             \
+    CURL_PERFORM_INTERNAL_NO_GLOBAL(curl_ptr, response_buffer, TRUE, ERR_MAJOR, ERR_MINOR, ret_value)
+
+#define CURL_PERFORM_INTERNAL_NO_GLOBAL(curl_ptr, local_response_buffer, handle_HTTP_response, ERR_MAJOR,    \
+                                        ERR_MINOR, ret_value)                                                \
+    do {                                                                                                     \
+        CURLcode result = curl_easy_perform(curl_ptr);                                                       \
+                                                                                                             \
+        /* Reset the cURL response buffer write position pointer */                                          \
+        local_response_buffer.curr_buf_ptr = local_response_buffer.buffer;                                   \
+                                                                                                             \
+        if (CURLE_OK != result)                                                                              \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "%s", curl_easy_strerror(result));              \
+                                                                                                             \
+        if (handle_HTTP_response) {                                                                          \
+            long response_code;                                                                              \
+                                                                                                             \
+            if (CURLE_OK != curl_easy_getinfo(curl_ptr, CURLINFO_RESPONSE_CODE, &response_code))             \
+                FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "can't get HTTP response code");            \
+                                                                                                             \
+            HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value);                                 \
+        } /* end if */                                                                                       \
+    } while (0)
+
+/* Helper macro to find the matching JSON '}' symbol for a given '{' symbol. This macro is                   \
+ * used to extract out all of the JSON within a JSON object so that processing can be done                   \
+ * on it.                                                                                                    \
  */
 #define FIND_JSON_SECTION_END(start_ptr, end_ptr, ERR_MAJOR, ret_value)                                      \
     do {                                                                                                     \
@@ -314,7 +343,7 @@
         H5VL_CAP_FLAG_OBJECT_MORE | H5VL_CAP_FLAG_CREATION_ORDER | H5VL_CAP_FLAG_ITERATE |                   \
         H5VL_CAP_FLAG_BY_IDX | H5VL_CAP_FLAG_GET_PLIST | H5VL_CAP_FLAG_EXTERNAL_LINKS |                      \
         H5VL_CAP_FLAG_HARD_LINKS | H5VL_CAP_FLAG_SOFT_LINKS | H5VL_CAP_FLAG_TRACK_TIMES |                    \
-        H5VL_CAP_FLAG_FILTERS
+        H5VL_CAP_FLAG_FILTERS | H5VL_CAP_FLAG_FILL_VALUES
 /**********************************
  *                                *
  *        Global Variables        *
@@ -340,6 +369,11 @@ extern char curl_err_buf[];
  * cURL header list
  */
 extern struct curl_slist *curl_headers;
+
+/* Default initial size for the response buffer allocated which cURL writes
+ * its responses into
+ */
+#define CURL_RESPONSE_BUFFER_DEFAULT_SIZE 1024
 
 /*
  * Saved copy of the base URL for operating on
@@ -517,6 +551,46 @@ struct RV_object_t {
     } u;
 };
 
+/* Structures to hold information for cURL requests to read/write to datasets */
+typedef struct dataset_write_info {
+    char       *write_body;
+    char       *base64_encoded_values;
+    curl_off_t  write_len;
+    upload_info uinfo;
+} dataset_write_info;
+
+typedef struct dataset_read_info {
+    H5S_sel_type sel_type;
+    curl_off_t   post_len;
+} dataset_read_info;
+
+typedef enum transfer_type_t { UNINIT = 0, READ = 1, WRITE = 2 } transfer_type_t;
+
+typedef struct dataset_transfer_info {
+    struct curl_slist     *curl_headers;
+    char                  *host_headers;
+    CURL                  *curl_easy_handle; /* An easy handle for a single transfer */
+    char                   curl_err_buf[CURL_ERROR_SIZE];
+    size_t                 current_backoff_duration;
+    size_t                 time_of_fail;
+    struct response_buffer resp_buffer;
+
+    RV_object_t *dataset;
+    void        *buf;
+    char        *request_url;
+    hid_t        mem_type_id;
+    hid_t        mem_space_id;
+    hid_t        file_space_id;
+    char        *selection_body;
+
+    transfer_type_t transfer_type;
+
+    union {
+        dataset_write_info write_info;
+        dataset_read_info  read_info;
+    } u;
+} dataset_transfer_info;
+
 /*
  * A struct which is filled out and passed to the link and attribute
  * iteration callback functions when calling
@@ -630,14 +704,28 @@ int H5_rest_compare_string_keys(void *value1, void *value2);
 /* Helper function to initialize an object's name based on its parent's name. */
 herr_t RV_set_object_handle_path(const char *obj_path, const char *parent_path, char **buf);
 
+size_t H5_rest_curl_write_data_callback_no_global(char *buffer, size_t size, size_t nmemb, void *userp);
+
 /* Helper to turn an object type into a string for a server request */
 herr_t RV_set_object_type_header(H5I_type_t parent_obj_type, const char **parent_obj_type_header);
 
+/* Helper function to parse an object's allocated size from server response */
+herr_t RV_parse_allocated_size_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+
 void RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
+
+/* Counterpart of CURL_PERFORM that takes a curl multi handle,
+ * and waits until all requests on it have finished before returning. */
+herr_t RV_curl_multi_perform(CURL *curl_multi_ptr, dataset_transfer_info *transfer_info, size_t count,
+                             herr_t(success_callback)(hid_t mem_type_id, hid_t mem_space_id, void *buf,
+                                                      struct response_buffer resp_buffer));
 
 #define SERVER_VERSION_MATCHES_OR_EXCEEDS(version, major_needed, minor_needed, patch_needed)                 \
     (version.major > major_needed) || (version.major == major_needed && version.minor > minor_needed) ||     \
         (version.major == major_needed && version.minor == minor_needed && version.patch >= patch_needed)
+
+#define SERVER_VERISON_SUPPORTS_FILL_VALUE_ENCODING(version)                                                 \
+    (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 1))
 
 #ifdef __cplusplus
 }
