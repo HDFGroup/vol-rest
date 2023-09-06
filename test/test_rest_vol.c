@@ -1471,8 +1471,6 @@ test_unused_file_API_calls(void)
         hid_t               obj_id;
         void               *file_handle;
 
-        if (H5Fflush(file_id, H5F_SCOPE_GLOBAL) >= 0)
-            TEST_ERROR
         if (H5Fget_obj_count(file_id, H5F_OBJ_DATASET) >= 0)
             TEST_ERROR
         if (H5Fget_obj_ids(file_id, H5F_OBJ_DATASET, 0, &obj_id) >= 0)

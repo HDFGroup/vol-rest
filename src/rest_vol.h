@@ -84,6 +84,8 @@
 #define HTTP_SERVER_ERROR_MIN 500 /* Minimum and maximum values for the 500 class of */
 #define HTTP_SERVER_ERROR_MAX 599 /* HTTP server error responses */
 
+#define HTTP_NO_CONTENT 204 /* HTTP server code for 'No Content' response */
+
 #define DEFAULT_POLL_TIMEOUT_MS 100
 
 /* Macros to check for various classes of HTTP response */
