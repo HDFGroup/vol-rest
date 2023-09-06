@@ -75,6 +75,9 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
 
+    if (gapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid GAPL");
+
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file");
@@ -364,6 +367,9 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
 
     if (!parent->handle_path)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_BADVALUE, NULL, "parent object has NULL path");
+
+    if (gapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid GAPL");
 
     /* Allocate and setup internal Group struct */
     if (NULL == (group = (RV_object_t *)RV_malloc(sizeof(*group))))

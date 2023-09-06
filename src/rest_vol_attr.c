@@ -101,6 +101,9 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file");
 
+    if (aapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid AAPL");
+
     /* Allocate and setup internal Attribute struct */
     if (NULL == (new_attribute = (RV_object_t *)RV_malloc(sizeof(*new_attribute))))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for attribute object");
@@ -457,6 +460,9 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type && H5I_DATATYPE != parent->obj_type &&
         H5I_DATASET != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file, group, datatype or dataset");
+
+    if (aapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid AAPL");
 
     /* Allocate and setup internal Attribute struct */
     if (NULL == (attribute = (RV_object_t *)RV_malloc(sizeof(*attribute))))

@@ -65,6 +65,9 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
             FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL,
                             "can't set REST VOL connector connection information");
 
+    if (fapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid FAPL");
+
     /* Allocate and setup internal File struct */
     if (NULL == (new_file = (RV_object_t *)RV_malloc(sizeof(*new_file))))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for file object");
@@ -337,6 +340,9 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
         if (H5_rest_set_connection_information() < 0)
             FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL,
                             "can't set REST VOL connector connection information");
+
+    if (fapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid FAPL");
 
     /* Allocate and setup internal File struct */
     if (NULL == (file = (RV_object_t *)RV_malloc(sizeof(*file))))

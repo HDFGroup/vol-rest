@@ -150,6 +150,9 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file");
 
+    if (dapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid DAPL");
+
     /* Allocate and setup internal Dataset struct */
     if (NULL == (new_dataset = (RV_object_t *)RV_malloc(sizeof(*new_dataset))))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for dataset object");
@@ -342,6 +345,9 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
+
+    if (dapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid DAPL");
 
     /* Allocate and setup internal Dataset struct */
     if (NULL == (dataset = (RV_object_t *)RV_malloc(sizeof(*dataset))))
