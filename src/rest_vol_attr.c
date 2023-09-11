@@ -1614,7 +1614,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                     char       parent_obj_URI[URI_MAX_LENGTH];
 
                     /* Retrieve the type and URI of the object that the attribute is attached to */
-                    search_ret = RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name,
+                    search_ret = RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_idx.name,
                                                         &parent_obj_type, RV_copy_object_URI_callback, NULL,
                                                         parent_obj_URI);
                     if (!search_ret || search_ret < 0)
@@ -1797,19 +1797,23 @@ herr_t
 RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_args_t *args,
                  hid_t dxpl_id, void **req)
 {
-    RV_object_t *loc_obj             = (RV_object_t *)obj;
-    RV_object_t *attr_iter_obj_typed = NULL;
-    H5I_type_t   parent_obj_type     = H5I_UNINIT;
-    size_t       host_header_len     = 0;
-    hid_t        attr_iter_object_id = H5I_INVALID_HID;
-    void        *attr_iter_object    = NULL;
-    char        *host_header         = NULL;
-    char        *obj_URI;
-    char         temp_URI[URI_MAX_LENGTH];
-    char         request_url[URL_MAX_LENGTH];
-    char        *url_encoded_attr_name = NULL;
-    int          url_len               = 0;
-    herr_t       ret_value             = SUCCEED;
+    RV_object_t         *loc_obj             = (RV_object_t *)obj;
+    RV_object_t         *attr_iter_obj_typed = NULL;
+    H5I_type_t           parent_obj_type     = H5I_UNINIT;
+    size_t               host_header_len     = 0;
+    H5VL_attr_get_args_t attr_get_args;
+    size_t               attr_name_to_delete_len = 0;
+    hid_t                attr_iter_object_id     = H5I_INVALID_HID;
+    void                *attr_iter_object        = NULL;
+    char                *host_header             = NULL;
+    char                *obj_URI;
+    char                 temp_URI[URI_MAX_LENGTH];
+    char                 request_url[URL_MAX_LENGTH];
+    char                 attr_name_to_delete[ATTRIBUTE_NAME_MAX_LENGTH];
+    char                *url_encoded_attr_name  = NULL;
+    const char          *parent_obj_type_header = NULL;
+    int                  url_len                = 0;
+    herr_t               ret_value              = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received attribute-specific call with following parameters:\n");
@@ -1822,6 +1826,92 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
     switch (args->op_type) {
         /* H5Adelete (_by_name/_by_idx) */
+        case H5VL_ATTR_DELETE_BY_IDX: {
+
+            if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
+            attr_get_args.op_type                                        = H5VL_ATTR_GET_NAME;
+            attr_get_args.args.get_name.loc_params.type                  = H5VL_OBJECT_BY_IDX;
+            attr_get_args.args.get_name.loc_params.loc_data.loc_by_idx.n = args->args.delete_by_idx.n;
+            attr_get_args.args.get_name.loc_params.loc_data.loc_by_idx.idx_type =
+                args->args.delete_by_idx.idx_type;
+            attr_get_args.args.get_name.loc_params.loc_data.loc_by_idx.order = args->args.delete_by_idx.order;
+            attr_get_args.args.get_name.loc_params.loc_data.loc_by_idx.lapl_id = H5P_DEFAULT;
+            attr_get_args.args.get_name.loc_params.loc_data.loc_by_idx.name =
+                loc_params->loc_data.loc_by_name.name;
+
+            attr_get_args.args.get_name.buf_size      = ATTRIBUTE_NAME_MAX_LENGTH;
+            attr_get_args.args.get_name.buf           = attr_name_to_delete;
+            attr_get_args.args.get_name.attr_name_len = &attr_name_to_delete_len;
+
+            if (RV_attr_get(obj, &attr_get_args, dxpl_id, req) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't get name of attribute by index");
+
+            /* URL-encode the attribute name so that the resulting URL for the
+             * attribute delete operation doesn't contain any illegal characters
+             */
+            if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, attr_name_to_delete, 0)))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name");
+
+            /* Retrieve type of attribute's parent object */
+            if (RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &parent_obj_type,
+                                       RV_copy_object_URI_callback, NULL, temp_URI) < 0)
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTFIND, FAIL, "unable to retrieve attribute parent object");
+
+            /* Redirect cURL from the base URL to
+             * "/groups/<id>/attributes/<attr name>",
+             * "/datatypes/<id>/attributes/<attr name>"
+             * or
+             * "/datasets/<id>/attributes/<attr name>,
+             * depending on the type of the object the attribute is attached to. */
+            if (RV_set_object_type_header(parent_obj_type, (const char **)&parent_obj_type_header) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
+                                "parent object not a group, datatype or dataset");
+
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL,
+                                    parent_obj_type_header, temp_URI, url_encoded_attr_name)) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
+                                "H5Adelete(_by_name) request URL exceeded maximum URL size");
+
+            /* Setup the host header */
+            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
+            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for request Host header");
+
+            strcpy(host_header, host_string);
+
+            curl_headers =
+                curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name,
+                                                        host_header_len - strlen(host_string) - 1));
+
+            /* Disable use of Expect: 100 Continue HTTP response */
+            curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL,
+                                "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
+
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Deleting attribute at URL: %s\n\n", request_url);
+
+            printf("   /*************************************\\\n");
+            printf("-> | Making DELETE request to the server |\n");
+            printf("   \\*************************************/\n\n");
+#endif
+
+            CURL_PERFORM(curl, H5E_ATTR, H5E_CANTREMOVE, FAIL);
+            break;
+        }
+
         case H5VL_ATTR_DELETE: {
             const char *attr_name = NULL;
 
@@ -1884,7 +1974,8 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
                 /* H5Adelete_by_idx */
                 case H5VL_OBJECT_BY_IDX: {
-                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL, "H5Adelete_by_idx is unsupported");
+                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL,
+                                    "invalid location parameters - this message should not appear!");
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
 

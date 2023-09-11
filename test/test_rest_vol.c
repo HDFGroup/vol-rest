@@ -4033,16 +4033,32 @@ test_delete_attribute(void)
     puts("Attempting to delete attribute with H5Adelete_by_idx\n");
 #endif
 
-    H5E_BEGIN_TRY
-    {
-        if (H5Adelete_by_idx(file_id, ATTRIBUTE_TEST_GROUP_NAME, H5_INDEX_NAME, H5_ITER_INC, 0,
-                             H5P_DEFAULT) >= 0) {
-            H5_FAILED();
-            printf("    unsupported API succeeded!\n");
-            goto error;
-        }
+    if ((attr_id = H5Acreate2(container_group, ATTRIBUTE_DELETION_TEST_ATTR_NAME, attr_dtype, space_id,
+                              H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create attribute\n");
+        goto error;
     }
-    H5E_END_TRY;
+
+    if (H5Adelete_by_idx(file_id, ATTRIBUTE_TEST_GROUP_NAME, H5_INDEX_CRT_ORDER, H5_ITER_DEC, 0,
+                         H5P_DEFAULT) < 0) {
+        H5_FAILED();
+        printf("    H5Adelete_by_idx failed!\n");
+        goto error;
+    }
+
+    /* Verify the attribute has been deleted */
+    if ((attr_exists = H5Aexists(container_group, ATTRIBUTE_DELETION_TEST_ATTR_NAME)) < 0) {
+        H5_FAILED();
+        printf("    couldn't determine if attribute exists\n");
+        goto error;
+    }
+
+    if (attr_exists) {
+        H5_FAILED();
+        printf("    attribute exists!\n");
+        goto error;
+    }
 
     if (H5Sclose(space_id) < 0)
         TEST_ERROR
