@@ -35,11 +35,15 @@ static herr_t RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl_id, char
 static herr_t RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string,
                                                        size_t *selection_string_len, hbool_t req_param);
 
+/* Helper function for dataspace selection */
+static htri_t RV_dataspace_selection_is_contiguous(hid_t space_id);
+
 /* Conversion function to convert one or more rest_obj_ref_t objects into a binary buffer for data transfer */
-static herr_t RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_len,
-                                            char **buf_out, size_t *buf_out_len);
-static herr_t RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len, rv_obj_ref_t **buf_out,
-                                            size_t *buf_out_len);
+static herr_t   RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, size_t ref_array_len,
+                                              char **buf_out, size_t *buf_out_len);
+static herr_t   RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len, rv_obj_ref_t **buf_out,
+                                              size_t *buf_out_len);
+static hssize_t RV_convert_start_to_offset(hid_t space_id);
 
 /* Callbacks used for post-processing after a curl request succeeds */
 static herr_t rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, void *buf,
@@ -804,9 +808,11 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
     H5S_sel_type           sel_type = H5S_SEL_ALL;
     H5T_class_t            dtype_class;
     hbool_t                is_transfer_binary = FALSE;
+    htri_t                 contiguous         = FALSE;
     htri_t                 is_variable_str;
     hssize_t               mem_select_npoints  = 0;
     hssize_t               file_select_npoints = 0;
+    hssize_t               offset              = 0;
     size_t                 host_header_len     = 0;
     size_t                 write_body_len      = 0;
     size_t                 selection_body_len  = 0;
@@ -982,6 +988,25 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
 
             write_body_len = (size_t)file_select_npoints * dtype_size;
+            if ((contiguous = RV_dataspace_selection_is_contiguous(transfer_info[i].mem_space_id)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL,
+                                "Unable to determine if the dataspace selection is contiguous");
+            if (!contiguous) {
+                if (NULL == (transfer_info[i].u.write_info.write_body = (char *)RV_malloc(write_body_len)))
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                    "can't allocate space for the 'write_body' values");
+                if (H5Dgather(transfer_info[i].mem_space_id, buf[i], transfer_info[i].mem_type_id,
+                              write_body_len, transfer_info[i].u.write_info.write_body, NULL,
+                              transfer_info[i].u.write_info.write_body) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "can't gather data to write buffer");
+                buf[i] = transfer_info[i].u.write_info.write_body;
+            }
+            else {
+                if ((offset = RV_convert_start_to_offset(transfer_info[i].mem_space_id)) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                                    "Unable to determine memory offset value");
+                buf[i] = buf[i] + offset * dtype_size;
+            }
         } /* end if */
         else {
             if (H5T_STD_REF_OBJ == transfer_info[i].mem_type_id) {
@@ -1060,6 +1085,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                    transfer_info[i].u.write_info.base64_encoded_values);
 #endif
 
+            if (transfer_info[i].u.write_info.write_body)
+                RV_free(transfer_info[i].u.write_info.write_body);
             write_body_len = (strlen(fmt_string) - 4) + selection_body_len + value_body_len;
             if (NULL == (transfer_info[i].u.write_info.write_body = RV_malloc(write_body_len + 1)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for write buffer");
@@ -4138,3 +4165,156 @@ rv_dataset_write_cb(hid_t mem_type_id, hid_t mem_space_id, void *buf, struct res
     herr_t ret_value = SUCCEED;
     return SUCCEED;
 }
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_dataspace_selection_is_contiguous
+ *
+ * Purpose:     Checks if the specified dataspace in a contiguous selection.
+ *
+ * Return:      TRUE or FALSE if the selection is contiguous or
+ *              non-contiguous and FAIL if it is unable to determine it.
+ *
+ * Programmer:  Jan-Willem Blokland
+ *              August, 2023
+ */
+static htri_t
+RV_dataspace_selection_is_contiguous(hid_t space_id)
+{
+    htri_t   ret_value = TRUE;
+    hbool_t  whole     = TRUE;
+    hsize_t *dims      = NULL;
+    hsize_t *start     = NULL;
+    hsize_t *stride    = NULL;
+    hsize_t *count     = NULL;
+    hsize_t *block     = NULL;
+    int      i;
+    int      ndims;
+    hssize_t npoints, nblocks;
+
+    if ((npoints = H5Sget_select_npoints(space_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve number of selected points");
+    if (npoints < 2)
+        FUNC_GOTO_DONE(TRUE);
+
+    if ((ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace dimensionality");
+    if (!ndims)
+        FUNC_GOTO_DONE(TRUE);
+
+    if (H5S_SEL_HYPERSLABS == H5Sget_select_type(space_id)) {
+        if (NULL == (dims = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*dims))))
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                            "can't allocate space for dimension 'dims' values");
+
+        if (H5Sget_simple_extent_dims(space_id, dims, NULL) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace dimension size");
+
+        if (NULL == (start = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*start))))
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                            "can't allocate space for hyperslab selection 'start' values");
+        if (NULL == (stride = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*stride))))
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                            "can't allocate space for hyperslab selection 'stride' values");
+        if (NULL == (count = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*count))))
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                            "can't allocate space for hyperslab selection 'count' values");
+        if (NULL == (block = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*block))))
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                            "can't allocate space for hyperslab selection 'block' values");
+
+        if (nblocks = H5Sget_select_hyper_nblocks(space_id) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of hyperslab blocks");
+
+        if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get regular hyperslab selection");
+
+        /* For contiguous, the stride should be 1. */
+        for (i = 0; i < ndims; i++) {
+            if (stride[i] > 1)
+                FUNC_GOTO_DONE(FALSE);
+        }
+
+        if (nblocks > 1) {
+            /* Multiple blocks: count should be 1 except for the last dimension (fastest) */
+            for (i = 0; i < ndims - 1; i++) {
+                if (count[i] > 1)
+                    FUNC_GOTO_DONE(FALSE);
+            }
+        }
+
+        /* For contiguous, all faster running dimensions than the current dimension should be selected
+         * completely */
+        whole = (start[ndims - 1] == 0) && (count[ndims - 1] * block[ndims - 1] == dims[ndims - 1]);
+        for (i = ndims - 2; i >= 0; i--) {
+            if ((dims[i] > 1) && (count[i] * block[i] > 1) && !whole)
+                FUNC_GOTO_DONE(FALSE);
+
+            whole = whole && (start[i] == 0) && (count[i] * block[i] == dims[i]);
+        }
+    } /* end if */
+
+done:
+    if (block)
+        RV_free(block);
+    if (count)
+        RV_free(count);
+    if (dims)
+        RV_free(dims);
+    if (stride)
+        RV_free(stride);
+    if (start)
+        RV_free(start);
+
+    return ret_value;
+} /* end RV_dataspace_selection_is_contiguous() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_convert_start_to_offset
+ *
+ * Purpose:     Convert starting position value to an offset value.
+ *
+ * Return:      Offset value on success/Negative value on failure.
+ *
+ * Programmer:  Jan-Willem Blokland
+ *              August, 2023
+ */
+static hssize_t
+RV_convert_start_to_offset(hid_t space_id)
+{
+    hsize_t *dims      = NULL;
+    hsize_t *start     = NULL;
+    hssize_t ret_value = 0;
+    int      ndims, i;
+
+    if (H5S_SEL_HYPERSLABS == H5Sget_select_type(space_id)) {
+        if ((ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, -1, "can't retrieve dataspace dimensionality");
+
+        if (NULL == (dims = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*dims))))
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, -1,
+                            "can't allocate space for dimension 'dims' values");
+
+        if (H5Sget_simple_extent_dims(space_id, dims, NULL) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, -1, "can't get dataspace dimension size");
+
+        if (NULL == (start = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*start))))
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, -1,
+                            "can't allocate space for hyperslab selection 'start' values");
+
+        if (H5Sget_regular_hyperslab(space_id, start, NULL, NULL, NULL) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, -1, "can't get regular hyperslab selection");
+
+        ret_value = start[0];
+        for (i = 1; i < ndims; i++) {
+            ret_value = ret_value * dims[i] + start[i];
+        }
+    }
+
+done:
+    if (dims)
+        RV_free(dims);
+    if (start)
+        RV_free(start);
+
+    return ret_value;
+} /* end RV_convert_start_to_offset() */
