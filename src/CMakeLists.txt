@@ -108,28 +108,6 @@ if (BUILD_SHARED_LIBS)
 endif ()
 
 #-----------------------------------------------------------------------------
-# Make the REST VOL build depend on H5pubconf.h existing
-#-----------------------------------------------------------------------------
-if (HDF5_FOUND)
-  add_custom_target(
-    rest_vol_pubconf_depend
-    DEPENDS ${HDF5_BINARY_DIR}/src/H5pubconf.h
-  )
-else ()
-  add_custom_target(
-    rest_vol_pubconf_depend
-    DEPENDS ${CMAKE_BINARY_DIR}/${HDF5_DIR_NAME}/src/H5pubconf.h
-  )
-endif ()
-
-if (BUILD_STATIC_LIBS)
-  add_dependencies(${HDF5_VOL_REST_LIB_TARGET} rest_vol_pubconf_depend)
-endif ()
-if (BUILD_SHARED_LIBS)
-  add_dependencies(${HDF5_VOL_REST_LIBSH_TARGET} rest_vol_pubconf_depend)
-endif ()
-
-#-----------------------------------------------------------------------------
 # Add file(s) to CMake Install
 #-----------------------------------------------------------------------------
 if (NOT HDF5_VOL_REST_INSTALL_NO_DEVELOPMENT)
