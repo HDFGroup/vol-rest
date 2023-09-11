@@ -469,22 +469,6 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
     CURL                  *curl_multi_handle   = NULL;
     dataset_transfer_info *transfer_info       = NULL;
 
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Received dataset read call with following parameters:\n");
-    for (size_t i = 0; i < count; i++) {
-        printf("     - Dataset %zu's URI: %s\n", i, transfer_info[i].dataset->URI);
-        printf("     - Dataset %zu's object type: %s\n", i,
-               object_type_to_string(transfer_info[i].dataset->obj_type));
-        printf("     - Dataset %zu's domain path: %s\n", i,
-               transfer_info[i].dataset->domain->u.file.filepath_name);
-        printf("     - Entire memory dataspace selected? %s\n",
-               (_transfer_info[i].mem_space_id == H5S_ALL) ? "yes" : "no");
-        printf("     - Entire file dataspace selected? %s\n",
-               (_transfer_info[i].file_space_id == H5S_ALL) ? "yes" : "no");
-    }
-    printf("     - Default DXPL? %s\n\n", (dxpl_id == H5P_DATASET_XFER_DEFAULT) ? "yes" : "no");
-#endif
-
     if ((transfer_info = RV_calloc(count * sizeof(dataset_transfer_info))) == NULL)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset transfer info");
 
@@ -529,6 +513,22 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
         transfer_info[i].resp_buffer.buffer_size  = CURL_RESPONSE_BUFFER_DEFAULT_SIZE;
         transfer_info[i].resp_buffer.curr_buf_ptr = transfer_info[i].resp_buffer.buffer;
     }
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Received dataset read call with following parameters:\n");
+    for (size_t i = 0; i < count; i++) {
+        printf("     - Dataset %zu's URI: %s\n", i, transfer_info[i].dataset->URI);
+        printf("     - Dataset %zu's object type: %s\n", i,
+               object_type_to_string(transfer_info[i].dataset->obj_type));
+        printf("     - Dataset %zu's domain path: %s\n", i,
+               transfer_info[i].dataset->domain->u.file.filepath_name);
+        printf("     - Entire memory dataspace selected? %s\n",
+               (transfer_info[i].mem_space_id == H5S_ALL) ? "yes" : "no");
+        printf("     - Entire file dataspace selected? %s\n",
+               (transfer_info[i].file_space_id == H5S_ALL) ? "yes" : "no");
+    }
+    printf("     - Default DXPL? %s\n\n", (dxpl_id == H5P_DATASET_XFER_DEFAULT) ? "yes" : "no");
+#endif
 
     /* Iterate over datasets to read from */
     for (size_t i = 0; i < count; i++) {
@@ -1030,7 +1030,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                             "dataset write URL size exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
-        printf("-> Dataset write URL: %s\n\n", request_urls[0]);
+        printf("-> Dataset write URL: %s\n\n", transfer_info[0].request_url);
 #endif
 
         /* If using a point selection, instruct cURL to perform a POST request in order to post the
@@ -1057,7 +1057,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Base64-encoded data buffer: %s\n\n",
-                   transfer_info[i].u.write_info.base64_encoded_value);
+                   transfer_info[i].u.write_info.base64_encoded_values);
 #endif
 
             write_body_len = (strlen(fmt_string) - 4) + selection_body_len + value_body_len;
