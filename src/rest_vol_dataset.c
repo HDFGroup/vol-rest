@@ -870,7 +870,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         transfer_info[i].u.write_info.write_body            = NULL;
         transfer_info[i].u.write_info.base64_encoded_values = NULL;
         transfer_info[i].dataset                            = (RV_object_t *)dset[i];
-        transfer_info[i].buf                                = buf[i];
+        transfer_info[i].buf                                = (void *)buf[i];
         transfer_info[i].transfer_type                      = WRITE;
 
         transfer_info[i].mem_space_id             = _mem_space_id[i];
@@ -4251,7 +4251,11 @@ RV_dataspace_selection_is_contiguous(hid_t space_id)
 
             whole = whole && (start[i] == 0) && (count[i] * block[i] == dims[i]);
         }
-    } /* end if */
+    } /* end if*/
+    else if (H5S_SEL_POINTS == H5Sget_select_type(space_id)) {
+        /* Assumption: any point selection is non-contiguous in memory */
+        FUNC_GOTO_DONE(FALSE);
+    } /* end else if */
 
 done:
     if (block)
@@ -4308,7 +4312,11 @@ RV_convert_start_to_offset(hid_t space_id)
         for (i = 1; i < ndims; i++) {
             ret_value = ret_value * dims[i] + start[i];
         }
-    }
+    } /* end if */
+    else if (H5S_SEL_POINTS == H5Sget_select_type(space_id)) {
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, -1,
+                        "for point selection, computing the offset is not supported");
+    } /* end else if */
 
 done:
     if (dims)
