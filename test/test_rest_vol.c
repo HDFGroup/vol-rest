@@ -1475,8 +1475,6 @@ test_unused_file_API_calls(void)
             TEST_ERROR
         if (H5Fget_obj_count(file_id, H5F_OBJ_DATASET) >= 0)
             TEST_ERROR
-        if (H5Fget_obj_ids(file_id, H5F_OBJ_DATASET, 0, &obj_id) >= 0)
-            TEST_ERROR
         if (H5Fmount(file_id, "/", file_id, H5P_DEFAULT) >= 0)
             TEST_ERROR
         if (H5Funmount(file_id, "/") >= 0)
