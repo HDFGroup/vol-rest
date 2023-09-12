@@ -13,21 +13,22 @@ set (examples
     rv_ds1
 )
 
+
 foreach (example ${examples})
   if (BUILD_STATIC_LIBS)
     add_executable (${example} ${HDF5_VOL_REST_HL_EXAMPLES_SOURCE_DIR}/${example}.c)
     RV_TARGET_C_PROPERTIES (${example} STATIC " " " ")
-    target_link_libraries (${example} PUBLIC ${HDF5_VOL_REST_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
+    target_link_libraries (${example} PUBLIC ${HDF5_VOL_REST_LIB_TARGET} ${LINK_LIBS})
     set_target_properties (${example} PROPERTIES FOLDER examples)
-    add_dependencies(${example} ${HDF5_VOL_REST_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
+    add_dependencies(${example} ${HDF5_VOL_REST_LIB_TARGET})
   endif ()
 
   if (BUILD_SHARED_LIBS)
     add_executable (${example}-shared ${HDF5_VOL_REST_HL_EXAMPLES_SOURCE_DIR}/${example}.c)
     RV_TARGET_C_PROPERTIES (${example}-shared SHARED " " " ")
-    target_link_libraries (${example}-shared PUBLIC ${HDF5_VOL_REST_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
+    target_link_libraries (${example}-shared PUBLIC ${HDF5_VOL_REST_LIBSH_TARGET} ${LINK_SHARED_LIBS})
     set_target_properties (${example}-shared PROPERTIES FOLDER examples)
-    add_dependencies(${example}-shared ${HDF5_VOL_REST_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
+    add_dependencies(${example}-shared ${HDF5_VOL_REST_LIBSH_TARGET})
   endif (BUILD_SHARED_LIBS)
 
   #-----------------------------------------------------------------------------

@@ -65,8 +65,6 @@ usage()
     echo "              library should be built with position independent"
     echo "              code option enabled."
     echo
-    echo "      -x      Enable building of the REST VOL examples."
-    echo 
     echo "      -G      Specify the CMake Generator to use for the build"
     echo "              files created. Default is 'Unix Makefiles'."
     echo
@@ -93,7 +91,7 @@ usage()
     echo
 }
 
-optspec=":hctdmstxlG:H:C:Y:B:P:-"
+optspec=":hctdmstlG:H:C:Y:B:P:-"
 while getopts "$optspec" optchar; do
     case "${optchar}" in
     h)

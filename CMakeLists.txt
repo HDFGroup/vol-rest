@@ -79,7 +79,6 @@ mark_as_advanced (HDF5_VOL_REST_NO_PACKAGES)
 set (HDF5_VOL_REST_LIB_CORENAME        "hdf5_vol_rest")
 set (HDF5_VOL_REST_TEST_LIB_CORENAME   "hdf5_vol_rest_test")
 
-
 #-----------------------------------------------------------------------------
 # Set the target names of all the libraries
 #-----------------------------------------------------------------------------
@@ -122,7 +121,7 @@ endif ()
 find_package (CURL REQUIRED)
 if (CURL_FOUND)
   include_directories(${CURL_INCLUDE_DIRS})
-  set (LINK_LIBS ${LINK_LIBS} ${CURL_LIBRARIES})
+  set (LINK_LIBS ${LINK_LIBS} CURL::libcurl)
 else ()
   message (FATAL_ERROR "cURL not found; please check CURL_INCLUDE_DIR")
 endif ()
@@ -463,8 +462,6 @@ set (HDF5_VOL_REST_INCLUDE_DIRECTORIES
 
 list(APPEND HDF5_VOL_REST_INCLUDE_DIRECTORIES
   ${HDF5_INCLUDE_DIRS}
-  ${HDF5_BINARY_DIR}/src
-  ${HDF5_SOURCE_DIR}/${HDF5_HL_DIR_NAME}/src
 )
 
 set(HDF5_VOL_REST_INCLUDE_DIRECTORIES 
@@ -573,9 +570,18 @@ include (${HDF5_VOL_REST_RESOURCES_DIR}/HDFCompilerFlags.cmake)
 #-----------------------------------------------------------------------------
 include_directories(${HDF5_INCLUDE_DIRS})
 
-list (APPEND HDF5_LIBRARIES_TO_EXPORT
-  ${HDF5_C_HL_LIBRARIES}
-)
+if (BUILD_SHARED_LIBS)
+  list (APPEND LINK_SHARED_LIBS 
+    ${HDF5_C_LIBRARIES}
+    ${HDF5_C_HL_LIBRARIES})
+endif()
+
+if (BUILD_STATIC_LIBS)
+  list (APPEND LINK_LIBS 
+    ${HDF5_C_LIBRARIES}
+    ${HDF5_C_HL_LIBRARIES})
+endif()
+
 
 #-----------------------------------------------------------------------------
 # Build the REST VOL
