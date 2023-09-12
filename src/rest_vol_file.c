@@ -569,8 +569,8 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
             unsigned int requested_types  = args->args.get_obj_ids.types;
 
             get_obj_ids_udata_t id_list;
-            id_list.obj_id_list = args->args.get_obj_ids.oid_list;
-            id_list.obj_count   = 0;
+            id_list.obj_id_list   = args->args.get_obj_ids.oid_list;
+            id_list.obj_count     = 0;
             id_list.max_obj_count = args->args.get_obj_ids.max_objs;
 
             if (requested_types & H5F_OBJ_FILE)
