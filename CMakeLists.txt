@@ -135,7 +135,7 @@ endif ()
 # Include custom module for finding YAJL
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${HDF5_VOL_REST_RESOURCES_MOD_DIR}")
 
-find_package (YAJL REQUIRED)
+find_package (YAJL 2.0.4 REQUIRED)
 if (YAJL_FOUND)
   include_directories(${YAJL_INCLUDE_DIRS})
   set (LINK_LIBS ${LINK_LIBS} yajl)
