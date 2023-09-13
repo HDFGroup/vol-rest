@@ -79,7 +79,6 @@ mark_as_advanced (HDF5_VOL_REST_NO_PACKAGES)
 set (HDF5_VOL_REST_LIB_CORENAME        "hdf5_vol_rest")
 set (HDF5_VOL_REST_TEST_LIB_CORENAME   "hdf5_vol_rest_test")
 
-
 #-----------------------------------------------------------------------------
 # Set the target names of all the libraries
 #-----------------------------------------------------------------------------
@@ -100,34 +99,29 @@ set (HDF5_VOL_REST_UTIL_DIR            ${HDF5_VOL_REST_SOURCE_DIR}/src/util)
 set (HDF5_VOL_REST_TEST_SRC_DIR        ${HDF5_VOL_REST_SOURCE_DIR}/test)
 set (HDF5_VOL_REST_EXAMPLES_DIR        ${HDF5_VOL_REST_SOURCE_DIR}/examples)
 set (HDF5_DIR_NAME                     "hdf5")
-set (HDF5_DIR                          ${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME})
-set (HDF5_BINARY_DIR                   ${HDF5_VOL_REST_BINARY_DIR}/${HDF5_DIR_NAME})
-
-
-#-----------------------------------------------------------------------------
-# Define a CMake variable which the user can override to use
-# a pre-built HDF5 distribution for building the REST VOL connector
-#-----------------------------------------------------------------------------
-set (PREBUILT_HDF5_DIR CACHE STRING "Directory of pre-built HDF5 distribution")
+set (HDF5_HL_DIR_NAME                  "hl")
 
 #-----------------------------------------------------------------------------
 # Find HDF5, cURL and YAJL before building
 #-----------------------------------------------------------------------------
-set (HDF5_FOUND FALSE)
-if (NOT PREBUILT_HDF5_DIR)
-  find_package(HDF5 MODULE COMPONENTS C HL)
-  if (HDF5_ENABLE_THREADSAFE AND NOT Threads_FOUND)
-    find_package(Threads)
-  endif ()
-  if (NOT HDF5_FOUND)
-    set (HDF5_DIR ${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME})
-  endif ()
+if (HDF5_FOUND STREQUAL "")
+  set (HDF5_FOUND FALSE)
+endif()
+
+find_package(HDF5 MODULE COMPONENTS C HL)
+
+if (NOT HDF5_FOUND)
+  message(SEND_ERROR "HDF5 not found!")
+endif()
+
+if (HDF5_ENABLE_THREADSAFE AND NOT Threads_FOUND)
+  find_package(Threads)
 endif ()
 
 find_package (CURL 7.61 REQUIRED)
 if (CURL_FOUND)
   include_directories(${CURL_INCLUDE_DIRS})
-  set (LINK_LIBS ${LINK_LIBS} ${CURL_LIBRARIES})
+  set (LINK_LIBS ${LINK_LIBS} CURL::libcurl)
 else ()
   message (FATAL_ERROR "cURL not found; please check CURL_INCLUDE_DIR")
 endif ()
@@ -288,7 +282,7 @@ macro (HDF5_VOL_REST_SET_LIB_OPTIONS libtarget libname libtype)
 endmacro (HDF5_VOL_REST_SET_LIB_OPTIONS)
 
 #-------------------------------------------------------------------------------
-macro (TARGET_C_PROPERTIES wintarget libtype addcompileflags addlinkflags)
+macro (RV_TARGET_C_PROPERTIES wintarget libtype addcompileflags addlinkflags)
   if (MSVC)
     TARGET_MSVC_PROPERTIES (${wintarget} ${libtype} "${addcompileflags} ${WIN_COMPILE_FLAGS}" "${addlinkflags} ${WIN_LINK_FLAGS}")
   else ()
@@ -459,38 +453,23 @@ configure_file (${HDF5_VOL_REST_RESOURCES_DIR}/rv_cmake_config.h.in ${HDF5_VOL_R
 #-----------------------------------------------------------------------------
 # Include the main src directory and HDF5 distribution directory
 #-----------------------------------------------------------------------------
-if (PREBUILT_HDF5_DIR)
-  set (HDF5_VOL_REST_INCLUDE_DIRECTORIES
+
+set (HDF5_VOL_REST_INCLUDE_DIRECTORIES
     ${HDF5_VOL_REST_SRC_DIR}
     ${HDF5_VOL_REST_BINARY_DIR}
     ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-    ${PREBUILT_HDF5_DIR}/include
-    CACHE
-    INTERNAL
+)
+
+list(APPEND HDF5_VOL_REST_INCLUDE_DIRECTORIES
+  ${HDF5_INCLUDE_DIRS}
+)
+
+set(HDF5_VOL_REST_INCLUDE_DIRECTORIES 
+  ${HDF5_VOL_REST_INCLUDE_DIRECTORIES}
+    CACHE 
+    INTERNAL 
     "Include directories for HDF5 REST VOL connector"
-    )
-elseif (HDF5_FOUND)
-  set (HDF5_VOL_REST_INCLUDE_DIRECTORIES
-    ${HDF5_VOL_REST_SRC_DIR}
-    ${HDF5_VOL_REST_BINARY_DIR}
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-    ${HDF5_INCLUDE_DIRS}
-    CACHE
-    INTERNAL
-    "Include directories for HDF5 REST VOL connector"
-  )
-else ()
-  set (HDF5_VOL_REST_INCLUDE_DIRECTORIES
-    ${HDF5_VOL_REST_SRC_DIR}
-    ${HDF5_VOL_REST_BINARY_DIR}
-    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-    ${HDF5_DIR}
-    ${HDF5_BINARY_DIR}
-    CACHE
-    INTERNAL
-    "Include directories for HDF5 REST VOL connector"
-  )
-endif ()
+)
 
 INCLUDE_DIRECTORIES (${HDF5_VOL_REST_INCLUDE_DIRECTORIES})
 
@@ -587,27 +566,22 @@ include (${HDF5_VOL_REST_RESOURCES_DIR}/HDFCompilerFlags.cmake)
 #endif ()
 
 #-----------------------------------------------------------------------------
-# Build HDF5, unless the user has specified to use
-# a pre-built HDF5 distribution
+# Include HDF5 Directories
 #-----------------------------------------------------------------------------
-if (NOT PREBUILT_HDF5_DIR AND NOT HDF5_FOUND)
-  include_directories(${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME}/src)
-  include_directories(${HDF5_VOL_REST_SRC_DIR}/${HDF5_DIR_NAME}/src/H5FDsubfiling)
-  add_subdirectory(${HDF5_DIR} ${PROJECT_BINARY_DIR}/${HDF5_DIR_NAME})
-elseif (NOT PREBUILT_HDF5_DIR AND HDF5_FOUND)
-  set (HDF5_LIBRARIES_TO_EXPORT
-    ${HDF5_C_HL_LIBRARIES}
+include_directories(${HDF5_INCLUDE_DIRS})
+
+if (BUILD_SHARED_LIBS)
+  list (APPEND LINK_SHARED_LIBS 
     ${HDF5_C_LIBRARIES}
-  )
-else ()
-  link_directories(${PREBUILT_HDF5_DIR}/lib)
-  set (HDF5_LIBRARIES_TO_EXPORT
-       libhdf5.so
-       libhdf5_hl.so
-       libhdf5.a
-       libhdf5_hl.a
-  )
-endif ()
+    ${HDF5_C_HL_LIBRARIES})
+endif()
+
+if (BUILD_STATIC_LIBS)
+  list (APPEND LINK_LIBS 
+    ${HDF5_C_LIBRARIES}
+    ${HDF5_C_HL_LIBRARIES})
+endif()
+
 
 #-----------------------------------------------------------------------------
 # Build the REST VOL

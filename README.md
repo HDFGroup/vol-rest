@@ -20,7 +20,8 @@ HDF5 REST VOL connector - currently under development
       - [CMake](#cmake)
       - [II.B.iii.a. Options for `configure`](#iibiiia-options-for-configure)
       - [II.B.iii.b. Options for CMake](#iibiiib-options-for-cmake)
-    - [II.B.iv. Build Results](#iibiv-build-results)
+    - [II.B.iv. Building at HDF5 Build Time](#iibiv-building-at-hdf5-build-time)
+    - [II.B.v. Build Results](#iibv-build-results)
 - [III. Using/Testing the REST VOL connector](#iii-usingtesting-the-rest-vol-connector)
 - [IV. More Information](#iv-more-information)
 
@@ -314,8 +315,11 @@ REST VOL Connector-specific options:
 Note, when setting BUILD_SHARED_LIBS=ON and YAJL_USE_STATIC_LIBRARIES=ON, the static YAJL libraries have be build with the position independent code (PIC) option enabled. In the static YAJL build,
 this PIC option has been turned off by default.
 
+### II.B.iv. Building at HDF5 Build Time
 
-### II.B.iv. Build Results
+It is also possible to build the REST VOL as part of the build process for the HDF5 library, using CMake's FetchContent module. This can be done using a local copy of the REST VOL's source code, or by providing the information for the repository to be automatically cloned from a branch of a Github repository. For full instructions on this process, see [Building and testing HDF5 VOL connectors with CMake FetchContent](https://github.com/HDFGroup/hdf5/blob/develop/doc/cmake-vols-fetchcontent.md).
+
+### II.B.v. Build Results
 
 If the build is successful, the following files will be written into the installation directory:
 
