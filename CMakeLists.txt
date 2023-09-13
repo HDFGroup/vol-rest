@@ -124,7 +124,7 @@ if (NOT PREBUILT_HDF5_DIR)
   endif ()
 endif ()
 
-find_package (CURL REQUIRED)
+find_package (CURL 7.61 REQUIRED)
 if (CURL_FOUND)
   include_directories(${CURL_INCLUDE_DIRS})
   set (LINK_LIBS ${LINK_LIBS} ${CURL_LIBRARIES})

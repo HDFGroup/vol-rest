@@ -66,7 +66,7 @@ To build the REST VOL connector, the following libraries are required:
             connector. Using statically-built HDF5 libraries can cause issues with the REST
             VOL connector under certain circumstances.
 
-+ libcurl - networking support
++ libcurl (ver. 7.61.0 or greater) - networking support
     + https://curl.haxx.se/
 
 + libyajl (ver. 2.0.4 or greater) - JSON parsing and construction
