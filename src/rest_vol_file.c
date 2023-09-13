@@ -17,6 +17,14 @@
 
 #include "rest_vol_file.h"
 
+herr_t RV_iterate_copy_hid_cb(hid_t obj_id, void *udata);
+
+struct get_obj_ids_udata_t {
+    hid_t *obj_id_list;
+    size_t obj_count;
+    size_t max_obj_count;
+} typedef get_obj_ids_udata_t;
+
 /*-------------------------------------------------------------------------
  * Function:    RV_file_create
  *
@@ -550,9 +558,50 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
 
         /* H5Fget_obj_ids */
         case H5VL_FILE_GET_OBJ_IDS:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_obj_ids is unsupported");
-            break;
 
+            if (args->args.get_obj_ids.oid_list == NULL)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "given object id list buffer is NULL");
+
+            if (args->args.get_obj_ids.count == NULL)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "given object id count buffer is NULL");
+
+            if (args->args.get_obj_ids.max_objs < 0)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "invalid max object parameter");
+
+            if (args->args.get_obj_ids.max_objs == 0)
+                FUNC_GOTO_DONE(SUCCEED);
+
+            *args->args.get_obj_ids.count = 0;
+            unsigned int requested_types  = args->args.get_obj_ids.types;
+
+            get_obj_ids_udata_t id_list;
+            id_list.obj_id_list   = args->args.get_obj_ids.oid_list;
+            id_list.obj_count     = 0;
+            id_list.max_obj_count = args->args.get_obj_ids.max_objs;
+
+            if (requested_types & H5F_OBJ_FILE)
+                if (H5Iiterate(H5I_FILE, RV_iterate_copy_hid_cb, &id_list) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over file ids");
+
+            if (requested_types & H5F_OBJ_GROUP)
+                if (H5Iiterate(H5I_GROUP, RV_iterate_copy_hid_cb, &id_list) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over group ids");
+
+            if (requested_types & H5F_OBJ_DATATYPE)
+                if (H5Iiterate(H5I_DATATYPE, RV_iterate_copy_hid_cb, &id_list) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over datatype ids");
+
+            if (requested_types & H5F_OBJ_DATASET)
+                if (H5Iiterate(H5I_DATASET, RV_iterate_copy_hid_cb, &id_list) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over dataset ids");
+
+            if (requested_types & H5F_OBJ_ATTR)
+                if (H5Iiterate(H5I_ATTR, RV_iterate_copy_hid_cb, &id_list) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over attribute ids");
+
+            *args->args.get_obj_ids.count = id_list.obj_count;
+
+            break;
         default:
             FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "can't get this type of information from file");
     } /* end switch */
@@ -819,3 +868,30 @@ done:
 
     return ret_value;
 } /* end RV_file_close() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_iterate_copy_hid_cb
+ *
+ * Purpose:     Callback for H5Iiterate() that copies the hid_t
+ *              of each library object into a list.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              August, 2023
+ */
+herr_t
+RV_iterate_copy_hid_cb(hid_t obj_id, void *udata)
+{
+    herr_t               ret_value = H5_ITER_CONT;
+    get_obj_ids_udata_t *id_list   = (get_obj_ids_udata_t *)udata;
+
+    if (id_list->obj_count >= id_list->max_obj_count)
+        FUNC_GOTO_DONE(H5_ITER_STOP);
+
+    id_list->obj_id_list[id_list->obj_count] = obj_id;
+    id_list->obj_count++;
+
+done:
+    return ret_value;
+}
