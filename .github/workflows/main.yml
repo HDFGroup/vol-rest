@@ -129,7 +129,9 @@ jobs:
           pytest
 
       - name: Install valgrind
-        run: sudo apt install valgrind
+        run: |
+          sudo apt update
+          sudo apt install valgrind
         working-directory: ${{ github.workspace }}
             
       - name: Start HSDS
@@ -262,7 +264,9 @@ jobs:
           pytest
 
       - name: Install valgrind
-        run: sudo apt install valgrind
+        run: |
+          sudo apt update
+          sudo apt install valgrind
         working-directory: ${{ github.workspace }}
             
       - name: Start HSDS
@@ -371,7 +375,9 @@ jobs:
         working-directory: ${{github.workspace}}/hdf5/build
 
       - name: Install valgrind
-        run: sudo apt install valgrind
+        run:  |
+          sudo apt update
+          sudo apt install valgrind
         working-directory: ${{ github.workspace }}
           
       - uses: actions/cache/restore@v3
