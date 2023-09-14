@@ -996,8 +996,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
                                     "can't allocate space for the 'write_body' values");
                 if (H5Dgather(transfer_info[i].mem_space_id, buf[i], transfer_info[i].mem_type_id,
-                              write_body_len, transfer_info[i].u.write_info.write_body, NULL,
-                              transfer_info[i].u.write_info.write_body) < 0)
+                              write_body_len, transfer_info[i].u.write_info.write_body, NULL, NULL) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "can't gather data to write buffer");
                 buf[i] = transfer_info[i].u.write_info.write_body;
             }
@@ -1085,8 +1084,10 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                    transfer_info[i].u.write_info.base64_encoded_values);
 #endif
 
-            if (transfer_info[i].u.write_info.write_body)
+            if (transfer_info[i].u.write_info.write_body) {
                 RV_free(transfer_info[i].u.write_info.write_body);
+                transfer_info[i].u.write_info.write_body = NULL;
+            }
             write_body_len = (strlen(fmt_string) - 4) + selection_body_len + value_body_len;
             if (NULL == (transfer_info[i].u.write_info.write_body = RV_malloc(write_body_len + 1)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for write buffer");
@@ -4182,6 +4183,7 @@ RV_dataspace_selection_is_contiguous(hid_t space_id)
 {
     htri_t   ret_value = TRUE;
     hbool_t  whole     = TRUE;
+    htri_t   regular   = TRUE;
     hsize_t *dims      = NULL;
     hsize_t *start     = NULL;
     hsize_t *stride    = NULL;
@@ -4192,70 +4194,87 @@ RV_dataspace_selection_is_contiguous(hid_t space_id)
     hssize_t npoints, nblocks;
 
     if ((npoints = H5Sget_select_npoints(space_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve number of selected points");
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of selected points");
     if (npoints < 2)
         FUNC_GOTO_DONE(TRUE);
 
     if ((ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace dimensionality");
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace dimensionality");
     if (!ndims)
         FUNC_GOTO_DONE(TRUE);
 
-    if (H5S_SEL_HYPERSLABS == H5Sget_select_type(space_id)) {
-        if (NULL == (dims = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*dims))))
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
-                            "can't allocate space for dimension 'dims' values");
-
-        if (H5Sget_simple_extent_dims(space_id, dims, NULL) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace dimension size");
-
-        if (NULL == (start = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*start))))
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
-                            "can't allocate space for hyperslab selection 'start' values");
-        if (NULL == (stride = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*stride))))
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
-                            "can't allocate space for hyperslab selection 'stride' values");
-        if (NULL == (count = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*count))))
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
-                            "can't allocate space for hyperslab selection 'count' values");
-        if (NULL == (block = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*block))))
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
-                            "can't allocate space for hyperslab selection 'block' values");
-
-        if (nblocks = H5Sget_select_hyper_nblocks(space_id) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of hyperslab blocks");
-
-        if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get regular hyperslab selection");
-
-        /* For contiguous, the stride should be 1. */
-        for (i = 0; i < ndims; i++) {
-            if (stride[i] > 1)
+    switch (H5Sget_select_type(space_id)) {
+        case H5S_SEL_HYPERSLABS: {
+            if ((regular = H5Sis_regular_hyperslab(space_id)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL,
+                                "can't determine if the hyperslab is regular");
+            if (!regular)
                 FUNC_GOTO_DONE(FALSE);
-        }
 
-        if (nblocks > 1) {
-            /* Multiple blocks: count should be 1 except for the last dimension (fastest) */
-            for (i = 0; i < ndims - 1; i++) {
-                if (count[i] > 1)
+            if (NULL == (dims = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*dims))))
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for dimension 'dims' values");
+
+            if (H5Sget_simple_extent_dims(space_id, dims, NULL) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace dimension size");
+
+            if (NULL == (start = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*start))))
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for hyperslab selection 'start' values");
+            if (NULL == (stride = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*stride))))
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for hyperslab selection 'stride' values");
+            if (NULL == (count = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*count))))
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for hyperslab selection 'count' values");
+            if (NULL == (block = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*block))))
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for hyperslab selection 'block' values");
+
+            if (nblocks = H5Sget_select_hyper_nblocks(space_id) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of hyperslab blocks");
+
+            if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get regular hyperslab selection");
+
+            /* For contiguous, the stride should be 1. */
+            for (i = 0; i < ndims; i++) {
+                if (stride[i] > 1)
                     FUNC_GOTO_DONE(FALSE);
             }
-        }
 
-        /* For contiguous, all faster running dimensions than the current dimension should be selected
-         * completely */
-        whole = (start[ndims - 1] == 0) && (count[ndims - 1] * block[ndims - 1] == dims[ndims - 1]);
-        for (i = ndims - 2; i >= 0; i--) {
-            if ((dims[i] > 1) && (count[i] * block[i] > 1) && !whole)
-                FUNC_GOTO_DONE(FALSE);
+            if (nblocks > 1) {
+                /* Multiple blocks: count should be 1 except for the last dimension (fastest) */
+                for (i = 0; i < ndims - 1; i++) {
+                    if (count[i] > 1)
+                        FUNC_GOTO_DONE(FALSE);
+                }
+            }
 
-            whole = whole && (start[i] == 0) && (count[i] * block[i] == dims[i]);
-        }
-    } /* end if*/
-    else if (H5S_SEL_POINTS == H5Sget_select_type(space_id)) {
-        /* Assumption: any point selection is non-contiguous in memory */
-        FUNC_GOTO_DONE(FALSE);
-    } /* end else if */
+            /* For contiguous, all faster running dimensions than the current dimension should be selected
+             * completely */
+            whole = (start[ndims - 1] == 0) && (count[ndims - 1] * block[ndims - 1] == dims[ndims - 1]);
+            for (i = ndims - 2; i >= 0; i--) {
+                if ((dims[i] > 1) && (count[i] * block[i] > 1) && !whole)
+                    FUNC_GOTO_DONE(FALSE);
+
+                whole = whole && (start[i] == 0) && (count[i] * block[i] == dims[i]);
+            }
+            break;
+        } /* H5S_SEL_HYPERSLABS */
+
+        case H5S_SEL_POINTS:
+            /* Assumption: any point selection is non-contiguous in memory */
+            FUNC_GOTO_DONE(FALSE);
+            break;
+
+        case H5S_SEL_ALL:
+        case H5S_SEL_ERROR:
+        case H5S_SEL_N:
+        case H5S_SEL_NONE:
+        default:
+            FUNC_GOTO_DONE(TRUE);
+    } /* end switch */
 
 done:
     if (block)
@@ -4287,40 +4306,58 @@ RV_convert_start_to_offset(hid_t space_id)
 {
     hsize_t *dims      = NULL;
     hsize_t *start     = NULL;
+    hsize_t *end       = NULL;
     hssize_t ret_value = 0;
     int      ndims, i;
 
-    if (H5S_SEL_HYPERSLABS == H5Sget_select_type(space_id)) {
-        if ((ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, -1, "can't retrieve dataspace dimensionality");
+    switch (H5Sget_select_type(space_id)) {
+        case H5S_SEL_HYPERSLABS: {
+            if ((ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, -1, "can't retrieve dataspace dimensionality");
 
-        if (NULL == (dims = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*dims))))
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, -1,
-                            "can't allocate space for dimension 'dims' values");
+            if (NULL == (dims = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*dims))))
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, -1,
+                                "can't allocate space for dimension 'dims' values");
 
-        if (H5Sget_simple_extent_dims(space_id, dims, NULL) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, -1, "can't get dataspace dimension size");
+            if (H5Sget_simple_extent_dims(space_id, dims, NULL) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, -1, "can't get dataspace dimension size");
 
-        if (NULL == (start = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*start))))
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, -1,
-                            "can't allocate space for hyperslab selection 'start' values");
+            if (NULL == (start = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*start))))
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, -1,
+                                "can't allocate space for hyperslab selection 'start' values");
+            if (NULL == (end = (hsize_t *)RV_malloc((size_t)ndims * sizeof(*end))))
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, -1,
+                                "can't allocate space for hyperslab selection 'end' values");
 
-        if (H5Sget_regular_hyperslab(space_id, start, NULL, NULL, NULL) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, -1, "can't get regular hyperslab selection");
+            if (H5Sget_select_bounds(space_id, start, end) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, -1,
+                                "can't get bounding box of hyperslab selection");
 
-        ret_value = start[0];
-        for (i = 1; i < ndims; i++) {
-            ret_value = ret_value * dims[i] + start[i];
-        }
-    } /* end if */
-    else if (H5S_SEL_POINTS == H5Sget_select_type(space_id)) {
-        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, -1,
-                        "for point selection, computing the offset is not supported");
-    } /* end else if */
+            ret_value = start[0];
+            for (i = 1; i < ndims; i++) {
+                ret_value = ret_value * dims[i] + start[i];
+            }
+            break;
+        } /* H5S_SEL_HYPERSLABS */
+
+        case H5S_SEL_POINTS:
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, -1,
+                            "for point selection, computing the offset is not supported");
+            break;
+
+        case H5S_SEL_ALL:
+        case H5S_SEL_ERROR:
+        case H5S_SEL_N:
+        case H5S_SEL_NONE:
+        default:
+            ret_value = 0;
+    } /* end switch */
 
 done:
     if (dims)
         RV_free(dims);
+    if (end)
+        RV_free(end);
     if (start)
         RV_free(start);
 
