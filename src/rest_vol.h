@@ -717,7 +717,8 @@ void RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
 /* Counterpart of CURL_PERFORM that takes a curl multi handle,
  * and waits until all requests on it have finished before returning. */
 herr_t RV_curl_multi_perform(CURL *curl_multi_ptr, dataset_transfer_info *transfer_info, size_t count,
-                             herr_t(success_callback)(hid_t mem_type_id, hid_t mem_space_id, void *buf,
+                             herr_t(success_callback)(hid_t mem_type_id, hid_t mem_space_id,
+                                                      hid_t file_space_id, void *buf,
                                                       struct response_buffer resp_buffer));
 
 #define SERVER_VERSION_MATCHES_OR_EXCEEDS(version, major_needed, minor_needed, patch_needed)                 \

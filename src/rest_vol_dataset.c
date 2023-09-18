@@ -21,6 +21,9 @@
 static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callback_data_in,
                                                             void *callback_data_out);
 
+static herr_t RV_json_values_to_binary_callback(char *HTTP_response, void *callback_data_in,
+                                                void *callback_data_out);
+
 /* Helper functions for creating a Dataset */
 static herr_t RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t type_id,
                                                    hid_t space_id, hid_t lcpl_id, hid_t dcpl,
@@ -46,15 +49,15 @@ static herr_t   RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
 static hssize_t RV_convert_start_to_offset(hid_t space_id);
 
 /* Callbacks used for post-processing after a curl request succeeds */
-static herr_t rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, void *buf,
+static herr_t rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, void *buf,
                                  struct response_buffer resp_buffer);
-static herr_t rv_dataset_write_cb(hid_t mem_type_id, hid_t mem_space_id, void *buf,
+static herr_t rv_dataset_write_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, void *buf,
                                   struct response_buffer resp_buffer);
 
 /* Struct for H5Dscatter's callback that allows it to scatter from a non-global response buffer */
 struct response_read_info {
-    struct response_buffer *response_buf;
-    void                   *read_size;
+    void *buffer;
+    void *read_size;
 } typedef response_read_info;
 
 /* H5Dscatter() callback for dataset reads */
@@ -77,6 +80,7 @@ const char *min_dense_keys[]              = {"minDense", (const char *)0};
 const char *layout_class_keys[]           = {"class", (const char *)0};
 const char *chunk_dims_keys[]             = {"dims", (const char *)0};
 const char *external_storage_keys[]       = {"externalStorage", (const char *)0};
+const char *value_keys[]                  = {"value", (const char *)0};
 
 /* Defines for Dataset operations */
 #define DATASET_CREATION_PROPERTIES_BODY_DEFAULT_SIZE 512
@@ -1004,7 +1008,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                 if ((offset = RV_convert_start_to_offset(transfer_info[i].mem_space_id)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
                                     "Unable to determine memory offset value");
-                buf[i] = buf[i] + offset * dtype_size;
+                buf[i] = (const void *)((const char *)buf[i] + (size_t)offset * dtype_size);
             }
         } /* end if */
         else {
@@ -1057,8 +1061,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         printf("-> Dataset write URL: %s\n\n", transfer_info[0].request_url);
 #endif
 
-        /* If using a point selection, instruct cURL to perform a POST request in order to post the
-         * point list. Otherwise, a PUT request is made to the server.
+        /* If using a point selection, add the selection body
+         * into the write body sent to server.
          */
         if (H5S_SEL_POINTS == sel_type) {
             const char *const fmt_string = "{%s,\"value_base64\": \"%s\"}";
@@ -4095,7 +4099,7 @@ static herr_t
 dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *op_data)
 {
     response_read_info *resp_info = (response_read_info *)op_data;
-    *src_buf                      = resp_info->response_buf->buffer;
+    *src_buf                      = resp_info->buffer;
     *src_buf_bytes_used           = *((size_t *)resp_info->read_size);
 
     return 0;
@@ -4103,7 +4107,8 @@ dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *
 
 /* Callback to be passed to rv_curl_multi_perform, for execution upon successful cURL request */
 static herr_t
-rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, void *buf, struct response_buffer resp_buffer)
+rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, void *buf,
+                   struct response_buffer resp_buffer)
 {
     herr_t      ret_value      = SUCCEED;
     size_t      dtype_size     = 0;
@@ -4113,6 +4118,9 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, void *buf, struct resp
     hssize_t    file_select_npoints;
 
     void *obj_ref_buf = NULL;
+
+    H5S_sel_type sel_type = H5S_SEL_NONE;
+    void        *json_buf = NULL;
 
     if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
@@ -4134,8 +4142,26 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, void *buf, struct resp
          * mem_type_id and mem_space_id given */
         read_data_size = (size_t)file_select_npoints * dtype_size;
         struct response_read_info resp_info;
-        resp_info.response_buf = &resp_buffer;
-        resp_info.read_size    = &read_data_size;
+        resp_info.read_size = &read_data_size;
+
+        if ((sel_type = H5Sget_select_type(file_space_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get selection type for file space");
+
+        if (sel_type != H5S_SEL_POINTS) {
+            resp_info.buffer = resp_buffer.buffer;
+        }
+        else {
+            /* Server response is JSON instead of binary.
+             * Parse its 'value' field to a binary array to use for src_buf */
+            if (RV_parse_response(resp_buffer.buffer, (void *)&mem_type_id, (void *)&json_buf,
+                                  RV_json_values_to_binary_callback) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "can't parse values");
+
+            if ((dtype_size = H5Tget_size(mem_type_id)) <= 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get datatype size");
+
+            resp_info.buffer = json_buf;
+        }
 
         if (H5Dscatter(dataset_read_scatter_op, &resp_info, mem_type_id, mem_space_id, buf) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL, "can't scatter data to read buffer");
@@ -4156,12 +4182,16 @@ done:
     if (obj_ref_buf)
         RV_free(obj_ref_buf);
 
+    if (json_buf)
+        RV_free(json_buf);
+
     return ret_value;
 }
 
 /* Callback to be passed to rv_curl_multi_perform, for execution upon successful cURL request */
 static herr_t
-rv_dataset_write_cb(hid_t mem_type_id, hid_t mem_space_id, void *buf, struct response_buffer resp_buffer)
+rv_dataset_write_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, void *buf,
+                    struct response_buffer resp_buffer)
 {
     herr_t ret_value = SUCCEED;
     return SUCCEED;
@@ -4333,9 +4363,9 @@ RV_convert_start_to_offset(hid_t space_id)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, -1,
                                 "can't get bounding box of hyperslab selection");
 
-            ret_value = start[0];
+            ret_value = (hssize_t)start[0];
             for (i = 1; i < ndims; i++) {
-                ret_value = ret_value * dims[i] + start[i];
+                ret_value = ret_value * (hssize_t)(dims[i] + start[i]);
             }
             break;
         } /* H5S_SEL_HYPERSLABS */
@@ -4363,3 +4393,111 @@ done:
 
     return ret_value;
 } /* end RV_convert_start_to_offset() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_json_values_to_binary_callback
+ *
+ * Purpose:     A callback for RV_parse_response which will search
+ *              an HTTP response for the "value" field, and extract
+ *              the values into a newly allocated binary buffer.
+ *
+ *              Expects data in to be a pointer to an hid_t for the
+ *              datatype in the response, and data out to be the
+ *              address of a pointer that will point to the
+ *              newly allocated buffer.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ */
+static herr_t
+RV_json_values_to_binary_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+{
+
+    void      **out_buf    = (void **)callback_data_out;
+    hid_t       dtype_id   = *(hid_t *)callback_data_in;
+    yajl_val    parse_tree = NULL, key_obj;
+    char       *parsed_string;
+    herr_t      ret_value    = SUCCEED;
+    void       *value_buffer = NULL;
+    size_t      dtype_size   = 0;
+    H5T_class_t dtype_class  = H5T_NO_CLASS;
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Converting response JSON values to binary buffer\n\n");
+#endif
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
+    if (!out_buf)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL");
+
+    if ((dtype_size = H5Tget_size(dtype_id)) <= 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get datatype size");
+
+    if ((dtype_class = H5Tget_class(dtype_id)) == H5T_NO_CLASS)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get datatype class");
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
+
+    /* Get the 'value' array */
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, value_keys, yajl_t_array)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "unable to find 'value' key in JSON");
+
+    if (!YAJL_IS_ARRAY(key_obj))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed response is not an array of values");
+
+    if ((value_buffer = calloc(YAJL_GET_ARRAY(key_obj)->len, dtype_size)) == NULL)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "memory allocation failed for value buffer");
+
+    for (size_t i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
+        yajl_val val = YAJL_GET_ARRAY(key_obj)->values[i];
+
+        if (dtype_class == H5T_INTEGER) {
+            if (dtype_id != H5T_NATIVE_INT)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                                "parsing non-native integer types is unsupported");
+
+            if (!YAJL_IS_INTEGER(val))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
+                                "parsed yajl val has incorrect type; expected integer");
+
+            ((int *)value_buffer)[i] = (int)YAJL_GET_INTEGER(val);
+        }
+        else if (dtype_class == H5T_FLOAT) {
+
+            if (dtype_id == H5T_NATIVE_FLOAT) {
+                if (!YAJL_IS_DOUBLE(val))
+                    FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
+                                    "parsed yajl val has incorrect type; expected float-like");
+
+                ((float *)value_buffer)[i] = (float)YAJL_GET_DOUBLE(val);
+            }
+            else if (dtype_id == H5T_NATIVE_DOUBLE) {
+                if (!YAJL_IS_DOUBLE(val))
+                    FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
+                                    "parsed yajl val has incorrect type; expected double");
+
+                ((double *)value_buffer)[i] = YAJL_GET_DOUBLE(val);
+            }
+            else {
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                                "parsing non-native float types is unsupported");
+            }
+        }
+        else {
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype class for parsing");
+        }
+    }
+
+done:
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    if (ret_value >= 0 && value_buffer)
+        *out_buf = value_buffer;
+
+    if (ret_value < 0 && value_buffer)
+        RV_free(value_buffer);
+
+    return ret_value;
+}

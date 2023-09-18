@@ -3121,7 +3121,7 @@ herr_t
 RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size)
 {
     const uint8_t *buf       = (const uint8_t *)in;
-    const char     charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const char     charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     uint32_t       three_byte_set;
     uint8_t        c0, c1, c2, c3;
     size_t         i;
@@ -3524,8 +3524,8 @@ done:
 
 herr_t
 RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_info, size_t count,
-                      herr_t(success_callback)(hid_t mem_type_id, hid_t mem_space_id, void *buf,
-                                               struct response_buffer resp_buffer))
+                      herr_t(success_callback)(hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id,
+                                               void *buf, struct response_buffer resp_buffer))
 {
 
     herr_t         ret_value               = SUCCEED;
@@ -3656,7 +3656,8 @@ RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_i
 
                     if (success_callback(
                             transfer_info[handle_index].mem_type_id, transfer_info[handle_index].mem_space_id,
-                            transfer_info[handle_index].buf, transfer_info[handle_index].resp_buffer) < 0)
+                            transfer_info[handle_index].file_space_id, transfer_info[handle_index].buf,
+                            transfer_info[handle_index].resp_buffer) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL,
                                         "failed to post-process data read from dataset");
 
