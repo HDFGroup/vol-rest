@@ -24,6 +24,9 @@ static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response,
 static herr_t RV_json_values_to_binary_callback(char *HTTP_response, void *callback_data_in,
                                                 void *callback_data_out);
 
+/* Internal helper for RV_json_values_to_binary_callback */
+herr_t RV_json_values_to_binary_recursive(yajl_val value_entry, hid_t dtype_id, void *value_buffer);
+
 /* Helper functions for creating a Dataset */
 static herr_t RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t type_id,
                                                    hid_t space_id, hid_t lcpl_id, hid_t dcpl,
@@ -49,10 +52,10 @@ static herr_t   RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len,
 static hssize_t RV_convert_start_to_offset(hid_t space_id);
 
 /* Callbacks used for post-processing after a curl request succeeds */
-static herr_t rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, void *buf,
-                                 struct response_buffer resp_buffer);
-static herr_t rv_dataset_write_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, void *buf,
-                                  struct response_buffer resp_buffer);
+static herr_t rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id,
+                                 hid_t file_space_id, void *buf, struct response_buffer resp_buffer);
+static herr_t rv_dataset_write_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id,
+                                  hid_t file_space_id, void *buf, struct response_buffer resp_buffer);
 
 /* Struct for H5Dscatter's callback that allows it to scatter from a non-global response buffer */
 struct response_read_info {
@@ -518,8 +521,11 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
         transfer_info[i].mem_space_id             = _mem_space_id[i];
         transfer_info[i].file_space_id            = _file_space_id[i];
         transfer_info[i].mem_type_id              = mem_type_id[i];
+        transfer_info[i].file_type_id             = ((RV_object_t *)dset[i])->u.dataset.dtype_id;
         transfer_info[i].resp_buffer.buffer_size  = CURL_RESPONSE_BUFFER_DEFAULT_SIZE;
         transfer_info[i].resp_buffer.curr_buf_ptr = transfer_info[i].resp_buffer.buffer;
+        transfer_info[i].tconv_buf                = NULL;
+        transfer_info[i].bkg_buf                  = NULL;
     }
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -826,6 +832,12 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
     dataset_transfer_info *transfer_info       = NULL;
     CURL                  *curl_multi_handle   = NULL;
 
+    hbool_t needs_tconv    = FALSE;
+    size_t  file_type_size = 0;
+    size_t  mem_type_size  = 0;
+    hbool_t fill_bkg       = FALSE;
+    void   *buf_to_write   = NULL;
+
     if ((transfer_info = RV_calloc(count * sizeof(dataset_transfer_info))) == NULL)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset transfer info");
 
@@ -880,10 +892,13 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         transfer_info[i].mem_space_id             = _mem_space_id[i];
         transfer_info[i].file_space_id            = _file_space_id[i];
         transfer_info[i].mem_type_id              = mem_type_id[i];
+        transfer_info[i].file_type_id             = ((RV_object_t *)dset[i])->u.dataset.dtype_id;
         transfer_info[i].curl_headers             = NULL;
         transfer_info[i].host_headers             = NULL;
         transfer_info[i].resp_buffer.buffer_size  = CURL_RESPONSE_BUFFER_DEFAULT_SIZE;
         transfer_info[i].resp_buffer.curr_buf_ptr = transfer_info[i].resp_buffer.buffer;
+        transfer_info[i].tconv_buf                = NULL;
+        transfer_info[i].bkg_buf                  = NULL;
     }
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -982,14 +997,48 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         printf("-> %lld points selected in memory dataspace\n\n", mem_select_npoints);
 #endif
 
+        /* Handle conversion from memory datatype to file datatype, if necessary */
+        if ((needs_tconv = RV_need_tconv(transfer_info[i].file_type_id, transfer_info[i].mem_type_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to check if datatypes need conversion");
+
+        if (needs_tconv) {
+
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Beginning type conversion for write\n");
+#endif
+            if ((file_type_size = H5Tget_size(transfer_info[i].file_type_id)) == 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to get size of file datatype");
+
+            if ((mem_type_size = H5Tget_size(transfer_info[i].mem_type_id)) == 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to get size of memory datatype");
+
+            /* Initialize type conversion */
+            RV_tconv_init(transfer_info[i].mem_type_id, &mem_type_size, transfer_info[i].file_type_id,
+                          &file_type_size, (size_t)file_select_npoints, TRUE, FALSE,
+                          &transfer_info[i].tconv_buf, &transfer_info[i].bkg_buf, NULL, &fill_bkg);
+
+            /* Perform type conversion on response values */
+            memset(transfer_info[i].tconv_buf, 0, file_type_size * (size_t)mem_select_npoints);
+            memcpy(transfer_info[i].tconv_buf, transfer_info[i].buf,
+                   mem_type_size * (size_t)mem_select_npoints);
+
+            if (H5Tconvert(transfer_info[i].mem_type_id, transfer_info[i].file_type_id,
+                           (size_t)file_select_npoints, transfer_info[i].tconv_buf, transfer_info[i].bkg_buf,
+                           H5P_DEFAULT) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                                "failed to convert file datatype to memory datatype");
+        }
+
+        buf_to_write = (transfer_info[i].tconv_buf) ? transfer_info[i].tconv_buf : transfer_info[i].buf;
+
         /* Setup the size of the data being transferred and the data buffer itself (for non-simple
          * types like object references or variable length types)
          */
         if ((H5T_REFERENCE != dtype_class) && (H5T_VLEN != dtype_class) && !is_variable_str) {
             size_t dtype_size;
 
-            if (0 == (dtype_size = H5Tget_size(transfer_info[i].mem_type_id)))
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
+            if (0 == (dtype_size = H5Tget_size(transfer_info[i].file_type_id)))
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "file datatype is invalid");
 
             write_body_len = (size_t)file_select_npoints * dtype_size;
             if ((contiguous = RV_dataspace_selection_is_contiguous(transfer_info[i].mem_space_id)) < 0)
@@ -999,27 +1048,27 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                 if (NULL == (transfer_info[i].u.write_info.write_body = (char *)RV_malloc(write_body_len)))
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
                                     "can't allocate space for the 'write_body' values");
-                if (H5Dgather(transfer_info[i].mem_space_id, buf[i], transfer_info[i].mem_type_id,
+                if (H5Dgather(transfer_info[i].mem_space_id, buf_to_write, transfer_info[i].file_type_id,
                               write_body_len, transfer_info[i].u.write_info.write_body, NULL, NULL) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "can't gather data to write buffer");
-                buf[i] = transfer_info[i].u.write_info.write_body;
+                buf_to_write = transfer_info[i].u.write_info.write_body;
             }
             else {
                 if ((offset = RV_convert_start_to_offset(transfer_info[i].mem_space_id)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
                                     "Unable to determine memory offset value");
-                buf[i] = (const void *)((const char *)buf[i] + (size_t)offset * dtype_size);
+                buf_to_write = (const void *)((const char *)buf_to_write + (size_t)offset * dtype_size);
             }
         } /* end if */
         else {
-            if (H5T_STD_REF_OBJ == transfer_info[i].mem_type_id) {
+            if (H5T_STD_REF_OBJ == transfer_info[i].file_type_id) {
                 /* Convert the buffer of rest_obj_ref_t's to a binary buffer */
-                if (RV_convert_obj_refs_to_buffer((const rv_obj_ref_t *)buf[i], (size_t)file_select_npoints,
-                                                  &(transfer_info[i].u.write_info.write_body),
-                                                  &write_body_len) < 0)
+                if (RV_convert_obj_refs_to_buffer(
+                        (const rv_obj_ref_t *)buf_to_write, (size_t)file_select_npoints,
+                        &(transfer_info[i].u.write_info.write_body), &write_body_len) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
                                     "can't convert object ref/s to ref string/s");
-                buf[i] = transfer_info[i].u.write_info.write_body;
+                buf_to_write = transfer_info[i].u.write_info.write_body;
             } /* end if */
         }     /* end else */
 
@@ -1079,7 +1128,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
                                 "can't allocate temporary buffer for base64-encoded write buffer");
 
-            if (RV_base64_encode(buf[i], write_body_len,
+            if (RV_base64_encode(buf_to_write, write_body_len,
                                  &(transfer_info[i].u.write_info.base64_encoded_values), &value_body_len) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTENCODE, FAIL, "can't base64-encode write buffer");
 
@@ -1118,7 +1167,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         } /* end if */
 
         transfer_info[i].u.write_info.uinfo.buffer =
-            is_transfer_binary ? buf[i] : transfer_info[i].u.write_info.write_body;
+            is_transfer_binary ? buf_to_write : transfer_info[i].u.write_info.write_body;
         transfer_info[i].u.write_info.uinfo.buffer_size = write_body_len;
         transfer_info[i].u.write_info.uinfo.bytes_sent  = 0;
 
@@ -1201,6 +1250,12 @@ done:
         RV_free(transfer_info[i].request_url);
         RV_free(transfer_info[i].u.write_info.base64_encoded_values);
         RV_free(transfer_info[i].resp_buffer.buffer);
+
+        if (transfer_info[i].tconv_buf)
+            RV_free(transfer_info[i].tconv_buf);
+
+        if (transfer_info[i].bkg_buf)
+            RV_free(transfer_info[i].bkg_buf);
 
         if (transfer_info[i].host_headers)
             RV_free(transfer_info[i].host_headers);
@@ -4120,12 +4175,13 @@ dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *
 
 /* Callback to be passed to rv_curl_multi_perform, for execution upon successful cURL request */
 static herr_t
-rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, void *buf,
+rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hid_t file_space_id, void *buf,
                    struct response_buffer resp_buffer)
 {
     herr_t      ret_value      = SUCCEED;
     size_t      dtype_size     = 0;
-    size_t      read_data_size = 0;
+    size_t      file_data_size = 0;
+    size_t      mem_data_size  = 0;
     htri_t      is_variable_str;
     H5T_class_t dtype_class = H5T_NO_CLASS;
     hssize_t    file_select_npoints;
@@ -4134,6 +4190,15 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, v
 
     H5S_sel_type sel_type = H5S_SEL_NONE;
     void        *json_buf = NULL;
+
+    void *tconv_buf = NULL;
+    void *bkg_buf   = NULL;
+
+    size_t           file_type_size = 0;
+    size_t           mem_type_size  = 0;
+    hbool_t          needs_tconv    = FALSE;
+    RV_tconv_reuse_t reuse          = RV_TCONV_REUSE_NONE;
+    hbool_t          fill_bkg       = FALSE;
 
     if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
@@ -4146,16 +4211,21 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, v
     if ((file_select_npoints = H5Sget_select_npoints(mem_space_id)) < 0)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory dataspace is invalid");
 
+    if ((file_type_size = H5Tget_size(file_type_id)) == 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
+
+    file_data_size = (size_t)file_select_npoints * file_type_size;
+
+    if ((mem_type_size = H5Tget_size(mem_type_id)) == 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to get size of memory datatype");
+
+    mem_data_size = (size_t)file_select_npoints * mem_type_size;
+
     if ((H5T_REFERENCE != dtype_class) && (H5T_VLEN != dtype_class) && !is_variable_str) {
-
-        if (0 == (dtype_size = H5Tget_size(mem_type_id)))
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
-
         /* Scatter the read data out to the supplied read buffer according to the
          * mem_type_id and mem_space_id given */
-        read_data_size = (size_t)file_select_npoints * dtype_size;
         struct response_read_info resp_info;
-        resp_info.read_size = &read_data_size;
+        resp_info.read_size = &mem_data_size;
 
         if ((sel_type = H5Sget_select_type(file_space_id)) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get selection type for file space");
@@ -4166,14 +4236,54 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, v
         else {
             /* Server response is JSON instead of binary.
              * Parse its 'value' field to a binary array to use for src_buf */
-            if (RV_parse_response(resp_buffer.buffer, (void *)&mem_type_id, (void *)&json_buf,
+            if (RV_parse_response(resp_buffer.buffer, (void *)&file_type_id, (void *)&json_buf,
                                   RV_json_values_to_binary_callback) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "can't parse values");
 
-            if ((dtype_size = H5Tget_size(mem_type_id)) <= 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get datatype size");
-
             resp_info.buffer = json_buf;
+        }
+
+        if ((needs_tconv = RV_need_tconv(file_type_id, mem_type_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to check if datatypes need conversion");
+
+        if (needs_tconv) {
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Beginning type conversion\n");
+#endif
+
+            /* Initialize type conversion */
+            RV_tconv_init(file_type_id, &file_type_size, mem_type_id, &mem_type_size,
+                          (size_t)file_select_npoints, TRUE, FALSE, &tconv_buf, &bkg_buf, &reuse, &fill_bkg);
+
+            /* Perform type conversion on response values */
+            if (reuse == RV_TCONV_REUSE_TCONV) {
+                /* Use read buffer as type conversion buffer */
+                if (H5Tconvert(file_type_id, mem_type_id, (size_t)file_select_npoints, resp_info.buffer,
+                               bkg_buf, H5P_DEFAULT) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                                    "failed to convert file datatype to memory datatype");
+            }
+            else if (reuse == RV_TCONV_REUSE_BKG) {
+                /* Use read buffer as background buffer */
+                memcpy(tconv_buf, resp_info.buffer, file_type_size * (size_t)file_select_npoints);
+
+                if (H5Tconvert(file_type_id, mem_type_id, (size_t)file_select_npoints, tconv_buf,
+                               resp_info.buffer, H5P_DEFAULT) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                                    "failed to convert file datatype to memory datatype");
+                resp_info.buffer = tconv_buf;
+            }
+            else {
+                /* Use newly allocated buffer for type conversion */
+                memcpy(tconv_buf, resp_info.buffer, file_type_size * (size_t)file_select_npoints);
+
+                if (H5Tconvert(file_type_id, mem_type_id, (size_t)file_select_npoints, tconv_buf, bkg_buf,
+                               H5P_DEFAULT) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                                    "failed to convert file datatype to memory datatype");
+
+                resp_info.buffer = tconv_buf;
+            }
         }
 
         if (H5Dscatter(dataset_read_scatter_op, &resp_info, mem_type_id, mem_space_id, buf) < 0)
@@ -4183,11 +4293,11 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, v
         if (H5T_STD_REF_OBJ == mem_type_id) {
             /* Convert the received binary buffer into a buffer of rest_obj_ref_t's */
             if (RV_convert_buffer_to_obj_refs(resp_buffer.buffer, (size_t)file_select_npoints,
-                                              (rv_obj_ref_t **)&obj_ref_buf, &read_data_size) < 0)
+                                              (rv_obj_ref_t **)&obj_ref_buf, &file_data_size) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
                                 "can't convert ref string/s to object ref array");
 
-            memcpy(buf, obj_ref_buf, read_data_size);
+            memcpy(buf, obj_ref_buf, file_data_size);
         }
         else {
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype");
@@ -4201,12 +4311,18 @@ done:
     if (json_buf)
         RV_free(json_buf);
 
+    if (tconv_buf)
+        RV_free(tconv_buf);
+
+    if (bkg_buf)
+        RV_free(bkg_buf);
+
     return ret_value;
 }
 
 /* Callback to be passed to rv_curl_multi_perform, for execution upon successful cURL request */
 static herr_t
-rv_dataset_write_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, void *buf,
+rv_dataset_write_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hid_t file_space_id, void *buf,
                     struct response_buffer resp_buffer)
 {
     herr_t ret_value = SUCCEED;
@@ -4437,14 +4553,13 @@ static herr_t
 RV_json_values_to_binary_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
 
-    void      **out_buf    = (void **)callback_data_out;
-    hid_t       dtype_id   = *(hid_t *)callback_data_in;
-    yajl_val    parse_tree = NULL, key_obj;
-    char       *parsed_string;
-    herr_t      ret_value    = SUCCEED;
-    void       *value_buffer = NULL;
-    size_t      dtype_size   = 0;
-    H5T_class_t dtype_class  = H5T_NO_CLASS;
+    void   **out_buf    = (void **)callback_data_out;
+    hid_t    dtype_id   = *(hid_t *)callback_data_in;
+    yajl_val parse_tree = NULL, key_obj;
+    char    *parsed_string;
+    herr_t   ret_value    = SUCCEED;
+    void    *value_buffer = NULL;
+    size_t   dtype_size   = 0;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting response JSON values to binary buffer\n\n");
@@ -4457,9 +4572,6 @@ RV_json_values_to_binary_callback(char *HTTP_response, void *callback_data_in, v
 
     if ((dtype_size = H5Tget_size(dtype_id)) <= 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get datatype size");
-
-    if ((dtype_class = H5Tget_class(dtype_id)) == H5T_NO_CLASS)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get datatype class");
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
@@ -4477,41 +4589,9 @@ RV_json_values_to_binary_callback(char *HTTP_response, void *callback_data_in, v
     for (size_t i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
         yajl_val val = YAJL_GET_ARRAY(key_obj)->values[i];
 
-        if (dtype_class == H5T_INTEGER) {
-            if (dtype_id != H5T_NATIVE_INT)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
-                                "parsing non-native integer types is unsupported");
-
-            if (!YAJL_IS_INTEGER(val))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
-                                "parsed yajl val has incorrect type; expected integer");
-
-            ((int *)value_buffer)[i] = (int)YAJL_GET_INTEGER(val);
-        }
-        else if (dtype_class == H5T_FLOAT) {
-
-            if (dtype_id == H5T_NATIVE_FLOAT) {
-                if (!YAJL_IS_DOUBLE(val))
-                    FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
-                                    "parsed yajl val has incorrect type; expected float-like");
-
-                ((float *)value_buffer)[i] = (float)YAJL_GET_DOUBLE(val);
-            }
-            else if (dtype_id == H5T_NATIVE_DOUBLE) {
-                if (!YAJL_IS_DOUBLE(val))
-                    FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
-                                    "parsed yajl val has incorrect type; expected double");
-
-                ((double *)value_buffer)[i] = YAJL_GET_DOUBLE(val);
-            }
-            else {
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
-                                "parsing non-native float types is unsupported");
-            }
-        }
-        else {
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype class for parsing");
-        }
+        if (RV_json_values_to_binary_recursive(val, dtype_id,
+                                               (void *)((char *)value_buffer + i * dtype_size)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "failed to parse datatype from json");
     }
 
 done:
@@ -4524,5 +4604,92 @@ done:
     if (ret_value < 0 && value_buffer)
         RV_free(value_buffer);
 
+    return ret_value;
+}
+
+/* Helper function for RV_json_values_to_binary_callback */
+herr_t
+RV_json_values_to_binary_recursive(yajl_val value_entry, hid_t dtype_id, void *value_buffer)
+{
+    herr_t      ret_value   = SUCCEED;
+    H5T_class_t dtype_class = H5T_NO_CLASS;
+    size_t      dtype_size  = 0;
+
+    if ((dtype_size = H5Tget_size(dtype_id)) <= 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get datatype size");
+
+    if ((dtype_class = H5Tget_class(dtype_id)) == H5T_NO_CLASS)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get datatype class");
+
+    if (dtype_class == H5T_INTEGER) {
+        if (H5Tequal(dtype_id, H5T_NATIVE_INT) != TRUE)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                            "parsing non-native integer types is unsupported");
+
+        if (!YAJL_IS_INTEGER(value_entry))
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
+                            "parsed yajl val has incorrect type; expected integer");
+
+        *((int *)value_buffer) = (int)YAJL_GET_INTEGER(value_entry);
+    }
+    else if (dtype_class == H5T_FLOAT) {
+        if (H5Tequal(dtype_id, H5T_NATIVE_FLOAT) == TRUE) {
+            if (!YAJL_IS_DOUBLE(value_entry))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
+                                "parsed yajl val has incorrect type; expected float-like");
+
+            *((float *)value_buffer) = (float)YAJL_GET_DOUBLE(value_entry);
+        }
+        else if (H5Tequal(dtype_id, H5T_NATIVE_DOUBLE) == TRUE) {
+            if (!YAJL_IS_DOUBLE(value_entry))
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
+                                "parsed yajl val has incorrect type; expected double");
+
+            *((double *)value_buffer) = YAJL_GET_DOUBLE(value_entry);
+        }
+        else {
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                            "parsing non-native float types is unsupported");
+        }
+    }
+    else if (dtype_class == H5T_COMPOUND) {
+        /* Recursively parse each member of the compound type */
+        int      nmembers        = 0;
+        size_t   offset          = 0;
+        size_t   member_size     = 0;
+        hid_t    member_dtype_id = H5I_INVALID_HID;
+        yajl_val member_val;
+
+        if ((nmembers = H5Tget_nmembers(dtype_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                            "can't get number of members in compound datatype");
+
+        for (int i = 0; i < nmembers; i++) {
+            if ((member_dtype_id = H5Tget_member_type(dtype_id, (unsigned int)i)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                "can't get datatype of member in compound datatype");
+
+            if ((member_size = H5Tget_size(member_dtype_id)) == 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get size of member datatype");
+
+            if ((member_val = YAJL_GET_OBJECT(value_entry)->values[i]) == NULL)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                                "failed to parse member of compound type");
+
+            if (RV_json_values_to_binary_recursive(member_val, member_dtype_id,
+                                                   (void *)((char *)value_buffer + offset)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "failed to parse member datatype");
+
+            offset += member_size;
+            member_val      = NULL;
+            member_size     = 0;
+            member_dtype_id = H5I_INVALID_HID;
+        }
+    }
+    else {
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype class for parsing");
+    }
+
+done:
     return ret_value;
 }
