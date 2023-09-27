@@ -2339,6 +2339,13 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                                                     "attribute's parent group");
                             }
 
+                            if (loc_obj->u.group.gapl_id != H5P_GROUP_ACCESS_DEFAULT) {
+                                if (H5Iinc_ref(loc_obj->u.group.gapl_id) < 0)
+                                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL,
+                                                    "can't increment field's ref. count for copy of "
+                                                    "attribute's parent group");
+                            }
+
                             break;
 
                         case H5I_DATATYPE:
@@ -2348,6 +2355,10 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                                                 "can't increment field's ref. count for copy of attribute's "
                                                 "parent datatype");
                             if (H5Iinc_ref(loc_obj->u.datatype.tcpl_id) < 0)
+                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL,
+                                                "can't increment field's ref. count for copy of attribute's "
+                                                "parent datatype");
+                            if (H5Iinc_ref(loc_obj->u.datatype.tapl_id) < 0)
                                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL,
                                                 "can't increment field's ref. count for copy of attribute's "
                                                 "parent datatype");
