@@ -4149,6 +4149,8 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, void *buf, struct resp
                                 "can't convert ref string/s to object ref array");
 
             memcpy(buf, obj_ref_buf, read_data_size);
+        } else {
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype");
         }
     }
 
