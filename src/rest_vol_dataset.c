@@ -4176,6 +4176,9 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_space_id, v
 
             memcpy(buf, obj_ref_buf, read_data_size);
         }
+        else {
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype");
+        }
     }
 
 done:
