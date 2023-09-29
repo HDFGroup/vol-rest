@@ -2313,12 +2313,25 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                         case H5I_FILE:
                             /* Copy fapl, fcpl, and filepath name to new object */
 
-                            if (H5I_INVALID_HID ==
-                                (attr_iter_obj->u.file.fapl_id = H5Pcopy(loc_obj->u.file.fapl_id)))
-                                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy FAPL");
-                            if (H5I_INVALID_HID ==
-                                (attr_iter_obj->u.file.fcpl_id = H5Pcopy(loc_obj->u.file.fcpl_id)))
-                                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy FCPL");
+                            /* FAPL */
+                            if (loc_obj->u.file.fapl_id != H5P_FILE_ACCESS_DEFAULT) {
+                                if (H5I_INVALID_HID ==
+                                    (attr_iter_obj->u.file.fapl_id = H5Pcopy(loc_obj->u.file.fapl_id)))
+                                    FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy FAPL");
+                            }
+                            else
+                                attr_iter_obj->u.file.fapl_id = H5P_FILE_ACCESS_DEFAULT;
+
+                            /* FCPL */
+                            if (loc_obj->u.file.fcpl_id != H5P_FILE_CREATE_DEFAULT) {
+                                if (H5I_INVALID_HID ==
+                                    (attr_iter_obj->u.file.fcpl_id = H5Pcopy(loc_obj->u.file.fcpl_id)))
+                                    FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCOPY, FAIL, "can't copy FCPL");
+                            }
+                            else
+                                attr_iter_obj->u.file.fcpl_id = H5P_FILE_CREATE_DEFAULT;
+
+                            /* Filepath */
                             if (NULL == (attr_iter_obj->u.file.filepath_name =
                                              RV_malloc(strlen(loc_obj->u.file.filepath_name) + 1)))
                                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
@@ -2332,6 +2345,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                             break;
                         case H5I_GROUP:
 
+                            /* GCPL */
                             if (loc_obj->u.group.gcpl_id != H5P_GROUP_CREATE_DEFAULT) {
                                 if (H5Iinc_ref(loc_obj->u.group.gcpl_id) < 0)
                                     FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL,
@@ -2339,6 +2353,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                                                     "attribute's parent group");
                             }
 
+                            /* GAPL */
                             if (loc_obj->u.group.gapl_id != H5P_GROUP_ACCESS_DEFAULT) {
                                 if (H5Iinc_ref(loc_obj->u.group.gapl_id) < 0)
                                     FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL,
@@ -2350,18 +2365,27 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
                         case H5I_DATATYPE:
 
+                            /* Datatype */
                             if (H5Iinc_ref(loc_obj->u.datatype.dtype_id) < 0)
                                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL,
                                                 "can't increment field's ref. count for copy of attribute's "
                                                 "parent datatype");
-                            if (H5Iinc_ref(loc_obj->u.datatype.tcpl_id) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL,
-                                                "can't increment field's ref. count for copy of attribute's "
-                                                "parent datatype");
-                            if (H5Iinc_ref(loc_obj->u.datatype.tapl_id) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTINC, FAIL,
-                                                "can't increment field's ref. count for copy of attribute's "
-                                                "parent datatype");
+
+                            /* TCPL */
+                            if (loc_obj->u.datatype.tcpl_id != H5P_DATATYPE_CREATE_DEFAULT)
+                                if (H5Iinc_ref(loc_obj->u.datatype.tcpl_id) < 0)
+                                    FUNC_GOTO_ERROR(
+                                        H5E_ATTR, H5E_CANTINC, FAIL,
+                                        "can't increment field's ref. count for copy of attribute's "
+                                        "parent datatype");
+
+                            /* TAPL */
+                            if (loc_obj->u.datatype.tapl_id != H5P_DATATYPE_ACCESS_DEFAULT)
+                                if (H5Iinc_ref(loc_obj->u.datatype.tapl_id) < 0)
+                                    FUNC_GOTO_ERROR(
+                                        H5E_ATTR, H5E_CANTINC, FAIL,
+                                        "can't increment field's ref. count for copy of attribute's "
+                                        "parent datatype");
                             break;
 
                         case H5I_DATASET:
