@@ -23,6 +23,7 @@ struct get_obj_ids_udata_t {
     hid_t *obj_id_list;
     size_t obj_count;
     size_t max_obj_count;
+    char  *local_filename;
 } typedef get_obj_ids_udata_t;
 
 /*-------------------------------------------------------------------------
@@ -574,32 +575,35 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
             *args->args.get_obj_ids.count = 0;
             unsigned int requested_types  = args->args.get_obj_ids.types;
 
-            get_obj_ids_udata_t id_list;
-            id_list.obj_id_list   = args->args.get_obj_ids.oid_list;
-            id_list.obj_count     = 0;
-            id_list.max_obj_count = args->args.get_obj_ids.max_objs;
+            get_obj_ids_udata_t iterate_cb_args;
+            iterate_cb_args.obj_id_list   = args->args.get_obj_ids.oid_list;
+            iterate_cb_args.obj_count     = 0;
+            iterate_cb_args.max_obj_count = args->args.get_obj_ids.max_objs;
+            /* Requests for object ids in all files do not pass through the
+             * VOL layer - assume single-file request */
+            iterate_cb_args.local_filename = _obj->domain->u.file.filepath_name;
 
             if (requested_types & H5F_OBJ_FILE)
-                if (H5Iiterate(H5I_FILE, RV_iterate_copy_hid_cb, &id_list) < 0)
+                if (H5Iiterate(H5I_FILE, RV_iterate_copy_hid_cb, &iterate_cb_args) < 0)
                     FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over file ids");
 
             if (requested_types & H5F_OBJ_GROUP)
-                if (H5Iiterate(H5I_GROUP, RV_iterate_copy_hid_cb, &id_list) < 0)
+                if (H5Iiterate(H5I_GROUP, RV_iterate_copy_hid_cb, &iterate_cb_args) < 0)
                     FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over group ids");
 
             if (requested_types & H5F_OBJ_DATATYPE)
-                if (H5Iiterate(H5I_DATATYPE, RV_iterate_copy_hid_cb, &id_list) < 0)
+                if (H5Iiterate(H5I_DATATYPE, RV_iterate_copy_hid_cb, &iterate_cb_args) < 0)
                     FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over datatype ids");
 
             if (requested_types & H5F_OBJ_DATASET)
-                if (H5Iiterate(H5I_DATASET, RV_iterate_copy_hid_cb, &id_list) < 0)
+                if (H5Iiterate(H5I_DATASET, RV_iterate_copy_hid_cb, &iterate_cb_args) < 0)
                     FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over dataset ids");
 
             if (requested_types & H5F_OBJ_ATTR)
-                if (H5Iiterate(H5I_ATTR, RV_iterate_copy_hid_cb, &id_list) < 0)
+                if (H5Iiterate(H5I_ATTR, RV_iterate_copy_hid_cb, &iterate_cb_args) < 0)
                     FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over attribute ids");
 
-            *args->args.get_obj_ids.count = id_list.obj_count;
+            *args->args.get_obj_ids.count = iterate_cb_args.obj_count;
 
             break;
         default:
@@ -883,15 +887,56 @@ done:
 herr_t
 RV_iterate_copy_hid_cb(hid_t obj_id, void *udata)
 {
-    herr_t               ret_value = H5_ITER_CONT;
-    get_obj_ids_udata_t *id_list   = (get_obj_ids_udata_t *)udata;
+    herr_t               ret_value               = H5_ITER_CONT;
+    get_obj_ids_udata_t *iterate_cb_args         = (get_obj_ids_udata_t *)udata;
+    char                *containing_filename     = NULL;
+    size_t               containing_filename_len = 0;
+    H5I_type_t           id_type                 = H5I_UNINIT;
+    htri_t               is_committed            = FALSE;
 
-    if (id_list->obj_count >= id_list->max_obj_count)
+    if (iterate_cb_args->obj_count >= iterate_cb_args->max_obj_count)
         FUNC_GOTO_DONE(H5_ITER_STOP);
 
-    id_list->obj_id_list[id_list->obj_count] = obj_id;
-    id_list->obj_count++;
+    /* Do not copy the id of transient datatypes */
+    if ((id_type = H5Iget_type(obj_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_ID, FAIL, "can't get identifier type");
+
+    if ((id_type == H5I_DATATYPE)) {
+        if ((is_committed = H5Tcommitted(obj_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_DATATYPE, FAIL, "can't check if datatype is committed");
+
+        if (!is_committed)
+            FUNC_GOTO_DONE(H5_ITER_CONT);
+    }
+
+    if (iterate_cb_args->local_filename) {
+        /* Require that obj id reside in local file */
+
+        /* Get size of name */
+        if ((containing_filename_len = H5Fget_name(obj_id, NULL, 0)) < 0)
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTGET, FAIL, "unable to get length of filename");
+
+        if ((containing_filename = RV_malloc(containing_filename_len + 1)) == NULL)
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL, "can't allocate space for filename");
+
+        /* Get name */
+        if (H5Fget_name(obj_id, containing_filename, containing_filename_len + 1) < 0)
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTGET, FAIL, "unable to get filename");
+
+        if (!strcmp(iterate_cb_args->local_filename, containing_filename)) {
+            iterate_cb_args->obj_id_list[iterate_cb_args->obj_count] = obj_id;
+            iterate_cb_args->obj_count++;
+        }
+    }
+    else {
+        iterate_cb_args->obj_id_list[iterate_cb_args->obj_count] = obj_id;
+        iterate_cb_args->obj_count++;
+    }
 
 done:
+
+    if (containing_filename)
+        RV_free(containing_filename);
+
     return ret_value;
 }
