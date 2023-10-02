@@ -427,6 +427,18 @@ struct response_buffer {
 };
 extern struct response_buffer response_buffer;
 
+/* Struct containing information about open objects of each type in the VOL*/
+typedef struct RV_type_info {
+    size_t           open_count;
+    rv_hash_table_t *table;
+} RV_type_info;
+
+/* TODO - This is copied directly from the library */
+#define TYPE_BITS         7
+#define TYPE_MASK         (((hid_t)1 << TYPE_BITS) - 1)
+#define H5I_MAX_NUM_TYPES TYPE_MASK
+extern RV_type_info *RV_type_info_array_g[];
+
 /**************************
  *                        *
  *        Typedefs        *

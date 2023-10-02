@@ -284,6 +284,10 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     if (RV_parse_response(response_buffer.buffer, NULL, new_datatype->URI, RV_copy_object_URI_callback) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, NULL, "can't parse committed datatype's URI");
 
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_DATATYPE]->table, (char *)new_datatype,
+                             (char *)new_datatype) == 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "Failed to add datatype to type info array");
+
     ret_value = (void *)new_datatype;
 
 done:
@@ -418,6 +422,10 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
        we still use one here specifically for H5Tget_create_plist(). */
     if ((datatype->u.datatype.tcpl_id = H5Pcreate(H5P_DATATYPE_CREATE)) < 0)
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create TCPL for datatype");
+
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_DATATYPE]->table, (char *)datatype, (char *)datatype) ==
+        0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "Failed to add datatype to type info array");
 
     ret_value = (void *)datatype;
 
@@ -566,6 +574,9 @@ RV_datatype_close(void *dt, hid_t dxpl_id, void **req)
             H5Pclose(_dtype->u.datatype.tcpl_id) < 0)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close TCPL");
     } /* end if */
+
+    if (RV_type_info_array_g[H5I_DATATYPE])
+        rv_hash_table_remove(RV_type_info_array_g[H5I_DATATYPE]->table, (char *)_dtype);
 
     if (RV_file_close(_dtype->domain, H5P_DEFAULT, NULL) < 0)
         FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");

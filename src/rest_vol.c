@@ -98,6 +98,9 @@ typedef struct H5_rest_ad_info_t {
     hbool_t unattended;
 } H5_rest_ad_info_t;
 
+/* Global array containing information about open objects */
+RV_type_info *RV_type_info_array_g[H5I_MAX_NUM_TYPES];
+
 /* Host header string for specifying the host (Domain) for requests */
 const char *const host_string = "X-Hdf-domain: ";
 
@@ -451,6 +454,12 @@ H5_rest_init(hid_t vipl_id)
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
 #endif
 
+    /* Set up global type info array */
+    for (size_t i = 0; i < H5I_MAX_NUM_TYPES; i++) {
+        RV_type_info_array_g[i]        = RV_calloc(sizeof(RV_type_info));
+        RV_type_info_array_g[i]->table = rv_hash_table_new(rv_hash_string, H5_rest_compare_string_keys);
+    }
+
     /* Register the connector with HDF5's error reporting API */
     if ((H5_rest_err_class_g = H5Eregister_class(HDF5_VOL_REST_ERR_CLS_NAME, HDF5_VOL_REST_LIB_NAME,
                                                  HDF5_VOL_REST_LIB_VER)) < 0)
@@ -616,6 +625,12 @@ H5_rest_term(void)
         curl_global_cleanup();
     } /* end if */
 
+    /* Cleanup type info array */
+    for (size_t i = 0; i < H5I_MAX_NUM_TYPES; i++) {
+        rv_hash_table_free(RV_type_info_array_g[i]->table);
+        RV_free(RV_type_info_array_g[i]);
+        RV_type_info_array_g[i] = NULL;
+    }
     /*
      * "Forget" connector ID. This should normally be called by the library
      * when it is closing the id, so no need to close it here.
