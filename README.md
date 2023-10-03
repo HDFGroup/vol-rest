@@ -126,7 +126,7 @@ include the flag `-H <dir>` where `dir` is the path to the HDF5 install prefix.
 
 NOTE: For those who are capable of using both build systems, the autotools build currently
 does not support out-of-tree builds. If the REST VOL source directory is used for an autotools
-build, it is important not to re-use the source directory for a later build using CMake.
+build, it is important not to reuse the source directory for a later build using CMake.
 This can cause build conflicts and result in strange and unexpected behavior.
 
 
