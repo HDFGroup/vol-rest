@@ -64,15 +64,8 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
     printf("     - Default FAPL? %s\n\n", (H5P_FILE_ACCESS_DEFAULT == fapl_id) ? "yes" : "no");
 #endif
 
-    /*
-     * If the connector has been dynamically loaded, the FAPL used for
-     * creating the file will be a default FAPL, so we need to ensure
-     * that the connection information gets set.
-     */
-    if (fapl_id == H5P_FILE_ACCESS_DEFAULT)
-        if (H5_rest_set_connection_information() < 0)
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL,
-                            "can't set REST VOL connector connection information");
+    if (H5_rest_set_connection_information() < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
 
     if (fapl_id == H5I_INVALID_HID)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid FAPL");
@@ -340,15 +333,8 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     printf("     - Default FAPL? %s\n\n", (H5P_FILE_ACCESS_DEFAULT == fapl_id) ? "yes" : "no");
 #endif
 
-    /*
-     * If the connector has been dynamically loaded, the FAPL used for
-     * creating the file will be a default FAPL, so we need to ensure
-     * that the connection information gets set.
-     */
-    if (fapl_id == H5P_FILE_ACCESS_DEFAULT)
-        if (H5_rest_set_connection_information() < 0)
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL,
-                            "can't set REST VOL connector connection information");
+    if (H5_rest_set_connection_information() < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
 
     if (fapl_id == H5I_INVALID_HID)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid FAPL");
