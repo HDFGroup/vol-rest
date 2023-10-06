@@ -1510,7 +1510,16 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
                 /* N bytes needed to store an N digit number,
                  *  floor(log10) + 1 of an N digit number is >= N,
                  *  plus two bytes for space and comma characters in the list */
-                request_body_shape_size += floor(log10((double)new_extent[i])) + 1 + 2;
+                size_t num_digits = 0;
+
+                if (new_extent[i] == 0) {
+                    num_digits = 1;
+                }
+                else {
+                    num_digits = floor(log10((double)new_extent[i]));
+                }
+
+                request_body_shape_size += num_digits + 1 + 2;
             }
 
             if ((request_body = RV_malloc(request_body_shape_size + strlen(fmt_string) + 1)) == NULL)
