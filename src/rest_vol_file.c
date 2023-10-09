@@ -659,7 +659,7 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
              * the containing domain. */
             RV_object_t *target_domain = file->domain;
             filename                   = target_domain->u.file.filepath_name;
-            const char *flush_string   = "/?flush=1";
+            const char *flush_string   = "/?flush=1&rescan=1";
 
             name_length = strlen(filename);
 

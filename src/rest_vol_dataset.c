@@ -1232,9 +1232,10 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
     RV_object_t *dset      = (RV_object_t *)obj;
     herr_t       ret_value = SUCCEED;
 
-    size_t host_header_len = 0;
-    char  *host_header     = NULL;
-    char   request_url[URL_MAX_LENGTH];
+    H5VL_file_specific_args_t vol_flush_args;
+    size_t                    host_header_len = 0;
+    char                     *host_header     = NULL;
+    char                      request_url[URL_MAX_LENGTH];
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset get call with following parameters:\n");
@@ -1285,6 +1286,18 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
 
         /* H5Dget_storage_size */
         case H5VL_DATASET_GET_STORAGE_SIZE:
+
+            if (!(SERVER_VERSION_SUPPORTS_GET_STORAGE_SIZE(dset->domain->u.file.server_version)))
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL,
+                                "H5Dget_storage_size requires HSDS 0.8.5 or higher");
+
+            /* First, flush domain to make server update allocated bytes */
+            vol_flush_args.op_type             = H5VL_FILE_FLUSH;
+            vol_flush_args.args.flush.obj_type = H5I_FILE;
+            vol_flush_args.args.flush.scope    = H5F_SCOPE_LOCAL;
+
+            if (RV_file_specific((void *)dset->domain, &vol_flush_args, H5P_DEFAULT, NULL) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTFLUSH, FAIL, "can't flush datase's domain");
 
             /* Make GET request to dataset with 'verbose' parameter for HSDS. */
             snprintf(request_url, URL_MAX_LENGTH, "%s%s%s%s", base_URL, "/datasets/", dset->URI,
@@ -2407,7 +2420,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                 out_string_curr_pos += null_value_len;
             }
             else if (H5D_FILL_VALUE_USER_DEFINED == fill_status) {
-                if (!(SERVER_VERISON_SUPPORTS_FILL_VALUE_ENCODING(version)))
+                if (!(SERVER_VERSION_SUPPORTS_FILL_VALUE_ENCODING(version)))
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL,
                                     "server API version %zu.%zu.%zu does not support fill value encoding\n",
                                     version.major, version.minor, version.patch);
