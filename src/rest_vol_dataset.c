@@ -1508,9 +1508,11 @@ static herr_t
 RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callback_data_in,
                                               void *callback_data_out)
 {
-    yajl_val parse_tree = NULL, creation_properties_obj, key_obj;
-    hid_t   *DCPL       = (hid_t *)callback_data_out;
-    herr_t   ret_value  = SUCCEED;
+    yajl_val parse_tree         = NULL, creation_properties_obj, key_obj;
+    hid_t   *DCPL               = (hid_t *)callback_data_out;
+    char    *encoded_fill_value = NULL;
+    char    *decoded_fill_value = NULL;
+    herr_t   ret_value          = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving dataset's creation properties from server's HTTP response\n\n");
@@ -1709,10 +1711,29 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callbac
      *                                                                            *
      ******************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, fill_value_keys, yajl_t_any))) {
-        /* TODO: Until fill value support is implemented, just push an error to the stack but continue ahead
-         */
-        FUNC_DONE_ERROR(H5E_DATASET, H5E_UNSUPPORTED, SUCCEED,
-                        "warning: dataset fill values are unsupported");
+        hid_t  fill_type               = H5I_INVALID_HID;
+        size_t encoded_fill_value_size = 0;
+        size_t decoded_fill_value_size = 0;
+
+        /* Decode from base64 */
+        if (!YAJL_IS_STRING(key_obj))
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "base64-encoded fill value was not a string");
+
+        if ((encoded_fill_value = YAJL_GET_STRING(key_obj)) == NULL)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "failed to parse encoded fill value");
+
+        encoded_fill_value_size = strlen(encoded_fill_value);
+
+        if (RV_base64_decode(encoded_fill_value, encoded_fill_value_size, &decoded_fill_value,
+                             &decoded_fill_value_size) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTDECODE, FAIL, "can't decode fill value");
+
+        /* Parse datatype of dataset/fill value */
+        if ((fill_type = RV_parse_datatype(HTTP_response, true)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "can't parse datatype of dataset");
+
+        if (H5Pset_fill_value(*DCPL, fill_type, (void *)decoded_fill_value) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set fill value in DCPL");
     } /* end if */
 
     /***************************************************************
@@ -2110,6 +2131,9 @@ done:
 
     if (parse_tree)
         yajl_tree_free(parse_tree);
+
+    if (decoded_fill_value)
+        RV_free(decoded_fill_value);
 
     return ret_value;
 } /* end RV_parse_dataset_creation_properties_callback() */
