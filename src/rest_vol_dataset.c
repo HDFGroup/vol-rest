@@ -1510,6 +1510,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callbac
 {
     yajl_val parse_tree         = NULL, creation_properties_obj, key_obj;
     hid_t   *DCPL               = (hid_t *)callback_data_out;
+    hid_t    fill_type          = H5I_INVALID_HID;
     char    *encoded_fill_value = NULL;
     char    *decoded_fill_value = NULL;
     herr_t   ret_value          = SUCCEED;
@@ -1711,7 +1712,6 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callbac
      *                                                                            *
      ******************************************************************************/
     if ((key_obj = yajl_tree_get(creation_properties_obj, fill_value_keys, yajl_t_any))) {
-        hid_t  fill_type               = H5I_INVALID_HID;
         size_t encoded_fill_value_size = 0;
         size_t decoded_fill_value_size = 0;
 
@@ -2134,6 +2134,10 @@ done:
 
     if (decoded_fill_value)
         RV_free(decoded_fill_value);
+
+    if (fill_type != H5I_INVALID_HID)
+        if (H5Tclose(fill_type) < 0)
+            FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype of fill value");
 
     return ret_value;
 } /* end RV_parse_dataset_creation_properties_callback() */
