@@ -177,6 +177,9 @@ herr_t RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_bu
 herr_t RV_get_index_of_matching_handle(dataset_transfer_info *transfer_info, size_t count, CURL *handle,
                                        size_t *handle_index);
 
+/* Stub that throws an error when called */
+void *RV_wrap_get_object(const void *obj);
+
 /* The REST VOL connector's class structure. */
 static const H5VL_class_t H5VL_rest_g = {
     HDF5_VOL_REST_VERSION,      /* Connector struct version number       */
@@ -199,11 +202,11 @@ static const H5VL_class_t H5VL_rest_g = {
 
     /* Connector 'wrap' callbacks */
     {
-        NULL, /* Connector get object function         */
-        NULL, /* Connector get wrap context function   */
-        NULL, /* Connector wrap object function        */
-        NULL, /* Connector unwrap object function      */
-        NULL, /* Connector free wrap context function  */
+        RV_wrap_get_object, /* Connector get object function         */
+        NULL,               /* Connector get wrap context function   */
+        NULL,               /* Connector wrap object function        */
+        NULL,               /* Connector unwrap object function      */
+        NULL,               /* Connector free wrap context function  */
     },
 
     /* Connector attribute callbacks */
@@ -3828,3 +3831,26 @@ RV_free_visited_link_hash_table_key(rv_hash_table_key_t value)
     RV_free(value);
     value = NULL;
 } /* end RV_free_visited_link_hash_table_key() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_wrap_get_object
+ *
+ * Purpose:     For the VOL interface's "connector get object"
+ *              callback, to safely throw an error
+ *              instead of defaulting to library's
+ *              unsafe behavior.
+ *
+ * Return:      Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              September, 2023
+ */
+void *
+RV_wrap_get_object(const void *obj)
+{
+    void *ret_value = NULL;
+
+    FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, NULL, "connector get object function not supported");
+done:
+    return ret_value;
+}
