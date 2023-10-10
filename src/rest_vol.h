@@ -725,8 +725,11 @@ herr_t RV_curl_multi_perform(CURL *curl_multi_ptr, dataset_transfer_info *transf
     (version.major > major_needed) || (version.major == major_needed && version.minor > minor_needed) ||     \
         (version.major == major_needed && version.minor == minor_needed && version.patch >= patch_needed)
 
-#define SERVER_VERISON_SUPPORTS_FILL_VALUE_ENCODING(version)                                                 \
+#define SERVER_VERSION_SUPPORTS_FILL_VALUE_ENCODING(version)                                                 \
     (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 1))
+
+#define SERVER_VERSION_SUPPORTS_GET_STORAGE_SIZE(version)                                                    \
+    (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 5))
 
 #ifdef __cplusplus
 }
