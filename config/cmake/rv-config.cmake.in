@@ -41,4 +41,5 @@ else ()
 endif ()
 
 set (CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} @PACKAGE_SHARE_INSTALL_DIR@/..)
-find_package (YAJL REQUIRED)
+find_package (CURL 7.61 QUIET REQUIRED)
+find_package (YAJL 2.0.4 QUIET REQUIRED)
