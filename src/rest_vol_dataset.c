@@ -4302,11 +4302,17 @@ RV_dataspace_selection_is_contiguous(hid_t space_id)
             break;
 
         case H5S_SEL_ALL:
+            FUNC_GOTO_DONE(TRUE);
+            break;
+
+        case H5S_SEL_NONE:
+            FUNC_GOTO_DONE(FALSE);
+            break;
+
         case H5S_SEL_ERROR:
         case H5S_SEL_N:
-        case H5S_SEL_NONE:
         default:
-            FUNC_GOTO_DONE(TRUE);
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "specified unsupported dataspace type");
     } /* end switch */
 
 done:
@@ -4379,11 +4385,14 @@ RV_convert_start_to_offset(hid_t space_id)
             break;
 
         case H5S_SEL_ALL:
+        case H5S_SEL_NONE:
+            ret_value = 0;
+            break;
+
         case H5S_SEL_ERROR:
         case H5S_SEL_N:
-        case H5S_SEL_NONE:
         default:
-            ret_value = 0;
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, -1, "specified unsupported dataspace type");
     } /* end switch */
 
 done:
