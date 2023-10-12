@@ -70,15 +70,15 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
     printf("     - Default FAPL? %s\n\n", (H5P_FILE_ACCESS_DEFAULT == fapl_id) ? "yes" : "no");
 #endif
 
-    if (H5_rest_set_connection_information() < 0)
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
-
     if (fapl_id == H5I_INVALID_HID)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid FAPL");
 
     /* Allocate and setup internal File struct */
     if (NULL == (new_file = (RV_object_t *)RV_malloc(sizeof(*new_file))))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for file object");
+
+    if (H5_rest_set_connection_information(&new_file->u.file.server_info) < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
 
     new_file->URI[0]               = '\0';
     new_file->obj_type             = H5I_FILE;
@@ -143,6 +143,10 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
     /* Disable use of Expect: 100 Continue HTTP response */
     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, new_file->u.file.server_info.username))
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, new_file->u.file.server_info.password))
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
@@ -262,7 +266,7 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't parse new file's URI");
 
     /* Store server version */
-    if (RV_parse_response(response_buffer.buffer, NULL, &new_file->u.file.server_version,
+    if (RV_parse_response(response_buffer.buffer, NULL, &new_file->u.file.server_info.version,
                           RV_parse_server_version) < 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't parse server  version");
 
@@ -342,15 +346,15 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     printf("     - Default FAPL? %s\n\n", (H5P_FILE_ACCESS_DEFAULT == fapl_id) ? "yes" : "no");
 #endif
 
-    if (H5_rest_set_connection_information() < 0)
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
-
     if (fapl_id == H5I_INVALID_HID)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid FAPL");
 
     /* Allocate and setup internal File struct */
     if (NULL == (file = (RV_object_t *)RV_malloc(sizeof(*file))))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for file object");
+
+    if (H5_rest_set_connection_information(&file->u.file.server_info) < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
 
     file->URI[0]               = '\0';
     file->obj_type             = H5I_FILE;
@@ -391,6 +395,10 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     /* Disable use of Expect: 100 Continue HTTP response */
     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, file->u.file.server_info.username))
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, file->u.file.server_info.password))
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
@@ -414,7 +422,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTOPENFILE, NULL, "can't parse file's URI");
 
     /* Store server version */
-    if (RV_parse_response(response_buffer.buffer, NULL, &file->u.file.server_version,
+    if (RV_parse_response(response_buffer.buffer, NULL, &file->u.file.server_info.version,
                           RV_parse_server_version) < 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't parse server version");
 
@@ -713,6 +721,10 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
             snprintf(request_url, URL_MAX_LENGTH, "%s%s", base_URL, flush_string);
 
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, file->u.file.server_info.username))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, file->u.file.server_info.password))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
@@ -792,6 +804,15 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+            /* TODO - H5Fdelete doesn't receive a file handle, so the username/password can't be pulled from
+             * it */
+            /*
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME,
+            file->domain->u.file.server_info.username)) FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't
+            set cURL username: %s", curl_err_buf); if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD,
+            file->domain->u.file.server_info.password)) FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't
+            set cURL password: %s", curl_err_buf);
+            */
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
@@ -886,6 +907,21 @@ RV_file_close(void *file, hid_t dxpl_id, void **req)
         if (_file->u.file.filepath_name) {
             RV_free(_file->u.file.filepath_name);
             _file->u.file.filepath_name = NULL;
+        }
+
+        if (_file->u.file.server_info.username) {
+            RV_free(_file->u.file.server_info.username);
+            _file->u.file.server_info.username;
+        }
+
+        if (_file->u.file.server_info.password) {
+            RV_free(_file->u.file.server_info.password);
+            _file->u.file.server_info.password;
+        }
+
+        if (_file->u.file.server_info.base_URL) {
+            RV_free(_file->u.file.server_info.base_URL);
+            _file->u.file.server_info.base_URL;
         }
 
         if (_file->handle_path) {

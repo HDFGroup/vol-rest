@@ -251,6 +251,12 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
     printf("-> Dataset creation request URL: %s\n\n", request_url);
 #endif
 
+    if (CURLE_OK !=
+        curl_easy_setopt(curl, CURLOPT_USERNAME, new_dataset->domain->u.file.server_info.username))
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
+    if (CURLE_OK !=
+        curl_easy_setopt(curl, CURLOPT_PASSWORD, new_dataset->domain->u.file.server_info.password))
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
@@ -396,8 +402,8 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     loc_info_out.GCPL_base64 = NULL;
 
     /* Locate dataset and set domain */
-    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_loc_info_callback, NULL,
-                                        &loc_info_out);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_loc_info_callback,
+                                        &dataset->domain->u.file.server_info, &loc_info_out);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, NULL, "can't locate dataset by path");
 
@@ -1403,6 +1409,12 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_USERNAME, dset->domain->u.file.server_info.username))
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_PASSWORD, dset->domain->u.file.server_info.password))
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
                                 curl_err_buf);
@@ -3600,13 +3612,13 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t t
      * Dataset create request */
     if (H5P_DATASET_CREATE_DEFAULT != dcpl) {
         if ((H5Pget_layout(dcpl) == H5D_CONTIGUOUS) &&
-            !(SERVER_VERSION_MATCHES_OR_EXCEEDS(pobj->domain->u.file.server_version, 0, 8, 0)))
+            !(SERVER_VERSION_MATCHES_OR_EXCEEDS(pobj->domain->u.file.server_info.version, 0, 8, 0)))
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_UNSUPPORTED, FAIL,
                             "layout H5D_CONTIGUOUS is unsupported for server versions before 0.8.0");
 
         if (RV_convert_dataset_creation_properties_to_JSON(dcpl, &creation_properties_body,
                                                            &creation_properties_body_len, type_id,
-                                                           pobj->domain->u.file.server_version) < 0)
+                                                           pobj->domain->u.file.server_info.version) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL,
                             "can't convert Dataset Creation Properties to JSON representation");
     }

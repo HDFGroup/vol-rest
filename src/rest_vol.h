@@ -502,6 +502,14 @@ typedef struct server_api_version {
     size_t patch;
 } server_api_version;
 
+// TODO
+typedef struct server_info_t {
+    char              *username;
+    char              *password;
+    char              *base_URL;
+    server_api_version version;
+} server_info_t;
+
 /*
  * Definitions for the basic objects which the REST VOL uses
  * to represent various HDF5 objects internally. The base object
@@ -511,12 +519,13 @@ typedef struct server_api_version {
 typedef struct RV_object_t RV_object_t;
 
 typedef struct RV_file_t {
-    unsigned           intent;
-    unsigned           ref_count;
-    char              *filepath_name;
-    hid_t              fcpl_id;
-    hid_t              fapl_id;
-    server_api_version server_version;
+    unsigned intent;
+    unsigned ref_count;
+    char    *filepath_name;
+    /* TODO - Username/password in global curl handle are still used for now */
+    server_info_t server_info;
+    hid_t         fcpl_id;
+    hid_t         fapl_id;
 } RV_file_t;
 
 typedef struct RV_group_t {
@@ -677,8 +686,8 @@ typedef enum {
 extern "C" {
 #endif
 
-/* Function to set the connection information for the connector to connect to the server */
-herr_t H5_rest_set_connection_information(void);
+/* Function to set the connection information on a file for the connector to connect to the server */
+herr_t H5_rest_set_connection_information(server_info_t *server_info);
 
 /* Alternate, more portable version of the basename function which doesn't modify its argument */
 const char *H5_rest_basename(const char *path);

@@ -252,6 +252,10 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     printf("-> Group create request URL: %s\n\n", request_url);
 #endif
 
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, new_group->domain->u.file.server_info.username))
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, new_group->domain->u.file.server_info.password))
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
@@ -399,8 +403,8 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
     loc_info_out.domain      = group->domain;
     loc_info_out.GCPL_base64 = NULL;
 
-    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_loc_info_callback, NULL,
-                                        &loc_info_out);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_loc_info_callback,
+                                        &group->domain->u.file.server_info, &loc_info_out);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate group by path");
 
@@ -411,7 +415,7 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
 #endif
 
     /* Decode creation properties, if server supports them and file has them */
-    if (SERVER_VERSION_MATCHES_OR_EXCEEDS(parent->domain->u.file.server_version, 0, 8, 0) &&
+    if (SERVER_VERSION_MATCHES_OR_EXCEEDS(parent->domain->u.file.server_info.version, 0, 8, 0) &&
         loc_info_out.GCPL_base64) {
         if (RV_base64_decode(loc_info_out.GCPL_base64, strlen(loc_info_out.GCPL_base64),
                              (char **)&binary_gcpl, binary_gcpl_size) < 0)
@@ -561,9 +565,9 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
                     loc_info_out.domain      = loc_obj->domain;
                     loc_info_out.GCPL_base64 = NULL;
 
-                    search_ret =
-                        RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type,
-                                               RV_copy_object_loc_info_callback, NULL, &loc_info_out);
+                    search_ret = RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name,
+                                                        &obj_type, RV_copy_object_loc_info_callback,
+                                                        &loc_obj->domain->u.file.server_info, &loc_info_out);
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate group");
 
@@ -618,6 +622,12 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
