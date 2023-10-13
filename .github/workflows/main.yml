@@ -58,7 +58,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           path: ${{github.workspace}}/vol-rest
-          repository: HDFGroup/vol-rest
 
       - name: Autotools Configure + Build HDF5        
         run: |
@@ -185,7 +184,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           path: ${{github.workspace}}/vol-rest
-          repository: HDFGroup/vol-rest
 
       - name: CMake Configure + Build HDF5        
         run: |
@@ -290,7 +288,7 @@ jobs:
         working-directory: ${{github.workspace}}/hsds
 
       - name: Test REST VOL
-        working-directory: ${{github.workspace}}/hdf5/build/
+        working-directory: ${{github.workspace}}/vol-rest/build/
         run: |
               echo "HDF5_PLUGIN_PATH=${{github.workspace}}/hdf5/build/bin/" >> $GITHUB_ENV
               valgrind --leak-check=full -s ctest -R "test_rest_vol" -VV
@@ -323,7 +321,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           path: ${{github.workspace}}/vol-rest
-          repository: HDFGroup/vol-rest
 
       - name: CMake Configure HDF5 + REST VOL from GIT
         if: ${{matrix.vol-source == 'GIT'}}
