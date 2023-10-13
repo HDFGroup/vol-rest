@@ -202,11 +202,11 @@ static const H5VL_class_t H5VL_rest_g = {
 
     /* Connector 'wrap' callbacks */
     {
-        RV_wrap_get_object, /* Connector get object function         */
-        NULL,               /* Connector get wrap context function   */
-        NULL,               /* Connector wrap object function        */
-        NULL,               /* Connector unwrap object function      */
-        NULL,               /* Connector free wrap context function  */
+        NULL, /* Connector get object function         */
+        NULL, /* Connector get wrap context function   */
+        NULL, /* Connector wrap object function        */
+        NULL, /* Connector unwrap object function      */
+        NULL, /* Connector free wrap context function  */
     },
 
     /* Connector attribute callbacks */
@@ -3831,26 +3831,3 @@ RV_free_visited_link_hash_table_key(rv_hash_table_key_t value)
     RV_free(value);
     value = NULL;
 } /* end RV_free_visited_link_hash_table_key() */
-
-/*-------------------------------------------------------------------------
- * Function:    RV_wrap_get_object
- *
- * Purpose:     For the VOL interface's "connector get object"
- *              callback, to safely throw an error
- *              instead of defaulting to library's
- *              unsafe behavior.
- *
- * Return:      Negative on failure
- *
- * Programmer:  Matthew Larson
- *              September, 2023
- */
-void *
-RV_wrap_get_object(const void *obj)
-{
-    void *ret_value = NULL;
-
-    FUNC_GOTO_ERROR(H5E_VOL, H5E_UNSUPPORTED, NULL, "connector get object function not supported");
-done:
-    return ret_value;
-}
