@@ -45,6 +45,7 @@ jobs:
                    
       - name: Get REST VOL dependencies
         run: |
+          sudo apt-get update
           sudo apt-get install libcurl4-openssl-dev
           sudo apt-get install libyajl-dev
 
@@ -57,8 +58,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           path: ${{github.workspace}}/vol-rest
-          ref: build_under_lib_workflow 
-          repository: mattjala/vol-rest # TODO: For workflow testing
+          repository: HDFGroup/vol-rest
 
       - name: Autotools Configure + Build HDF5        
         run: |
@@ -177,6 +177,7 @@ jobs:
                    
       - name: Get REST VOL dependencies
         run: |
+          sudo apt-get update
           sudo apt-get install libcurl4-openssl-dev
           sudo apt-get install libyajl-dev
               
@@ -184,8 +185,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           path: ${{github.workspace}}/vol-rest
-          ref: build_under_lib_workflow 
-          repository: mattjala/vol-rest # TODO: For workflow testing
+          repository: HDFGroup/vol-rest
 
       - name: CMake Configure + Build HDF5        
         run: |
@@ -314,6 +314,7 @@ jobs:
                    
       - name: Get REST VOL dependencies
         run: |
+          sudo apt-get update
           sudo apt-get install libcurl4-openssl-dev
           sudo apt-get install libyajl-dev
               
@@ -322,8 +323,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           path: ${{github.workspace}}/vol-rest
-          ref: build_under_lib_workflow 
-          repository: mattjala/vol-rest # TODO: For workflow testing
+          repository: HDFGroup/vol-rest
 
       - name: CMake Configure HDF5 + REST VOL from GIT
         if: ${{matrix.vol-source == 'GIT'}}
@@ -334,8 +334,8 @@ jobs:
           -DHDF5_BUILD_HL_LIB=ON \
           -DBUILD_SHARED_LIBS=ON -DHDF5_ENABLE_SZIP_SUPPORT=OFF \
           -DHDF5_TEST_API=ON -DHDF5_VOL_ALLOW_EXTERNAL='GIT' \
-          -DHDF5_VOL_URL01=https://github.com/mattjala/vol-rest.git \
-          -DHDF5_VOL_VOL-REST_BRANCH=build_under_lib_workflow \
+          -DHDF5_VOL_URL01=https://github.com/HDFGroup/vol-rest.git \
+          -DHDF5_VOL_VOL-REST_BRANCH=master \
           -DHDF5_VOL_VOL-REST_NAME="REST" -DHDF5_VOL_VOL-REST_TEST_PARALLEL=OFF \
           -DHDF5_ENABLE_Z_LIB_SUPPORT=OFF \
           -DCMAKE_BUILD_TYPE=RelWithDebInfo -DHDF5_ENABLE_THREADSAFE=OFF \
