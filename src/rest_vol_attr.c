@@ -68,6 +68,7 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
     char        *url_encoded_attr_name   = NULL;
     int          create_request_body_len = 0;
     int          url_len                 = 0;
+    const char  *base_URL                = NULL;
     void        *ret_value               = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -96,6 +97,9 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type && H5I_DATATYPE != parent->obj_type &&
         H5I_DATASET != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file, group, datatype or dataset");
+
+    if ((base_URL = parent->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object does not have valid server URL");
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -438,6 +442,7 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
     char         request_url[URL_MAX_LENGTH];
     char        *url_encoded_attr_name  = NULL;
     const char  *parent_obj_type_header = NULL;
+    const char  *base_URL               = NULL;
     int          url_len                = 0;
     void        *ret_value              = NULL;
 
@@ -470,6 +475,9 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type && H5I_DATATYPE != parent->obj_type &&
         H5I_DATASET != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file, group, datatype or dataset");
+
+    if ((base_URL = parent->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object does not have valid server URL");
 
     if (aapl_id == H5I_INVALID_HID)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid AAPL");
@@ -839,6 +847,7 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
     char        *host_header           = NULL;
     char        *url_encoded_attr_name = NULL;
     char         request_url[URL_MAX_LENGTH];
+    const char  *base_URL  = NULL;
     int          url_len   = 0;
     herr_t       ret_value = SUCCEED;
 
@@ -854,6 +863,9 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not an attribute");
     if (!buf)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "read buffer was NULL");
+
+    if ((base_URL = attribute->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "attribute does not have valid server URL");
 
     /* Determine whether it's possible to receive the data as a binary blob instead of as JSON */
     if (H5T_NO_CLASS == (dtype_class = H5Tget_class(dtype_id)))
@@ -1032,6 +1044,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
     char        *host_header           = NULL;
     char        *url_encoded_attr_name = NULL;
     char         request_url[URL_MAX_LENGTH];
+    const char  *base_URL  = NULL;
     int          url_len   = 0;
     herr_t       ret_value = SUCCEED;
 
@@ -1047,6 +1060,9 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not an attribute");
     if (!buf)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "write buffer was NULL");
+
+    if ((base_URL = attribute->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "attribute does not have valid server URL");
 
     /* Check for write access */
     if (!(attribute->domain->u.file.intent & H5F_ACC_RDWR))
@@ -1245,6 +1261,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
     int          url_len                = 0;
     const char  *parent_obj_type_header = NULL;
     const char  *request_idx_type       = NULL;
+    const char  *base_URL               = NULL;
     herr_t       ret_value              = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1256,6 +1273,9 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
         H5I_DATATYPE != loc_obj->obj_type && H5I_DATASET != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL,
                         "parent object not an attribute, file, group, datatype or dataset");
+
+    if ((base_URL = loc_obj->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "location object does not have valid server URL");
 
     switch (args->op_type) {
         /* H5Aget_create_plist */
@@ -1867,6 +1887,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
     char                 attr_name_to_delete[ATTRIBUTE_NAME_MAX_LENGTH];
     char                *url_encoded_attr_name  = NULL;
     const char          *parent_obj_type_header = NULL;
+    const char          *base_URL               = NULL;
     int                  url_len                = 0;
     herr_t               ret_value              = SUCCEED;
 
@@ -1878,6 +1899,9 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type &&
         H5I_DATATYPE != loc_obj->obj_type && H5I_DATASET != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file, group, datatype or dataset");
+
+    if ((base_URL = loc_obj->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "location object does not have valid server URL");
 
     switch (args->op_type) {
         /* H5Adelete (_by_name/_by_idx) */

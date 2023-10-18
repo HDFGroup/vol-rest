@@ -375,11 +375,6 @@ extern struct curl_slist *curl_headers;
  */
 #define CURL_RESPONSE_BUFFER_DEFAULT_SIZE 1024
 
-/*
- * Saved copy of the base URL for operating on
- */
-extern char *base_URL;
-
 #ifdef RV_TRACK_MEM_USAGE
 /*
  * Counter to keep track of the currently allocated amount of bytes
@@ -502,7 +497,8 @@ typedef struct server_api_version {
     size_t patch;
 } server_api_version;
 
-// TODO
+/* Structure containing information to connect to and evaluate
+ * features of a server */
 typedef struct server_info_t {
     char              *username;
     char              *password;
@@ -519,10 +515,9 @@ typedef struct server_info_t {
 typedef struct RV_object_t RV_object_t;
 
 typedef struct RV_file_t {
-    unsigned intent;
-    unsigned ref_count;
-    char    *filepath_name;
-    /* TODO - Username/password in global curl handle are still used for now */
+    unsigned      intent;
+    unsigned      ref_count;
+    char         *filepath_name;
     server_info_t server_info;
     hid_t         fcpl_id;
     hid_t         fapl_id;

@@ -140,6 +140,7 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
     char        *host_header             = NULL;
     char        *create_request_body     = NULL;
     char         request_url[URL_MAX_LENGTH];
+    const char  *base_URL  = NULL;
     int          url_len   = 0;
     void        *ret_value = NULL;
 
@@ -157,6 +158,8 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
+    if ((base_URL = parent->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object does not have valid server URL");
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -687,7 +690,8 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
 
         /* Redirect cURL from the base URL to "/datasets/<id>/value" to get the dataset data values */
         if ((url_len = snprintf(transfer_info[i].request_url, URL_MAX_LENGTH, "%s/datasets/%s/value%s%s",
-                                base_URL, transfer_info[i].dataset->URI,
+                                transfer_info[i].dataset->domain->u.file.server_info.base_URL,
+                                transfer_info[i].dataset->URI,
                                 is_transfer_binary && transfer_info[i].selection_body &&
                                         (H5S_SEL_POINTS != transfer_info[i].u.read_info.sel_type)
                                     ? "?select="
@@ -1131,8 +1135,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 
         /* Redirect cURL from the base URL to "/datasets/<id>/value" to write the value out */
         if ((url_len = snprintf(
-                 transfer_info[i].request_url, URL_MAX_LENGTH, "%s/datasets/%s/value%s%s", base_URL,
-                 transfer_info[i].dataset->URI,
+                 transfer_info[i].request_url, URL_MAX_LENGTH, "%s/datasets/%s/value%s%s",
+                 transfer_info[i].dataset->domain->u.file.server_info.base_URL, transfer_info[i].dataset->URI,
                  is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? "?select=" : "",
                  is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? selection_body
                                                                                       : "")) < 0)
@@ -1327,6 +1331,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
     size_t                    host_header_len = 0;
     char                     *host_header     = NULL;
     char                      request_url[URL_MAX_LENGTH];
+    const char               *base_URL = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset get call with following parameters:\n");
@@ -1338,6 +1343,8 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
 
     if (H5I_DATASET != dset->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a dataset");
+    if ((base_URL = dset->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "dataset does not have valid server URL");
 
     switch (args->op_type) {
         /* H5Dget_access_plist */
@@ -1378,7 +1385,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
         /* H5Dget_storage_size */
         case H5VL_DATASET_GET_STORAGE_SIZE:
 
-            if (!(SERVER_VERSION_SUPPORTS_GET_STORAGE_SIZE(dset->domain->u.file.server_version)))
+            if (!(SERVER_VERSION_SUPPORTS_GET_STORAGE_SIZE(dset->domain->u.file.server_info.version)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL,
                                 "H5Dget_storage_size requires HSDS 0.8.5 or higher");
 
@@ -1617,7 +1624,7 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
 
             if ((url_len =
-                     snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/shape", base_URL, dset->URI)) < 0)
+                     snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/shape", dset->domain->u.file.server_info.base_URL, dset->URI)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
             if (url_len >= URL_MAX_LENGTH)

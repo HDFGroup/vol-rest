@@ -49,6 +49,7 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     size_t       plist_nalloc          = 0;
     size_t       path_size             = 0;
     size_t       path_len              = 0;
+    const char  *base_URL              = NULL;
     char        *host_header           = NULL;
     char        *create_request_body   = NULL;
     char        *path_dirname          = NULL;
@@ -74,6 +75,9 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
+
+    if ((base_URL = parent->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object does not have valid server URL");
 
     if (gapl_id == H5I_INVALID_HID)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid GAPL");
@@ -493,6 +497,7 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
     char        *host_header     = NULL;
     char         request_url[URL_MAX_LENGTH];
     int          url_len   = 0;
+    const char  *base_URL  = NULL;
     herr_t       ret_value = SUCCEED;
 
     loc_info loc_info_out;
@@ -505,6 +510,8 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
 
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a group");
+    if ((base_URL = loc_obj->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object does not have valid server URL");
 
     switch (args->op_type) {
         /* H5Gget_create_plist */

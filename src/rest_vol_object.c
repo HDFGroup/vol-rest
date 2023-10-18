@@ -270,6 +270,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
     char        *host_header     = NULL;
     char         request_url[URL_MAX_LENGTH];
     char        *found_object_name = NULL;
+    const char  *base_URL          = NULL;
     int          url_len           = 0;
     herr_t       ret_value         = SUCCEED;
     loc_info     loc_info_out;
@@ -289,6 +290,9 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type &&
         H5I_DATATYPE != loc_obj->obj_type && H5I_DATASET != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file, group, dataset or committed datatype");
+
+    if ((base_URL = loc_obj->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "location object does not have valid server URL");
 
     switch (args->op_type) {
         case H5VL_OBJECT_GET_NAME: {
@@ -1037,8 +1041,9 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             /* To build object table, information about parent object will be needed */
             object_iter_data.iter_obj_parent = iter_object;
 
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s", base_URL, object_type_header,
-                                    object_iter_data.iter_obj_parent->URI)) < 0)
+            if (url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s",
+                                   iter_object->domain->u.file.server_info.base_URL, object_type_header,
+                                   object_iter_data.iter_obj_parent->URI) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
             if (url_len >= URL_MAX_LENGTH)
@@ -1156,9 +1161,11 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             switch (iter_object_type) {
                 case H5I_FILE:
                 case H5I_GROUP:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s%s", base_URL,
-                                            object_type_header, object_iter_data.iter_obj_parent->URI,
-                                            (!strcmp(object_type_header, "groups") ? "/links" : ""))) < 0)
+                    if (url_len =
+                            snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s%s",
+                                     object_iter_data.iter_obj_parent->domain->u.file.server_info.base_URL,
+                                     object_type_header, object_iter_data.iter_obj_parent->URI,
+                                     (!strcmp(object_type_header, "groups") ? "/links" : "")) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
@@ -1803,8 +1810,10 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
                                      curl, H5_rest_basename(YAJL_GET_STRING(link_field_obj)), 0)))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
 
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links", base_URL,
-                                            url_encoded_link_name)) < 0)
+                    if ((url_len =
+                             snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links",
+                                      object_iter_data->iter_obj_parent->domain->u.file.server_info.base_URL,
+                                      url_encoded_link_name)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)

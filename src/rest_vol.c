@@ -68,11 +68,6 @@ char curl_err_buf[CURL_ERROR_SIZE];
  */
 struct curl_slist *curl_headers = NULL;
 
-/*
- * Saved copy of the base URL for operating on
- */
-char *base_URL = NULL;
-
 #ifdef RV_TRACK_MEM_USAGE
 /*
  * Counter to keep track of the currently allocated amount of bytes
@@ -156,7 +151,7 @@ const char *server_version_keys[] = {"version", (const char *)0};
 static herr_t H5_rest_init(hid_t vipl_id);
 static herr_t H5_rest_term(void);
 
-static herr_t H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info);
+static herr_t H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL);
 
 /* Introspection callbacks */
 static herr_t H5_rest_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const struct H5VL_class_t **conn_cls);
@@ -609,12 +604,6 @@ H5_rest_term(void)
     if (!H5_rest_initialized_g)
         FUNC_GOTO_DONE(SUCCEED);
 
-    /* Free base URL */
-    if (base_URL) {
-        RV_free(base_URL);
-        base_URL = NULL;
-    }
-
     /* Free memory for cURL response buffer */
     if (response_buffer.buffer) {
         RV_free(response_buffer.buffer);
@@ -729,19 +718,12 @@ herr_t
 H5_rest_set_connection_information(server_info_t *server_info)
 {
     H5_rest_ad_info_t ad_info;
-    const char       *URL;
-    size_t            URL_len     = 0;
     FILE             *config_file = NULL;
     herr_t            ret_value   = SUCCEED;
 
     const char *username = NULL;
     const char *password = NULL;
-
-    const char *username = NULL;
-    const char *password = NULL;
-
-    if (base_URL)
-        FUNC_GOTO_DONE(SUCCEED);
+    const char *base_URL = NULL;
 
     memset(&ad_info, 0, sizeof(ad_info));
 
@@ -750,50 +732,12 @@ H5_rest_set_connection_information(server_info_t *server_info)
      * the environment.
      */
 
-    if ((URL = getenv("HSDS_ENDPOINT"))) {
-
-        if (!strncmp(URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
-            /* This is just a placeholder URL for curl's syntax, its specific value is unimportant */
-            URL     = "0";
-            URL_len = 1;
-
-            if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
-                                "can't allocate space necessary for placeholder base URL");
-
-            strcpy(base_URL, URL);
-        }
-        else {
-            /*
-             * Save a copy of the base URL being worked on so that operations like
-             * creating a Group can be redirected to "base URL"/groups by building
-             * off of the base URL supplied.
-             */
-            URL_len = strlen(URL);
-
-            if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
-                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
-                                "can't allocate space necessary for placeholder base URL");
-
-            strcpy(base_URL, URL);
-        }
+    if (base_URL = getenv("HSDS_ENDPOINT")) {
 
         username = getenv("HSDS_USERNAME");
         password = getenv("HSDS_PASSWORD");
 
-        if (username || password) {
-            /* Attempt to set authentication information */
-            if (username && strlen(username)) {
-                if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, username))
-                    FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf);
-            } /* end if */
-
-            if (password && strlen(password)) {
-                if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, password))
-                    FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf);
-            } /* end if */
-        }     /* end if */
-        else {
+        if (!username && !password) {
             const char *clientID      = getenv("HSDS_AD_CLIENT_ID");
             const char *tenantID      = getenv("HSDS_AD_TENANT_ID");
             const char *resourceID    = getenv("HSDS_AD_RESOURCE_ID");
@@ -811,7 +755,7 @@ H5_rest_set_connection_information(server_info_t *server_info)
             } /* end if */
 
             /* Attempt authentication with Active Directory */
-            if (H5_rest_authenticate_with_AD(&ad_info) < 0)
+            if (H5_rest_authenticate_with_AD(&ad_info, base_URL) < 0)
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't authenticate with Active Directory");
         } /* end else */
     }     /* end if */
@@ -887,33 +831,9 @@ H5_rest_set_connection_information(server_info_t *server_info)
 
             if (!strcmp(key, "hs_endpoint")) {
                 if (val) {
-                    /*
-                     * Save a copy of the base URL being worked on so that operations like
-                     * creating a Group can be redirected to "base URL"/groups by building
-                     * off of the base URL supplied.
-                     */
-                    URL_len = strlen(val);
-
-                    if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
-                        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
-                                        "can't allocate space necessary for placeholder base URL");
-
-                    strcpy(base_URL, val);
-
+                    base_URL = val;
                 } /* end if */
             }     /* end if */
-            else if (!strcmp(key, "hs_username")) {
-                if (val && strlen(val)) {
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, val))
-                        FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf);
-                } /* end if */
-            }     /* end else if */
-            else if (!strcmp(key, "hs_password")) {
-                if (val && strlen(val)) {
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, val))
-                        FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf);
-                } /* end if */
-            }     /* end else if */
             else if (!strcmp(key, "hs_ad_app_id")) {
                 if (val && strlen(val))
                     strncpy(ad_info.clientID, val, sizeof(ad_info.clientID) - 1);
@@ -936,7 +856,7 @@ H5_rest_set_connection_information(server_info_t *server_info)
 
         /* Attempt authentication with Active Directory if ID values are present */
         if (ad_info.clientID[0] != '\0' && ad_info.tenantID[0] != '\0' && ad_info.resourceID[0] != '\0')
-            if (H5_rest_authenticate_with_AD(&ad_info) < 0)
+            if (!base_URL || (H5_rest_authenticate_with_AD(&ad_info, base_URL) < 0))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't authenticate with Active Directory");
     } /* end else */
 
@@ -961,8 +881,9 @@ H5_rest_set_connection_information(server_info_t *server_info)
             strcpy(server_info->password, password);
         }
 
-        if ((server_info->base_URL = RV_calloc(strlen(base_URL) + 1)) == NULL) {
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for URL");
+        if (base_URL) {
+            if ((server_info->base_URL = RV_calloc(strlen(base_URL) + 1)) == NULL)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for URL");
 
             strcpy(server_info->base_URL, base_URL);
         }
@@ -1006,7 +927,7 @@ done:
  *-------------------------------------------------------------------------
  */
 static herr_t
-H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
+H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
 {
     const char *access_token_key[]  = {"access_token", (const char *)0};
     const char *refresh_token_key[] = {"refresh_token", (const char *)0};
@@ -2072,6 +1993,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
     char              *url_encoded_path_name = NULL;
     const char        *ext_filename          = NULL;
     const char        *ext_obj_path          = NULL;
+    const char        *base_URL;
     char               request_url[URL_MAX_LENGTH];
     long               http_response;
     int                url_len = 0;
@@ -2088,7 +2010,8 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
     if (H5I_FILE != parent_obj->obj_type && H5I_GROUP != parent_obj->obj_type &&
         H5I_DATATYPE != parent_obj->obj_type && H5I_DATASET != parent_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file, group, datatype or dataset");
-
+    if ((base_URL = parent_obj->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object does not have valid server URL");
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Finding object by path '%s' from parent object of type %s with URI %s\n\n", obj_path,
            object_type_to_string(parent_obj->obj_type), parent_obj->URI);
