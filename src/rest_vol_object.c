@@ -996,8 +996,8 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             /* To build object table, information about parent object will be needed */
             object_iter_data.iter_obj_parent = iter_object;
 
-            if (url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s", base_URL, object_type_header,
-                                   object_iter_data.iter_obj_parent->URI) < 0)
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s", base_URL, object_type_header,
+                                    object_iter_data.iter_obj_parent->URI)) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
             if (url_len >= URL_MAX_LENGTH)
@@ -1085,6 +1085,11 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
              * object */
             CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
 
+            if (curl_headers) {
+                curl_slist_free_all(curl_headers);
+                curl_headers = NULL;
+            }
+
             if (RV_parse_response(response_buffer.buffer, NULL, &oinfo, RV_get_object_info_callback) < 0)
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to get object info");
 
@@ -1104,20 +1109,36 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             switch (iter_object_type) {
                 case H5I_FILE:
                 case H5I_GROUP:
-                    if (url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s%s", base_URL,
-                                           object_type_header, object_iter_data.iter_obj_parent->URI,
-                                           (!strcmp(object_type_header, "groups") ? "/links" : "")) < 0)
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s%s", base_URL,
+                                            object_type_header, object_iter_data.iter_obj_parent->URI,
+                                            (!strcmp(object_type_header, "groups") ? "/links" : ""))) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                         "H5Oiterate/visit request URL size exceeded maximum URL size");
 
+                    curl_headers = curl_slist_append(curl_headers, host_header);
+
+                    /* Disable use of Expect: 100 Continue HTTP response */
+                    curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
+                                        curl_err_buf);
+                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL,
+                                        "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
                     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
                                         curl_err_buf);
 
                     CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
+
+                    if (curl_headers) {
+                        curl_slist_free_all(curl_headers);
+                        curl_headers = NULL;
+                    }
 
                     if (RV_parse_response(response_buffer.buffer, &object_iter_data, NULL,
                                           RV_object_iter_callback) < 0)
