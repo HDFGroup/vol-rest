@@ -287,10 +287,13 @@ jobs:
               python tests/integ/setup_test.py
         working-directory: ${{github.workspace}}/hsds
 
+      - name: Set HDF5 Plugin path
+        run: |
+              echo "HDF5_PLUGIN_PATH=${{github.workspace}}/hdf5/build/bin/" >> $GITHUB_ENV
+
       - name: Test REST VOL
         working-directory: ${{github.workspace}}/vol-rest/build/
         run: |
-              echo "HDF5_PLUGIN_PATH=${{github.workspace}}/hdf5/build/bin/" >> $GITHUB_ENV
               valgrind --leak-check=full -s ctest -R "test_rest_vol" -VV
 
   build_with_fetchcontent:
