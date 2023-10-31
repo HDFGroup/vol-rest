@@ -289,7 +289,7 @@ jobs:
 
       - name: Set HDF5 Plugin path
         run: |
-              echo "HDF5_PLUGIN_PATH=${{github.workspace}}/hdf5/build/bin/" >> $GITHUB_ENV
+              echo "HDF5_PLUGIN_PATH=${{github.workspace}}/vol-rest/build/bin/" >> $GITHUB_ENV
 
       - name: Test REST VOL
         working-directory: ${{github.workspace}}/vol-rest/build/
