@@ -496,7 +496,7 @@ typedef struct {
 } upload_info;
 
 /* Structure that keeps track of semantic version. */
-typedef struct server_api_version {
+typedef struct {
     size_t major;
     size_t minor;
     size_t patch;
@@ -753,6 +753,10 @@ herr_t RV_tconv_init(hid_t src_type_id, size_t *src_type_size, hid_t dst_type_id
                      size_t num_elem, hbool_t clear_tconv_buf, hbool_t dst_file, void **tconv_buf,
                      void **bkg_buf, RV_tconv_reuse_t *reuse, hbool_t *fill_bkg);
 
+/* REST VOL Datatype helper */
+herr_t RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested,
+                                   server_api_version server_version);
+
 #define SERVER_VERSION_MATCHES_OR_EXCEEDS(version, major_needed, minor_needed, patch_needed)                 \
     (version.major > major_needed) || (version.major == major_needed && version.minor > minor_needed) ||     \
         (version.major == major_needed && version.minor == minor_needed && version.patch >= patch_needed)
@@ -761,6 +765,9 @@ herr_t RV_tconv_init(hid_t src_type_id, size_t *src_type_size, hid_t dst_type_id
     (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 1))
 
 #define SERVER_VERSION_SUPPORTS_GET_STORAGE_SIZE(version)                                                    \
+    (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 5))
+
+#define SERVER_VERSION_SUPPORTS_FIXED_LENGTH_UTF8(version)                                                   \
     (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 5))
 
 #ifdef __cplusplus
