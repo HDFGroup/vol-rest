@@ -811,6 +811,7 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
     htri_t       is_variable_str;
     size_t       dtype_size;
     size_t       host_header_len       = 0;
+    size_t       read_size             = 0;
     char        *host_header           = NULL;
     char        *url_encoded_attr_name = NULL;
     char         request_url[URL_MAX_LENGTH];
@@ -997,6 +998,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
     curl_off_t   write_len;
     hssize_t     file_select_npoints;
     htri_t       is_variable_str;
+    hbool_t      is_transfer_binary;
     size_t       dtype_size;
     size_t       write_body_len        = 0;
     size_t       host_header_len       = 0;
@@ -1058,7 +1060,10 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
     /* Instruct cURL on which type of transfer to perform, binary or JSON */
-    curl_headers = curl_slist_append(curl_headers, "Content-Type: application/octet-stream");
+    is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
+    curl_headers =
+        curl_slist_append(curl_headers, is_transfer_binary ? "Content-Type: application/octet-stream"
+                                                           : "Content-Type: application/json");
 
     /* URL-encode the attribute name to ensure that the resulting URL for the write
      * operation contains no illegal characters
@@ -1161,6 +1166,9 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
     printf("-> | Making PUT request to the server |\n");
     printf("   \\**********************************/\n\n");
 #endif
+
+    /* Clear response buffer */
+    memset(response_buffer.buffer, 0, response_buffer.buffer_size);
 
     CURL_PERFORM(curl, H5E_ATTR, H5E_WRITEERROR, FAIL);
 
@@ -1799,13 +1807,23 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 {
     RV_object_t         *loc_obj             = (RV_object_t *)obj;
     RV_object_t         *attr_iter_obj_typed = NULL;
+    RV_object_t         *attr                = NULL;
+    RV_object_t         *renamed_attr        = NULL;
+    RV_object_t         *attr_parent         = NULL;
     H5I_type_t           parent_obj_type     = H5I_UNINIT;
     size_t               host_header_len     = 0;
+    size_t               elem_size           = 0;
     H5VL_attr_get_args_t attr_get_args;
+    H5VL_loc_params_t    attr_open_loc_params;
+    hssize_t             num_elems               = 0;
     size_t               attr_name_to_delete_len = 0;
     hid_t                attr_iter_object_id     = H5I_INVALID_HID;
+    hid_t                space_id                = H5I_INVALID_HID;
+    hid_t                type_id                 = H5I_INVALID_HID;
+    void                *buf                     = NULL;
     void                *attr_iter_object        = NULL;
-    char                *host_header             = NULL;
+    char                 parent_URI[URI_MAX_LENGTH];
+    char                *host_header = NULL;
     char                *obj_URI;
     char                 temp_URI[URI_MAX_LENGTH];
     char                 request_url[URL_MAX_LENGTH];
@@ -2660,13 +2678,171 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
         } /* H5VL_ATTR_ITER */
 
         /* H5Arename (_by_name) */
-        case H5VL_ATTR_RENAME:
-            FUNC_GOTO_ERROR(H5E_ATTR, H5E_UNSUPPORTED, FAIL,
-                            "H5Arename and H5Arename_by_name are unsupported");
-            break;
+        case H5VL_ATTR_RENAME: {
+            /* Open original attribute */
 
+            switch (loc_params->type) {
+                /* H5rename */
+                case H5VL_OBJECT_BY_SELF: {
+                    parent_obj_type = loc_obj->obj_type;
+                    break;
+                }
+
+                /* H5Arename_by_name */
+                case H5VL_OBJECT_BY_NAME: {
+                    if (loc_params->loc_data.loc_by_name.lapl_id == H5I_INVALID_HID)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LAPL");
+
+                    if (RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name,
+                                               &parent_obj_type, RV_copy_object_URI_callback, NULL,
+                                               parent_URI) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, FAIL,
+                                        "can't find object attribute is attached to");
+
+                    /* Open parent object of attribute */
+                    switch (parent_obj_type) {
+                        case H5I_FILE:
+                        case H5I_GROUP:
+                            if ((attr_parent = (RV_object_t *)RV_group_open(
+                                     obj, loc_params, loc_params->loc_data.loc_by_name.name, H5P_DEFAULT,
+                                     H5P_DEFAULT, NULL)) == NULL)
+                                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, FAIL, "can't open parent group");
+                            break;
+
+                        case H5I_DATASET:
+                            if ((attr_parent = (RV_object_t *)RV_dataset_open(
+                                     obj, loc_params, loc_params->loc_data.loc_by_name.name, H5P_DEFAULT,
+                                     H5P_DEFAULT, NULL)) == NULL)
+                                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTOPENOBJ, FAIL,
+                                                "can't open parent group");
+                            break;
+
+                        case H5I_DATATYPE:
+                            if ((attr_parent = (RV_object_t *)RV_datatype_open(
+                                     obj, loc_params, loc_params->loc_data.loc_by_name.name, H5P_DEFAULT,
+                                     H5P_DEFAULT, NULL)) == NULL)
+                                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTOPENOBJ, FAIL,
+                                                "can't open parent group");
+                            break;
+
+                        default:
+                            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
+                                            "attribute's parent object is not group, dataset, or datatype");
+                            break;
+                    }
+
+                    break;
+                }
+
+                case H5VL_OBJECT_BY_TOKEN:
+                case H5VL_OBJECT_BY_IDX:
+                default: {
+                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid loc_params type");
+                } break;
+            }
+
+            /* Open original attribute */
+            attr_open_loc_params.type = H5VL_OBJECT_BY_SELF;
+            attr_open_loc_params.obj_type =
+                (loc_params->type == H5VL_OBJECT_BY_SELF) ? loc_obj->obj_type : parent_obj_type;
+
+            if ((attr = (RV_object_t *)RV_attr_open((attr_parent != NULL) ? (void *)attr_parent : obj,
+                                                    (const H5VL_loc_params_t *)&attr_open_loc_params,
+                                                    args->args.rename.old_name, H5P_DEFAULT, H5P_DEFAULT,
+                                                    NULL)) == NULL)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTOPENOBJ, FAIL, "can't open attribute");
+
+            /* Create copy of attribute with same name */
+            if ((renamed_attr = RV_attr_create(
+                     (loc_params->type == H5VL_OBJECT_BY_SELF) ? obj : (void *)attr_parent,
+                     (const H5VL_loc_params_t *)&attr_open_loc_params, args->args.rename.new_name,
+                     attr->u.attribute.dtype_id, attr->u.attribute.space_id, attr->u.attribute.acpl_id,
+                     attr->u.attribute.aapl_id, H5P_DEFAULT, NULL)) == NULL)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTCREATE, FAIL, "can't create renamed attribute");
+
+            /* Write original data to copy of attribute */
+            if ((num_elems = H5Sget_simple_extent_npoints(attr->u.attribute.space_id)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL,
+                                "can't get number of elements in dataspace");
+
+            if ((elem_size = H5Tget_size(attr->u.attribute.dtype_id)) == 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get size of datatype");
+
+            /* Allocate buffer for attr read */
+            if ((buf = RV_calloc((size_t)num_elems * elem_size)) == NULL)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for attribute read");
+
+            if (RV_attr_read((void *)attr, attr->u.attribute.dtype_id, buf, H5P_DEFAULT, NULL) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_READERROR, FAIL, "can't read attribute");
+
+            if (RV_attr_write((void *)renamed_attr, attr->u.attribute.dtype_id, (const void *)buf,
+                              H5P_DEFAULT, NULL) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_WRITEERROR, FAIL, "can't write to attribute");
+
+            /* Close original attribute */
+            if (RV_attr_close((void *)attr, H5P_DEFAULT, NULL) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close attribute");
+
+            attr = NULL;
+
+            /* Delete original attribute */
+
+            /* Setup the host header */
+            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
+            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for request Host header");
+
+            strcpy(host_header, host_string);
+
+            curl_headers =
+                curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name,
+                                                        host_header_len - strlen(host_string) - 1));
+
+            /* Disable use of Expect: 100 Continue HTTP response */
+            curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+            /* Set request url */
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
+
+            if (RV_set_object_type_header(parent_obj_type, &parent_obj_type_header) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
+                                "parent object not a group, datatype or dataset");
+
+            /* URL-encode the attribute name so that the resulting URL
+             * doesn't contain any illegal characters */
+            if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, args->args.rename.old_name, 0)))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name");
+
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL,
+                                    parent_obj_type_header,
+                                    (loc_params->type == H5VL_OBJECT_BY_SELF) ? loc_obj->URI : parent_URI,
+                                    url_encoded_attr_name)) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL,
+                                "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);
+
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Deleting attribute at URL: %s\n\n", request_url);
+
+            printf("   /*************************************\\\n");
+            printf("-> | Making DELETE request to the server |\n");
+            printf("   \\*************************************/\n\n");
+#endif
+
+            CURL_PERFORM(curl, H5E_ATTR, H5E_CANTDELETE, FAIL);
+
+            break;
+        }
         default:
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "unknown attribute operation");
+
     } /* end switch */
 
 done:
@@ -2698,6 +2874,36 @@ done:
             FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "invalid attribute parent object type");
     } /* end if */
 
+    if (attr)
+        if (RV_attr_close(attr, H5P_DEFAULT, NULL) < 0)
+            FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close attribute");
+
+    if (renamed_attr)
+        if (RV_attr_close(renamed_attr, H5P_DEFAULT, NULL) < 0)
+            FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, FAIL, "can't close attribute");
+
+    if (attr_parent)
+        switch (parent_obj_type) {
+            case H5I_FILE:
+            case H5I_GROUP:
+                if (RV_group_close((void *)attr_parent, H5P_DEFAULT, NULL) < 0)
+                    FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTCLOSEOBJ, FAIL, "can't close parent group");
+                break;
+
+            case H5I_DATASET:
+                if (RV_dataset_close((void *)attr_parent, H5P_DEFAULT, NULL) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, FAIL, "can't close parent dataset");
+                break;
+
+            case H5I_DATATYPE:
+                if (RV_datatype_close((void *)attr_parent, H5P_DEFAULT, NULL) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close parent datatype");
+
+            default:
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
+                                "attribute's parent object is not group, dataset, or datatype");
+                break;
+        }
     /* In case a custom DELETE request was made, reset the request to NULL
      * to prevent any possible future issues with requests
      */
@@ -2711,6 +2917,9 @@ done:
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
+
+    if (buf)
+        RV_free(buf);
 
     PRINT_ERROR_STACK;
 

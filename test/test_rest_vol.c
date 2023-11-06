@@ -172,10 +172,6 @@ char filename[FILENAME_MAX_LENGTH];
 #define ATTRIBUTE_READ_TEST_SPACE_RANK      2
 #define ATTRIBUTE_READ_TEST_ATTR_NAME       "read_test_attr"
 
-#define ATTRIBUTE_RENAME_TEST_SPACE_RANK 2
-#define ATTRIBUTE_RENAME_TEST_ATTR_NAME  "rename_test_attr"
-#define ATTRIBUTE_RENAME_TEST_NEW_NAME   "renamed_attr"
-
 #define ATTRIBUTE_GET_NUM_ATTRS_TEST_ATTRIBUTE_NAME "get_num_attrs_test_attribute"
 #define ATTRIBUTE_GET_NUM_ATTRS_TEST_SPACE_RANK     2
 
@@ -637,7 +633,6 @@ static int test_create_attribute_with_space_in_name(void);
 static int test_delete_attribute(void);
 static int test_write_attribute(void);
 static int test_read_attribute(void);
-static int test_rename_attribute(void);
 static int test_get_number_attributes(void);
 static int test_attribute_iterate(void);
 static int test_attribute_iterate_0_attributes(void);
@@ -779,7 +774,6 @@ static int (*attribute_tests[])(void) = {test_create_attribute_on_root,
                                          test_delete_attribute,
                                          test_write_attribute,
                                          test_read_attribute,
-                                         test_rename_attribute,
                                          test_get_number_attributes,
                                          test_attribute_iterate,
                                          test_attribute_iterate_0_attributes,
@@ -4366,130 +4360,6 @@ error:
 }
 
 static int
-test_rename_attribute(void)
-{
-    hsize_t attr_dims[ATTRIBUTE_RENAME_TEST_SPACE_RANK];
-    size_t  i;
-    htri_t  attr_exists;
-    hid_t   file_id = -1, fapl_id = -1;
-    hid_t   container_group = -1;
-    hid_t   attr_id         = -1;
-    hid_t   attr_dtype      = -1;
-    hid_t   attr_space_id   = -1;
-
-    TESTING("rename an attribute")
-
-    if (H5rest_init() < 0)
-        TEST_ERROR
-
-    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
-        TEST_ERROR
-    if (H5Pset_fapl_rest_vol(fapl_id) < 0)
-        TEST_ERROR
-
-    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0) {
-        H5_FAILED();
-        printf("    couldn't open file\n");
-        goto error;
-    }
-
-    if ((container_group = H5Gopen2(file_id, ATTRIBUTE_TEST_GROUP_NAME, H5P_DEFAULT)) < 0) {
-        H5_FAILED();
-        printf("    couldn't open container group\n");
-        goto error;
-    }
-
-    for (i = 0; i < ATTRIBUTE_RENAME_TEST_SPACE_RANK; i++)
-        attr_dims[i] = (hsize_t)(rand() % MAX_DIM_SIZE + 1);
-
-    if ((attr_space_id = H5Screate_simple(ATTRIBUTE_RENAME_TEST_SPACE_RANK, attr_dims, NULL)) < 0)
-        TEST_ERROR
-
-    if ((attr_dtype = generate_random_datatype(H5T_NO_CLASS)) < 0)
-        TEST_ERROR
-
-    if ((attr_id = H5Acreate2(container_group, ATTRIBUTE_RENAME_TEST_ATTR_NAME, attr_dtype, attr_space_id,
-                              H5P_DEFAULT, H5P_DEFAULT)) < 0) {
-        H5_FAILED();
-        printf("    couldn't create attribute\n");
-        goto error;
-    }
-
-    /* Verify the attribute has been created */
-    if ((attr_exists = H5Aexists(container_group, ATTRIBUTE_RENAME_TEST_ATTR_NAME)) < 0) {
-        H5_FAILED();
-        printf("    couldn't determine if attribute exists\n");
-        goto error;
-    }
-
-    if (!attr_exists) {
-        H5_FAILED();
-        printf("    attribute did not exist\n");
-        goto error;
-    }
-
-    H5E_BEGIN_TRY
-    {
-#ifdef RV_CONNECTOR_DEBUG
-        puts("Attempting to rename the attribute with H5Arename\n");
-#endif
-
-        if (H5Arename(container_group, ATTRIBUTE_RENAME_TEST_ATTR_NAME, ATTRIBUTE_RENAME_TEST_NEW_NAME) >=
-            0) {
-            H5_FAILED();
-            printf("    unsupported API succeeded!\n");
-            goto error;
-        }
-
-#ifdef RV_CONNECTOR_DEBUG
-        puts("Attempting to rename the attribute with H5Arename_by_name\n");
-#endif
-
-        if (H5Arename_by_name(file_id, "/" ATTRIBUTE_TEST_GROUP_NAME, ATTRIBUTE_RENAME_TEST_ATTR_NAME,
-                              ATTRIBUTE_RENAME_TEST_NEW_NAME, H5P_DEFAULT) >= 0) {
-            H5_FAILED();
-            printf("    unsupported API succeeded!\n");
-            goto error;
-        }
-    }
-    H5E_END_TRY;
-
-    if (H5Sclose(attr_space_id) < 0)
-        TEST_ERROR
-    if (H5Tclose(attr_dtype) < 0)
-        TEST_ERROR
-    if (H5Aclose(attr_id) < 0)
-        TEST_ERROR
-    if (H5Gclose(container_group) < 0)
-        TEST_ERROR
-    if (H5Pclose(fapl_id) < 0)
-        TEST_ERROR
-    if (H5Fclose(file_id) < 0)
-        TEST_ERROR
-    if (H5rest_term() < 0)
-        TEST_ERROR
-
-    PASSED();
-
-    return 0;
-
-error:
-    H5E_BEGIN_TRY
-    {
-        H5Sclose(attr_space_id);
-        H5Tclose(attr_dtype);
-        H5Aclose(attr_id);
-        H5Gclose(container_group);
-        H5Pclose(fapl_id);
-        H5Fclose(file_id);
-        H5rest_term();
-    }
-    H5E_END_TRY;
-
-    return 1;
-}
-
-static int
 test_get_number_attributes(void)
 {
     H5O_info2_t obj_info;
@@ -5874,10 +5744,10 @@ test_create_dataset_predefined_types(void)
     hid_t  fspace_id                    = -1;
     hid_t  dset_id                      = -1;
     hid_t  predefined_type_test_table[] = {H5T_STD_U8LE,   H5T_STD_U8BE,   H5T_STD_I8LE,   H5T_STD_I8BE,
-                                          H5T_STD_U16LE,  H5T_STD_U16BE,  H5T_STD_I16LE,  H5T_STD_I16BE,
-                                          H5T_STD_U32LE,  H5T_STD_U32BE,  H5T_STD_I32LE,  H5T_STD_I32BE,
-                                          H5T_STD_U64LE,  H5T_STD_U64BE,  H5T_STD_I64LE,  H5T_STD_I64BE,
-                                          H5T_IEEE_F32LE, H5T_IEEE_F32BE, H5T_IEEE_F64LE, H5T_IEEE_F64BE};
+                                           H5T_STD_U16LE,  H5T_STD_U16BE,  H5T_STD_I16LE,  H5T_STD_I16BE,
+                                           H5T_STD_U32LE,  H5T_STD_U32BE,  H5T_STD_I32LE,  H5T_STD_I32BE,
+                                           H5T_STD_U64LE,  H5T_STD_U64BE,  H5T_STD_I64LE,  H5T_STD_I64BE,
+                                           H5T_IEEE_F32LE, H5T_IEEE_F32BE, H5T_IEEE_F64LE, H5T_IEEE_F64BE};
 
     TESTING("dataset creation w/ predefined datatypes")
 
