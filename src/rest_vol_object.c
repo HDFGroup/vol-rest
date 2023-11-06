@@ -478,7 +478,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                         "attribute open URL exceeded maximum URL size");
 
-                    if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+                    if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                                     loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get link");
 
@@ -521,7 +521,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
             } /* end switch */
 
             /* Make a GET request to the server to retrieve the number of attributes attached to the object */
-            if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+            if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                             loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't get object");
 
@@ -911,7 +911,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             /* Unlike H5Lvisit, H5Ovisit executes the provided callback on the directly specified object. */
 
             /* Make GET request to server */
-            if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+            if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                             loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get link to object");
 
@@ -943,7 +943,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                         "H5Oiterate/visit request URL size exceeded maximum URL size");
 
-                    if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+                    if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                                     loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get link to object");
 
@@ -1569,8 +1569,9 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
                                         "link GET request URL size exceeded maximum URL size");
 
                     response_code = RV_curl_get(
-                        &object_iter_data->iter_obj_parent->domain->u.file.server_info, request_endpoint,
-                        object_iter_data->iter_obj_parent->domain->u.file.filepath_name, CONTENT_TYPE_JSON);
+                        curl, &object_iter_data->iter_obj_parent->domain->u.file.server_info,
+                        request_endpoint, object_iter_data->iter_obj_parent->domain->u.file.filepath_name,
+                        CONTENT_TYPE_JSON);
 
                     if (!(HTTP_SUCCESS(response_code)))
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't get object: HTTP %ld",

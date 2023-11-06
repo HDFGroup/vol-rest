@@ -253,7 +253,7 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     printf("-> Group create request URL: %s\n\n", request_endpoint);
 #endif
 
-    http_response = RV_curl_post(&new_group->domain->u.file.server_info, request_endpoint,
+    http_response = RV_curl_post(curl, &new_group->domain->u.file.server_info, request_endpoint,
                                  parent->domain->u.file.filepath_name,
                                  create_request_body ? (const char *)create_request_body : "",
                                  (size_t)create_request_body_len, CONTENT_TYPE_JSON);
@@ -584,7 +584,7 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
                     FUNC_GOTO_ERROR(H5E_SYM, H5E_BADVALUE, FAIL, "invalid loc_params type");
             } /* end switch */
 
-            if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+            if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                             loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTGET, FAIL, "can't get group");
 

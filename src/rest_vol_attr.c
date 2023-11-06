@@ -272,7 +272,7 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
     uinfo.buffer_size = (size_t)create_request_body_len;
     uinfo.bytes_sent  = 0;
 
-    http_response = RV_curl_put(&new_attribute->domain->u.file.server_info, request_endpoint,
+    http_response = RV_curl_put(curl, &new_attribute->domain->u.file.server_info, request_endpoint,
                                 new_attribute->domain->u.file.filepath_name, &uinfo, CONTENT_TYPE_JSON);
     if (!HTTP_SUCCESS(http_response))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTCREATE, NULL, "can't create attribute");
@@ -527,7 +527,7 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL,
                                 "attribute open URL exceeded maximum URL size");
 
-            if (RV_curl_get(&attribute->domain->u.file.server_info, request_endpoint,
+            if (RV_curl_get(curl, &attribute->domain->u.file.server_info, request_endpoint,
                             attribute->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't get attribute");
 
@@ -579,7 +579,7 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
     printf("-> URL for attribute open request: %s\n\n", request_endpoint);
 #endif
 
-    if (RV_curl_get(&attribute->domain->u.file.server_info, request_endpoint,
+    if (RV_curl_get(curl, &attribute->domain->u.file.server_info, request_endpoint,
                     attribute->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't get attribute");
 
@@ -741,7 +741,7 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
     printf("-> URL for attribute read request: %s\n\n", request_endpoint);
 #endif
 
-    if (RV_curl_get(&attribute->domain->u.file.server_info, request_endpoint,
+    if (RV_curl_get(curl, &attribute->domain->u.file.server_info, request_endpoint,
                     attribute->domain->u.file.filepath_name, content_type) < 0)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_READERROR, FAIL, "can't read from attribute");
 
@@ -873,7 +873,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
     /* Clear response buffer */
     memset(response_buffer.buffer, 0, response_buffer.buffer_size);
 
-    http_response = RV_curl_put(&attribute->domain->u.file.server_info, request_endpoint,
+    http_response = RV_curl_put(curl, &attribute->domain->u.file.server_info, request_endpoint,
                                 attribute->domain->u.file.filepath_name, &uinfo,
                                 (is_transfer_binary ? CONTENT_TYPE_OCTET_STREAM : CONTENT_TYPE_JSON));
 
@@ -1094,7 +1094,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
                                         "attribute open URL exceeded maximum URL size");
 
-                    if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+                    if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                                     loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't get attribute");
 
@@ -1124,7 +1124,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
             } /* end switch */
 
             /* Make a GET request to the server to retrieve the attribute's info */
-            if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+            if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                             loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't get attribute");
 
@@ -1225,7 +1225,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
                                         "attribute open URL exceeded maximum URL size");
 
-                    if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+                    if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                                     loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't get attribute");
 
@@ -1407,7 +1407,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                                 "H5Adelete(_by_name) request URL exceeded maximum URL size");
 
             http_response =
-                RV_curl_delete(&loc_obj->domain->u.file.server_info, (const char *)request_endpoint,
+                RV_curl_delete(curl, &loc_obj->domain->u.file.server_info, (const char *)request_endpoint,
                                (const char *)loc_obj->domain->u.file.filepath_name);
 
             if (!HTTP_SUCCESS(http_response))
@@ -1513,7 +1513,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                                 "H5Adelete(_by_name) request URL exceeded maximum URL size");
 
             http_response =
-                RV_curl_delete(&loc_obj->domain->u.file.server_info, (const char *)request_endpoint,
+                RV_curl_delete(curl, &loc_obj->domain->u.file.server_info, (const char *)request_endpoint,
                                (const char *)loc_obj->domain->u.file.filepath_name);
 
             if (!HTTP_SUCCESS(http_response))
@@ -1606,7 +1606,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
                                 "H5Aexists(_by_name) request URL exceeded maximum URL size");
 
-            http_response = RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+            http_response = RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                                         loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON);
 
             if (HTTP_SUCCESS(http_response))
@@ -1970,7 +1970,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
             /* Make a GET request to the server to retrieve all of the attributes attached to the given object
              */
-            if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+            if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                             loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't get attribute");
 

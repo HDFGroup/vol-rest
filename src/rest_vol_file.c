@@ -138,12 +138,12 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
     if (flags & H5F_ACC_TRUNC) {
 
         /* Don't fail function if this file doesn't exist */
-        http_response = RV_curl_get(&new_file->u.file.server_info, "/", new_file->u.file.filepath_name,
+        http_response = RV_curl_get(curl, &new_file->u.file.server_info, "/", new_file->u.file.filepath_name,
                                     CONTENT_TYPE_JSON);
 
         /* If the file exists, go ahead and delete it before proceeding */
         if (HTTP_SUCCESS(http_response)) {
-            http_response = RV_curl_delete(&new_file->u.file.server_info, "/",
+            http_response = RV_curl_delete(curl, &new_file->u.file.server_info, "/",
                                            (const char *)new_file->u.file.filepath_name);
 
             if (!HTTP_SUCCESS(http_response))
@@ -187,8 +187,8 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
     uinfo.buffer_size = (size_t)create_request_body_len;
     uinfo.bytes_sent  = 0;
 
-    http_response = RV_curl_put(&new_file->u.file.server_info, "/", new_file->u.file.filepath_name, &uinfo,
-                                CONTENT_TYPE_JSON);
+    http_response = RV_curl_put(curl, &new_file->u.file.server_info, "/", new_file->u.file.filepath_name,
+                                &uinfo, CONTENT_TYPE_JSON);
 
     if (!HTTP_SUCCESS(http_response))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't create file");
@@ -304,7 +304,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     file->u.file.filepath_name[name_length] = '\0';
 
     http_response =
-        RV_curl_get(&file->u.file.server_info, "/", file->u.file.filepath_name, CONTENT_TYPE_JSON);
+        RV_curl_get(curl, &file->u.file.server_info, "/", file->u.file.filepath_name, CONTENT_TYPE_JSON);
 
     if (!HTTP_SUCCESS(http_response))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTOPENFILE, NULL, "can't get file");
@@ -553,11 +553,11 @@ done:
 herr_t
 RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void **req)
 {
-    RV_object_t   *file      = (RV_object_t *)obj;
-    herr_t         ret_value = SUCCEED;
-    size_t         name_length;
-    long           http_response;
-    const char    *filename = NULL;
+    RV_object_t   *file          = (RV_object_t *)obj;
+    herr_t         ret_value     = SUCCEED;
+    size_t         name_length   = 0;
+    long           http_response = 0;
+    const char    *filename      = NULL;
     char           request_endpoint[URL_MAX_LENGTH];
     server_info_t *server_info = NULL;
 
@@ -589,7 +589,7 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             /* Server only checks for flush parameter on PUT operations */
 
             if (HTTP_NO_CONTENT !=
-                (http_response = RV_curl_put(&file->u.file.server_info, request_endpoint,
+                (http_response = RV_curl_put(curl, &file->u.file.server_info, request_endpoint,
                                              file->u.file.filepath_name, NULL, CONTENT_TYPE_JSON)))
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTFLUSH, FAIL, "unexpected return from flush: HTTP %zu",
                                 http_response);
@@ -648,7 +648,7 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             if (H5_rest_set_connection_information(server_info) < 0)
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "can't get server connection information");
 
-            http_response = RV_curl_delete(server_info, "/", filename);
+            http_response = RV_curl_delete(curl, server_info, "/", filename);
 
             if (!HTTP_SUCCESS(http_response))
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CLOSEERROR, FAIL, "can't delete file");

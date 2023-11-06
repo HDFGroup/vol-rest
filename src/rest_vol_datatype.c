@@ -238,7 +238,7 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     printf("-> Datatype commit URL: %s\n\n", request_endpoint);
 #endif
 
-    http_response = RV_curl_post(&parent->domain->u.file.server_info, request_endpoint,
+    http_response = RV_curl_post(curl, &parent->domain->u.file.server_info, request_endpoint,
                                  parent->domain->u.file.filepath_name, (const char *)commit_request_body,
                                  (size_t)commit_request_len, CONTENT_TYPE_JSON);
 

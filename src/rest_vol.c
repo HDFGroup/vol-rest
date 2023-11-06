@@ -184,9 +184,6 @@ herr_t RV_get_index_of_matching_handle(dataset_transfer_info *transfer_info, siz
 /* Stub that throws an error when called */
 void *RV_wrap_get_object(const void *obj);
 
-/* Helper function that creates and sets some fields on a cURL handle. */
-CURL *RV_curl_setup_handle(server_info_t *server_info, char *err_buf);
-
 /* The REST VOL connector's class structure. */
 static const H5VL_class_t H5VL_rest_g = {
     HDF5_VOL_REST_VERSION,      /* Connector struct version number       */
@@ -2197,7 +2194,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "Request URL size exceeded maximum URL size");
 
-    http_response = RV_curl_get(&parent_obj->domain->u.file.server_info, request_endpoint,
+    http_response = RV_curl_get(curl, &parent_obj->domain->u.file.server_info, request_endpoint,
                                 parent_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON);
 
     if (HTTP_SUCCESS(http_response))
@@ -3882,21 +3879,16 @@ done:
 /* Helper function to perform a DELETE request to an endpoint on a server.
  * Request endpoint must contain a leading slash. */
 long
-RV_curl_delete(server_info_t *server_info, const char *request_endpoint, const char *filename)
+RV_curl_delete(CURL *curl_handle, server_info_t *server_info, const char *request_endpoint,
+               const char *filename)
 {
     long   ret_value       = FAIL;
-    CURL  *curl_local      = NULL;
     size_t host_header_len = 0;
 
-    char               curl_local_err_buf[CURL_ERROR_SIZE];
     char              *host_header = NULL;
     char               request_url[URL_MAX_LENGTH];
     int                url_len            = 0;
     struct curl_slist *curl_headers_local = NULL;
-
-    /* Initial curl handle setup */
-    if ((curl_local = RV_curl_setup_handle(server_info, curl_local_err_buf)) == NULL)
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTCREATE, FAIL, "can't create curl handle");
 
     /* Setup the host header */
     host_header_len = strlen(filename) + strlen(host_string) + 1;
@@ -3912,9 +3904,8 @@ RV_curl_delete(server_info_t *server_info, const char *request_endpoint, const c
     /* Disable use of Expect: 100 Continue HTTP response */
     curl_headers_local = curl_slist_append(curl_headers_local, "Expect:");
 
-    if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_HTTPHEADER, curl_headers_local))
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
-                        curl_local_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, curl_headers_local))
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
 
     /* Assemble request url */
     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s%s", server_info->base_URL, request_endpoint)) <
@@ -3925,14 +3916,13 @@ RV_curl_delete(server_info_t *server_info, const char *request_endpoint, const c
         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_SYSERRSTR, FAIL,
                         "H5Adelete(_by_name) request URL exceeded maximum URL size");
 
-    if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_URL, request_url))
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
-                        curl_local_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_URL, request_url))
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
 
     /* Make DELETE request */
-    if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_CUSTOMREQUEST, "DELETE"))
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, "DELETE"))
         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP DELETE request: %s",
-                        curl_local_err_buf);
+                        curl_err_buf);
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Deleting object at URL: %s\n\n", request_url);
 
@@ -3941,12 +3931,17 @@ RV_curl_delete(server_info_t *server_info, const char *request_endpoint, const c
     printf("   \\*************************************/\n\n");
 #endif
 
-    CURL_PERFORM_NO_ERR(curl_local, FAIL);
+    CURL_PERFORM_NO_ERR(curl_handle, FAIL);
 
-    if (CURLE_OK != curl_easy_getinfo(curl_local, CURLINFO_RESPONSE_CODE, &ret_value))
+    if (CURLE_OK != curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &ret_value))
         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTGET, ret_value, "can't get HTTP response code");
 
 done:
+
+    /* Reset custom request */
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_CUSTOMREQUEST, NULL))
+        FUNC_DONE_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf);
+
     if (host_header)
         RV_free(host_header);
 
@@ -3955,31 +3950,22 @@ done:
         curl_headers_local = NULL;
     }
 
-    if (curl_local) {
-        curl_easy_cleanup(curl_local);
-    }
-
     return ret_value;
 }
 
 /* Helper function to perform a PUT request to an endpoint on a server.
  * Request endpoint must contain a leading slash. */
 long
-RV_curl_put(server_info_t *server_info, const char *request_endpoint, const char *filename,
+RV_curl_put(CURL *curl_handle, server_info_t *server_info, const char *request_endpoint, const char *filename,
             upload_info *uinfo, content_type_t content_type)
 {
     long   ret_value       = FAIL;
-    CURL  *curl_local      = NULL;
     size_t host_header_len = 0;
 
-    char               curl_local_err_buf[CURL_ERROR_SIZE];
     char              *host_header = NULL;
     char               request_url[URL_MAX_LENGTH];
     int                url_len            = 0;
     struct curl_slist *curl_headers_local = NULL;
-
-    if ((curl_local = RV_curl_setup_handle(server_info, curl_local_err_buf)) == NULL)
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTCREATE, FAIL, "can't create curl handle");
 
     /* Setup the host header */
     host_header_len = strlen(filename) + strlen(host_string) + 1;
@@ -4017,25 +4003,28 @@ RV_curl_put(server_info_t *server_info, const char *request_endpoint, const char
         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_SYSERRSTR, FAIL,
                         "H5Adelete(_by_name) request URL exceeded maximum URL size");
 
-    if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_HTTPHEADER, curl_headers_local))
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
-                        curl_local_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_UPLOAD, 1))
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, curl_headers_local))
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1))
         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s",
-                        curl_local_err_buf);
+                        curl_err_buf);
+
+    /* Provide information for upload */
     if (uinfo) {
-        if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_READDATA, uinfo))
-            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s",
-                            curl_local_err_buf);
+        if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_READDATA, uinfo))
+            FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf);
         if (CURLE_OK !=
-            curl_easy_setopt(curl_local, CURLOPT_INFILESIZE_LARGE, (curl_off_t)uinfo->buffer_size))
+            curl_easy_setopt(curl_handle, CURLOPT_INFILESIZE_LARGE, (curl_off_t)uinfo->buffer_size))
             FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s",
-                            curl_local_err_buf);
+                            curl_err_buf);
+    }
+    else {
+        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)0))
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL upload size: %s", curl_err_buf);
     }
 
-    if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_URL, request_url))
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
-                        curl_local_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_URL, request_url))
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("   /**********************************\\\n");
@@ -4043,11 +4032,15 @@ RV_curl_put(server_info_t *server_info, const char *request_endpoint, const char
     printf("   \\**********************************/\n\n");
 #endif
 
-    CURL_PERFORM_NO_ERR(curl_local, FAIL);
+    CURL_PERFORM_NO_ERR(curl_handle, FAIL);
 
-    if (CURLE_OK != curl_easy_getinfo(curl_local, CURLINFO_RESPONSE_CODE, &ret_value))
+    if (CURLE_OK != curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &ret_value))
         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTGET, ret_value, "can't get HTTP response code");
+
 done:
+
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 0))
+        FUNC_DONE_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't unset cURL PUT option: %s", curl_err_buf);
 
     if (host_header)
         RV_free(host_header);
@@ -4056,9 +4049,6 @@ done:
         curl_slist_free_all(curl_headers_local);
         curl_headers_local = NULL;
     }
-
-    if (curl_local)
-        curl_easy_cleanup(curl_local);
 
     return ret_value;
 }
@@ -4066,21 +4056,16 @@ done:
 /* Helper function to perform a GET request to an endpoint on a server.
  * Request endpoint must contain a leading slash. */
 long
-RV_curl_get(server_info_t *server_info, const char *request_endpoint, const char *filename,
+RV_curl_get(CURL *curl_handle, server_info_t *server_info, const char *request_endpoint, const char *filename,
             content_type_t content_type)
 {
     herr_t ret_value       = FAIL;
-    CURL  *curl_local      = NULL;
     size_t host_header_len = 0;
 
-    char               curl_local_err_buf[CURL_ERROR_SIZE];
     char              *host_header = NULL;
     char               request_url[URL_MAX_LENGTH];
     int                url_len            = 0;
     struct curl_slist *curl_headers_local = NULL;
-
-    if ((curl_local = RV_curl_setup_handle(server_info, curl_local_err_buf)) == NULL)
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTCREATE, FAIL, "can't create curl handle");
 
     /* Setup the host header */
     host_header_len = strlen(filename) + strlen(host_string) + 1;
@@ -4116,16 +4101,14 @@ RV_curl_get(server_info_t *server_info, const char *request_endpoint, const char
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_SYSERRSTR, FAIL, "cURL GET request URL exceeded maximum URL size");
 
-    if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_HTTPHEADER, curl_headers_local))
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
-                        curl_local_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_HTTPGET, 1))
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, curl_headers_local))
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_HTTPGET, 1))
         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s",
-                        curl_local_err_buf);
+                        curl_err_buf);
 
-    if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_URL, request_url))
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
-                        curl_local_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_URL, request_url))
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("   /**********************************\\\n");
@@ -4133,12 +4116,17 @@ RV_curl_get(server_info_t *server_info, const char *request_endpoint, const char
     printf("   \\**********************************/\n\n");
 #endif
 
-    CURL_PERFORM_NO_ERR(curl_local, FAIL);
+    CURL_PERFORM_NO_ERR(curl_handle, FAIL);
 
-    if (CURLE_OK != curl_easy_getinfo(curl_local, CURLINFO_RESPONSE_CODE, &ret_value))
+    if (CURLE_OK != curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &ret_value))
         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTGET, FAIL, "can't get HTTP response code");
 
 done:
+
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_HTTPGET, 0))
+        FUNC_DONE_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s",
+                        curl_err_buf);
+
     if (host_header)
         RV_free(host_header);
 
@@ -4147,31 +4135,23 @@ done:
         curl_headers_local = NULL;
     }
 
-    if (curl_local)
-        curl_easy_cleanup(curl_local);
-
     return ret_value;
 }
 
 /* Helper function to perform a POST request to an endpoint on a server.
  * Request endpoint must contain a leading slash. */
 long
-RV_curl_post(server_info_t *server_info, const char *request_endpoint, const char *filename,
-             const char *post_data, size_t data_size, content_type_t content_type)
+RV_curl_post(CURL *curl_handle, server_info_t *server_info, const char *request_endpoint,
+             const char *filename, const char *post_data, size_t data_size, content_type_t content_type)
 {
     herr_t ret_value       = FAIL;
-    CURL  *curl_local      = NULL;
     size_t host_header_len = 0;
 
-    char               curl_local_err_buf[CURL_ERROR_SIZE];
     char              *host_header = NULL;
     char               request_url[URL_MAX_LENGTH];
     int                url_len            = 0;
     struct curl_slist *curl_headers_local = NULL;
     curl_off_t         _data_size;
-
-    if ((curl_local = RV_curl_setup_handle(server_info, curl_local_err_buf)) == NULL)
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTCREATE, FAIL, "can't create curl handle");
 
     /* Setup the host header */
     host_header_len = strlen(filename) + strlen(host_string) + 1;
@@ -4207,14 +4187,13 @@ RV_curl_post(server_info_t *server_info, const char *request_endpoint, const cha
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_SYSERRSTR, FAIL, "cURL GET request URL exceeded maximum URL size");
 
-    if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_HTTPHEADER, curl_headers_local))
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
-                        curl_local_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_POST, 1))
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s",
-                        curl_local_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_POSTFIELDS, post_data))
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL POST data: %s", curl_local_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, curl_headers_local))
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_POST, 1))
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP POST request: %s",
+                        curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, post_data))
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL POST data: %s", curl_err_buf);
 
     /* Make sure that the size of the create request HTTP body can safely be cast to a curl_off_t */
     if (sizeof(curl_off_t) < sizeof(size_t))
@@ -4224,13 +4203,11 @@ RV_curl_post(server_info_t *server_info, const char *request_endpoint, const cha
     else
         ASSIGN_TO_SAME_SIZE_UNSIGNED_TO_SIGNED(_data_size, curl_off_t, data_size, size_t)
 
-    if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_POSTFIELDSIZE_LARGE, _data_size))
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL POST data size: %s",
-                        curl_local_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDSIZE_LARGE, _data_size))
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL POST data size: %s", curl_err_buf);
 
-    if (CURLE_OK != curl_easy_setopt(curl_local, CURLOPT_URL, request_url))
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
-                        curl_local_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_URL, request_url))
+        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("   /**********************************\\\n");
@@ -4238,12 +4215,16 @@ RV_curl_post(server_info_t *server_info, const char *request_endpoint, const cha
     printf("   \\**********************************/\n\n");
 #endif
 
-    CURL_PERFORM_NO_ERR(curl_local, FAIL);
+    CURL_PERFORM_NO_ERR(curl_handle, FAIL);
 
-    if (CURLE_OK != curl_easy_getinfo(curl_local, CURLINFO_RESPONSE_CODE, &ret_value))
+    if (CURLE_OK != curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &ret_value))
         FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTGET, ret_value, "can't get HTTP response code");
 
 done:
+
+    if (CURLE_OK != curl_easy_setopt(curl_handle, CURLOPT_POST, 0))
+        FUNC_DONE_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't unset cURL POST request: %s", curl_err_buf);
+
     if (host_header)
         RV_free(host_header);
 
@@ -4252,74 +4233,5 @@ done:
         curl_headers_local = NULL;
     }
 
-    if (curl_local)
-        curl_easy_cleanup(curl_local);
-
     return ret_value;
-}
-
-/* Helper function that creates and sets some fields on a cURL handle. */
-CURL *
-RV_curl_setup_handle(server_info_t *server_info, char *err_buf)
-{
-    CURL                   *new_curl_handle = NULL;
-    curl_version_info_data *curl_ver        = NULL;
-    char                    user_agent[128] = {'\0'};
-    herr_t                  ret_value       = SUCCEED;
-
-    /* Initialize cURL */
-    if (!H5_rest_curl_initialized_g && (CURLE_OK != curl_global_init(CURL_GLOBAL_ALL)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't initialize cURL");
-
-    H5_rest_curl_initialized_g = true;
-
-    if (NULL == (new_curl_handle = curl_easy_init()))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't initialize cURL easy handle");
-
-    /* Instruct cURL to use the buffer for error messages */
-    if (CURLE_OK != curl_easy_setopt(new_curl_handle, CURLOPT_ERRORBUFFER, err_buf))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL error buffer");
-
-    /* Allocate buffer for cURL to write responses to */
-    /* TODO - For now this is still global. Have the local handles share the global buffer. */
-
-    /*
-    if (NULL == (response_buffer.buffer = (char *)RV_malloc(CURL_RESPONSE_BUFFER_DEFAULT_SIZE)))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL, "can't allocate cURL response buffer");
-    response_buffer.buffer_size  = CURL_RESPONSE_BUFFER_DEFAULT_SIZE;
-    response_buffer.curr_buf_ptr = response_buffer.buffer;
-    */
-
-    /* Redirect cURL output to response buffer */
-    if (CURLE_OK !=
-        curl_easy_setopt(new_curl_handle, CURLOPT_WRITEFUNCTION, H5_rest_curl_write_data_callback))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL write function: %s", err_buf);
-
-    /* Set cURL read function for UPLOAD operations */
-    if (CURLE_OK != curl_easy_setopt(new_curl_handle, CURLOPT_READFUNCTION, H5_rest_curl_read_data_callback))
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL read function: %s", err_buf);
-
-    /* Set user agent string */
-    curl_ver = curl_version_info(CURLVERSION_NOW);
-    if (snprintf(user_agent, sizeof(user_agent), "libhdf5/%d.%d.%d (%s; %s v%s)", H5_VERS_MAJOR,
-                 H5_VERS_MINOR, H5_VERS_RELEASE, curl_ver->host, HDF5_VOL_REST_LIB_NAME,
-                 HDF5_VOL_REST_LIB_VER) < 0) {
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_SYSERRSTR, FAIL, "error creating user agent string");
-    }
-
-    if (CURLE_OK != curl_easy_setopt(new_curl_handle, CURLOPT_USERAGENT, user_agent))
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "error while setting CURL option (CURLOPT_USERAGENT)");
-
-    if (CURLE_OK != curl_easy_setopt(new_curl_handle, CURLOPT_USERNAME, server_info->username))
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL username: %s", err_buf);
-    if (CURLE_OK != curl_easy_setopt(new_curl_handle, CURLOPT_PASSWORD, server_info->password))
-        FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_CANTSET, FAIL, "can't set cURL password: %s", err_buf);
-
-done:
-    if (ret_value < 0) {
-        curl_easy_cleanup(new_curl_handle);
-        new_curl_handle = NULL;
-    }
-
-    return new_curl_handle;
 }

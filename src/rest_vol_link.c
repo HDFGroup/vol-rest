@@ -323,7 +323,7 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
     uinfo.bytes_sent  = 0;
 
     // TODO - Check this uses right filename for external links
-    http_response = RV_curl_put(&new_link_loc_obj->domain->u.file.server_info, request_endpoint,
+    http_response = RV_curl_put(curl, &new_link_loc_obj->domain->u.file.server_info, request_endpoint,
                                 new_link_loc_obj->domain->u.file.filepath_name, &uinfo, CONTENT_TYPE_JSON);
 
     if (!HTTP_SUCCESS(http_response))
@@ -507,7 +507,7 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
             } /* end switch */
 
             /* Make a GET request to the server to retrieve the number of attributes attached to the object */
-            if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+            if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                             loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get link");
 
@@ -568,7 +568,7 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
                                 "H5Lget_name_by_idx request URL size exceeded maximum URL size");
 
             /* Make a GET request to the server to retrieve all of the links in the given group */
-            if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+            if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                             loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get link");
 
@@ -653,7 +653,7 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
             } /* end switch */
 
             /* Make a GET request to the server to retrieve the number of attributes attached to the object */
-            if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+            if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                             loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get link");
 
@@ -783,7 +783,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "invalid loc_params type");
             } /* end switch */
 
-            http_response = RV_curl_delete(&loc_obj->domain->u.file.server_info, request_endpoint,
+            http_response = RV_curl_delete(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                                            (const char *)loc_obj->domain->u.file.filepath_name);
 
             if (!HTTP_SUCCESS(http_response))
@@ -831,7 +831,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                 "H5Lexists request URL size exceeded maximum URL size");
 
-            http_response = RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+            http_response = RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                                         loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON);
             *ret          = HTTP_SUCCESS(http_response);
 
@@ -942,7 +942,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
             link_iter_data.iter_obj_id = link_iter_group_id;
 
             /* Make a GET request to the server to retrieve all of the links in the given group */
-            if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+            if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                             loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get link");
 
@@ -1720,7 +1720,7 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                         "link GET request URL size exceeded maximum URL size");
 
-                    if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+                    if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                                     loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get link");
 

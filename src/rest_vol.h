@@ -756,13 +756,14 @@ herr_t RV_curl_multi_perform(CURL *curl_multi_ptr, dataset_transfer_info *transf
                                                       struct response_buffer resp_buffer));
 
 /* Helper functions for cURL requests to the server */
-long RV_curl_delete(server_info_t *server_info, const char *request_endpoint, const char *filename);
-long RV_curl_put(server_info_t *server_info, const char *request_endpoint, const char *filename,
-                 upload_info *uinfo, content_type_t content_type);
-long RV_curl_get(server_info_t *server_info, const char *request_endpoint, const char *filename,
-                 content_type_t content_type);
-long RV_curl_post(server_info_t *server_info, const char *request_endpoint, const char *filename,
-                  const char *post_data, size_t post_size, content_type_t content_type);
+long RV_curl_delete(CURL *curl_handle, server_info_t *server_info, const char *request_endpoint,
+                    const char *filename);
+long RV_curl_put(CURL *curl_handle, server_info_t *server_info, const char *request_endpoint,
+                 const char *filename, upload_info *uinfo, content_type_t content_type);
+long RV_curl_get(CURL *curl_handle, server_info_t *server_info, const char *request_endpoint,
+                 const char *filename, content_type_t content_type);
+long RV_curl_post(CURL *curl_handle, server_info_t *server_info, const char *request_endpoint,
+                  const char *filename, const char *post_data, size_t post_size, content_type_t content_type);
 
 /* Dtermine if datatype conversion is necessary */
 htri_t RV_need_tconv(hid_t src_type_id, hid_t dst_type_id);

@@ -221,7 +221,7 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
     printf("-> Dataset creation request URL: %s\n\n", request_url);
 #endif
 
-    http_response = RV_curl_post(&new_dataset->domain->u.file.server_info, request_endpoint,
+    http_response = RV_curl_post(curl, &new_dataset->domain->u.file.server_info, request_endpoint,
                                  new_dataset->domain->u.file.filepath_name, (const char *)create_request_body,
                                  create_request_body_len, CONTENT_TYPE_JSON);
 
@@ -1332,7 +1332,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
             /* Make GET request to dataset with 'verbose' parameter for HSDS. */
             snprintf(request_endpoint, URL_MAX_LENGTH, "%s%s%s", "/datasets/", dset->URI, "?verbose=1");
 
-            if (RV_curl_get(&dset->domain->u.file.server_info, request_endpoint,
+            if (RV_curl_get(curl, &dset->domain->u.file.server_info, request_endpoint,
                             dset->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get dataset");
 
