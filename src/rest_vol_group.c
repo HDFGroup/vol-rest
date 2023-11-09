@@ -283,6 +283,10 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     if (RV_parse_response(response_buffer.buffer, NULL, new_group->URI, RV_copy_object_URI_callback) < 0)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTCREATE, NULL, "can't parse new group's URI");
 
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_GROUP]->table, (char *)new_group, (char *)new_group) ==
+        0)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "Failed to add group to type info array");
+
     ret_value = (void *)new_group;
 
 done:
@@ -433,6 +437,9 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
     } /* end if */
     else
         group->u.group.gapl_id = H5P_GROUP_ACCESS_DEFAULT;
+
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_GROUP]->table, (char *)group, (char *)group) == 0)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "Failed to add group to type info array");
 
     ret_value = (void *)group;
 
@@ -708,6 +715,9 @@ RV_group_close(void *grp, hid_t dxpl_id, void **req)
         if (_grp->u.group.gcpl_id != H5P_GROUP_CREATE_DEFAULT && H5Pclose(_grp->u.group.gcpl_id) < 0)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close GCPL");
     } /* end if */
+
+    if (RV_type_info_array_g[H5I_GROUP])
+        rv_hash_table_remove(RV_type_info_array_g[H5I_GROUP]->table, (char *)_grp);
 
     if (RV_file_close(_grp->domain, H5P_DEFAULT, NULL) < 0) {
         FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");
