@@ -39,7 +39,8 @@
  */
 hid_t H5_rest_id_g = H5I_UNINIT;
 
-static hbool_t H5_rest_initialized_g = FALSE;
+static hbool_t H5_rest_initialized_g                 = FALSE;
+static hbool_t H5_rest_connection_info_initialized_g = FALSE;
 
 /* Identifiers for HDF5's error API */
 hid_t H5_rest_err_stack_g                 = H5I_INVALID_HID;
@@ -728,6 +729,9 @@ H5_rest_set_connection_information(void)
     FILE             *config_file = NULL;
     herr_t            ret_value   = SUCCEED;
 
+    if (H5_rest_connection_info_initialized_g)
+        FUNC_GOTO_DONE(SUCCEED);
+
     memset(&ad_info, 0, sizeof(ad_info));
 
     /*
@@ -960,6 +964,7 @@ H5_rest_set_connection_information(void)
                         "must specify a base URL - please set HSDS_ENDPOINT environment variable or create a "
                         "config file");
 
+    H5_rest_connection_info_initialized_g = TRUE;
 done:
     if (config_file)
         fclose(config_file);
