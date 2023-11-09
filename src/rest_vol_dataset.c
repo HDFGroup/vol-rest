@@ -1417,9 +1417,7 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
     char        *request_body_shape = NULL;
     char         request_url[URL_MAX_LENGTH];
     int          url_len       = 0;
-    hid_t        dspace_id     = H5I_INVALID_HID;
     hid_t        new_dspace_id = H5I_INVALID_HID;
-    hid_t        dcpl_id       = H5I_INVALID_HID;
     hsize_t     *old_extent    = NULL;
     hsize_t     *maxdims       = NULL;
     upload_info  uinfo;
@@ -1451,45 +1449,8 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
 
             new_extent = args->args.set_extent.size;
 
-            /* Assemble curl request */
-            if ((url_len =
-                     snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/shape", base_URL, dset->URI)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
-                                "H5Dset_extent request URL size exceeded maximum URL size");
-
-            /* Setup the host header */
-            host_header_len = strlen(dset->domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
-
-            strcpy(host_header, host_string);
-
-            curl_headers =
-                curl_slist_append(curl_headers, strncat(host_header, dset->domain->u.file.filepath_name,
-                                                        host_header_len - strlen(host_string) - 1));
-
-            /* Disable use of Expect: 100 Continue HTTP response */
-            curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-            /* First, make a GET request for the dataset's dataspace to do some checks */
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
-                                curl_err_buf);
-
-            CURL_PERFORM(curl, H5E_DATASET, H5E_CANTGET, FAIL);
-
-            if ((dspace_id = RV_parse_dataspace(response_buffer.buffer)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "failed to parse dataspace");
-
-            if ((ndims = H5Sget_simple_extent_ndims(dspace_id)) < 0)
+            /* Do some checks on the dataspace before changing extent */
+            if ((ndims = H5Sget_simple_extent_ndims(dset->u.dataset.space_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "failed to get number of dataset dimensions");
 
             if ((old_extent = calloc((size_t)ndims, sizeof(hssize_t))) == NULL)
@@ -1500,7 +1461,7 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
                                 "failed to allocate memory for dataset max shape");
 
-            if (H5Sget_simple_extent_dims(dspace_id, old_extent, maxdims) < 0)
+            if (H5Sget_simple_extent_dims(dset->u.dataset.space_id, old_extent, maxdims) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "failed to get dataset dimensions");
 
             for (size_t i = 0; i < (size_t)ndims; i++)
@@ -1508,29 +1469,7 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
                                     "new dataset dimensions exceed maximum dimensions");
 
-            /* Make request to dataset to check layout in DCPL */
-
-            memset(request_url, 0, URL_MAX_LENGTH);
-
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL, dset->URI)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
-                                "H5Dset_extent request URL size exceeded maximum URL size");
-
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-            CURL_PERFORM(curl, H5E_DATASET, H5E_CANTGET, FAIL);
-
-            if ((dcpl_id = H5Pcreate(H5P_DATASET_CREATE)) < 0)
-                FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, FAIL, "can't create DCPL for dataset");
-
-            if (RV_parse_dataset_creation_properties_callback(response_buffer.buffer, NULL, &dcpl_id) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "can't parse DCPL of dataset");
-
-            if ((layout = H5Pget_layout(dcpl_id)) < 0)
+            if ((layout = H5Pget_layout(dset->u.dataset.dcpl_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_PLIST, FAIL, "can't get layout from DCPL");
 
             if (layout != H5D_CHUNKED)
@@ -1594,6 +1533,22 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
             /* Target dataset's shape URL */
             memset(request_url, 0, URL_MAX_LENGTH);
 
+            /* Set up curl request */
+            host_header_len = strlen(dset->domain->u.file.filepath_name) + strlen(host_string) + 1;
+            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
+
+            strcpy(host_header, host_string);
+
+            curl_headers =
+                curl_slist_append(curl_headers, strncat(host_header, dset->domain->u.file.filepath_name,
+                                                        host_header_len - strlen(host_string) - 1));
+
+            curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
+
             if ((url_len =
                      snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/shape", base_URL, dset->URI)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
@@ -1616,7 +1571,6 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
                 curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)strlen(request_body)))
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s",
                                 curl_err_buf);
-
             CURL_PERFORM(curl, H5E_DATASET, H5E_CANTGET, FAIL);
 
             /* Modify local dataspace to match version on server */
@@ -1655,14 +1609,8 @@ done:
         curl_headers = NULL;
     }
 
-    if (dspace_id != H5I_INVALID_HID)
-        H5Sclose(dspace_id);
-
     if ((ret_value < 0) && (new_dspace_id != H5I_INVALID_HID))
         H5Sclose(new_dspace_id);
-
-    if (dcpl_id > 0)
-        H5Pclose(dcpl_id);
 
     RV_free(old_extent);
     RV_free(request_body);
