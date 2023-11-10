@@ -629,11 +629,16 @@ H5_rest_term(void)
     } /* end if */
 
     /* Cleanup type info array */
-    for (size_t i = 0; i < H5I_MAX_NUM_TYPES; i++) {
-        rv_hash_table_free(RV_type_info_array_g[i]->table);
-        RV_free(RV_type_info_array_g[i]);
-        RV_type_info_array_g[i] = NULL;
+    if (RV_type_info_array_g) {
+        for (size_t i = 0; i < H5I_MAX_NUM_TYPES; i++) {
+            if (RV_type_info_array_g[i]) {
+                rv_hash_table_free(RV_type_info_array_g[i]->table);
+                RV_free(RV_type_info_array_g[i]);
+                RV_type_info_array_g[i] = NULL;
+            }
+        }
     }
+
     /*
      * "Forget" connector ID. This should normally be called by the library
      * when it is closing the id, so no need to close it here.
