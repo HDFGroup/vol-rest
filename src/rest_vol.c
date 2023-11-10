@@ -39,8 +39,7 @@
  */
 hid_t H5_rest_id_g = H5I_UNINIT;
 
-static hbool_t H5_rest_initialized_g                 = FALSE;
-static hbool_t H5_rest_connection_info_initialized_g = FALSE;
+static hbool_t H5_rest_initialized_g = FALSE;
 
 /* Identifiers for HDF5's error API */
 hid_t H5_rest_err_stack_g                 = H5I_INVALID_HID;
@@ -729,7 +728,7 @@ H5_rest_set_connection_information(void)
     FILE             *config_file = NULL;
     herr_t            ret_value   = SUCCEED;
 
-    if (H5_rest_connection_info_initialized_g)
+    if (base_URL)
         FUNC_GOTO_DONE(SUCCEED);
 
     memset(&ad_info, 0, sizeof(ad_info));
@@ -746,21 +745,11 @@ H5_rest_set_connection_information(void)
             URL     = "0";
             URL_len = 1;
 
-            if (!base_URL || (0 != (strncmp(base_URL, URL, strlen(URL))))) {
+            if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
+                                "can't allocate space necessary for placeholder base URL");
 
-                /* If previous value is incorrect, reassign */
-                if (base_URL) {
-                    free(base_URL);
-                    base_URL = NULL;
-                }
-
-                if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
-                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
-                                    "can't allocate space necessary for placeholder base URL");
-
-                strncpy(base_URL, URL, URL_len);
-                base_URL[URL_len] = '\0';
-            }
+            strcpy(base_URL, URL);
         }
         else {
             /*
@@ -770,21 +759,11 @@ H5_rest_set_connection_information(void)
              */
             URL_len = strlen(URL);
 
-            if (!base_URL || (0 != (strncmp(base_URL, URL, strlen(URL))))) {
+            if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
+                FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
+                                "can't allocate space necessary for placeholder base URL");
 
-                /* If previous value is incorrect, reassign */
-                if (base_URL) {
-                    free(base_URL);
-                    base_URL = NULL;
-                }
-
-                if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
-                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
-                                    "can't allocate space necessary for placeholder base URL");
-
-                strncpy(base_URL, URL, URL_len);
-                base_URL[URL_len] = '\0';
-            }
+            strcpy(base_URL, URL);
         }
 
         const char *username = getenv("HSDS_USERNAME");
@@ -903,21 +882,11 @@ H5_rest_set_connection_information(void)
                      */
                     URL_len = strlen(val);
 
-                    if (!base_URL || (0 != (strncmp(base_URL, val, URL_len)))) {
+                    if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
+                        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space necessary for placeholder base URL");
 
-                        /* If previous value is incorrect, reassign */
-                        if (base_URL) {
-                            free(base_URL);
-                            base_URL = NULL;
-                        }
-
-                        if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
-                            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
-                                            "can't allocate space necessary for placeholder base URL");
-
-                        strncpy(base_URL, val, URL_len);
-                        base_URL[URL_len] = '\0';
-                    }
+                    strcpy(base_URL, val);
 
                 } /* end if */
             }     /* end if */
@@ -964,7 +933,6 @@ H5_rest_set_connection_information(void)
                         "must specify a base URL - please set HSDS_ENDPOINT environment variable or create a "
                         "config file");
 
-    H5_rest_connection_info_initialized_g = TRUE;
 done:
     if (config_file)
         fclose(config_file);
