@@ -99,7 +99,7 @@ typedef struct H5_rest_ad_info_t {
 } H5_rest_ad_info_t;
 
 /* Global array containing information about open objects */
-RV_type_info *RV_type_info_array_g[H5I_MAX_NUM_TYPES];
+RV_type_info *RV_type_info_array_g[H5I_MAX_NUM_TYPES] = {0};
 
 /* Host header string for specifying the host (Domain) for requests */
 const char *const host_string = "X-Hdf-domain: ";
