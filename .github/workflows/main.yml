@@ -73,8 +73,8 @@ jobs:
       - name: Autotools Configure REST VOL
         run: |
           ./autogen.sh
-          mkdir ${{github.workspace}}/rest_vol_install
-          CFLAGS="-D_POSIX_C_SOURCE=200809L" ./configure --prefix=${{github.workspace}}/rest_vol_install --with-hdf5=${{github.workspace}}/hdf5install
+          mkdir ${{github.workspace}}/vol-rest/install
+          CFLAGS="-D_POSIX_C_SOURCE=200809L" ./configure --prefix=${{github.workspace}}/vol-rest/install --with-hdf5=${{github.workspace}}/hdf5install
         shell: bash
         working-directory: ${{github.workspace}}/vol-rest
 
@@ -85,22 +85,9 @@ jobs:
         shell: bash
         working-directory: ${{github.workspace}}/vol-rest/
 
-      - uses: actions/cache/restore@v3
-        with:
-          key: hsds
-          path: ${{github.workspace}}/hsds
-        id: hsds-restore
-        
       - uses: actions/checkout@v3
-        if: ${{!steps.hsds-restore.outputs.cache-hit}}
         with:
           repository: HDFGroup/hsds
-          path: ${{github.workspace}}/hsds
-          
-      - uses: actions/cache/save@v3
-        if: ${{!steps.hsds-restore.outputs.cache-hit}}
-        with:          
-          key: hsds
           path: ${{github.workspace}}/hsds
           
       - name: Set up Python ${{ matrix.python-version }}
@@ -156,7 +143,7 @@ jobs:
       - name: Test REST VOL
         working-directory: ${{github.workspace}}/vol-rest/
         run: |
-              HDF5_PLUGIN_PATH=${{github.workspace}}/rest_vol_install/lib HDF5_VOL_CONNECTOR=REST ./test/test_rest_vol
+              HDF5_PLUGIN_PATH=${{github.workspace}}/vol-rest/install/lib HDF5_VOL_CONNECTOR=REST ./test/test_rest_vol
 
   build_and_test_with_cmake:
     strategy:
@@ -219,22 +206,9 @@ jobs:
         shell: bash
         working-directory: ${{github.workspace}}/vol-rest/build
 
-      - uses: actions/cache/restore@v3
-        with:
-          key: hsds
-          path: ${{github.workspace}}/hsds
-        id: hsds-restore
-        
       - uses: actions/checkout@v3
-        if: ${{!steps.hsds-restore.outputs.cache-hit}}
         with:
           repository: HDFGroup/hsds
-          path: ${{github.workspace}}/hsds
-          
-      - uses: actions/cache/save@v3
-        if: ${{!steps.hsds-restore.outputs.cache-hit}}
-        with:          
-          key: hsds
           path: ${{github.workspace}}/hsds
           
       - name: Set up Python ${{ matrix.python-version }}
@@ -290,6 +264,7 @@ jobs:
       - name: Set HDF5 Plugin path
         run: |
               echo "HDF5_PLUGIN_PATH=${{github.workspace}}/vol-rest/build/bin/" >> $GITHUB_ENV
+              echo "HDF5_VOL_CONNECTOR=REST" >> $GITHUB_ENV
 
       - name: Test REST VOL
         working-directory: ${{github.workspace}}/vol-rest/build/
@@ -379,23 +354,10 @@ jobs:
           sudo apt update
           sudo apt install valgrind
         working-directory: ${{ github.workspace }}
-          
-      - uses: actions/cache/restore@v3
-        with:
-          key: hsds
-          path: ${{github.workspace}}/hsds
-        id: hsds-restore
         
       - uses: actions/checkout@v3
-        if: ${{!steps.hsds-restore.outputs.cache-hit}}
         with:
           repository: HDFGroup/hsds
-          path: ${{github.workspace}}/hsds
-          
-      - uses: actions/cache/save@v3
-        if: ${{!steps.hsds-restore.outputs.cache-hit}}
-        with:          
-          key: hsds
           path: ${{github.workspace}}/hsds
           
       - name: Set up Python ${{ matrix.python-version }}
