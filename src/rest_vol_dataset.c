@@ -1623,8 +1623,8 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
 
-            if ((url_len =
-                     snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/shape", dset->domain->u.file.server_info.base_URL, dset->URI)) < 0)
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/shape",
+                                    dset->domain->u.file.server_info.base_URL, dset->URI)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
             if (url_len >= URL_MAX_LENGTH)
