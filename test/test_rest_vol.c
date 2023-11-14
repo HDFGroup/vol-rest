@@ -446,21 +446,23 @@ char filename[FILENAME_MAX_LENGTH];
 #define LINK_DELETE_TEST_DSET_NAME1          "link_delete_test_dset1"
 #define LINK_DELETE_TEST_DSET_NAME2          "link_delete_test_dset2"
 
-#define COPY_LINK_TEST_SOFT_LINK_TARGET_PATH "/" COPY_LINK_TEST_GROUP_NAME "/" COPY_LINK_TEST_DSET_NAME
-#define COPY_LINK_TEST_HARD_LINK_COPY_NAME   "hard_link_to_dset_copy"
-#define COPY_LINK_TEST_SOFT_LINK_COPY_NAME   "soft_link_to_dset_copy"
-#define COPY_LINK_TEST_HARD_LINK_NAME        "hard_link_to_dset"
-#define COPY_LINK_TEST_SOFT_LINK_NAME        "soft_link_to_dset"
-#define COPY_LINK_TEST_GROUP_NAME            "link_copy_test_group"
-#define COPY_LINK_TEST_DSET_NAME             "link_copy_test_dset"
-#define COPY_LINK_TEST_DSET_SPACE_RANK       2
+#define COPY_LINK_TEST_SOFT_LINK_TARGET_PATH                                                                 \
+    "/" LINK_TEST_GROUP_NAME "/" COPY_LINK_TEST_GROUP_NAME "/" COPY_LINK_TEST_DSET_NAME
+#define COPY_LINK_TEST_HARD_LINK_COPY_NAME "hard_link_to_dset_copy"
+#define COPY_LINK_TEST_SOFT_LINK_COPY_NAME "soft_link_to_dset_copy"
+#define COPY_LINK_TEST_HARD_LINK_NAME      "hard_link_to_dset"
+#define COPY_LINK_TEST_SOFT_LINK_NAME      "soft_link_to_dset"
+#define COPY_LINK_TEST_GROUP_NAME          "link_copy_test_group"
+#define COPY_LINK_TEST_DSET_NAME           "link_copy_test_dset"
+#define COPY_LINK_TEST_DSET_SPACE_RANK     2
 
-#define MOVE_LINK_TEST_SOFT_LINK_TARGET_PATH "/" MOVE_LINK_TEST_GROUP_NAME "/" MOVE_LINK_TEST_DSET_NAME
-#define MOVE_LINK_TEST_HARD_LINK_NAME        "hard_link_to_dset"
-#define MOVE_LINK_TEST_SOFT_LINK_NAME        "soft_link_to_dset"
-#define MOVE_LINK_TEST_GROUP_NAME            "link_move_test_group"
-#define MOVE_LINK_TEST_DSET_NAME             "link_move_test_dset"
-#define MOVE_LINK_TEST_DSET_SPACE_RANK       2
+#define MOVE_LINK_TEST_SOFT_LINK_TARGET_PATH                                                                 \
+    "/" LINK_TEST_GROUP_NAME "/" MOVE_LINK_TEST_GROUP_NAME "/" MOVE_LINK_TEST_DSET_NAME
+#define MOVE_LINK_TEST_HARD_LINK_NAME  "hard_link_to_dset"
+#define MOVE_LINK_TEST_SOFT_LINK_NAME  "soft_link_to_dset"
+#define MOVE_LINK_TEST_GROUP_NAME      "link_move_test_group"
+#define MOVE_LINK_TEST_DSET_NAME       "link_move_test_dset"
+#define MOVE_LINK_TEST_DSET_SPACE_RANK 2
 
 #define GET_LINK_INFO_TEST_DSET_SPACE_RANK 2
 #define GET_LINK_INFO_TEST_SUBGROUP_NAME   "get_link_info_test"
@@ -884,7 +886,6 @@ static int (**tests[])(void) = {
     setup_tests, file_tests, group_tests,  attribute_tests, dataset_tests,
     link_tests,  type_tests, object_tests, misc_tests,
 };
-
 /*****************************************************
  *                                                   *
  *      Plugin initialization/termination tests      *
@@ -15393,7 +15394,12 @@ test_object_visit(void)
         if (H5Ovisit3(container_group, H5_INDEX_NAME, H5_ITER_INC, object_visit_callback, NULL,
                       H5O_INFO_ALL) < 0) {
             H5_FAILED();
-            printf("    H5Ovisit failed!\n");
+            printf("    H5Ovisit using container_group failed!\n");
+            goto error;
+        }
+        if (H5Ovisit(file_id, H5_INDEX_NAME, H5_ITER_DEC, object_visit_callback, NULL, H5O_INFO_ALL) < 0) {
+            H5_FAILED();
+            printf("    H5Ovisit using file_id failed!\n");
             goto error;
         }
 
