@@ -593,7 +593,12 @@ typedef struct dataset_transfer_info {
     hid_t        mem_type_id;
     hid_t        mem_space_id;
     hid_t        file_space_id;
+    hid_t        file_type_id;
     char        *selection_body;
+
+    /* Fields for type conversion */
+    void *tconv_buf;
+    void *bkg_buf;
 
     transfer_type_t transfer_type;
 
@@ -654,6 +659,13 @@ typedef struct loc_info {
     char        *GCPL_base64;
     RV_object_t *domain;
 } loc_info;
+
+/* Enum to indicate if the supplied read buffer can be used as a type conversion or background buffer */
+typedef enum {
+    RV_TCONV_REUSE_NONE,  /* Cannot reuse buffer */
+    RV_TCONV_REUSE_TCONV, /* Use buffer as type conversion buffer */
+    RV_TCONV_REUSE_BKG    /* Use buffer as background buffer */
+} RV_tconv_reuse_t;
 
 /****************************
  *                          *
@@ -730,8 +742,16 @@ void RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
  * and waits until all requests on it have finished before returning. */
 herr_t RV_curl_multi_perform(CURL *curl_multi_ptr, dataset_transfer_info *transfer_info, size_t count,
                              herr_t(success_callback)(hid_t mem_type_id, hid_t mem_space_id,
-                                                      hid_t file_space_id, void *buf,
+                                                      hid_t file_type_id, hid_t file_space_id, void *buf,
                                                       struct response_buffer resp_buffer));
+
+/* Dtermine if datatype conversion is necessary */
+htri_t RV_need_tconv(hid_t src_type_id, hid_t dst_type_id);
+
+/* Initialize variables and buffers used for type conversion */
+herr_t RV_tconv_init(hid_t src_type_id, size_t *src_type_size, hid_t dst_type_id, size_t *dst_type_size,
+                     size_t num_elem, hbool_t clear_tconv_buf, hbool_t dst_file, void **tconv_buf,
+                     void **bkg_buf, RV_tconv_reuse_t *reuse, hbool_t *fill_bkg);
 
 #define SERVER_VERSION_MATCHES_OR_EXCEEDS(version, major_needed, minor_needed, patch_needed)                 \
     (version.major > major_needed) || (version.major == major_needed && version.minor > minor_needed) ||     \
