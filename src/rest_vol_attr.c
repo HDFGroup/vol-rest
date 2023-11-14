@@ -2887,20 +2887,20 @@ done:
             case H5I_FILE:
             case H5I_GROUP:
                 if (RV_group_close((void *)attr_parent, H5P_DEFAULT, NULL) < 0)
-                    FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTCLOSEOBJ, FAIL, "can't close parent group");
+                    FUNC_DONE_ERROR(H5E_SYM, H5E_CANTCLOSEOBJ, FAIL, "can't close parent group");
                 break;
 
             case H5I_DATASET:
                 if (RV_dataset_close((void *)attr_parent, H5P_DEFAULT, NULL) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, FAIL, "can't close parent dataset");
+                    FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, FAIL, "can't close parent dataset");
                 break;
 
             case H5I_DATATYPE:
                 if (RV_datatype_close((void *)attr_parent, H5P_DEFAULT, NULL) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close parent datatype");
+                    FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close parent datatype");
 
             default:
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
+                FUNC_DONE_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
                                 "attribute's parent object is not group, dataset, or datatype");
                 break;
         }
