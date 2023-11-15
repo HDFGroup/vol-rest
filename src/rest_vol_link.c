@@ -121,10 +121,10 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
             new_link_loc_obj = (RV_object_t *)hard_link_target_obj;
     } /* end if */
 
-    if (new_link_loc_obj && ((base_URL = new_link_loc_obj->domain->u.file.server_info.base_URL) == NULL))
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "location object does not have valid server URL");
+    if (!new_link_loc_obj)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link location object is NULL");
 
-    if (!base_URL)
+    if ((base_URL = new_link_loc_obj->domain->u.file.server_info.base_URL) == NULL)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link creation requires valid server URL");
 
     /* Validate loc_id and check for write access on the file */
