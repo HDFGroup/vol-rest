@@ -353,7 +353,7 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
     printf("-> Created attribute\n\n");
 #endif
 
-    if (rv_hash_table_insert(RV_type_info_array_g[H5I_ATTR]->table, (char *)new_attribute,
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_ATTR]->table, (char *)new_attribute->URI,
                              (char *)new_attribute) == 0)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "Failed to add attribute to type info array");
 
@@ -756,8 +756,8 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
     if ((attribute->u.attribute.acpl_id = H5Pcreate(H5P_ATTRIBUTE_CREATE)) < 0)
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create ACPL for attribute");
 
-    if (rv_hash_table_insert(RV_type_info_array_g[H5I_ATTR]->table, (char *)attribute, (char *)attribute) ==
-        0)
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_ATTR]->table, (char *)attribute->URI,
+                             (char *)attribute) == 0)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "Failed to add attribute to type info array");
 
     ret_value = (void *)attribute;
@@ -2990,7 +2990,7 @@ RV_attr_close(void *attr, hid_t dxpl_id, void **req)
     } /* end if */
 
     if (RV_type_info_array_g[H5I_ATTR])
-        rv_hash_table_remove(RV_type_info_array_g[H5I_ATTR]->table, (char *)_attr);
+        rv_hash_table_remove(RV_type_info_array_g[H5I_ATTR]->table, (char *)_attr->URI);
 
     if (RV_file_close(_attr->domain, H5P_DEFAULT, NULL) < 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCLOSEOBJ, FAIL, "couldn't close attr domain");
