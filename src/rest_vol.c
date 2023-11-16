@@ -146,6 +146,9 @@ const char *allocated_size_keys[] = {"allocated_size", (const char *)0};
 /* JSON key to retrieve the version of server from a request to a file. */
 const char *server_version_keys[] = {"version", (const char *)0};
 
+/* Used for cURL's base URL if the connection is through a local socket */
+const char *socket_base_url = "0";
+
 /* Internal initialization/termination functions which are called by
  * the public functions H5rest_init() and H5rest_term() */
 static herr_t H5_rest_init(hid_t vipl_id);
@@ -673,10 +676,6 @@ H5Pset_fapl_rest_vol(hid_t fapl_id)
     if ((ret_value = H5Pset_vol(fapl_id, H5_rest_id_g, NULL)) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't set REST VOL connector in FAPL");
 
-    // now always handled at file open/create time
-    // if (H5_rest_set_connection_information() < 0)
-    // FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't set REST VOL connector connection information");
-
 done:
     PRINT_ERROR_STACK;
 
@@ -736,6 +735,10 @@ H5_rest_set_connection_information(server_info_t *server_info)
 
         username = getenv("HSDS_USERNAME");
         password = getenv("HSDS_PASSWORD");
+
+        if (!strncmp(base_URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
+            base_URL = socket_base_url;
+        }
 
         if (!username && !password) {
             const char *clientID      = getenv("HSDS_AD_CLIENT_ID");
@@ -831,7 +834,12 @@ H5_rest_set_connection_information(server_info_t *server_info)
 
             if (!strcmp(key, "hs_endpoint")) {
                 if (val) {
-                    base_URL = val;
+                    if (!strncmp(base_URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
+                        base_URL = socket_base_url;
+                    }
+                    else {
+                        base_URL = val;
+                    }
                 } /* end if */
             }     /* end if */
             else if (!strcmp(key, "hs_ad_app_id")) {
