@@ -4600,49 +4600,6 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
             resp_info.buffer = json_buf;
         }
 
-        if ((needs_tconv = RV_need_tconv(file_type_id, mem_type_id)) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to check if datatypes need conversion");
-
-        if (needs_tconv) {
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Beginning type conversion\n");
-#endif
-
-            /* Initialize type conversion */
-            RV_tconv_init(file_type_id, &file_type_size, mem_type_id, &mem_type_size,
-                          (size_t)file_select_npoints, TRUE, FALSE, &tconv_buf, &bkg_buf, &reuse, &fill_bkg);
-
-            /* Perform type conversion on response values */
-            if (reuse == RV_TCONV_REUSE_TCONV) {
-                /* Use read buffer as type conversion buffer */
-                if (H5Tconvert(file_type_id, mem_type_id, (size_t)file_select_npoints, resp_info.buffer,
-                               bkg_buf, H5P_DEFAULT) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
-                                    "failed to convert file datatype to memory datatype");
-            }
-            else if (reuse == RV_TCONV_REUSE_BKG) {
-                /* Use read buffer as background buffer */
-                memcpy(tconv_buf, resp_info.buffer, file_type_size * (size_t)file_select_npoints);
-
-                if (H5Tconvert(file_type_id, mem_type_id, (size_t)file_select_npoints, tconv_buf,
-                               resp_info.buffer, H5P_DEFAULT) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
-                                    "failed to convert file datatype to memory datatype");
-                resp_info.buffer = tconv_buf;
-            }
-            else {
-                /* Use newly allocated buffer for type conversion */
-                memcpy(tconv_buf, resp_info.buffer, file_type_size * (size_t)file_select_npoints);
-
-                if (H5Tconvert(file_type_id, mem_type_id, (size_t)file_select_npoints, tconv_buf, bkg_buf,
-                               H5P_DEFAULT) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
-                                    "failed to convert file datatype to memory datatype");
-
-                resp_info.buffer = tconv_buf;
-            }
-        }
-
         if ((is_compound_subset_read = RV_is_compound_subset_read(mem_type_id, file_type_id)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't check if types are compound subsets");
 
@@ -4692,6 +4649,49 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
 
             RV_free(subset_buffer);
             subset_buffer = NULL;
+        }
+
+        if ((needs_tconv = RV_need_tconv(file_type_id, mem_type_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to check if datatypes need conversion");
+
+        if (!is_compound_subset_read && needs_tconv) {
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Beginning type conversion\n");
+#endif
+
+            /* Initialize type conversion */
+            RV_tconv_init(file_type_id, &file_type_size, mem_type_id, &mem_type_size,
+                          (size_t)file_select_npoints, TRUE, FALSE, &tconv_buf, &bkg_buf, &reuse, &fill_bkg);
+
+            /* Perform type conversion on response values */
+            if (reuse == RV_TCONV_REUSE_TCONV) {
+                /* Use read buffer as type conversion buffer */
+                if (H5Tconvert(file_type_id, mem_type_id, (size_t)file_select_npoints, resp_info.buffer,
+                               bkg_buf, H5P_DEFAULT) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                                    "failed to convert file datatype to memory datatype");
+            }
+            else if (reuse == RV_TCONV_REUSE_BKG) {
+                /* Use read buffer as background buffer */
+                memcpy(tconv_buf, resp_info.buffer, file_type_size * (size_t)file_select_npoints);
+
+                if (H5Tconvert(file_type_id, mem_type_id, (size_t)file_select_npoints, tconv_buf,
+                               resp_info.buffer, H5P_DEFAULT) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                                    "failed to convert file datatype to memory datatype");
+                resp_info.buffer = tconv_buf;
+            }
+            else {
+                /* Use newly allocated buffer for type conversion */
+                memcpy(tconv_buf, resp_info.buffer, file_type_size * (size_t)file_select_npoints);
+
+                if (H5Tconvert(file_type_id, mem_type_id, (size_t)file_select_npoints, tconv_buf, bkg_buf,
+                               H5P_DEFAULT) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                                    "failed to convert file datatype to memory datatype");
+
+                resp_info.buffer = tconv_buf;
+            }
         }
 
         if (H5Dscatter(dataset_read_scatter_op, &resp_info, mem_type_id, mem_space_id, buf) < 0)
