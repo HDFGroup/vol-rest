@@ -428,11 +428,12 @@ typedef struct RV_type_info {
     rv_hash_table_t *table;
 } RV_type_info;
 
-/* Information about members of a compound type */
+/* Information about members of a compound type for subsetting */
 typedef struct RV_compound_info_t {
     int     nmembers; /* Number of offset/length pairs used */
     int     nalloc;   /* Number of offset/length pairs allocated */
-    size_t *offsets;
+    size_t *mem_offsets;
+    size_t *file_offsets;
     size_t *lengths;
 } RV_compound_info_t;
 

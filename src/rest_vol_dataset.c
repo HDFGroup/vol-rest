@@ -4548,8 +4548,14 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
 
     int                file_nmembs = 0;
     RV_compound_info_t compound_info;
-    compound_info.offsets = NULL;
-    compound_info.lengths = NULL;
+    compound_info.mem_offsets  = NULL;
+    compound_info.file_offsets = NULL;
+    compound_info.lengths      = NULL;
+
+    void *subset_buffer = NULL;
+
+    char *dst = NULL;
+    char *src = NULL;
 
     if (H5T_NO_CLASS == (mem_dtype_class = H5Tget_class(mem_type_id)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
@@ -4652,7 +4658,10 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
             if ((compound_info.lengths = RV_calloc(sizeof(size_t) * (size_t)file_nmembs)) == NULL)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate memory for compound info");
 
-            if ((compound_info.offsets = RV_calloc(sizeof(size_t) * (size_t)file_nmembs)) == NULL)
+            if ((compound_info.mem_offsets = RV_calloc(sizeof(size_t) * (size_t)file_nmembs)) == NULL)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate memory for compound info");
+
+            if ((compound_info.file_offsets = RV_calloc(sizeof(size_t) * (size_t)file_nmembs)) == NULL)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate memory for compound info");
 
             compound_info.nmembers = 0;
@@ -4663,7 +4672,26 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
                                 "can't get unused fields in compound datatype");
 
             /* Copy those regions of memory from buf to resp_info.buf */
-            // TODO
+            if ((subset_buffer = RV_calloc(mem_data_size)) == NULL)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
+                                "can't allocate buffer for compound subsetting");
+
+            if (H5Dgather(mem_space_id, (const void *)buf, mem_type_id, mem_data_size, subset_buffer, NULL,
+                          NULL) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL, "can't gather data from read buffer");
+
+            for (size_t i = 0; i < file_select_npoints; i++) {
+                /* Copy unused field information from subset buffer to response buffer before scattering */
+                for (size_t j = 0; j < compound_info.nmembers; j++) {
+                    src = (char *)subset_buffer + (i * mem_type_size) + compound_info.mem_offsets[j];
+                    dst = (char *)resp_info.buffer + (i * file_type_size) + compound_info.file_offsets[j];
+
+                    memcpy(dst, src, compound_info.lengths[j]);
+                }
+            }
+
+            RV_free(subset_buffer);
+            subset_buffer = NULL;
         }
 
         if (H5Dscatter(dataset_read_scatter_op, &resp_info, mem_type_id, mem_space_id, buf) < 0)
@@ -4688,8 +4716,14 @@ done:
     if (compound_info.lengths)
         RV_free(compound_info.lengths);
 
-    if (compound_info.offsets)
-        RV_free(compound_info.offsets);
+    if (compound_info.mem_offsets)
+        RV_free(compound_info.mem_offsets);
+
+    if (compound_info.file_offsets)
+        RV_free(compound_info.file_offsets);
+
+    if (subset_buffer)
+        RV_free(subset_buffer);
 
     if (obj_ref_buf)
         RV_free(obj_ref_buf);

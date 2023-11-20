@@ -2761,8 +2761,8 @@ RV_get_unused_compound_fields(hid_t mem_type_id, hid_t file_type_id, RV_compound
     char       *mem_member_name = NULL, *file_member_name = NULL;
     htri_t      types_same            = false;
     bool        match_for_file_member = false;
-    size_t      member_offset         = 0;
-    size_t      member_size           = 0;
+    size_t      file_member_offset = 0, mem_member_offset = 0;
+    size_t      member_size = 0;
 
     if (!compound_info)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "provided compound info struct is NULL");
@@ -2788,19 +2788,22 @@ RV_get_unused_compound_fields(hid_t mem_type_id, hid_t file_type_id, RV_compound
     // TODO - Optimize this
     for (unsigned int file_idx = 0; file_idx < file_nmembs; file_idx++) {
         match_for_file_member = false;
+        mem_member_offset     = 0;
 
         if ((file_member_name = H5Tget_member_name(file_type_id, file_idx)) == NULL)
-            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get memory datatype member name");
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get file datatype member name");
 
         if ((file_member_type = H5Tget_member_type(file_type_id, file_idx)) == H5I_INVALID_HID)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get memory datatype member type");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get file datatype member type");
 
         for (unsigned int mem_idx = 0; mem_idx < mem_nmembs; mem_idx++) {
             if ((mem_member_name = H5Tget_member_name(mem_type_id, mem_idx)) == NULL)
-                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get file datatype member name");
+                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get memory datatype member name");
 
             if ((mem_member_type = H5Tget_member_type(mem_type_id, mem_idx)) == H5I_INVALID_HID)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get file  datatype member type");
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get memory datatype member type");
+
+            mem_member_offset = H5Tget_member_offset(mem_type_id, mem_idx);
 
             if ((types_same = H5Tequal(mem_member_type, file_member_type)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
@@ -2818,30 +2821,33 @@ RV_get_unused_compound_fields(hid_t mem_type_id, hid_t file_type_id, RV_compound
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free file datatype member name");
 
             mem_member_name = NULL;
+
+            if (match_for_file_member)
+                break;
         }
 
         if (!match_for_file_member) {
-            if ((member_offset = H5Tget_member_offset(file_type_id, file_idx)) == 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get offset of unused member");
+            file_member_offset = H5Tget_member_offset(file_type_id, file_idx);
 
             if ((member_size = H5Tget_size(file_member_type)) == 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get size of memory datatype member");
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get size of file datatype member");
 
             if (compound_info->nmembers >= compound_info->nalloc)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "compound info struct is full");
 
-            compound_info->offsets[compound_info->nmembers] = member_offset;
-            compound_info->lengths[compound_info->nmembers] = member_size;
+            compound_info->file_offsets[compound_info->nmembers] = file_member_offset;
+            compound_info->mem_offsets[compound_info->nmembers]  = mem_member_offset;
+            compound_info->lengths[compound_info->nmembers]      = member_size;
             compound_info->nmembers++;
         }
 
         if (H5Tclose(file_member_type) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close memory datatype member");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close file datatype member");
 
         file_member_type = H5I_INVALID_HID;
 
         if (H5free_memory(file_member_name) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free member datatype member name");
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free member datatype name");
 
         file_member_name = NULL;
     }
@@ -2849,7 +2855,7 @@ RV_get_unused_compound_fields(hid_t mem_type_id, hid_t file_type_id, RV_compound
 done:
     if (mem_member_name) {
         if (H5free_memory(mem_member_name) < 0)
-            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free member datatype member name");
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free member datatype name");
 
         mem_member_name = NULL;
     }
