@@ -1464,18 +1464,21 @@ done:
 herr_t
 RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id, void **req)
 {
-    RV_object_t *dset               = (RV_object_t *)obj;
-    herr_t       ret_value          = SUCCEED;
-    size_t       host_header_len    = 0;
-    char        *host_header        = NULL;
-    char        *request_body       = NULL;
-    char        *request_body_shape = NULL;
-    char         request_url[URL_MAX_LENGTH];
-    int          url_len       = 0;
-    hid_t        new_dspace_id = H5I_INVALID_HID;
-    hsize_t     *old_extent    = NULL;
-    hsize_t     *maxdims       = NULL;
-    upload_info  uinfo;
+    RV_object_t   *dset               = (RV_object_t *)obj;
+    herr_t         ret_value          = SUCCEED;
+    size_t         host_header_len    = 0;
+    char          *host_header        = NULL;
+    char          *request_body       = NULL;
+    char          *request_body_shape = NULL;
+    char           request_url[URL_MAX_LENGTH];
+    int            ndims         = 0;
+    int            url_len       = 0;
+    hid_t          new_dspace_id = H5I_INVALID_HID;
+    hsize_t       *old_extent    = NULL;
+    hsize_t       *maxdims       = NULL;
+    const hsize_t *new_extent    = NULL;
+    H5D_layout_t   layout        = H5D_LAYOUT_ERROR;
+    upload_info    uinfo;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset-specific call with following parameters:\n");
@@ -1491,10 +1494,6 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
     switch (args->op_type) {
         /* H5Dset_extent */
         case H5VL_DATASET_SET_EXTENT:
-            int            ndims      = 0;
-            const hsize_t *new_extent = NULL;
-            H5D_layout_t   layout     = H5D_LAYOUT_ERROR;
-
             /* Check for write access */
             if (!(dset->domain->u.file.intent & H5F_ACC_RDWR))
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file");
@@ -4621,7 +4620,7 @@ RV_dataspace_selection_is_contiguous(hid_t space_id)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
                                 "can't allocate space for hyperslab selection 'block' values");
 
-            if (nblocks = H5Sget_select_hyper_nblocks(space_id) < 0)
+            if ((nblocks = H5Sget_select_hyper_nblocks(space_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of hyperslab blocks");
 
             if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
