@@ -761,6 +761,9 @@ herr_t RV_tconv_init(hid_t src_type_id, size_t *src_type_size, hid_t dst_type_id
 herr_t RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested,
                                    server_api_version server_version);
 
+/* Determine if a read from file to mem dtype is a compound subset read */
+htri_t RV_is_compound_subset_read(hid_t mem_type_id, hid_t file_type_id);
+
 /* Helper function to escape control characters for JSON strings */
 herr_t RV_JSON_escape_string(const char *in, char *out, size_t *out_size);
 

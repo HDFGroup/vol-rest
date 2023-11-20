@@ -4528,8 +4528,9 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
     size_t      file_data_size = 0;
     size_t      mem_data_size  = 0;
     htri_t      is_variable_str;
-    H5T_class_t dtype_class = H5T_NO_CLASS;
+    H5T_class_t mem_dtype_class = H5T_NO_CLASS;
     hssize_t    file_select_npoints;
+    htri_t      is_compound_subset_read = false;
 
     void *obj_ref_buf = NULL;
 
@@ -4545,7 +4546,7 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
     RV_tconv_reuse_t reuse          = RV_TCONV_REUSE_NONE;
     hbool_t          fill_bkg       = FALSE;
 
-    if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id)))
+    if (H5T_NO_CLASS == (mem_dtype_class = H5Tget_class(mem_type_id)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
 
     if ((is_variable_str = H5Tis_variable_str(mem_type_id)) < 0)
@@ -4566,7 +4567,7 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
 
     mem_data_size = (size_t)file_select_npoints * mem_type_size;
 
-    if ((H5T_REFERENCE != dtype_class) && (H5T_VLEN != dtype_class) && !is_variable_str) {
+    if ((H5T_REFERENCE != mem_dtype_class) && (H5T_VLEN != mem_dtype_class) && !is_variable_str) {
         /* Scatter the read data out to the supplied read buffer according to the
          * mem_type_id and mem_space_id given */
         struct response_read_info resp_info;
@@ -4630,6 +4631,9 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
                 resp_info.buffer = tconv_buf;
             }
         }
+
+        if ((is_compound_subset_read = RV_is_compound_subset_read(mem_type_id, file_type_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't check if types are compound subsets");
 
         if (H5Dscatter(dataset_read_scatter_op, &resp_info, mem_type_id, mem_space_id, buf) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL, "can't scatter data to read buffer");
