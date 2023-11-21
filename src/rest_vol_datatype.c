@@ -2639,241 +2639,257 @@ done:
     return ret_value;
 } /* end RV_tconv_init() */
 
-/* Determine if a read from file to mem dtype is a compound subset read */
-htri_t
-RV_is_compound_subset_read(hid_t mem_type_id, hid_t file_type_id)
+/* Determine if a read from src to dst dtype is a compound subset read */
+herr_t
+RV_get_compound_subset_info(hid_t src_type_id, hid_t dst_type_id, RV_subset_t *subset)
 {
-    htri_t      ret_value       = false;
-    H5T_class_t file_type_class = H5T_NO_CLASS, mem_type_class = H5T_NO_CLASS;
-    hid_t       mem_member_type = H5I_INVALID_HID, file_member_type = H5I_INVALID_HID;
-    int         file_nmembs = 0, mem_nmembs = 0;
-    char       *mem_member_name = NULL, *file_member_name = NULL;
+    herr_t      ret_value      = SUCCEED;
+    H5T_class_t dst_type_class = H5T_NO_CLASS, src_type_class = H5T_NO_CLASS;
+    hid_t       src_member_type = H5I_INVALID_HID, dst_member_type = H5I_INVALID_HID;
+    int         dst_nmembs = 0, src_nmembs = 0;
+    char       *src_member_name = NULL, *dst_member_name = NULL;
     htri_t      types_same           = false;
-    bool        match_for_mem_member = false;
+    bool        match_for_src_member = false;
 
-    if (H5T_NO_CLASS == (mem_type_class = H5Tget_class(mem_type_id)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
+    if (H5T_NO_CLASS == (src_type_class = H5Tget_class(src_type_id)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "source datatype is invalid");
 
-    if (H5T_NO_CLASS == (file_type_class = H5Tget_class(file_type_id)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "file datatype is invalid");
+    if (H5T_NO_CLASS == (dst_type_class = H5Tget_class(dst_type_id)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "destination datatype is invalid");
 
-    if ((file_type_class != H5T_COMPOUND) || (mem_type_class != H5T_COMPOUND))
-        FUNC_GOTO_DONE(false);
+    if ((dst_type_class != H5T_COMPOUND) || (src_type_class != H5T_COMPOUND)) {
+        *subset = H5T_SUBSET_FALSE;
+        FUNC_GOTO_DONE(SUCCEED);
+    }
 
-    if ((file_nmembs = H5Tget_nmembers(file_type_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of file datatype");
+    if ((dst_nmembs = H5Tget_nmembers(dst_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of destination datatype");
 
-    if ((mem_nmembs = H5Tget_nmembers(mem_type_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of memory datatype");
+    if ((src_nmembs = H5Tget_nmembers(src_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of source datatype");
 
-    if (mem_nmembs > file_nmembs)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "memory datatype is superset of file datatype");
+    if (src_nmembs > dst_nmembs) {
+        *subset = H5T_SUBSET_DST;
+    }
+    else if (src_nmembs < dst_nmembs) {
+        *subset = H5T_SUBSET_SRC;
+    }
+    else {
+        *subset = H5T_SUBSET_FALSE;
+    }
 
-    if (mem_nmembs == file_nmembs)
-        FUNC_GOTO_DONE(false);
+    /* TODO - Library just compares the number of fields in each to determine if two
+     * compounds are subsets, so that should suffice here as well. */
 
-    /* Every field in memory dtype must be found in file dtype */
-    // TODO - Optimize this
-    for (unsigned int mem_idx = 0; mem_idx < mem_nmembs; mem_idx++) {
-        match_for_mem_member = false;
+    /*
+    for (unsigned int src_idx = 0; src_idx < src_nmembs; src_idx++) {
+        match_for_src_member = false;
 
-        if ((mem_member_name = H5Tget_member_name(mem_type_id, mem_idx)) == NULL)
-            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get memory datatype member name");
+        if ((src_member_name = H5Tget_member_name(src_type_id, src_idx)) == NULL)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get source datatype member name");
 
-        if ((mem_member_type = H5Tget_member_type(mem_type_id, mem_idx)) == H5I_INVALID_HID)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get memory datatype member type");
+        if ((src_member_type = H5Tget_member_type(src_type_id, src_idx)) == H5I_INVALID_HID)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get source datatype member type");
 
-        for (unsigned int file_idx = 0; file_idx < file_nmembs; file_idx++) {
-            if ((file_member_name = H5Tget_member_name(file_type_id, file_idx)) == NULL)
-                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get file datatype member name");
+        for (unsigned int dst_idx = 0; dst_idx < dst_nmembs; dst_idx++) {
+            if ((dst_member_name = H5Tget_member_name(dst_type_id, dst_idx)) == NULL)
+                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get destination datatype member
+    name");
 
-            if ((file_member_type = H5Tget_member_type(file_type_id, file_idx)) == H5I_INVALID_HID)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get file  datatype member type");
+            if ((dst_member_type = H5Tget_member_type(dst_type_id, dst_idx)) == H5I_INVALID_HID)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get destination  datatype member
+    type");
 
-            if ((types_same = H5Tequal(mem_member_type, file_member_type)) < 0)
+            if ((types_same = H5Tequal(src_member_type, dst_member_type)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
                                 "can't check if member datatypes are equal");
 
-            if (types_same && !strcmp(file_member_name, mem_member_name))
-                match_for_mem_member = true;
+            if (types_same && !strcmp(dst_member_name, src_member_name))
+                match_for_src_member = true;
 
-            if (H5Tclose(file_member_type) < 0)
+            if (H5Tclose(dst_member_type) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype member");
 
-            file_member_type = H5I_INVALID_HID;
+            dst_member_type = H5I_INVALID_HID;
 
-            if (H5free_memory(file_member_name) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free file datatype member name");
+            if (H5free_memory(dst_member_name) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free destination datatype member
+    name");
 
-            file_member_name = NULL;
+            dst_member_name = NULL;
         }
 
-        if (!match_for_mem_member)
+        if (!match_for_src_member)
             FUNC_GOTO_DONE(false);
 
-        if (H5Tclose(mem_member_type) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close memory datatype member");
+        if (H5Tclose(src_member_type) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close source datatype member");
 
-        mem_member_type = H5I_INVALID_HID;
+        src_member_type = H5I_INVALID_HID;
 
-        if (H5free_memory(mem_member_name) < 0)
+        if (H5free_memory(src_member_name) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free member datatype member name");
 
-        mem_member_name = NULL;
+        src_member_name = NULL;
     }
 
     ret_value = true;
 
+    */
+
 done:
-    if (mem_member_name) {
-        if (H5free_memory(mem_member_name) < 0)
+    if (src_member_name) {
+        if (H5free_memory(src_member_name) < 0)
             FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free member datatype member name");
 
-        mem_member_name = NULL;
+        src_member_name = NULL;
     }
 
-    if (file_member_name) {
-        if (H5free_memory(file_member_name) < 0)
-            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free file datatype member name");
+    if (dst_member_name) {
+        if (H5free_memory(dst_member_name) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free destination datatype member name");
 
-        file_member_name = NULL;
+        dst_member_name = NULL;
     }
 
-    if (mem_member_type > 0)
-        if (H5Tclose(mem_member_type) < 0)
-            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close memory datatype member");
+    if (src_member_type > 0)
+        if (H5Tclose(src_member_type) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close source datatype member");
 
-    if (file_member_type > 0)
-        if (H5Tclose(file_member_type) < 0)
-            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close memory datatype member");
+    if (dst_member_type > 0)
+        if (H5Tclose(dst_member_type) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close destination datatype member");
 
     return ret_value;
 }
 
-/* Helper to get information about fields in the file type that are unused in the memory type. */
+/* Helper to get information about fields in the destination type that are unused in the source type. */
 herr_t
-RV_get_unused_compound_fields(hid_t mem_type_id, hid_t file_type_id, RV_compound_info_t *compound_info)
+RV_get_unused_compound_fields(hid_t src_type_id, hid_t dst_type_id, RV_compound_info_t *compound_info)
 {
-    herr_t      ret_value       = SUCCEED;
-    H5T_class_t file_type_class = H5T_NO_CLASS, mem_type_class = H5T_NO_CLASS;
-    hid_t       mem_member_type = H5I_INVALID_HID, file_member_type = H5I_INVALID_HID;
-    int         file_nmembs = 0, mem_nmembs = 0;
-    char       *mem_member_name = NULL, *file_member_name = NULL;
-    htri_t      types_same            = false;
-    bool        match_for_file_member = false;
-    size_t      file_member_offset = 0, mem_member_offset = 0;
+    herr_t      ret_value      = SUCCEED;
+    H5T_class_t dst_type_class = H5T_NO_CLASS, src_type_class = H5T_NO_CLASS;
+    hid_t       src_member_type = H5I_INVALID_HID, dst_member_type = H5I_INVALID_HID;
+    int         dst_nmembs = 0, src_nmembs = 0;
+    char       *src_member_name = NULL, *dst_member_name = NULL;
+    htri_t      types_same           = false;
+    bool        match_for_dst_member = false;
+    size_t      dst_member_offset = 0, src_member_offset = 0;
     size_t      member_size = 0;
 
     if (!compound_info)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "provided compound info struct is NULL");
 
-    if (H5T_NO_CLASS == (mem_type_class = H5Tget_class(mem_type_id)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
+    if (H5T_NO_CLASS == (src_type_class = H5Tget_class(src_type_id)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "source datatype is invalid");
 
-    if (H5T_NO_CLASS == (file_type_class = H5Tget_class(file_type_id)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "file datatype is invalid");
+    if (H5T_NO_CLASS == (dst_type_class = H5Tget_class(dst_type_id)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "destination datatype is invalid");
 
-    if ((file_type_class != H5T_COMPOUND) || (mem_type_class != H5T_COMPOUND))
+    if ((dst_type_class != H5T_COMPOUND) || (src_type_class != H5T_COMPOUND))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "datatypes must be compound to compare members");
 
-    if ((file_nmembs = H5Tget_nmembers(file_type_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of file datatype");
+    if ((dst_nmembs = H5Tget_nmembers(dst_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of destination datatype");
 
-    if ((mem_nmembs = H5Tget_nmembers(mem_type_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of memory datatype");
+    if ((src_nmembs = H5Tget_nmembers(src_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of source datatype");
 
-    if (file_nmembs > compound_info->nalloc)
+    if (dst_nmembs > compound_info->nalloc)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "not enough space in compound info");
 
     // TODO - Optimize this
-    for (unsigned int file_idx = 0; file_idx < file_nmembs; file_idx++) {
-        match_for_file_member = false;
-        mem_member_offset     = 0;
+    for (unsigned int dst_idx = 0; dst_idx < dst_nmembs; dst_idx++) {
+        match_for_dst_member = false;
+        src_member_offset    = 0;
 
-        if ((file_member_name = H5Tget_member_name(file_type_id, file_idx)) == NULL)
-            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get file datatype member name");
+        if ((dst_member_name = H5Tget_member_name(dst_type_id, dst_idx)) == NULL)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get destination datatype member name");
 
-        if ((file_member_type = H5Tget_member_type(file_type_id, file_idx)) == H5I_INVALID_HID)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get file datatype member type");
+        if ((dst_member_type = H5Tget_member_type(dst_type_id, dst_idx)) == H5I_INVALID_HID)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get destination datatype member type");
 
-        for (unsigned int mem_idx = 0; mem_idx < mem_nmembs; mem_idx++) {
-            if ((mem_member_name = H5Tget_member_name(mem_type_id, mem_idx)) == NULL)
-                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get memory datatype member name");
+        for (unsigned int src_idx = 0; src_idx < src_nmembs; src_idx++) {
+            if ((src_member_name = H5Tget_member_name(src_type_id, src_idx)) == NULL)
+                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get source datatype member name");
 
-            if ((mem_member_type = H5Tget_member_type(mem_type_id, mem_idx)) == H5I_INVALID_HID)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get memory datatype member type");
+            if ((src_member_type = H5Tget_member_type(src_type_id, src_idx)) == H5I_INVALID_HID)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get source datatype member type");
 
-            mem_member_offset = H5Tget_member_offset(mem_type_id, mem_idx);
+            src_member_offset = H5Tget_member_offset(src_type_id, src_idx);
 
-            if ((types_same = H5Tequal(mem_member_type, file_member_type)) < 0)
+            if ((types_same = H5Tequal(src_member_type, dst_member_type)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
                                 "can't check if member datatypes are equal");
 
-            if (types_same && !strcmp(file_member_name, mem_member_name))
-                match_for_file_member = true;
+            if (types_same && !strcmp(dst_member_name, src_member_name))
+                match_for_dst_member = true;
 
-            if (H5Tclose(mem_member_type) < 0)
+            if (H5Tclose(src_member_type) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype member");
 
-            mem_member_type = H5I_INVALID_HID;
+            src_member_type = H5I_INVALID_HID;
 
-            if (H5free_memory(mem_member_name) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free file datatype member name");
+            if (H5free_memory(src_member_name) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL,
+                                "can't free destination datatype member name");
 
-            mem_member_name = NULL;
+            src_member_name = NULL;
 
-            if (match_for_file_member)
+            if (match_for_dst_member)
                 break;
         }
 
-        if (!match_for_file_member) {
-            file_member_offset = H5Tget_member_offset(file_type_id, file_idx);
+        /* If member in dst type is omitted by subsetting, copy its offset and length */
+        if (!match_for_dst_member) {
+            dst_member_offset = H5Tget_member_offset(dst_type_id, dst_idx);
 
-            if ((member_size = H5Tget_size(file_member_type)) == 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get size of file datatype member");
+            if ((member_size = H5Tget_size(dst_member_type)) == 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                "can't get size of destination datatype member");
 
             if (compound_info->nmembers >= compound_info->nalloc)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "compound info struct is full");
 
-            compound_info->file_offsets[compound_info->nmembers] = file_member_offset;
-            compound_info->mem_offsets[compound_info->nmembers]  = mem_member_offset;
-            compound_info->lengths[compound_info->nmembers]      = member_size;
+            compound_info->dst_offsets[compound_info->nmembers] = dst_member_offset;
+            compound_info->src_offsets[compound_info->nmembers] = src_member_offset;
+            compound_info->lengths[compound_info->nmembers]     = member_size;
             compound_info->nmembers++;
         }
 
-        if (H5Tclose(file_member_type) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close file datatype member");
+        if (H5Tclose(dst_member_type) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close destination datatype member");
 
-        file_member_type = H5I_INVALID_HID;
+        dst_member_type = H5I_INVALID_HID;
 
-        if (H5free_memory(file_member_name) < 0)
+        if (H5free_memory(dst_member_name) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free member datatype name");
 
-        file_member_name = NULL;
+        dst_member_name = NULL;
     }
 
 done:
-    if (mem_member_name) {
-        if (H5free_memory(mem_member_name) < 0)
+    if (src_member_name) {
+        if (H5free_memory(src_member_name) < 0)
             FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free member datatype name");
 
-        mem_member_name = NULL;
+        src_member_name = NULL;
     }
 
-    if (file_member_name) {
-        if (H5free_memory(file_member_name) < 0)
-            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free file datatype member name");
+    if (dst_member_name) {
+        if (H5free_memory(dst_member_name) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free destination datatype member name");
 
-        file_member_name = NULL;
+        dst_member_name = NULL;
     }
 
-    if (mem_member_type > 0)
-        if (H5Tclose(mem_member_type) < 0)
-            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close memory datatype member");
+    if (src_member_type > 0)
+        if (H5Tclose(src_member_type) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close source datatype member");
 
-    if (file_member_type > 0)
-        if (H5Tclose(file_member_type) < 0)
-            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close memory datatype member");
+    if (dst_member_type > 0)
+        if (H5Tclose(dst_member_type) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close destination datatype member");
 
     return ret_value;
 }

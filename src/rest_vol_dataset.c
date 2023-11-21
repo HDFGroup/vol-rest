@@ -1201,6 +1201,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 #endif
         } /* end if */
 
+        // TODO - Compound subset handling on write
+
         transfer_info[i].u.write_info.uinfo.buffer =
             is_transfer_binary ? buf_to_write : transfer_info[i].u.write_info.write_body;
         transfer_info[i].u.write_info.uinfo.buffer_size = write_body_len;
@@ -4530,7 +4532,7 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
     htri_t      is_variable_str;
     H5T_class_t mem_dtype_class = H5T_NO_CLASS;
     hssize_t    file_select_npoints;
-    htri_t      is_compound_subset_read = false;
+    RV_subset_t subset_info = H5T_SUBSET_BADVALUE;
 
     void *obj_ref_buf = NULL;
 
@@ -4548,9 +4550,9 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
 
     int                file_nmembs = 0;
     RV_compound_info_t compound_info;
-    compound_info.mem_offsets  = NULL;
-    compound_info.file_offsets = NULL;
-    compound_info.lengths      = NULL;
+    compound_info.src_offsets = NULL;
+    compound_info.dst_offsets = NULL;
+    compound_info.lengths     = NULL;
 
     void *subset_buffer = NULL;
 
@@ -4600,10 +4602,16 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
             resp_info.buffer = json_buf;
         }
 
-        if ((is_compound_subset_read = RV_is_compound_subset_read(mem_type_id, file_type_id)) < 0)
+        /* On a read, file dtype is src and mem dtype is dst */
+        if (RV_get_compound_subset_info(file_type_id, mem_type_id, &subset_info) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "can't check if types are compound subsets");
 
-        if (is_compound_subset_read > 0) {
+        if (subset_info < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
+                            "error while checking if types are compound subsets");
+
+        // TODO - Move this to a helper function
+        if (subset_info > 0) {
             /* Copy unselected fields from user buffer to resp info buffer to avoid overwriting fields that
              * weren't selected */
 
@@ -4615,10 +4623,10 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
             if ((compound_info.lengths = RV_calloc(sizeof(size_t) * (size_t)file_nmembs)) == NULL)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate memory for compound info");
 
-            if ((compound_info.mem_offsets = RV_calloc(sizeof(size_t) * (size_t)file_nmembs)) == NULL)
+            if ((compound_info.src_offsets = RV_calloc(sizeof(size_t) * (size_t)file_nmembs)) == NULL)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate memory for compound info");
 
-            if ((compound_info.file_offsets = RV_calloc(sizeof(size_t) * (size_t)file_nmembs)) == NULL)
+            if ((compound_info.dst_offsets = RV_calloc(sizeof(size_t) * (size_t)file_nmembs)) == NULL)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate memory for compound info");
 
             compound_info.nmembers = 0;
@@ -4640,8 +4648,8 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
             for (size_t i = 0; i < file_select_npoints; i++) {
                 /* Copy unused field information from subset buffer to response buffer before scattering */
                 for (size_t j = 0; j < compound_info.nmembers; j++) {
-                    src = (char *)subset_buffer + (i * mem_type_size) + compound_info.mem_offsets[j];
-                    dst = (char *)resp_info.buffer + (i * file_type_size) + compound_info.file_offsets[j];
+                    src = (char *)subset_buffer + (i * mem_type_size) + compound_info.src_offsets[j];
+                    dst = (char *)resp_info.buffer + (i * file_type_size) + compound_info.dst_offsets[j];
 
                     memcpy(dst, src, compound_info.lengths[j]);
                 }
@@ -4654,7 +4662,7 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
         if ((needs_tconv = RV_need_tconv(file_type_id, mem_type_id)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to check if datatypes need conversion");
 
-        if (!is_compound_subset_read && needs_tconv) {
+        if (!subset_info && needs_tconv) {
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Beginning type conversion\n");
 #endif
@@ -4716,11 +4724,11 @@ done:
     if (compound_info.lengths)
         RV_free(compound_info.lengths);
 
-    if (compound_info.mem_offsets)
-        RV_free(compound_info.mem_offsets);
+    if (compound_info.src_offsets)
+        RV_free(compound_info.src_offsets);
 
-    if (compound_info.file_offsets)
-        RV_free(compound_info.file_offsets);
+    if (compound_info.dst_offsets)
+        RV_free(compound_info.dst_offsets);
 
     if (subset_buffer)
         RV_free(subset_buffer);

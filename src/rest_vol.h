@@ -428,12 +428,21 @@ typedef struct RV_type_info {
     rv_hash_table_t *table;
 } RV_type_info;
 
+/* Copy of H5T_subset_t struct defn for compound subsetting */
+typedef enum {
+    H5T_SUBSET_BADVALUE = -1, /* Invalid value */
+    H5T_SUBSET_FALSE    = 0,  /* Source and destination aren't subset of each other */
+    H5T_SUBSET_SRC,           /* Source is the subset of dest and no conversion is needed */
+    H5T_SUBSET_DST,           /* Dest is the subset of source and no conversion is needed */
+    H5T_SUBSET_CAP            /* Must be the last value */
+} RV_subset_t;
+
 /* Information about members of a compound type for subsetting */
 typedef struct RV_compound_info_t {
     int     nmembers; /* Number of offset/length pairs used */
     int     nalloc;   /* Number of offset/length pairs allocated */
-    size_t *mem_offsets;
-    size_t *file_offsets;
+    size_t *src_offsets;
+    size_t *dst_offsets;
     size_t *lengths;
 } RV_compound_info_t;
 
@@ -771,7 +780,7 @@ herr_t RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type
                                    server_api_version server_version);
 
 /* Determine if a read from file to mem dtype is a compound subset read */
-htri_t RV_is_compound_subset_read(hid_t mem_type_id, hid_t file_type_id);
+herr_t RV_get_compound_subset_info(hid_t src_type_id, hid_t dst_type_id, RV_subset_t *subset_info);
 
 /* Helper to get information about fields that are unused due to compound subsetting */
 herr_t RV_get_unused_compound_fields(hid_t mem_type_id, hid_t file_type_id,
