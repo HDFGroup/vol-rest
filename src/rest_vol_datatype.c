@@ -158,7 +158,7 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
 
     /* Convert the datatype into JSON to be used in the request body */
     if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE,
-                                    parent->domain->u.file.server_version) < 0)
+                                    parent->domain->u.file.server_info.version) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert datatype to JSON representation");
 
     /* If this is not a H5Tcommit_anon call, create a link for the Datatype
@@ -2668,6 +2668,9 @@ RV_get_compound_subset_info(hid_t src_type_id, hid_t dst_type_id, RV_subset_t *s
     if ((src_nmembs = H5Tget_nmembers(src_type_id)) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of source datatype");
 
+    /* The library just compares the number of members to determine if two
+     * compounds are subsets, so that should suffice here as well. */
+
     if (src_nmembs > dst_nmembs) {
         *subset = H5T_SUBSET_DST;
     }
@@ -2677,65 +2680,6 @@ RV_get_compound_subset_info(hid_t src_type_id, hid_t dst_type_id, RV_subset_t *s
     else {
         *subset = H5T_SUBSET_FALSE;
     }
-
-    /* TODO - Library just compares the number of fields in each to determine if two
-     * compounds are subsets, so that should suffice here as well. */
-
-    /*
-    for (unsigned int src_idx = 0; src_idx < src_nmembs; src_idx++) {
-        match_for_src_member = false;
-
-        if ((src_member_name = H5Tget_member_name(src_type_id, src_idx)) == NULL)
-            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get source datatype member name");
-
-        if ((src_member_type = H5Tget_member_type(src_type_id, src_idx)) == H5I_INVALID_HID)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get source datatype member type");
-
-        for (unsigned int dst_idx = 0; dst_idx < dst_nmembs; dst_idx++) {
-            if ((dst_member_name = H5Tget_member_name(dst_type_id, dst_idx)) == NULL)
-                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get destination datatype member
-    name");
-
-            if ((dst_member_type = H5Tget_member_type(dst_type_id, dst_idx)) == H5I_INVALID_HID)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get destination  datatype member
-    type");
-
-            if ((types_same = H5Tequal(src_member_type, dst_member_type)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
-                                "can't check if member datatypes are equal");
-
-            if (types_same && !strcmp(dst_member_name, src_member_name))
-                match_for_src_member = true;
-
-            if (H5Tclose(dst_member_type) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype member");
-
-            dst_member_type = H5I_INVALID_HID;
-
-            if (H5free_memory(dst_member_name) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free destination datatype member
-    name");
-
-            dst_member_name = NULL;
-        }
-
-        if (!match_for_src_member)
-            FUNC_GOTO_DONE(false);
-
-        if (H5Tclose(src_member_type) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close source datatype member");
-
-        src_member_type = H5I_INVALID_HID;
-
-        if (H5free_memory(src_member_name) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free member datatype member name");
-
-        src_member_name = NULL;
-    }
-
-    ret_value = true;
-
-    */
 
 done:
     if (src_member_name) {
@@ -2765,7 +2709,7 @@ done:
 
 /* Helper to get information about fields in the destination type that are unused in the source type. */
 herr_t
-RV_get_unused_compound_fields(hid_t src_type_id, hid_t dst_type_id, RV_compound_info_t *compound_info)
+RV_get_omitted_compound_members(hid_t src_type_id, hid_t dst_type_id, RV_compound_info_t *compound_info)
 {
     herr_t      ret_value      = SUCCEED;
     H5T_class_t dst_type_class = H5T_NO_CLASS, src_type_class = H5T_NO_CLASS;

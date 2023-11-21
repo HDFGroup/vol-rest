@@ -782,13 +782,18 @@ herr_t RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type
 /* Determine if a read from file to mem dtype is a compound subset read */
 herr_t RV_get_compound_subset_info(hid_t src_type_id, hid_t dst_type_id, RV_subset_t *subset_info);
 
-/* Helper to get information about fields that are unused due to compound subsetting */
-herr_t RV_get_unused_compound_fields(hid_t mem_type_id, hid_t file_type_id,
-                                     RV_compound_info_t *compound_info);
+/* Helper to get information about members in dst that are omitted in src due to compound subsetting */
+herr_t RV_get_omitted_compound_members(hid_t src_type_id, hid_t dst_type_id,
+                                       RV_compound_info_t *compound_info);
 
-/* Helper function to handle compound type subsetting during reads. */
+/* Helper function to handle compound type subsetting during reads */
 herr_t RV_handle_compound_subset_read(hid_t src_type_id, hid_t dst_type_id, hid_t dst_space_id,
                                       const void *src_buf, void *dst_buf);
+
+/* Helper function to handle compound type subsetting during writes */
+herr_t RV_handle_compound_subset_write(hid_t src_type_id, hid_t dst_type_id, hid_t src_space_id,
+                                       hid_t dst_space_id, RV_object_t *dset, const void *buf_in,
+                                       void *buf_out);
 
 /* Helper function to escape control characters for JSON strings */
 herr_t RV_JSON_escape_string(const char *in, char *out, size_t *out_size);

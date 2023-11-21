@@ -873,6 +873,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
     hbool_t fill_bkg       = FALSE;
     void   *buf_to_write   = NULL;
 
+    RV_subset_t subset_info = H5T_SUBSET_BADVALUE;
+
     if ((transfer_info = RV_calloc(count * sizeof(dataset_transfer_info))) == NULL)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset transfer info");
 
@@ -1032,11 +1034,45 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         printf("-> %lld points selected in memory dataspace\n\n", mem_select_npoints);
 #endif
 
+        /* Handle compound subsetting */
+        if (RV_get_compound_subset_info(transfer_info[i].mem_type_id, transfer_info[i].file_type_id,
+                                        &subset_info) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound type subset info");
+
+        if (subset_info < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
+                            "error while checking if types are compound subsets");
+
+        if (subset_info == H5T_SUBSET_DST)
+            FUNC_GOTO_ERROR(
+                H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                "write using a type with more members than file type is unsupported by the REST VOL");
+
+        /* If memory type is subset than file type, modify write buffer to avoid
+         * modifying omitted members */
+        if (subset_info == H5T_SUBSET_SRC) {
+            /* Allocate buffer for output of subsetting */
+            if ((file_type_size = H5Tget_size(transfer_info[i].file_type_id)) == 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to get size of file datatype");
+
+            if ((transfer_info[i].u.write_info.write_body =
+                     RV_calloc(file_type_size * (size_t)file_select_npoints)) == NULL)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
+                                "can't allocate buffer for compound subset write");
+
+            if (RV_handle_compound_subset_write(transfer_info[i].mem_type_id, transfer_info[i].file_type_id,
+                                                transfer_info[i].mem_space_id, transfer_info[i].file_space_id,
+                                                transfer_info[i].dataset, (const void *)transfer_info[i].buf,
+                                                transfer_info[i].u.write_info.write_body) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_INTERNAL, FAIL,
+                                "can't populate buffer for compound subset write");
+        }
+
         /* Handle conversion from memory datatype to file datatype, if necessary */
         if ((needs_tconv = RV_need_tconv(transfer_info[i].file_type_id, transfer_info[i].mem_type_id)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to check if datatypes need conversion");
 
-        if (needs_tconv) {
+        if (!subset_info && needs_tconv) {
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Beginning type conversion for write\n");
@@ -1064,7 +1100,14 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                                 "failed to convert file datatype to memory datatype");
         }
 
-        buf_to_write = (transfer_info[i].tconv_buf) ? transfer_info[i].tconv_buf : transfer_info[i].buf;
+        /* TODO - Simplify pointer management here */
+        if (transfer_info[i].tconv_buf)
+            buf_to_write = transfer_info[i].tconv_buf;
+        else {
+            buf_to_write = (transfer_info[i].u.write_info.write_body)
+                               ? transfer_info[i].u.write_info.write_body
+                               : transfer_info[i].buf;
+        }
 
         /* Setup the size of the data being transferred and the data buffer itself (for non-simple
          * types like object references or variable length types)
@@ -1146,7 +1189,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 #endif
 
         /* If using a point selection, add the selection body
-         * into the write body sent to server.
+         * into the write body and base64 encode the write values.
          */
         if (H5S_SEL_POINTS == sel_type) {
             const char *const fmt_string = "{%s,\"value_base64\": \"%s\"}";
@@ -1201,8 +1244,6 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 #endif
         } /* end if */
 
-        // TODO - Compound subset handling on write
-
         transfer_info[i].u.write_info.uinfo.buffer =
             is_transfer_binary ? buf_to_write : transfer_info[i].u.write_info.write_body;
         transfer_info[i].u.write_info.uinfo.buffer_size = write_body_len;
@@ -1249,6 +1290,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
             RV_free(selection_body);
             selection_body = NULL;
         }
+
     } /* End iteration over dsets to write to */
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -3692,7 +3734,7 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t t
 
     /* Form the Datatype portion of the Dataset create request */
     if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE,
-                                    pobj->domain->u.file.server_version) < 0)
+                                    pobj->domain->u.file.server_info.version) < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL,
                         "can't convert dataset's datatype to JSON representation");
 
@@ -4599,7 +4641,13 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
                             "error while checking if types are compound subsets");
 
-        if (subset_info > 0)
+        if (subset_info == H5T_SUBSET_SRC)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                            "read to type with more members than file type is unsupported by the REST VOL");
+
+        /* If memory type has fewer fields than file type, modify response buffer to avoid
+         * modifying omitted fields */
+        if (subset_info == H5T_SUBSET_DST)
             if (RV_handle_compound_subset_read(file_type_id, mem_type_id, file_space_id, (const void *)buf,
                                                resp_info.buffer) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL, "can't handle compound subset read");
@@ -5076,10 +5124,10 @@ RV_handle_compound_subset_read(hid_t src_type_id, hid_t dst_type_id, hid_t dst_s
     compound_info.src_offsets = NULL;
     compound_info.lengths     = NULL;
 
-    /* Copy unselected fields from user buffer to resp info buffer to avoid overwriting fields that
+    /* Copy unselected members from user buffer to resp info buffer to avoid overwriting members that
      * weren't selected */
 
-    /* Determine which fields to copy */
+    /* Determine which members to copy */
     if ((src_nmembs = H5Tget_nmembers(src_type_id)) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get number of members in file datatype");
 
@@ -5095,8 +5143,8 @@ RV_handle_compound_subset_read(hid_t src_type_id, hid_t dst_type_id, hid_t dst_s
     compound_info.nmembers = 0;
     compound_info.nalloc   = src_nmembs;
 
-    if (RV_get_unused_compound_fields(dst_type_id, src_type_id, &compound_info) < 0)
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get unused fields in compound datatype");
+    if (RV_get_omitted_compound_members(dst_type_id, src_type_id, &compound_info) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get unused members in compound datatype");
 
     /* Allocate space for gather */
     if ((npoints = H5Sget_simple_extent_npoints(dst_space_id)) < 0)
@@ -5116,7 +5164,7 @@ RV_handle_compound_subset_read(hid_t src_type_id, hid_t dst_type_id, hid_t dst_s
                   subset_buffer, NULL, NULL) < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL, "can't gather data from read buffer");
 
-    /* Copy pre-existing data from src buffer to avoid modifying fields that are omitted via
+    /* Copy pre-existing data from src buffer to avoid modifying members that are omitted via
      * compound subsetting */
     for (size_t i = 0; i < npoints; i++) {
         for (size_t j = 0; j < compound_info.nmembers; j++) {
@@ -5139,4 +5187,116 @@ done:
         if (compound_info.lengths)
             RV_free(compound_info.lengths);
     }
-}
+} /* end RV_handle_compound_subset_read */
+
+/* Helper function to handle compound type subsetting during writes.
+ * Reads from the target dataset in order to avoid altering members
+ * which are omitted from the compound type.
+ * Provided buf_out should be as large as the original write buffer. */
+herr_t
+RV_handle_compound_subset_write(hid_t mem_type_id, hid_t file_type_id, hid_t mem_space_id,
+                                hid_t file_space_id, RV_object_t *dset, const void *buf_in, void *buf_out)
+{
+    herr_t             ret_value = SUCCEED;
+    hssize_t           npoints   = 0;
+    char              *src = NULL, *dst = NULL;
+    void              *src_buf       = NULL;
+    void              *cmpd_read_buf = NULL, *cmpd_gather_buf = NULL;
+    void              *write_gather_buf = NULL;
+    response_read_info cmpd_scatter_info;
+    size_t             scatter_size   = 0;
+    size_t             file_type_size = 0, mem_type_size = 0;
+    hid_t              space_select_all = H5S_ALL;
+
+    RV_compound_info_t compound_info;
+    compound_info.nalloc      = 0;
+    compound_info.nmembers    = 0;
+    compound_info.dst_offsets = NULL;
+    compound_info.src_offsets = NULL;
+    compound_info.lengths     = NULL;
+
+    /* Perform a read from the dataset to get values that occupy the omitted members */
+    if ((file_type_size = H5Tget_size(file_type_id)) == 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get size of file datatype");
+
+    if ((npoints = H5Sget_simple_extent_npoints(file_space_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get npoints in object dataspace");
+
+    if ((cmpd_read_buf = RV_calloc(file_type_size * (size_t)npoints)) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for compound subset buffer");
+
+    if ((RV_dataset_read(1, (void **)&dset, &file_type_id, &space_select_all, &file_space_id, H5P_DEFAULT,
+                         &cmpd_read_buf, NULL)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL,
+                        "can't perform dataset read for compound subset info");
+
+    /* Gather data from the read */
+    if ((cmpd_gather_buf = RV_calloc(file_type_size * (size_t)npoints)) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for compound gather buffer");
+
+    if (H5Dgather(file_space_id, cmpd_read_buf, file_type_id, file_type_size * (size_t)npoints,
+                  cmpd_gather_buf, NULL, NULL) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGATHER, FAIL, "can't gather data for compound subset write");
+
+    /* Gather data from the user-provided write buffer */
+    if ((write_gather_buf = RV_calloc(file_type_size * (size_t)npoints)) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for compound subset buffer");
+
+    if (H5Dgather(mem_space_id, buf_in, file_type_id, file_type_size * (size_t)npoints, write_gather_buf,
+                  NULL, NULL) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGATHER, FAIL,
+                        "can't gather write data from buffer for compound subsetting");
+
+    /* Get information on members omitted by compound subsetting */
+    if ((compound_info.nalloc = H5Tget_nmembers(file_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of file type");
+
+    if ((compound_info.src_offsets = RV_calloc((sizeof(size_t) * (size_t)compound_info.nalloc))) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
+                        "can't allocate memory for compound type subsetting");
+
+    if ((compound_info.dst_offsets = RV_calloc((sizeof(size_t) * (size_t)compound_info.nalloc))) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
+                        "can't allocate memory for compound type subsetting");
+
+    if ((compound_info.lengths = RV_calloc((sizeof(size_t) * (size_t)compound_info.nalloc))) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
+                        "can't allocate memory for compound type subsetting");
+
+    if (RV_get_omitted_compound_members(mem_type_id, file_type_id, &compound_info) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                        "can't get omitted fields from subsetted compound types");
+
+    /* Copy omitted fields from gathered read buffer to gathered write buffer */
+    for (size_t elem_idx = 0; elem_idx < npoints; elem_idx++) {
+        for (size_t member_idx = 0; member_idx < compound_info.nmembers; member_idx++) {
+            src =
+                (char *)cmpd_gather_buf + (elem_idx * file_type_size) + compound_info.dst_offsets[member_idx];
+            dst = (char *)write_gather_buf + (elem_idx * file_type_size) +
+                  compound_info.dst_offsets[member_idx];
+
+            memcpy(dst, src, compound_info.lengths[member_idx]);
+        }
+    }
+
+    /* Re-scatter write buffer into output buffer according to memory dataspace */
+    cmpd_scatter_info.buffer    = write_gather_buf;
+    scatter_size                = (size_t)npoints * file_type_size;
+    cmpd_scatter_info.read_size = &scatter_size;
+
+    if (H5Dscatter(dataset_read_scatter_op, &cmpd_scatter_info, file_type_id, mem_space_id, buf_out) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_DATATYPE, FAIL, "can't scatter compound data into write buffer");
+
+done:
+    if (compound_info.nalloc > 0) {
+        RV_free(compound_info.dst_offsets);
+        RV_free(compound_info.src_offsets);
+        RV_free(compound_info.lengths);
+    }
+
+    RV_free(cmpd_read_buf);
+    RV_free(cmpd_gather_buf);
+    RV_free(write_gather_buf);
+
+    return ret_value;
+} /* end RV_handle_compound_subset_write */

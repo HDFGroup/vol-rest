@@ -216,7 +216,7 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
 
     /* Form the Datatype portion of the Attribute create request */
     if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE,
-                                    parent->domain->u.file.server_version) < 0)
+                                    parent->domain->u.file.server_info.version) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL,
                         "can't convert attribute's datatype to JSON representation");
 
