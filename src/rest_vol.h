@@ -786,6 +786,10 @@ herr_t RV_get_compound_subset_info(hid_t src_type_id, hid_t dst_type_id, RV_subs
 herr_t RV_get_unused_compound_fields(hid_t mem_type_id, hid_t file_type_id,
                                      RV_compound_info_t *compound_info);
 
+/* Helper function to handle compound type subsetting during reads. */
+herr_t RV_handle_compound_subset_read(hid_t src_type_id, hid_t dst_type_id, hid_t dst_space_id,
+                                      const void *src_buf, void *dst_buf);
+
 /* Helper function to escape control characters for JSON strings */
 herr_t RV_JSON_escape_string(const char *in, char *out, size_t *out_size);
 

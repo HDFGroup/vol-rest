@@ -4548,17 +4548,6 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
     RV_tconv_reuse_t reuse          = RV_TCONV_REUSE_NONE;
     hbool_t          fill_bkg       = FALSE;
 
-    int                file_nmembs = 0;
-    RV_compound_info_t compound_info;
-    compound_info.src_offsets = NULL;
-    compound_info.dst_offsets = NULL;
-    compound_info.lengths     = NULL;
-
-    void *subset_buffer = NULL;
-
-    char *dst = NULL;
-    char *src = NULL;
-
     if (H5T_NO_CLASS == (mem_dtype_class = H5Tget_class(mem_type_id)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
 
@@ -4610,54 +4599,10 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
                             "error while checking if types are compound subsets");
 
-        // TODO - Move this to a helper function
-        if (subset_info > 0) {
-            /* Copy unselected fields from user buffer to resp info buffer to avoid overwriting fields that
-             * weren't selected */
-
-            /* Determine which fields to copy */
-            if ((file_nmembs = H5Tget_nmembers(file_type_id)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
-                                "can't get number of members in file datatype");
-
-            if ((compound_info.lengths = RV_calloc(sizeof(size_t) * (size_t)file_nmembs)) == NULL)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate memory for compound info");
-
-            if ((compound_info.src_offsets = RV_calloc(sizeof(size_t) * (size_t)file_nmembs)) == NULL)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate memory for compound info");
-
-            if ((compound_info.dst_offsets = RV_calloc(sizeof(size_t) * (size_t)file_nmembs)) == NULL)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate memory for compound info");
-
-            compound_info.nmembers = 0;
-            compound_info.nalloc   = file_nmembs;
-
-            if (RV_get_unused_compound_fields(mem_type_id, file_type_id, &compound_info) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
-                                "can't get unused fields in compound datatype");
-
-            /* Copy those regions of memory from buf to resp_info.buf */
-            if ((subset_buffer = RV_calloc(mem_data_size)) == NULL)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
-                                "can't allocate buffer for compound subsetting");
-
-            if (H5Dgather(mem_space_id, (const void *)buf, mem_type_id, mem_data_size, subset_buffer, NULL,
-                          NULL) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL, "can't gather data from read buffer");
-
-            for (size_t i = 0; i < file_select_npoints; i++) {
-                /* Copy unused field information from subset buffer to response buffer before scattering */
-                for (size_t j = 0; j < compound_info.nmembers; j++) {
-                    src = (char *)subset_buffer + (i * mem_type_size) + compound_info.src_offsets[j];
-                    dst = (char *)resp_info.buffer + (i * file_type_size) + compound_info.dst_offsets[j];
-
-                    memcpy(dst, src, compound_info.lengths[j]);
-                }
-            }
-
-            RV_free(subset_buffer);
-            subset_buffer = NULL;
-        }
+        if (subset_info > 0)
+            if (RV_handle_compound_subset_read(file_type_id, mem_type_id, file_space_id, (const void *)buf,
+                                               resp_info.buffer) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL, "can't handle compound subset read");
 
         if ((needs_tconv = RV_need_tconv(file_type_id, mem_type_id)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to check if datatypes need conversion");
@@ -4721,18 +4666,6 @@ rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
     }
 
 done:
-    if (compound_info.lengths)
-        RV_free(compound_info.lengths);
-
-    if (compound_info.src_offsets)
-        RV_free(compound_info.src_offsets);
-
-    if (compound_info.dst_offsets)
-        RV_free(compound_info.dst_offsets);
-
-    if (subset_buffer)
-        RV_free(subset_buffer);
-
     if (obj_ref_buf)
         RV_free(obj_ref_buf);
 
@@ -5120,4 +5053,90 @@ RV_json_values_to_binary_recursive(yajl_val value_entry, hid_t dtype_id, void *v
 
 done:
     return ret_value;
+}
+
+/* Helper function to handle compound type subsetting during reads.
+ * Copies the omitted members from the source buffer to dst buf to
+ * avoid overwriting them. */
+herr_t
+RV_handle_compound_subset_read(hid_t src_type_id, hid_t dst_type_id, hid_t dst_space_id, const void *src_buf,
+                               void *dst_buf)
+{
+    herr_t   ret_value     = SUCCEED;
+    int      src_nmembs    = 0;
+    void    *subset_buffer = NULL;
+    hssize_t npoints       = 0;
+    size_t   src_type_size = 0, dst_type_size = 0;
+    char    *src = NULL, *dst = NULL;
+
+    RV_compound_info_t compound_info;
+    compound_info.nalloc      = 0;
+    compound_info.nmembers    = 0;
+    compound_info.dst_offsets = NULL;
+    compound_info.src_offsets = NULL;
+    compound_info.lengths     = NULL;
+
+    /* Copy unselected fields from user buffer to resp info buffer to avoid overwriting fields that
+     * weren't selected */
+
+    /* Determine which fields to copy */
+    if ((src_nmembs = H5Tget_nmembers(src_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get number of members in file datatype");
+
+    if ((compound_info.lengths = RV_calloc(sizeof(size_t) * (size_t)src_nmembs)) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate memory for compound info");
+
+    if ((compound_info.src_offsets = RV_calloc(sizeof(size_t) * (size_t)src_nmembs)) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate memory for compound info");
+
+    if ((compound_info.dst_offsets = RV_calloc(sizeof(size_t) * (size_t)src_nmembs)) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate memory for compound info");
+
+    compound_info.nmembers = 0;
+    compound_info.nalloc   = src_nmembs;
+
+    if (RV_get_unused_compound_fields(dst_type_id, src_type_id, &compound_info) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get unused fields in compound datatype");
+
+    /* Allocate space for gather */
+    if ((npoints = H5Sget_simple_extent_npoints(dst_space_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of points in dst dataspace");
+
+    if ((dst_type_size = H5Tget_size(dst_type_id)) == 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get size of destination datatype");
+
+    if ((src_type_size = H5Tget_size(src_type_id)) == 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get size of source datatype");
+
+    if ((subset_buffer = RV_calloc((size_t)npoints * dst_type_size)) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate buffer for compound subsetting");
+
+    /* Gather pre-existing data from src buffer */
+    if (H5Dgather(dst_space_id, (const void *)src_buf, dst_type_id, (size_t)npoints * dst_type_size,
+                  subset_buffer, NULL, NULL) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL, "can't gather data from read buffer");
+
+    /* Copy pre-existing data from src buffer to avoid modifying fields that are omitted via
+     * compound subsetting */
+    for (size_t i = 0; i < npoints; i++) {
+        for (size_t j = 0; j < compound_info.nmembers; j++) {
+            src = (char *)subset_buffer + (i * dst_type_size) + compound_info.src_offsets[j];
+            dst = (char *)dst_buf + (i * src_type_size) + compound_info.dst_offsets[j];
+
+            memcpy(dst, src, compound_info.lengths[j]);
+        }
+    }
+
+done:
+    if (subset_buffer)
+        RV_free(subset_buffer);
+
+    if (compound_info.nalloc > 0) {
+        if (compound_info.src_offsets)
+            RV_free(compound_info.src_offsets);
+        if (compound_info.dst_offsets)
+            RV_free(compound_info.dst_offsets);
+        if (compound_info.lengths)
+            RV_free(compound_info.lengths);
+    }
 }
