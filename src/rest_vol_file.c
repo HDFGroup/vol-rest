@@ -661,7 +661,6 @@ done:
 herr_t
 RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void **req)
 {
-    RV_object_t *target_domain;
     RV_object_t *file      = (RV_object_t *)obj;
     herr_t       ret_value = SUCCEED;
     size_t       host_header_len;
@@ -686,12 +685,12 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
     switch (args->op_type) {
         /* H5Fflush */
-        case H5VL_FILE_FLUSH:
+        case H5VL_FILE_FLUSH: {
             /* H5Fflush() may be passed an object within the domain, so explicitly target
              * the containing domain. */
-            target_domain            = file->domain;
-            filename                 = target_domain->u.file.filepath_name;
-            const char *flush_string = "/?flush=1&rescan=1";
+            RV_object_t *target_domain = file->domain;
+            filename                   = target_domain->u.file.filepath_name;
+            const char *flush_string   = "/?flush=1&rescan=1";
 
             name_length = strlen(filename);
 
@@ -735,6 +734,7 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTFLUSH, FAIL, "invalid server response from flush");
 
             break;
+        }
 
         /* H5Freopen */
         case H5VL_FILE_REOPEN: {
