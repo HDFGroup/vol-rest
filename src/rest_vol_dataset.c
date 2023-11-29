@@ -2274,13 +2274,23 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callbac
                     break;
                 }
 
-                    /* TODO: support for other/user-defined filters */
-
                 default:
-                    /* Push error to stack; but don't fail this function */
+                    if (strcmp(filter_class, "H5Z_FILTER_USER")) {
+                        /* Push error to stack; but don't fail this function */
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                                        "warning: invalid filter with class '%s' and ID '%lld' on DCPL",
+                                        filter_class, filter_ID);
+                    }
+
+                    /* Parse user-defined filter from JSON */
                     FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
-                                    "warning: invalid filter with class '%s' and ID '%lld' on DCPL",
-                                    filter_class, filter_ID);
+                                        "TBD: invalid filter with class '%s' and ID '%lld' on DCPL",
+                                        filter_class, filter_ID);
+                    // yajl get array
+                    // iterate through members of array 
+                    // if (H5Pset_filter(*DCPL, filter_ID, flags?, cd_nelmts, c_values))
+
+
             }
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -2444,6 +2454,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
     void  *fill_value     = NULL;
     char  *encode_buf_out = NULL;
     char  *fill_value_str = NULL;
+    char             *ud_parameters = NULL;
     herr_t ret_value      = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -3130,7 +3141,12 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                     default: /* User-defined filter */
                     {
-                        char             *parameters = NULL;
+                        size_t parameters_size = 0;
+                        size_t parameters_len = 0;
+
+
+                        // TODO - require HSDS 085
+
                         const char *const fmt_string = "{"
                                                        "\"class\": \"H5Z_FILTER_USER\","
                                                        "\"id\": %d,"
@@ -3149,8 +3165,54 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                         /* Retrieve all of the parameters for the user-defined filter */
 
+                        // dcpl, (unsigned)i, &flags, &cd_nelmts, cd_values,
+                                                    // filter_namelen, filter_name, &filter_config
+                        
+                        /* Start/end brackets and null byte */
+                        parameters_size += 3;
+
+                        for (size_t j = 0; j < cd_nelmts; j++) {
+                            /* N bytes needed to store an N digit number,
+                            *  floor(log10) + 1 of an N digit number is >= N,
+                            *  plus two bytes for space and comma characters in the list */
+                            double num_digits = 0;
+
+                            if (cd_values[j] == 0) {
+                                num_digits = 1;
+                            }
+                            else {
+                                num_digits = floor(log10((double)cd_values[j]));
+                            }
+
+                            parameters_size += (size_t)num_digits + 1 + 2;
+                        }
+
+                        if ((ud_parameters = RV_calloc(parameters_size)) == NULL)
+                            FUNC_GOTO_ERROR(H5E_CANTFILTER, H5E_CANTALLOC, FAIL, "can't allocate memory for filter parameters");
+
+                        /* Assemble JSON array for user-defined filter parameters */
+
+                        memset(ud_parameters, '[', 1);
+                        parameters_len += 1;
+
+                        for (size_t j = 0; j < cd_nelmts; j++) {
+                            // TODO - better name
+                            int this_param_len = snprintf(ud_parameters + parameters_len, parameters_size - parameters_len, "%d", cd_values[j]);
+                            parameters_len += this_param_len;
+
+                            if (j != cd_nelmts - 1) {
+                                strcat(ud_parameters + (size_t) parameters_len, ", ");
+                                parameters_len += 2;
+                            }
+                        }
+
+                        memset(ud_parameters + parameters_len, ']', 1);
+                        parameters_len += 1;
+                        memset(ud_parameters + parameters_len, '\0', 1);
+                        parameters_len += 1;
+
                         /* Check whether the buffer needs to be grown */
-                        bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH + strlen(parameters) + 1;
+                        bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH + strlen(ud_parameters) + 1;
 
                         buf_ptrdiff = out_string_curr_pos - out_string;
                         if (buf_ptrdiff < 0)
@@ -3163,7 +3225,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                         if ((bytes_printed =
                                  snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
-                                          fmt_string, filter_id, parameters)) < 0)
+                                          fmt_string, filter_id, ud_parameters)) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                         if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
@@ -3533,6 +3595,9 @@ done:
 
     if (fill_value_str)
         RV_free(fill_value_str);
+    
+    if (ud_parameters)
+        RV_free(ud_parameters);
 
     return ret_value;
 } /* end RV_convert_dataset_creation_properties_to_JSON() */
