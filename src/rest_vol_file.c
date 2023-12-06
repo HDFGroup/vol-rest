@@ -266,7 +266,8 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
                           RV_parse_server_version) < 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't parse server  version");
 
-    if (rv_hash_table_insert(RV_type_info_array_g[H5I_FILE]->table, (char *)new_file, (char *)new_file) == 0)
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_FILE]->table, (char *)new_file->URI,
+                             (char *)new_file) == 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "Failed to add file to type info array");
 
     ret_value = (void *)new_file;
@@ -433,7 +434,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     if ((file->u.file.fcpl_id = H5Pcreate(H5P_FILE_CREATE)) < 0)
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create FCPL for file");
 
-    if (rv_hash_table_insert(RV_type_info_array_g[H5I_FILE]->table, (char *)file, (char *)file) == 0)
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_FILE]->table, (char *)file->URI, (char *)file) == 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "Failed to add file to type info array");
 
     ret_value = (void *)file;
@@ -894,7 +895,7 @@ RV_file_close(void *file, hid_t dxpl_id, void **req)
         }
 
         if (RV_type_info_array_g[H5I_FILE])
-            rv_hash_table_remove(RV_type_info_array_g[H5I_FILE]->table, (char *)_file);
+            rv_hash_table_remove(RV_type_info_array_g[H5I_FILE]->table, (char *)_file->URI);
 
         RV_free(_file);
     }

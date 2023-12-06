@@ -286,7 +286,7 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
     if ((new_dataset->u.dataset.space_id = H5Scopy(space_id)) < 0)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCOPY, NULL, "failed to copy dataset's dataspace");
 
-    if (rv_hash_table_insert(RV_type_info_array_g[H5I_DATASET]->table, (char *)new_dataset,
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_DATASET]->table, (char *)new_dataset->URI,
                              (char *)new_dataset) == 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "Failed to add dataset to type info array");
 
@@ -341,20 +341,17 @@ void *
 RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, hid_t dapl_id,
                 hid_t dxpl_id, void **req)
 {
-    RV_object_t *parent   = (RV_object_t *)obj;
-    RV_object_t *dataset  = NULL;
-    H5I_type_t   obj_type = H5I_UNINIT;
-    htri_t       search_ret;
-    void        *ret_value = NULL;
-    loc_info     loc_info_out;
-    size_t       path_size = 0;
-    size_t       path_len  = 0;
-
-    RV_type_info        *type_info = RV_type_info_array_g[H5I_DATASET];
-    rv_hash_table_iter_t iterator;
-    rv_hash_table_iterate(type_info->table, &iterator);
-    hid_t        matching_dspace = H5I_INVALID_HID;
-    RV_object_t *other_dataset   = NULL;
+    RV_object_t          *parent   = (RV_object_t *)obj;
+    RV_object_t          *dataset  = NULL;
+    H5I_type_t            obj_type = H5I_UNINIT;
+    htri_t                search_ret;
+    void                 *ret_value = NULL;
+    loc_info              loc_info_out;
+    size_t                path_size       = 0;
+    size_t                path_len        = 0;
+    hid_t                 matching_dspace = H5I_INVALID_HID;
+    RV_object_t          *other_dataset   = NULL;
+    rv_hash_table_value_t table_value     = RV_HASH_TABLE_NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset open call with following parameters:\n");
@@ -411,13 +408,10 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
 
     /* If this is another view of an already-opened dataset, make them share the same dataspace
      * so that changes to it (e.g. resizes) are visible to both views */
-    while (rv_hash_table_iter_has_more(&iterator)) {
-        other_dataset = (RV_object_t *)rv_hash_table_iter_next(&iterator);
-
-        if (!strcmp(other_dataset->URI, dataset->URI)) {
-            matching_dspace = other_dataset->u.dataset.space_id;
-            break;
-        }
+    if ((table_value = rv_hash_table_lookup(RV_type_info_array_g[H5I_DATASET]->table, dataset->URI)) !=
+        RV_HASH_TABLE_NULL) {
+        other_dataset   = (RV_object_t *)table_value;
+        matching_dspace = other_dataset->u.dataset.space_id;
     }
 
     if (matching_dspace != H5I_INVALID_HID) {
@@ -453,7 +447,8 @@ RV_dataset_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCREATE, NULL,
                         "can't parse dataset's creation properties from JSON representation");
 
-    if (rv_hash_table_insert(RV_type_info_array_g[H5I_DATASET]->table, (char *)dataset, (char *)dataset) == 0)
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_DATASET]->table, (char *)dataset->URI,
+                             (char *)dataset) == 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "Failed to add dataset to type info array");
 
     ret_value = (void *)dataset;
@@ -1724,7 +1719,7 @@ RV_dataset_close(void *dset, hid_t dxpl_id, void **req)
     } /* end if */
 
     if (RV_type_info_array_g[H5I_DATASET])
-        rv_hash_table_remove(RV_type_info_array_g[H5I_DATASET]->table, (char *)_dset);
+        rv_hash_table_remove(RV_type_info_array_g[H5I_DATASET]->table, (char *)_dset->URI);
 
     if (RV_file_close(_dset->domain, H5P_DEFAULT, NULL)) {
         FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");
