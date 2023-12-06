@@ -153,7 +153,8 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
         new_datatype->u.datatype.tcpl_id = H5P_DATATYPE_CREATE_DEFAULT;
 
     /* Convert the datatype into JSON to be used in the request body */
-    if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
+    if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE,
+                                    parent->domain->u.file.server_version) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert datatype to JSON representation");
 
     /* If this is not a H5Tcommit_anon call, create a link for the Datatype
@@ -711,7 +712,8 @@ done:
  *              July, 2017
  */
 herr_t
-RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested)
+RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested,
+                            server_api_version server_version)
 {
     H5T_class_t type_class;
     const char *leading_string = "\"type\": "; /* Leading string for all datatypes */
@@ -857,11 +859,35 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 
         case H5T_STRING: {
             const char *const cset_ascii_string = "H5T_CSET_ASCII";
-            htri_t            is_vlen;
+            const char *const cset_utf8_string  = "H5T_CSET_UTF8";
+            const char       *cset              = NULL;
+            H5T_cset_t        char_set          = H5T_CSET_ERROR;
+
+            char_set = H5Tget_cset(type_id);
+
+            htri_t is_vlen;
 
             if ((is_vlen = H5Tis_variable_str(type_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
                                 "can't determine if datatype is variable-length string");
+
+            switch (char_set) {
+                case (H5T_CSET_ASCII):
+                    cset = cset_ascii_string;
+                    break;
+                case (H5T_CSET_UTF8):
+                    if (!is_vlen && !(SERVER_VERSION_SUPPORTS_FIXED_LENGTH_UTF8(server_version)))
+                        FUNC_GOTO_ERROR(
+                            H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                            "fixed-length UTF8 strings not supported until server version 0.8.5+");
+
+                    cset = cset_utf8_string;
+                    break;
+                case (H5T_CSET_ERROR):
+                default:
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid character set for string");
+                    break;
+            }
 
             /* Build the Datatype body by appending the character set for the string type,
              * any type of string padding, and the length of the string */
@@ -879,8 +905,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                                                     "\"length\": \"H5T_VARIABLE\""
                                                     "}";
 
-                bytes_to_print =
-                    (strlen(fmt_string) - 4) + strlen(cset_ascii_string) + strlen(nullterm_string) + 1;
+                bytes_to_print = (strlen(fmt_string) - 4) + strlen(cset) + strlen(nullterm_string) + 1;
 
                 buf_ptrdiff = out_string_curr_pos - out_string;
                 if (buf_ptrdiff < 0)
@@ -892,7 +917,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                                 out_string_curr_pos, H5E_DATATYPE, FAIL);
 
                 if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - leading_string_len,
-                                              fmt_string, cset_ascii_string, nullterm_string)) < 0)
+                                              fmt_string, cset, nullterm_string)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                 if ((size_t)bytes_printed >= out_string_len - leading_string_len)
@@ -910,8 +935,8 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                                                    "\"length\": %zu"
                                                    "}";
 
-                bytes_to_print = (strlen(fmt_string) - 7) + strlen(cset_ascii_string) +
-                                 strlen(nullpad_string) + MAX_NUM_LENGTH + 1;
+                bytes_to_print =
+                    (strlen(fmt_string) - 7) + strlen(cset) + strlen(nullpad_string) + MAX_NUM_LENGTH + 1;
 
                 buf_ptrdiff = out_string_curr_pos - out_string;
                 if (buf_ptrdiff < 0)
@@ -923,7 +948,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                                 out_string_curr_pos, H5E_DATATYPE, FAIL);
 
                 if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - leading_string_len,
-                                              fmt_string, cset_ascii_string, nullpad_string, type_size)) < 0)
+                                              fmt_string, cset, nullpad_string, type_size)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                 if ((size_t)bytes_printed >= out_string_len - leading_string_len)
@@ -981,8 +1006,8 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                 printf("-> Converting compound datatype member %zu to JSON\n\n", i);
 #endif
 
-                if (RV_convert_datatype_to_JSON(compound_member, &compound_member_strings[i], NULL, FALSE) <
-                    0)
+                if (RV_convert_datatype_to_JSON(compound_member, &compound_member_strings[i], NULL, FALSE,
+                                                server_version) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
                                     "can't convert compound datatype member to JSON representation");
 
@@ -1243,8 +1268,8 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             printf("-> Converting array datatype's base datatype to JSON\n\n");
 #endif
 
-            if (RV_convert_datatype_to_JSON(type_base_class, &array_base_type, &array_base_type_len, TRUE) <
-                0)
+            if (RV_convert_datatype_to_JSON(type_base_class, &array_base_type, &array_base_type_len, TRUE,
+                                            server_version) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
                                 "can't convert datatype to JSON representation");
 

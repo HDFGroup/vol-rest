@@ -3582,7 +3582,8 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t t
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "dataset create request output buffer was NULL");
 
     /* Form the Datatype portion of the Dataset create request */
-    if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
+    if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE,
+                                    pobj->domain->u.file.server_version) < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL,
                         "can't convert dataset's datatype to JSON representation");
 
