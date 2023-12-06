@@ -686,7 +686,7 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
     switch (args->op_type) {
         /* H5Fflush */
-        case H5VL_FILE_FLUSH:
+        case H5VL_FILE_FLUSH: {
             /* H5Fflush() may be passed an object within the domain, so explicitly target
              * the containing domain. */
             RV_object_t *target_domain = file->domain;
@@ -735,6 +735,7 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTFLUSH, FAIL, "invalid server response from flush");
 
             break;
+        }
 
         /* H5Freopen */
         case H5VL_FILE_REOPEN: {

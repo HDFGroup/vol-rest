@@ -2530,7 +2530,7 @@ RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, vo
 
         /* Allocate root "path" on heap for consistency with other RV_object_t types */
         if ((new_domain->handle_path = RV_malloc(2)) == NULL)
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath");
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for filepath");
 
         strncpy(new_domain->handle_path, "/", 2);
 
@@ -2552,7 +2552,7 @@ done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
-    if (ret_value < 0) {
+    if ((ret_value < 0) && GCPL_buf) {
         RV_free(GCPL_buf);
         GCPL_buf                  = NULL;
         loc_info_out->GCPL_base64 = NULL;

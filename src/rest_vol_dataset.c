@@ -1485,7 +1485,7 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
 
     switch (args->op_type) {
         /* H5Dset_extent */
-        case H5VL_DATASET_SET_EXTENT:
+        case H5VL_DATASET_SET_EXTENT: {
             int            ndims      = 0;
             const hsize_t *new_extent = NULL;
             H5D_layout_t   layout     = H5D_LAYOUT_ERROR;
@@ -1629,6 +1629,7 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
                                 "unable to modify extent of local dataspace");
 
             break;
+        }
 
         /* H5Dflush */
         case H5VL_DATASET_FLUSH:
@@ -4616,7 +4617,7 @@ RV_dataspace_selection_is_contiguous(hid_t space_id)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
                                 "can't allocate space for hyperslab selection 'block' values");
 
-            if (nblocks = H5Sget_select_hyper_nblocks(space_id) < 0)
+            if ((nblocks = H5Sget_select_hyper_nblocks(space_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of hyperslab blocks");
 
             if (H5Sget_regular_hyperslab(space_id, start, stride, count, block) < 0)
