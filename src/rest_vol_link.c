@@ -330,6 +330,11 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
                             new_link_loc_obj->URI, url_encoded_link_name)) < 0)
         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
+    if (!(SERVER_VERSION_SUPPORTS_LONG_URLS(new_link_loc_obj->domain->u.file.server_version)) &&
+        (url_len >= OLD_URL_MAX_LENGTH))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL,
+                        "URL with length > 2048 not supported by server versions before 0.8.5");
+
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link create URL size exceeded maximum URL size");
 
@@ -542,6 +547,12 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
                         0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
+                    if (!(SERVER_VERSION_SUPPORTS_LONG_URLS(loc_obj->domain->u.file.server_version)) &&
+                        (url_len >= OLD_URL_MAX_LENGTH))
+                        FUNC_GOTO_ERROR(
+                            H5E_LINK, H5E_UNSUPPORTED, FAIL,
+                            "URL with length > 2048 not supported by server versions before 0.8.5");
+
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                         "H5Lget_info request URL size exceeded maximum URL size");
@@ -653,6 +664,11 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
                 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
+            if (!(SERVER_VERSION_SUPPORTS_LONG_URLS(loc_obj->domain->u.file.server_version)) &&
+                (url_len >= OLD_URL_MAX_LENGTH))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL,
+                                "URL with length > 2048 not supported by server versions before 0.8.5");
+
             if (url_len >= URL_MAX_LENGTH)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                 "H5Lget_name_by_idx request URL size exceeded maximum URL size");
@@ -759,6 +775,12 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
                                             empty_dirname ? loc_obj->URI : temp_URI, url_encoded_link_name)) <
                         0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+                    if (!(SERVER_VERSION_SUPPORTS_LONG_URLS(loc_obj->domain->u.file.server_version)) &&
+                        (url_len >= OLD_URL_MAX_LENGTH))
+                        FUNC_GOTO_ERROR(
+                            H5E_LINK, H5E_UNSUPPORTED, FAIL,
+                            "URL with length > 2048 not supported by server versions before 0.8.5");
 
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
@@ -938,6 +960,12 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
                         0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
+                    if (!(SERVER_VERSION_SUPPORTS_LONG_URLS(loc_obj->domain->u.file.server_version)) &&
+                        (url_len >= OLD_URL_MAX_LENGTH))
+                        FUNC_GOTO_ERROR(
+                            H5E_LINK, H5E_UNSUPPORTED, FAIL,
+                            "URL with length > 2048 not supported by server versions before 0.8.5");
+
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                         "H5Ldelete request URL size exceeded maximum URL size");
@@ -1036,6 +1064,11 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
                                     empty_dirname ? loc_obj->URI : temp_URI, url_encoded_link_name)) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
+            if (!(SERVER_VERSION_SUPPORTS_LONG_URLS(loc_obj->domain->u.file.server_version)) &&
+                (url_len >= OLD_URL_MAX_LENGTH))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL,
+                                "URL with length > 2048 not supported by server versions before 0.8.5");
+
             if (url_len >= URL_MAX_LENGTH)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                 "H5Lexists request URL size exceeded maximum URL size");
@@ -1121,6 +1154,12 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
                                             loc_obj->URI)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
+                    if (!(SERVER_VERSION_SUPPORTS_LONG_URLS(loc_obj->domain->u.file.server_version)) &&
+                        (url_len >= OLD_URL_MAX_LENGTH))
+                        FUNC_GOTO_ERROR(
+                            H5E_LINK, H5E_UNSUPPORTED, FAIL,
+                            "URL with length > 2048 not supported by server versions before 0.8.5");
+
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                         "H5Literate/visit request URL size exceeded maximum URL size");
@@ -1156,6 +1195,12 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links", base_URL,
                                             ((RV_object_t *)link_iter_group_object)->URI)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+                    if (!(SERVER_VERSION_SUPPORTS_LONG_URLS(loc_obj->domain->u.file.server_version)) &&
+                        (url_len >= OLD_URL_MAX_LENGTH))
+                        FUNC_GOTO_ERROR(
+                            H5E_LINK, H5E_UNSUPPORTED, FAIL,
+                            "URL with length > 2048 not supported by server versions before 0.8.5");
 
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(
@@ -2019,6 +2064,11 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links", base_URL,
                                             url_encoded_link_name)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+                    // if (!(SERVER_VERSION_SUPPORTS_LONG_URLS(???->domain->u.file.server_version))
+                    //     && (url_len >= OLD_URL_MAX_LENGTH))
+                    //     FUNC_GOTO_ERROR(H5E_LINK, H5E_UNSUPPORTED, FAIL, "URL with length > 2048 not
+                    //     supported by server versions before 0.8.5");
 
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,

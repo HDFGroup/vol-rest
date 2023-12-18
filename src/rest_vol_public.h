@@ -27,6 +27,9 @@
  */
 #define URL_MAX_LENGTH ((64 * 1024) + 1024) + 2048
 
+/* Maximum URL length supported by server API versions <= 0.8.4 */
+#define OLD_URL_MAX_LENGTH 2048
+
 /* Maximum length in characters of the URI of an object as returned by the server. If the
  * server in question returns URIs which are longer than this, the value will have to be
  * adjusted. Otherwise, the URIs will be truncated and invalid, likely causing severe

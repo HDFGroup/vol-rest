@@ -770,6 +770,8 @@ herr_t RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type
 #define SERVER_VERSION_SUPPORTS_FIXED_LENGTH_UTF8(version)                                                   \
     (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 5))
 
+#define SERVER_VERSION_SUPPORTS_LONG_URLS(version) (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 5))
+
 #ifdef __cplusplus
 }
 #endif
