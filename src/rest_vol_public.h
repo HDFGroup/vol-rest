@@ -25,7 +25,7 @@
  * this VOL connector. If the URLs used in operation are longer than this, the value will have
  * to be adjusted. Otherwise, the URLs will be truncated.
  */
-#define URL_MAX_LENGTH 2048
+#define URL_MAX_LENGTH ((64 * 1024) + 1024) + 2048
 
 /* Maximum length in characters of the URI of an object as returned by the server. If the
  * server in question returns URIs which are longer than this, the value will have to be

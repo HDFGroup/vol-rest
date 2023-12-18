@@ -79,11 +79,11 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     char        *datatype_body         = NULL;
     char        *link_body             = NULL;
     char        *path_dirname          = NULL;
-    char         request_url[URL_MAX_LENGTH];
-    int          commit_request_len = 0;
-    int          link_body_len      = 0;
-    int          url_len            = 0;
-    void        *ret_value          = NULL;
+    char        *request_url           = NULL;
+    int          commit_request_len    = 0;
+    int          link_body_len         = 0;
+    int          url_len               = 0;
+    void        *ret_value             = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received datatype commit call with following parameters:\n");
@@ -243,6 +243,9 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     /* Instruct cURL that we are sending JSON */
     curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
 
+    if ((request_url = RV_malloc(strlen(base_URL) + strlen("/datatypes") + 1)) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for request url");
+
     /* Redirect cURL from the base URL to "/datatypes" to commit the datatype */
     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes", base_URL)) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "snprintf error");
@@ -313,6 +316,8 @@ done:
         RV_free(datatype_body);
     if (link_body)
         RV_free(link_body);
+    if (request_url)
+        RV_free(request_url);
 
     /* Clean up allocated datatype object if there was an issue */
     if (new_datatype && !ret_value)

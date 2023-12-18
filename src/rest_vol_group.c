@@ -54,7 +54,7 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     char        *path_dirname          = NULL;
     char        *base64_plist_buffer   = NULL;
     char         target_URI[URI_MAX_LENGTH];
-    char         request_url[URL_MAX_LENGTH];
+    char        *request_url             = NULL;
     int          create_request_body_len = 0;
     int          url_len                 = 0;
     void        *binary_plist_buffer     = NULL;
@@ -241,6 +241,9 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     /* Instruct cURL that we are sending JSON */
     curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
 
+    if ((request_url = (char *)RV_malloc(strlen(base_URL) + strlen("/groups") + 1)) == NULL)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for request url");
+
     /* Redirect cURL from the base URL to "/groups" to create the group */
     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups", base_URL)) < 0)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error");
@@ -307,6 +310,8 @@ done:
         RV_free(create_request_body);
     if (host_header)
         RV_free(host_header);
+    if (request_url)
+        RV_free(request_url);
 
     /* Clean up allocated group object if there was an issue */
     if (new_group && !ret_value)
@@ -487,9 +492,9 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
     RV_object_t *loc_obj         = (RV_object_t *)obj;
     size_t       host_header_len = 0;
     char        *host_header     = NULL;
-    char         request_url[URL_MAX_LENGTH];
-    int          url_len   = 0;
-    herr_t       ret_value = SUCCEED;
+    char        *request_url     = NULL;
+    int          url_len         = 0;
+    herr_t       ret_value       = SUCCEED;
 
     loc_info loc_info_out;
     memset(&loc_info_out, 0, sizeof(loc_info));
@@ -526,6 +531,10 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
                     printf("-> H5Gget_info(): Group's object type: %s\n\n",
                            object_type_to_string(loc_obj->obj_type));
 #endif
+
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen("/groups/") +
+                                                 strlen(loc_obj->URI) + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
 
                     /* Redirect cURL from the base URL to "/groups/<id>" to get information about the group */
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL,
@@ -575,6 +584,10 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
                     printf("-> H5Gget_info_by_name(): group's parent object type: %s\n\n",
                            object_type_to_string(obj_type));
 #endif
+
+                    if ((request_url =
+                             RV_malloc(strlen(base_URL) + strlen("/groups/") + strlen(temp_URI) + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
 
                     /* Redirect cURL from the base URL to "/groups/<id>" to get information about the group */
                     if ((url_len =
@@ -663,6 +676,8 @@ done:
 
     if (host_header)
         RV_free(host_header);
+    if (request_url)
+        RV_free(request_url);
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);

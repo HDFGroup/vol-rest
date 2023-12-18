@@ -139,9 +139,9 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
     size_t       path_len                = 0;
     char        *host_header             = NULL;
     char        *create_request_body     = NULL;
-    char         request_url[URL_MAX_LENGTH];
-    int          url_len   = 0;
-    void        *ret_value = NULL;
+    char        *request_url             = NULL;
+    int          url_len                 = 0;
+    void        *ret_value               = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset create call with following parameters:\n");
@@ -240,6 +240,9 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
     curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
 
     /* Redirect cURL from the base URL to "/datasets" to create the dataset */
+    if ((request_url = RV_malloc(strlen(base_URL) + strlen("/datasets") + 1)) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, NULL, "can't allocate space for request url");
+
     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets", base_URL)) < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, NULL, "snprintf error");
 
@@ -308,6 +311,8 @@ done:
         RV_free(create_request_body);
     if (host_header)
         RV_free(host_header);
+    if (request_url)
+        RV_free(request_url);
 
     /* Clean up allocated dataset object if there was an issue */
     if (new_dataset && !ret_value)
@@ -495,11 +500,13 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
 {
     H5T_class_t            dtype_class;
     hbool_t                is_transfer_binary = FALSE;
+    hbool_t                is_select_request  = FALSE;
     htri_t                 is_variable_str;
     hssize_t               file_select_npoints = 0;
     hssize_t               mem_select_npoints  = 0;
     size_t                 selection_body_len  = 0;
     size_t                 host_header_len     = 0;
+    size_t                 request_url_size    = 0;
     int                    url_len             = 0;
     herr_t                 ret_value           = SUCCEED;
     CURL                  *curl_multi_handle   = NULL;
@@ -517,9 +524,6 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
             FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given read buffer was NULL");
 
         transfer_info[i].curl_easy_handle = curl_easy_duphandle(curl);
-
-        if ((transfer_info[i].request_url = calloc(URL_MAX_LENGTH, sizeof(char))) == NULL)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "failed to allocate memory for request URLs");
 
         if (CURLE_OK != curl_easy_setopt(transfer_info[i].curl_easy_handle, CURLOPT_WRITEFUNCTION,
                                          H5_rest_curl_write_data_callback_no_global))
@@ -674,17 +678,22 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
             transfer_info[i].curl_headers,
             is_transfer_binary ? "Accept: application/octet-stream" : "Accept: application/json");
 
+        is_select_request = is_transfer_binary && transfer_info[i].selection_body &&
+                            (H5S_SEL_POINTS != transfer_info[i].u.read_info.sel_type);
+
+        request_url_size = strlen(base_URL) + strlen("/datasets/") + strlen(transfer_info[i].dataset->URI) +
+                           strlen("/value") + 1;
+
+        if (is_select_request)
+            request_url_size += (strlen("?select=") + strlen(transfer_info[i].selection_body));
+
+        if ((transfer_info[i].request_url = RV_calloc(request_url_size)) == NULL)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
+
         /* Redirect cURL from the base URL to "/datasets/<id>/value" to get the dataset data values */
         if ((url_len = snprintf(transfer_info[i].request_url, URL_MAX_LENGTH, "%s/datasets/%s/value%s%s",
-                                base_URL, transfer_info[i].dataset->URI,
-                                is_transfer_binary && transfer_info[i].selection_body &&
-                                        (H5S_SEL_POINTS != transfer_info[i].u.read_info.sel_type)
-                                    ? "?select="
-                                    : "",
-                                is_transfer_binary && transfer_info[i].selection_body &&
-                                        (H5S_SEL_POINTS != transfer_info[i].u.read_info.sel_type)
-                                    ? transfer_info[i].selection_body
-                                    : "")) < 0)
+                                base_URL, transfer_info[i].dataset->URI, is_select_request ? "?select=" : "",
+                                is_select_request ? transfer_info[i].selection_body : "")) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
         if (url_len >= URL_MAX_LENGTH)
@@ -843,6 +852,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
     H5S_sel_type           sel_type = H5S_SEL_ALL;
     H5T_class_t            dtype_class;
     hbool_t                is_transfer_binary = FALSE;
+    hbool_t                is_select_request  = FALSE;
     htri_t                 contiguous         = FALSE;
     htri_t                 is_variable_str;
     hssize_t               mem_select_npoints  = 0;
@@ -851,6 +861,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
     size_t                 host_header_len     = 0;
     size_t                 write_body_len      = 0;
     size_t                 selection_body_len  = 0;
+    size_t                 request_url_size    = 0;
     char                  *selection_body      = NULL;
     int                    url_len             = 0;
     herr_t                 ret_value           = SUCCEED;
@@ -886,9 +897,6 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
             FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a dataset");
 
         transfer_info[i].curl_easy_handle = curl_easy_duphandle(curl);
-
-        if ((transfer_info[i].request_url = calloc(URL_MAX_LENGTH, sizeof(char))) == NULL)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "failed to allocate memory for request URLs");
 
         if (CURLE_OK != curl_easy_setopt(transfer_info[i].curl_easy_handle, CURLOPT_WRITEFUNCTION,
                                          H5_rest_curl_write_data_callback_no_global))
@@ -1118,13 +1126,21 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
             transfer_info[i].curl_headers,
             is_transfer_binary ? "Content-Type: application/octet-stream" : "Content-Type: application/json");
 
+        is_select_request = is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type);
+
+        request_url_size = strlen(base_URL) + strlen("/datasets/") + strlen(transfer_info[i].dataset->URI) +
+                           strlen("/value") + 1;
+
+        if (is_select_request)
+            request_url_size += (strlen("?select=") + strlen(selection_body));
+
+        if ((transfer_info[i].request_url = RV_calloc(request_url_size)) == NULL)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
+
         /* Redirect cURL from the base URL to "/datasets/<id>/value" to write the value out */
-        if ((url_len = snprintf(
-                 transfer_info[i].request_url, URL_MAX_LENGTH, "%s/datasets/%s/value%s%s", base_URL,
-                 transfer_info[i].dataset->URI,
-                 is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? "?select=" : "",
-                 is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? selection_body
-                                                                                      : "")) < 0)
+        if ((url_len = snprintf(transfer_info[i].request_url, URL_MAX_LENGTH, "%s/datasets/%s/value%s%s",
+                                base_URL, transfer_info[i].dataset->URI, is_select_request ? "?select=" : "",
+                                is_select_request ? selection_body : "")) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
         if (url_len >= URL_MAX_LENGTH)
@@ -1315,7 +1331,7 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
     H5VL_file_specific_args_t vol_flush_args;
     size_t                    host_header_len = 0;
     char                     *host_header     = NULL;
-    char                      request_url[URL_MAX_LENGTH];
+    char                     *request_url     = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received dataset get call with following parameters:\n");
@@ -1379,6 +1395,10 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
             if (RV_file_specific((void *)dset->domain, &vol_flush_args, H5P_DEFAULT, NULL) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTFLUSH, FAIL, "can't flush datase's domain");
 
+            if ((request_url = RV_malloc(strlen(base_URL) + strlen("/datasets/") + strlen(dset->URI) +
+                                         strlen("?verbose=1") + 1)) == NULL)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
+
             /* Make GET request to dataset with 'verbose' parameter for HSDS. */
             snprintf(request_url, URL_MAX_LENGTH, "%s%s%s%s", base_URL, "/datasets/", dset->URI,
                      "?verbose=1");
@@ -1438,6 +1458,9 @@ done:
         curl_headers = NULL;
     }
 
+    if (request_url)
+        RV_free(request_url);
+
     RV_free(host_header);
 
     PRINT_ERROR_STACK;
@@ -1465,11 +1488,11 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
     char        *host_header        = NULL;
     char        *request_body       = NULL;
     char        *request_body_shape = NULL;
-    char         request_url[URL_MAX_LENGTH];
-    int          url_len       = 0;
-    hid_t        new_dspace_id = H5I_INVALID_HID;
-    hsize_t     *old_extent    = NULL;
-    hsize_t     *maxdims       = NULL;
+    char        *request_url        = NULL;
+    int          url_len            = 0;
+    hid_t        new_dspace_id      = H5I_INVALID_HID;
+    hsize_t     *old_extent         = NULL;
+    hsize_t     *maxdims            = NULL;
     upload_info  uinfo;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1581,7 +1604,6 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
             uinfo.bytes_sent  = 0;
 
             /* Target dataset's shape URL */
-            memset(request_url, 0, URL_MAX_LENGTH);
 
             /* Set up curl request */
             host_header_len = strlen(dset->domain->u.file.filepath_name) + strlen(host_string) + 1;
@@ -1598,6 +1620,10 @@ RV_dataset_specific(void *obj, H5VL_dataset_specific_args_t *args, hid_t dxpl_id
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
+
+            if ((request_url = RV_malloc(strlen(base_URL) + strlen("/datasets/") + strlen(dset->URI) +
+                                         strlen("/shape") + 1)) == NULL)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
 
             if ((url_len =
                      snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/shape", base_URL, dset->URI)) < 0)
@@ -1654,6 +1680,9 @@ done:
 
     if (host_header)
         RV_free(host_header);
+
+    if (request_url)
+        RV_free(request_url);
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);

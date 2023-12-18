@@ -74,9 +74,9 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
     size_t             create_request_nalloc = 0;
     size_t             host_header_len       = 0;
     void              *hard_link_target_obj;
-    char              *host_header         = NULL;
-    char              *create_request_body = NULL;
-    char               request_url[URL_MAX_LENGTH];
+    char              *host_header             = NULL;
+    char              *create_request_body     = NULL;
+    char              *request_url             = NULL;
     char              *url_encoded_link_name   = NULL;
     int                create_request_body_len = 0;
     int                url_len                 = 0;
@@ -322,6 +322,10 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
 
     /* Redirect cURL from the base URL to "/groups/<id>/links/<name>" to create the link */
+    if ((request_url = RV_malloc(strlen(base_URL) + strlen("/groups/") + strlen(new_link_loc_obj->URI) +
+                                 strlen("/links/") + strlen(url_encoded_link_name) + 1)) == NULL)
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
+
     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links/%s", base_URL,
                             new_link_loc_obj->URI, url_encoded_link_name)) < 0)
         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
@@ -374,7 +378,8 @@ done:
         RV_free(host_header);
     if (url_encoded_link_name)
         curl_free(url_encoded_link_name);
-
+    if (request_url)
+        RV_free(request_url);
     /* Unset cURL UPLOAD option to ensure that future requests don't try to use PUT calls */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 0))
         FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't unset cURL PUT option: %s", curl_err_buf);
@@ -466,9 +471,9 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
     char        *link_dir_name         = NULL;
     char        *url_encoded_link_name = NULL;
     char         temp_URI[URI_MAX_LENGTH];
-    char         request_url[URL_MAX_LENGTH];
-    int          url_len   = 0;
-    herr_t       ret_value = SUCCEED;
+    char        *request_url = NULL;
+    int          url_len     = 0;
+    herr_t       ret_value   = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received link get call with following parameters:\n");
@@ -524,6 +529,13 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
                     if (NULL == (url_encoded_link_name = curl_easy_escape(
                                      curl, H5_rest_basename(loc_params->loc_data.loc_by_name.name), 0)))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
+
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen("/groups/") +
+                                                 (empty_dirname ? strlen(loc_obj->URI) : strlen(temp_URI)) +
+                                                 strlen("/links/") + strlen(url_encoded_link_name) + 1)) ==
+                        NULL)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
 
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links/%s", base_URL,
                                             empty_dirname ? loc_obj->URI : temp_URI, url_encoded_link_name)) <
@@ -633,6 +645,10 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
             if (!search_ret || search_ret < 0)
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate group");
 
+            if ((request_url = RV_malloc(strlen(base_URL) + strlen("/groups/") + strlen(temp_URI) +
+                                         strlen("/links") + 1)) == NULL)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
+
             if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links", base_URL, temp_URI)) <
                 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
@@ -732,6 +748,13 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
                                      curl, H5_rest_basename(loc_params->loc_data.loc_by_name.name), 0)))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
 
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen("/groups/") +
+                                                 (empty_dirname ? strlen(loc_obj->URI) : strlen(temp_URI)) +
+                                                 strlen("/links/") + strlen(url_encoded_link_name) + 1)) ==
+                        NULL)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
+
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links/%s", base_URL,
                                             empty_dirname ? loc_obj->URI : temp_URI, url_encoded_link_name)) <
                         0)
@@ -813,6 +836,8 @@ done:
         curl_free(url_encoded_link_name);
     if (link_dir_name)
         RV_free(link_dir_name);
+    if (request_url)
+        RV_free(request_url);
 
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
@@ -847,7 +872,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
     char        *host_header            = NULL;
     char        *link_path_dirname      = NULL;
     char         temp_URI[URI_MAX_LENGTH];
-    char         request_url[URL_MAX_LENGTH];
+    char        *request_url           = NULL;
     char        *url_encoded_link_name = NULL;
     int          url_len               = 0;
     herr_t       ret_value             = SUCCEED;
@@ -901,6 +926,13 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
 
                     /* Redirect cURL from the base URL to "/groups/<id>/links/<name>" to delete link */
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen("/groups/") +
+                                                 (empty_dirname ? strlen(loc_obj->URI) : strlen(temp_URI)) +
+                                                 strlen("/links/") + strlen(url_encoded_link_name) + 1)) ==
+                        NULL)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
+
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links/%s", base_URL,
                                             empty_dirname ? loc_obj->URI : temp_URI, url_encoded_link_name)) <
                         0)
@@ -995,6 +1027,11 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
                              curl, H5_rest_basename(loc_params->loc_data.loc_by_name.name), 0)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
 
+            if ((request_url = RV_malloc(strlen(base_URL) + strlen("/groups/") +
+                                         (empty_dirname ? strlen(loc_obj->URI) : strlen(temp_URI)) +
+                                         strlen("/links/") + strlen(url_encoded_link_name) + 1)) == NULL)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
+
             if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links/%s", base_URL,
                                     empty_dirname ? loc_obj->URI : temp_URI, url_encoded_link_name)) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
@@ -1075,6 +1112,11 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
                                      RV_group_open(loc_obj, loc_params, ".", H5P_DEFAULT, H5P_DEFAULT, NULL)))
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, FAIL, "can't open link iteration group");
 
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen("/groups/") +
+                                                 strlen(loc_obj->URI) + strlen("/links") + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
+
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links", base_URL,
                                             loc_obj->URI)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
@@ -1104,6 +1146,12 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
                                      RV_group_open(loc_obj, loc_params, loc_params->loc_data.loc_by_name.name,
                                                    H5P_DEFAULT, H5P_DEFAULT, NULL)))
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTOPENOBJ, FAIL, "can't open link iteration group");
+
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen("/groups/") +
+                                                 +strlen(((RV_object_t *)link_iter_group_object)->URI) +
+                                                 strlen("/links") + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
 
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links", base_URL,
                                             ((RV_object_t *)link_iter_group_object)->URI)) < 0)
@@ -1199,6 +1247,8 @@ done:
         RV_free(link_path_dirname);
     if (host_header)
         RV_free(host_header);
+    if (request_url)
+        RV_free(request_url);
 
     if (link_iter_group_id >= 0)
         if (H5Gclose(link_iter_group_id) < 0)
@@ -1797,8 +1847,8 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(
     char             *visit_buffer = NULL;
     char             *link_section_start, *link_section_end;
     char             *url_encoded_link_name = NULL;
-    char              request_url[URL_MAX_LENGTH];
-    herr_t            ret_value = SUCCEED;
+    char             *request_url           = NULL;
+    herr_t            ret_value             = SUCCEED;
 
     if (!HTTP_response)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response was NULL");
@@ -1960,6 +2010,12 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(
                                      curl, H5_rest_basename(YAJL_GET_STRING(link_field_obj)), 0)))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
 
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen("/groups/") +
+                                                 strlen(url_encoded_link_name) + strlen("/links") + 1)) ==
+                        NULL)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
+
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links", base_URL,
                                             url_encoded_link_name)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
@@ -2001,6 +2057,11 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(
 
         /* Continue on to the next link subsection */
         link_section_start = link_section_end + 1;
+
+        if (request_url) {
+            RV_free(request_url);
+            request_url = NULL;
+        }
     } /* end for */
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -2022,6 +2083,8 @@ done:
         curl_free(url_encoded_link_name);
     if (parse_tree)
         yajl_tree_free(parse_tree);
+    if (request_url)
+        RV_free(request_url);
     if (visit_buffer)
         RV_free(visit_buffer);
 

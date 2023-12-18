@@ -54,18 +54,19 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
     RV_object_t *parent        = (RV_object_t *)obj;
     RV_object_t *new_attribute = NULL;
     upload_info  uinfo;
-    size_t       create_request_nalloc = 0;
-    size_t       host_header_len       = 0;
-    size_t       datatype_body_len     = 0;
-    size_t       attr_name_len         = 0;
-    size_t       path_size             = 0;
-    size_t       path_len              = 0;
-    char        *host_header           = NULL;
-    char        *create_request_body   = NULL;
-    char        *datatype_body         = NULL;
-    char        *shape_body            = NULL;
-    char         request_url[URL_MAX_LENGTH];
+    size_t       create_request_nalloc   = 0;
+    size_t       host_header_len         = 0;
+    size_t       datatype_body_len       = 0;
+    size_t       attr_name_len           = 0;
+    size_t       path_size               = 0;
+    size_t       path_len                = 0;
+    char        *host_header             = NULL;
+    char        *create_request_body     = NULL;
+    char        *datatype_body           = NULL;
+    char        *shape_body              = NULL;
+    char        *request_url             = NULL;
     char        *url_encoded_attr_name   = NULL;
+    const char  *parent_obj_type_header  = NULL;
     int          create_request_body_len = 0;
     int          url_len                 = 0;
     void        *ret_value               = NULL;
@@ -268,57 +269,22 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
      * or
      * "/datasets/<id>/attributes/<attr name>",
      * depending on the type of the object the attribute is being attached to. */
-    switch (new_attribute->u.attribute.parent_obj_type) {
-        case H5I_FILE:
-        case H5I_GROUP:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s", base_URL,
-                                    new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error");
 
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL,
-                                "attribute create URL exceeded maximum URL size");
+    if (RV_set_object_type_header(new_attribute->u.attribute.parent_obj_type, &parent_obj_type_header) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "bad parent object type");
 
-            break;
+    if ((request_url = (char *)RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) + 2 +
+                                         strlen(new_attribute->u.attribute.parent_obj_URI) +
+                                         strlen("/attributes/") + strlen(url_encoded_attr_name) + 1)) == NULL)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for request url");
 
-        case H5I_DATATYPE:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s", base_URL,
-                                    new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error");
+    if ((url_len =
+             snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL, parent_obj_type_header,
+                      new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error");
 
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL,
-                                "attribute create URL exceeded maximum URL size");
-
-            break;
-
-        case H5I_DATASET:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s", base_URL,
-                                    new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error");
-
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL,
-                                "attribute create URL exceeded maximum URL size");
-
-            break;
-
-        case H5I_ATTR:
-        case H5I_UNINIT:
-        case H5I_BADID:
-        case H5I_DATASPACE:
-        case H5I_VFL:
-        case H5I_VOL:
-        case H5I_GENPROP_CLS:
-        case H5I_GENPROP_LST:
-        case H5I_ERROR_CLASS:
-        case H5I_ERROR_MSG:
-        case H5I_ERROR_STACK:
-        case H5I_NTYPES:
-        default:
-            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL,
-                            "parent object not a file, group, datatype or dataset");
-    } /* end switch */
+    if (url_len >= URL_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "attribute create URL exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> URL for attribute creation request: %s\n\n", request_url);
@@ -382,6 +348,8 @@ done:
         RV_free(shape_body);
     if (host_header)
         RV_free(host_header);
+    if (request_url)
+        RV_free(request_url);
     if (url_encoded_attr_name)
         curl_free(url_encoded_attr_name);
 
@@ -422,15 +390,15 @@ void *
 RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_name, hid_t aapl_id,
              hid_t dxpl_id, void **req)
 {
-    RV_object_t *parent          = (RV_object_t *)obj;
-    RV_object_t *attribute       = NULL;
-    size_t       attr_name_len   = 0;
-    size_t       host_header_len = 0;
-    size_t       path_size       = 0;
-    size_t       path_len        = 0;
-    char        *host_header     = NULL;
-    char        *found_attr_name = NULL;
-    char         request_url[URL_MAX_LENGTH];
+    RV_object_t *parent                 = (RV_object_t *)obj;
+    RV_object_t *attribute              = NULL;
+    size_t       attr_name_len          = 0;
+    size_t       host_header_len        = 0;
+    size_t       path_size              = 0;
+    size_t       path_len               = 0;
+    char        *host_header            = NULL;
+    char        *found_attr_name        = NULL;
+    char        *request_url            = NULL;
     char        *url_encoded_attr_name  = NULL;
     const char  *parent_obj_type_header = NULL;
     int          url_len                = 0;
@@ -615,6 +583,11 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL,
                                 "parent object not a group, datatype or dataset");
 
+            if ((request_url = RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) +
+                                         strlen(attribute->u.attribute.parent_obj_URI) + 3 +
+                                         strlen(request_idx_type) + strlen("&include_attrs=1") + 1)) == NULL)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for request url");
+
             if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s?%s&include_attrs=1", base_URL,
                                     parent_obj_type_header, attribute->u.attribute.parent_obj_URI,
                                     request_idx_type)) < 0)
@@ -652,6 +625,11 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
                 curl_slist_free_all(curl_headers);
                 curl_headers = NULL;
             } /* end if */
+
+            if (request_url) {
+                RV_free(request_url);
+                request_url = NULL;
+            }
 
             break;
         } /* H5VL_OBJECT_BY_IDX */
@@ -696,10 +674,13 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
     if (RV_set_object_type_header(attribute->u.attribute.parent_obj_type, &parent_obj_type_header) < 0)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "parent object not a group, datatype or dataset");
 
-    if ((url_len =
-             snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL, parent_obj_type_header,
-                      attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error");
+    if ((request_url = RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) +
+                                 strlen(attribute->u.attribute.parent_obj_URI) + 2 + strlen("/attributes/") +
+                                 strlen(url_encoded_attr_name) + 1)))
+        if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL,
+                                parent_obj_type_header, attribute->u.attribute.parent_obj_URI,
+                                url_encoded_attr_name)) < 0)
+            FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error");
 
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "attribute open URL exceeded maximum URL size");
@@ -795,6 +776,9 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    if (request_url)
+        RV_free(request_url);
+
     PRINT_ERROR_STACK;
 
     return ret_value;
@@ -819,13 +803,14 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
     hbool_t      is_transfer_binary = FALSE;
     htri_t       is_variable_str;
     size_t       dtype_size;
-    size_t       host_header_len       = 0;
-    size_t       read_size             = 0;
-    char        *host_header           = NULL;
-    char        *url_encoded_attr_name = NULL;
-    char         request_url[URL_MAX_LENGTH];
-    int          url_len   = 0;
-    herr_t       ret_value = SUCCEED;
+    size_t       host_header_len        = 0;
+    size_t       read_size              = 0;
+    char        *host_header            = NULL;
+    char        *url_encoded_attr_name  = NULL;
+    char        *request_url            = NULL;
+    const char  *parent_obj_type_header = NULL;
+    int          url_len                = 0;
+    herr_t       ret_value              = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received attribute read call with following parameters:\n");
@@ -890,59 +875,21 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
      * or
      * "/datasets/<id>/attributes/<attr name>/value",
      * depending on the type of the object the attribute is attached to. */
-    switch (attribute->u.attribute.parent_obj_type) {
-        case H5I_FILE:
-        case H5I_GROUP:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s/value", base_URL,
-                                    attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+    if (RV_set_object_type_header(attribute->u.attribute.parent_obj_type, &parent_obj_type_header) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "bad parent object type");
 
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                "attribute read URL exceeded maximum URL size");
+    if ((request_url = RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) +
+                                 strlen(attribute->u.attribute.parent_obj_URI) + 2 + strlen("/attributes/") +
+                                 strlen(url_encoded_attr_name) + strlen("/value") + 1)) == NULL)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
 
-            break;
+    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s/value", base_URL,
+                            parent_obj_type_header, attribute->u.attribute.parent_obj_URI,
+                            url_encoded_attr_name)) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-        case H5I_DATATYPE:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s/value",
-                                    base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) <
-                0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                "attribute read URL exceeded maximum URL size");
-
-            break;
-
-        case H5I_DATASET:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s/value",
-                                    base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) <
-                0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                "attribute read URL exceeded maximum URL size");
-
-            break;
-
-        case H5I_ATTR:
-        case H5I_UNINIT:
-        case H5I_BADID:
-        case H5I_DATASPACE:
-        case H5I_VFL:
-        case H5I_VOL:
-        case H5I_GENPROP_CLS:
-        case H5I_GENPROP_LST:
-        case H5I_ERROR_CLASS:
-        case H5I_ERROR_MSG:
-        case H5I_ERROR_STACK:
-        case H5I_NTYPES:
-        default:
-            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                            "parent object not a file, group, datatype or dataset");
-    } /* end switch */
+    if (url_len >= URL_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "attribute read URL exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> URL for attribute read request: %s\n\n", request_url);
@@ -983,6 +930,9 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    if (request_url)
+        RV_free(request_url);
+
     PRINT_ERROR_STACK;
 
     return ret_value;
@@ -1009,13 +959,14 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
     htri_t       is_variable_str;
     hbool_t      is_transfer_binary;
     size_t       dtype_size;
-    size_t       write_body_len        = 0;
-    size_t       host_header_len       = 0;
-    char        *host_header           = NULL;
-    char        *url_encoded_attr_name = NULL;
-    char         request_url[URL_MAX_LENGTH];
-    int          url_len   = 0;
-    herr_t       ret_value = SUCCEED;
+    size_t       write_body_len         = 0;
+    size_t       host_header_len        = 0;
+    char        *host_header            = NULL;
+    char        *url_encoded_attr_name  = NULL;
+    char        *request_url            = NULL;
+    const char  *parent_obj_type_header = NULL;
+    int          url_len                = 0;
+    herr_t       ret_value              = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received attribute write call with following parameters:\n");
@@ -1086,59 +1037,21 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
      * or
      * "/datasets/<id>/attributes/<attr name>/value",
      * depending on the type of the object the attribute is attached to. */
-    switch (attribute->u.attribute.parent_obj_type) {
-        case H5I_FILE:
-        case H5I_GROUP:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s/value", base_URL,
-                                    attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+    if (RV_set_object_type_header(attribute->u.attribute.parent_obj_type, &parent_obj_type_header) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "bad parent object type");
 
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                "attribute write URL exceeded maximum URL size");
+    if ((request_url = RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) +
+                                 strlen(attribute->u.attribute.parent_obj_URI) + 2 + strlen("/attributes/") +
+                                 strlen(url_encoded_attr_name) + strlen("/value") + 1)) == NULL)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
 
-            break;
+    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s/value", base_URL,
+                            parent_obj_type_header, attribute->u.attribute.parent_obj_URI,
+                            url_encoded_attr_name)) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-        case H5I_DATATYPE:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s/value",
-                                    base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) <
-                0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                "attribute write URL exceeded maximum URL size");
-
-            break;
-
-        case H5I_DATASET:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s/value",
-                                    base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) <
-                0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                "attribute write URL exceeded maximum URL size");
-
-            break;
-
-        case H5I_ATTR:
-        case H5I_UNINIT:
-        case H5I_BADID:
-        case H5I_DATASPACE:
-        case H5I_VFL:
-        case H5I_VOL:
-        case H5I_GENPROP_CLS:
-        case H5I_GENPROP_LST:
-        case H5I_ERROR_CLASS:
-        case H5I_ERROR_MSG:
-        case H5I_ERROR_STACK:
-        case H5I_NTYPES:
-        default:
-            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                            "parent object not a file, group, datatype or dataset");
-    } /* end switch */
+    if (url_len >= URL_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "attribute write URL exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> URL for attribute write request: %s\n\n", request_url);
@@ -1190,6 +1103,8 @@ done:
         RV_free(host_header);
     if (url_encoded_attr_name)
         curl_free(url_encoded_attr_name);
+    if (request_url)
+        RV_free(request_url);
 
     /* Unset cURL UPLOAD option to ensure that future requests don't try to use PUT calls */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 0))
@@ -1219,10 +1134,10 @@ done:
 herr_t
 RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
 {
-    RV_object_t *loc_obj         = (RV_object_t *)obj;
-    size_t       host_header_len = 0;
-    char        *host_header     = NULL;
-    char         request_url[URL_MAX_LENGTH];
+    RV_object_t *loc_obj                = (RV_object_t *)obj;
+    size_t       host_header_len        = 0;
+    char        *host_header            = NULL;
+    char        *request_url            = NULL;
     char        *url_encoded_attr_name  = NULL;
     char        *found_attr_name        = NULL;
     int          url_len                = 0;
@@ -1273,60 +1188,25 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                         (url_encoded_attr_name = curl_easy_escape(curl, loc_obj->u.attribute.attr_name, 0)))
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name");
 
-                    switch (loc_obj->u.attribute.parent_obj_type) {
-                        case H5I_FILE:
-                        case H5I_GROUP:
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                                                    base_URL, loc_obj->u.attribute.parent_obj_URI,
-                                                    url_encoded_attr_name)) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+                    if (RV_set_object_type_header(loc_obj->u.attribute.parent_obj_type,
+                                                  &parent_obj_type_header) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "bad parent object type");
 
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                                "H5Aget_info request URL exceeded maximum URL size");
+                    if ((request_url =
+                             RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) +
+                                       strlen(loc_obj->u.attribute.parent_obj_URI) + 2 +
+                                       strlen("/attributes/") + strlen(url_encoded_attr_name) + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
 
-                            break;
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL,
+                                            parent_obj_type_header, loc_obj->u.attribute.parent_obj_URI,
+                                            url_encoded_attr_name)) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                        case H5I_DATATYPE:
-                            if ((url_len = snprintf(
-                                     request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s", base_URL,
-                                     loc_obj->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                                "H5Aget_info request URL exceeded maximum URL size");
-
-                            break;
-
-                        case H5I_DATASET:
-                            if ((url_len = snprintf(
-                                     request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s", base_URL,
-                                     loc_obj->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                                "H5Aget_info request URL exceeded maximum URL size");
-
-                            break;
-
-                        case H5I_ATTR:
-                        case H5I_UNINIT:
-                        case H5I_BADID:
-                        case H5I_DATASPACE:
-                        case H5I_VFL:
-                        case H5I_VOL:
-                        case H5I_GENPROP_CLS:
-                        case H5I_GENPROP_LST:
-                        case H5I_ERROR_CLASS:
-                        case H5I_ERROR_MSG:
-                        case H5I_ERROR_STACK:
-                        case H5I_NTYPES:
-                        default:
-                            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                                            "parent object not a file, group, datatype or dataset");
-                    } /* end switch */
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
+                                        "H5Aget_info request URL exceeded maximum URL size");
 
                     break;
                 } /* H5VL_OBJECT_BY_SELF */
@@ -1370,59 +1250,23 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                     if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, attr_name, 0)))
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name");
 
-                    switch (parent_obj_type) {
-                        case H5I_FILE:
-                        case H5I_GROUP:
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                                                    base_URL, parent_obj_URI, url_encoded_attr_name)) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+                    if (RV_set_object_type_header(parent_obj_type, &parent_obj_type_header) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "bad parent object type");
 
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                                "H5Aget_info_by_name request URL exceeded maximum URL size");
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) + 2 +
+                                                 strlen(parent_obj_URI) + strlen("/attributes/") +
+                                                 strlen(url_encoded_attr_name) + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
 
-                            break;
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL,
+                                            parent_obj_type_header, parent_obj_URI, url_encoded_attr_name)) <
+                        0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                        case H5I_DATATYPE:
-                            if ((url_len =
-                                     snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                                              base_URL, parent_obj_URI, url_encoded_attr_name)) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                                "H5Aget_info_by_name request URL exceeded maximum URL size");
-
-                            break;
-
-                        case H5I_DATASET:
-                            if ((url_len =
-                                     snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                                              base_URL, parent_obj_URI, url_encoded_attr_name)) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                                "H5Aget_info_by_name request URL exceeded maximum URL size");
-
-                            break;
-
-                        case H5I_ATTR:
-                        case H5I_UNINIT:
-                        case H5I_BADID:
-                        case H5I_DATASPACE:
-                        case H5I_VFL:
-                        case H5I_VOL:
-                        case H5I_GENPROP_CLS:
-                        case H5I_GENPROP_LST:
-                        case H5I_ERROR_CLASS:
-                        case H5I_ERROR_MSG:
-                        case H5I_ERROR_STACK:
-                        case H5I_NTYPES:
-                        default:
-                            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                                            "parent object not a file, group, datatype or dataset");
-                    } /* end switch */
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
+                                        "H5Aget_info_by_name request URL exceeded maximum URL size");
 
                     break;
                 } /* H5VL_OBJECT_BY_NAME */
@@ -1495,6 +1339,12 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
                                         "can't get path header from parent object type");
 
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) + 3 +
+                                                 strlen(parent_obj_URI) + strlen(request_idx_type) +
+                                                 strlen("&include_attrs=1") + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
+
                     if ((url_len =
                              snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s?%s&include_attrs=1", base_URL,
                                       parent_obj_type_header, parent_obj_URI, request_idx_type)) < 0)
@@ -1535,8 +1385,19 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                         curl_headers = NULL;
                     } /* end if */
 
+                    if (request_url) {
+                        RV_free(request_url);
+                        request_url = NULL;
+                    }
+
                     if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, found_attr_name, 0)))
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name");
+
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) + 2 +
+                                                 strlen(parent_obj_URI) + strlen(url_encoded_attr_name) +
+                                                 strlen("/attributes/") + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
 
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL,
                                             parent_obj_type_header, parent_obj_URI, url_encoded_attr_name)) <
@@ -1690,6 +1551,12 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
                                         "parent object not a group, datatype or dataset");
 
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) + 3 +
+                                                 strlen(parent_obj_URI) + strlen(request_idx_type) +
+                                                 strlen("&include_attrs=1") + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
+
                     if ((url_len =
                              snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s?%s&include_attrs=1", base_URL,
                                       parent_obj_type_header, parent_obj_URI, request_idx_type)) < 0)
@@ -1737,6 +1604,10 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                         curl_headers = NULL;
                     } /* end if */
 
+                    if (request_url) {
+                        RV_free(request_url);
+                        request_url = NULL;
+                    }
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
 
@@ -1794,6 +1665,9 @@ done:
         found_attr_name = NULL;
     }
 
+    if (request_url)
+        RV_free(request_url);
+
     PRINT_ERROR_STACK;
 
     return ret_value;
@@ -1835,7 +1709,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
     char                *host_header = NULL;
     char                *obj_URI;
     char                 temp_URI[URI_MAX_LENGTH];
-    char                 request_url[URL_MAX_LENGTH];
+    char                *request_url = NULL;
     char                 attr_name_to_delete[ATTRIBUTE_NAME_MAX_LENGTH];
     char                *url_encoded_attr_name  = NULL;
     const char          *parent_obj_type_header = NULL;
@@ -1895,6 +1769,11 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
             if (RV_set_object_type_header(parent_obj_type, (const char **)&parent_obj_type_header) < 0)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
                                 "parent object not a group, datatype or dataset");
+
+            if ((request_url =
+                     RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) + 2 + strlen(temp_URI) +
+                               strlen("/attributes/") + strlen(url_encoded_attr_name) + 1)) == NULL)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
 
             if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL,
                                     parent_obj_type_header, temp_URI, url_encoded_attr_name)) < 0)
@@ -2023,57 +1902,21 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
              * or
              * "/datasets/<id>/attributes/<attr name>,
              * depending on the type of the object the attribute is attached to. */
-            switch (parent_obj_type) {
-                case H5I_FILE:
-                case H5I_GROUP:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                                            base_URL, obj_URI, url_encoded_attr_name)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+            if (RV_set_object_type_header(parent_obj_type, &parent_obj_type_header) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "bad parent object type");
 
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Adelete(_by_name) request URL exceeded maximum URL size");
+            if ((request_url =
+                     RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) + 2 + strlen(obj_URI) +
+                               strlen("/attributes/") + strlen(url_encoded_attr_name) + 1)) == NULL)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
 
-                    break;
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL,
+                                    parent_obj_type_header, obj_URI, url_encoded_attr_name)) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                case H5I_DATATYPE:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                                            base_URL, obj_URI, url_encoded_attr_name)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Adelete(_by_name) request URL exceeded maximum URL size");
-
-                    break;
-
-                case H5I_DATASET:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                                            base_URL, obj_URI, url_encoded_attr_name)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Adelete(_by_name) request URL exceeded maximum URL size");
-
-                    break;
-
-                case H5I_ATTR:
-                case H5I_UNINIT:
-                case H5I_BADID:
-                case H5I_DATASPACE:
-                case H5I_VFL:
-                case H5I_VOL:
-                case H5I_GENPROP_CLS:
-                case H5I_GENPROP_LST:
-                case H5I_ERROR_CLASS:
-                case H5I_ERROR_MSG:
-                case H5I_ERROR_STACK:
-                case H5I_NTYPES:
-                default:
-                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                                    "parent object not a file, group, datatype or dataset");
-            } /* end switch */
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
+                                "H5Adelete(_by_name) request URL exceeded maximum URL size");
 
             /* Setup the host header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
@@ -2184,57 +2027,21 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
              * or
              * "/datasets/<id>/attributes/<attr name>,
              * depending on the type of the object the attribute is attached to. */
-            switch (parent_obj_type) {
-                case H5I_FILE:
-                case H5I_GROUP:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                                            base_URL, obj_URI, url_encoded_attr_name)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+            if (RV_set_object_type_header(parent_obj_type, &parent_obj_type_header) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "bad parent object type");
 
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Aexists(_by_name) request URL exceeded maximum URL size");
+            if ((request_url = RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) + 2 +
+                                         strlen("/attributes/") + strlen(obj_URI) +
+                                         strlen(url_encoded_attr_name) + 1)) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
 
-                    break;
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL,
+                                    parent_obj_type_header, obj_URI, url_encoded_attr_name)) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                case H5I_DATATYPE:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                                            base_URL, obj_URI, url_encoded_attr_name)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Aexists(_by_name) request URL exceeded maximum URL size");
-
-                    break;
-
-                case H5I_DATASET:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                                            base_URL, obj_URI, url_encoded_attr_name)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Aexists(_by_name) request URL exceeded maximum URL size");
-
-                    break;
-
-                case H5I_ATTR:
-                case H5I_UNINIT:
-                case H5I_BADID:
-                case H5I_DATASPACE:
-                case H5I_VFL:
-                case H5I_VOL:
-                case H5I_GENPROP_CLS:
-                case H5I_GENPROP_LST:
-                case H5I_ERROR_CLASS:
-                case H5I_ERROR_MSG:
-                case H5I_ERROR_STACK:
-                case H5I_NTYPES:
-                default:
-                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                                    "parent object not a file, group, datatype or dataset");
-            } /* end switch */
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
+                                "H5Aexists(_by_name) request URL exceeded maximum URL size");
 
             /* Setup the host header */
             host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
@@ -2559,57 +2366,20 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
              * or
              * "/datasets/<id>/attributes",
              * depending on the type of the object the attribute is attached to. */
-            switch (parent_obj_type) {
-                case H5I_FILE:
-                case H5I_GROUP:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes", base_URL,
-                                            obj_URI)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+            if (RV_set_object_type_header(parent_obj_type, &parent_obj_type_header) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "bad parent object type");
 
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Aiterate(_by_name) request URL exceeded maximum URL size");
+            if ((request_url = RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) + 2 +
+                                         strlen(obj_URI) + strlen("/attributes") + 1)) == NULL)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
 
-                    break;
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes", base_URL,
+                                    parent_obj_type_header, obj_URI)) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                case H5I_DATATYPE:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes",
-                                            base_URL, obj_URI)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Aiterate(_by_name) request URL exceeded maximum URL size");
-
-                    break;
-
-                case H5I_DATASET:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes",
-                                            base_URL, obj_URI)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Aiterate(_by_name) request URL exceeded maximum URL size");
-
-                    break;
-
-                case H5I_ATTR:
-                case H5I_UNINIT:
-                case H5I_BADID:
-                case H5I_DATASPACE:
-                case H5I_VFL:
-                case H5I_VOL:
-                case H5I_GENPROP_CLS:
-                case H5I_GENPROP_LST:
-                case H5I_ERROR_CLASS:
-                case H5I_ERROR_MSG:
-                case H5I_ERROR_STACK:
-                case H5I_NTYPES:
-                default:
-                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                                    "parent object not a file, group, datatype or dataset");
-            } /* end switch */
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
+                                "H5Aiterate(_by_name) request URL exceeded maximum URL size");
 
             /* Register an hid_t for the attribute's parent object */
 
@@ -2824,6 +2594,12 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
             if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, args->args.rename.old_name, 0)))
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name");
 
+            if ((request_url = RV_malloc(
+                     strlen(base_URL) + strlen(parent_obj_type_header) + 2 +
+                     ((loc_params->type == H5VL_OBJECT_BY_SELF) ? strlen(loc_obj->URI) : strlen(parent_URI)) +
+                     strlen("/attributes/") + strlen(url_encoded_attr_name) + 1)) == NULL)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
+
             if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL,
                                     parent_obj_type_header,
                                     (loc_params->type == H5VL_OBJECT_BY_SELF) ? loc_obj->URI : parent_URI,
@@ -2857,6 +2633,9 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 done:
     if (host_header)
         RV_free(host_header);
+
+    if (request_url)
+        RV_free(request_url);
 
     if (attr_iter_object_id >= 0) {
         if (H5I_FILE == parent_obj_type) {

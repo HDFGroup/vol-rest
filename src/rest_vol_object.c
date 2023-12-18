@@ -265,13 +265,14 @@ herr_t
 RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_t *args, hid_t dxpl_id,
               void **req)
 {
-    RV_object_t *loc_obj         = (RV_object_t *)obj;
-    size_t       host_header_len = 0;
-    char        *host_header     = NULL;
-    char         request_url[URL_MAX_LENGTH];
-    char        *found_object_name = NULL;
-    int          url_len           = 0;
-    herr_t       ret_value         = SUCCEED;
+    RV_object_t *loc_obj                = (RV_object_t *)obj;
+    size_t       host_header_len        = 0;
+    char        *host_header            = NULL;
+    char        *request_url            = NULL;
+    char        *found_object_name      = NULL;
+    const char  *parent_obj_type_header = NULL;
+    int          url_len                = 0;
+    herr_t       ret_value              = SUCCEED;
     loc_info     loc_info_out;
 
     loc_info_out.GCPL_base64 = NULL;
@@ -340,60 +341,21 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                      * depending on the type of the object. Also set the
                      * object's type in the H5O_info2_t struct.
                      */
-                    switch (obj_type) {
-                        case H5I_FILE:
-                        case H5I_GROUP: {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL,
-                                                    loc_obj->URI)) < 0)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
+                    if (RV_set_object_type_header(obj_type, &parent_obj_type_header) < 0)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "bad object parent type");
 
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
-                                                "H5Oget_info request URL size exceeded maximum URL size");
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) + 2 +
+                                                 strlen(loc_obj->URI) + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
 
-                            break;
-                        } /* H5I_FILE H5I_GROUP */
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s", base_URL,
+                                            parent_obj_type_header, loc_obj->URI)) < 0)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                        case H5I_DATATYPE: {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL,
-                                                    loc_obj->URI)) < 0)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
-                                                "H5Oget_info request URL size exceeded maximum URL size");
-
-                            break;
-                        } /* H5I_DATATYPE */
-
-                        case H5I_DATASET: {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL,
-                                                    loc_obj->URI)) < 0)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
-                                                "H5Oget_info request URL size exceeded maximum URL size");
-
-                            break;
-                        } /* H5I_DATASET */
-
-                        case H5I_ATTR:
-                        case H5I_UNINIT:
-                        case H5I_BADID:
-                        case H5I_DATASPACE:
-                        case H5I_VFL:
-                        case H5I_VOL:
-                        case H5I_GENPROP_CLS:
-                        case H5I_GENPROP_LST:
-                        case H5I_ERROR_CLASS:
-                        case H5I_ERROR_MSG:
-                        case H5I_ERROR_STACK:
-                        case H5I_NTYPES:
-                        default:
-                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL,
-                                            "loc_id object is not a group, datatype or dataset");
-                    } /* end switch */
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
+                                        "H5Oget_info request URL size exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
                     printf("-> H5Oget_info(): Object type: %s\n\n", object_type_to_string(obj_type));
@@ -439,63 +401,21 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                      * depending on the type of the object. Also set the
                      * object's type in the H5O_info2_t struct.
                      */
-                    switch (obj_type) {
-                        case H5I_FILE:
-                        case H5I_GROUP: {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL,
-                                                    temp_URI)) < 0)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
+                    if (RV_set_object_type_header(obj_type, &parent_obj_type_header) < 0)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "bad object parent type");
 
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(
-                                    H5E_OBJECT, H5E_SYSERRSTR, FAIL,
-                                    "H5Oget_info_by_name request URL size exceeded maximum URL size");
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) + 2 +
+                                                 strlen(loc_obj->URI) + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
 
-                            break;
-                        } /* H5I_FILE H5I_GROUP */
+                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s", base_URL,
+                                            parent_obj_type_header, temp_URI)) < 0)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                        case H5I_DATATYPE: {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL,
-                                                    temp_URI)) < 0)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(
-                                    H5E_OBJECT, H5E_SYSERRSTR, FAIL,
-                                    "H5Oget_info_by_name request URL size exceeded maximum URL size");
-
-                            break;
-                        } /* H5I_DATATYPE */
-
-                        case H5I_DATASET: {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL,
-                                                    temp_URI)) < 0)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(
-                                    H5E_OBJECT, H5E_SYSERRSTR, FAIL,
-                                    "H5Oget_info_by_name request URL size exceeded maximum URL size");
-
-                            break;
-                        } /* H5I_DATASET */
-
-                        case H5I_ATTR:
-                        case H5I_UNINIT:
-                        case H5I_BADID:
-                        case H5I_DATASPACE:
-                        case H5I_VFL:
-                        case H5I_VOL:
-                        case H5I_GENPROP_CLS:
-                        case H5I_GENPROP_LST:
-                        case H5I_ERROR_CLASS:
-                        case H5I_ERROR_MSG:
-                        case H5I_ERROR_STACK:
-                        case H5I_NTYPES:
-                        default:
-                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL,
-                                            "loc_id object is not a group, datatype or dataset");
-                    } /* end switch */
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
+                                        "H5Oget_info_by_name request URL size exceeded maximum URL size");
 
                     break;
                 } /* H5VL_OBJECT_BY_NAME */
@@ -508,8 +428,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
                     htri_t      search_ret;
                     char        temp_URI[URI_MAX_LENGTH];
-                    const char *request_idx_type       = NULL;
-                    const char *parent_obj_type_header = NULL;
+                    const char *request_idx_type = NULL;
 
                     obj_type = H5I_UNINIT;
 
@@ -572,6 +491,11 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                     /* Disable use of Expect: 100 Continue HTTP response */
                     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen("/groups/") + strlen(temp_URI) +
+                                                 strlen("/links?") + strlen(request_idx_type) + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
+
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links?%s", base_URL,
                                             temp_URI, request_idx_type)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
@@ -607,6 +531,11 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                         curl_headers = NULL;
                     } /* end if */
 
+                    if (request_url) {
+                        RV_free(request_url);
+                        request_url = NULL;
+                    }
+
                     /* Use name of link to get object URI for final request */
 
                     if (loc_info_out.GCPL_base64) {
@@ -623,6 +552,11 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                     if (RV_set_object_type_header(obj_type, &parent_obj_type_header) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL,
                                         "object at index not a group, datatype or dataset");
+
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen(parent_obj_type_header) + 2 +
+                                                 strlen(loc_info_out.URI) + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
 
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s", base_URL,
                                             parent_obj_type_header, loc_info_out.URI)) < 0)
@@ -708,6 +642,9 @@ done:
         curl_headers = NULL;
     } /* end if */
 
+    if (request_url)
+        RV_free(request_url);
+
     if (found_object_name) {
         RV_free(found_object_name);
         found_object_name = NULL;
@@ -746,7 +683,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
     RV_object_t       *attr_object    = NULL;
     hid_t              iter_object_id = H5I_INVALID_HID;
     char               visit_by_name_URI[URI_MAX_LENGTH];
-    char               request_url[URL_MAX_LENGTH];
+    char              *request_url     = NULL;
     char              *host_header     = NULL;
     int                url_len         = 0;
     size_t             host_header_len = 0;
@@ -996,6 +933,10 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             /* To build object table, information about parent object will be needed */
             object_iter_data.iter_obj_parent = iter_object;
 
+            if ((request_url = RV_malloc(strlen(base_URL) + 2 + strlen(object_type_header) +
+                                         strlen(object_iter_data.iter_obj_parent->URI) + 1)) == NULL)
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL, "can't allocate space for request url");
+
             if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s", base_URL, object_type_header,
                                     object_iter_data.iter_obj_parent->URI)) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
@@ -1090,6 +1031,11 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                 curl_headers = NULL;
             }
 
+            if (request_url) {
+                RV_free(request_url);
+                request_url = NULL;
+            }
+
             if (RV_parse_response(response_buffer.buffer, NULL, &oinfo, RV_get_object_info_callback) < 0)
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to get object info");
 
@@ -1109,6 +1055,13 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             switch (iter_object_type) {
                 case H5I_FILE:
                 case H5I_GROUP:
+                    if ((request_url = RV_malloc(
+                             strlen(base_URL) + 2 + strlen(object_type_header) +
+                             strlen(object_iter_data.iter_obj_parent->URI) +
+                             (!strcmp(object_type_header, "groups") ? strlen("/links") : 0) + 1)) == NULL)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
+
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s%s", base_URL,
                                             object_type_header, object_iter_data.iter_obj_parent->URI,
                                             (!strcmp(object_type_header, "groups") ? "/links" : ""))) < 0)
@@ -1174,6 +1127,9 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
 done:
     if (host_header)
         RV_free(host_header);
+
+    if (request_url)
+        RV_free(request_url);
 
     RV_free(attr_loc_params);
 
@@ -1533,12 +1489,12 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
     char               *visit_buffer = NULL;
     char               *link_section_start, *link_section_end;
     char               *url_encoded_link_name = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    herr_t              ret_value   = SUCCEED;
-    int                 url_len     = 0;
-    H5I_type_t          obj_type    = H5I_UNINIT;
-    char               *host_header = NULL;
-    RV_object_t        *subgroup    = NULL;
+    char               *request_url           = NULL;
+    herr_t              ret_value             = SUCCEED;
+    int                 url_len               = 0;
+    H5I_type_t          obj_type              = H5I_UNINIT;
+    char               *host_header           = NULL;
+    RV_object_t        *subgroup              = NULL;
 
     if (!HTTP_response)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response was NULL");
@@ -1756,6 +1712,12 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
                                      curl, H5_rest_basename(YAJL_GET_STRING(link_field_obj)), 0)))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
 
+                    if ((request_url = RV_malloc(strlen(base_URL) + strlen("/groups/") +
+                                                 strlen(url_encoded_link_name) + strlen("/links") + 1)) ==
+                        NULL)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for request url");
+
                     if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links", base_URL,
                                             url_encoded_link_name)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
@@ -1867,6 +1829,11 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
             curl_slist_free_all(curl_headers);
             curl_headers = NULL;
         }
+
+        if (request_url) {
+            RV_free(request_url);
+            request_url = NULL;
+        }
     } /* end for */
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1900,6 +1867,10 @@ done:
     if (curl_headers) {
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
+    }
+    if (request_url) {
+        RV_free(request_url);
+        request_url = NULL;
     }
 
     return ret_value;
