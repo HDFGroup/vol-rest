@@ -757,6 +757,9 @@ herr_t RV_tconv_init(hid_t src_type_id, size_t *src_type_size, hid_t dst_type_id
 herr_t RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested,
                                    server_api_version server_version);
 
+/* Helper function to escape control characters for JSON strings */
+herr_t RV_JSON_escape_string(const char *in, char *out, size_t *out_size);
+
 #define SERVER_VERSION_MATCHES_OR_EXCEEDS(version, major_needed, minor_needed, patch_needed)                 \
     (version.major > major_needed) || (version.major == major_needed && version.minor > minor_needed) ||     \
         (version.major == major_needed && version.minor == minor_needed && version.patch >= patch_needed)
