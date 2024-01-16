@@ -1722,7 +1722,7 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
         /* Currently, only H5T_CSET_ASCII character set is supported */
-        if (strcmp(charSet, "H5T_CSET_ASCII"))
+        if (strcmp(charSet, "H5T_CSET_ASCII") && strcmp(charSet, "H5T_CSET_UTF8"))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
                             "unsupported character set for string datatype");
 
@@ -1757,9 +1757,12 @@ RV_convert_JSON_to_datatype(const char *type)
         if ((datatype = H5Tcreate(H5T_STRING, is_variable_str ? H5T_VARIABLE : (size_t)fixed_length)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create string datatype");
 
-        if (H5Tset_cset(datatype, H5T_CSET_ASCII) < 0)
+        if (!strcmp(charSet, "H5T_CSET_ASCII") && (H5Tset_cset(datatype, H5T_CSET_ASCII) < 0))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL,
-                            "can't set character set for string datatype");
+                            "can't set ASCII character set for string datatype");
+        if (!strcmp(charSet, "H5T_CSET_UTF8") && (H5Tset_cset(datatype, H5T_CSET_UTF8) < 0))
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL,
+                            "can't set UTF-8 character set for string datatype");
 
         if (H5Tset_strpad(datatype, is_variable_str ? H5T_STR_NULLTERM : H5T_STR_NULLPAD) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL,
