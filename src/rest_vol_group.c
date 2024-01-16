@@ -56,6 +56,7 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     char        *base64_plist_buffer   = NULL;
     char         target_URI[URI_MAX_LENGTH];
     char         request_url[URL_MAX_LENGTH];
+    char        *escaped_group_name      = NULL;
     int          create_request_body_len = 0;
     int          url_len                 = 0;
     void        *binary_plist_buffer     = NULL;
@@ -132,6 +133,7 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     if (name) {
         const char *path_basename = H5_rest_basename(name);
         hbool_t     empty_dirname;
+        size_t      escaped_name_size = 0;
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Creating JSON link for group\n\n");
@@ -208,7 +210,17 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
         if (RV_base64_encode(binary_plist_buffer, plist_nalloc, &base64_plist_buffer, &base64_buf_size) < 0)
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTENCODE, NULL, "failed to base64 encode plist binary");
 
-        create_request_nalloc = strlen(fmt_string) + strlen(path_basename) +
+        /* Escape group name to be sent as JSON */
+        if (RV_JSON_escape_string(path_basename, escaped_group_name, &escaped_name_size) < 0)
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTENCODE, NULL, "can't get size of JSON escaped group name");
+
+        if ((escaped_group_name = RV_malloc(escaped_name_size)) == NULL)
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for escaped group name");
+
+        if (RV_JSON_escape_string(path_basename, escaped_group_name, &escaped_name_size) < 0)
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTENCODE, NULL, "can't JSON escape group name");
+
+        create_request_nalloc = strlen(fmt_string) + strlen(escaped_group_name) +
                                 (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + base64_buf_size +
                                 1;
         if (NULL == (create_request_body = (char *)RV_malloc(create_request_nalloc)))
@@ -216,7 +228,7 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
                             "can't allocate space for group create request body");
 
         if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string,
-                                                empty_dirname ? parent->URI : target_URI, path_basename,
+                                                empty_dirname ? parent->URI : target_URI, escaped_group_name,
                                                 (char *)base64_plist_buffer)) < 0)
             FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error");
 
@@ -330,6 +342,9 @@ done:
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
+
+    if (escaped_group_name)
+        RV_free(escaped_group_name);
 
     PRINT_ERROR_STACK;
 

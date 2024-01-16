@@ -3674,6 +3674,7 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t t
     char        *creation_properties_body     = NULL;
     char        *link_body                    = NULL;
     char        *path_dirname                 = NULL;
+    char        *escaped_link_name            = NULL;
     int          create_request_len           = 0;
     int          link_body_len                = 0;
     herr_t       ret_value                    = SUCCEED;
@@ -3718,11 +3719,12 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t t
     if (name) {
         hbool_t           empty_dirname;
         char              target_URI[URI_MAX_LENGTH];
-        const char *const link_basename    = H5_rest_basename(name);
-        const char *const link_body_format = "\"link\": {"
-                                             "\"id\": \"%s\", "
-                                             "\"name\": \"%s\""
-                                             "}";
+        const char *const link_basename     = H5_rest_basename(name);
+        const char *const link_body_format  = "\"link\": {"
+                                              "\"id\": \"%s\", "
+                                              "\"name\": \"%s\""
+                                              "}";
+        size_t            escaped_name_size = 0;
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Creating JSON link for dataset\n\n");
@@ -3749,7 +3751,17 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t t
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_PATH, FAIL, "can't locate target for dataset link");
         } /* end if */
 
-        link_body_nalloc = strlen(link_body_format) + strlen(link_basename) +
+        /* JSON-escape link name */
+        if (RV_JSON_escape_string(link_basename, escaped_link_name, &escaped_name_size) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTENCODE, FAIL, "can't get length of JSON escaped link name");
+
+        if ((escaped_link_name = RV_malloc(escaped_name_size)) == NULL)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for escaped link name");
+
+        if (RV_JSON_escape_string(link_basename, escaped_link_name, &escaped_name_size) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTENCODE, FAIL, "can't JSON escape link name");
+
+        link_body_nalloc = strlen(link_body_format) + strlen(escaped_link_name) +
                            (empty_dirname ? strlen(pobj->URI) : strlen(target_URI)) + 1;
         if (NULL == (link_body = (char *)RV_malloc(link_body_nalloc)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset link body");
@@ -3757,7 +3769,7 @@ RV_setup_dataset_create_request_body(void *parent_obj, const char *name, hid_t t
         /* Form the Dataset Creation Link portion of the Dataset create request using the above format
          * specifier and the corresponding arguments */
         if ((link_body_len = snprintf(link_body, link_body_nalloc, link_body_format,
-                                      empty_dirname ? pobj->URI : target_URI, link_basename)) < 0)
+                                      empty_dirname ? pobj->URI : target_URI, escaped_link_name)) < 0)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
         if ((size_t)link_body_len >= link_body_nalloc)
@@ -3827,6 +3839,8 @@ done:
         RV_free(shape_body);
     if (datatype_body)
         RV_free(datatype_body);
+    if (escaped_link_name)
+        RV_free(escaped_link_name);
 
     return ret_value;
 } /* end RV_setup_dataset_create_request_body() */

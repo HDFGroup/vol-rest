@@ -34,6 +34,8 @@
 #define BACKOFF_SCALE_FACTOR     1.5
 #define BACKOFF_MAX_BEFORE_FAIL  3000000000 /* 30,000,000,000 ns -> 30 sec */
 
+/* Number of unique characters which need to be escaped before being sent as JSON */
+#define NUM_JSON_ESCAPE_CHARS 7
 /*
  * The VOL connector identification number.
  */
@@ -2205,6 +2207,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
                         curl_err_buf);
+
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
 
@@ -3815,3 +3818,84 @@ RV_free_visited_link_hash_table_key(rv_hash_table_key_t value)
     RV_free(value);
     value = NULL;
 } /* end RV_free_visited_link_hash_table_key() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_JSON_escape_string
+ *
+ * Purpose:     Helper function to escape control characters for JSON strings.
+ *              If 'out' is NULL, out_size will be changed to the buffer size
+ *              needed for the escaped version of 'in'.
+ *              If 'out' is non-NULL, it should be a buffer of out_size bytes
+ *              that will be populated with the escaped version of 'in'.
+ *              If the provided buffer is too small and this operation fails,
+ *              the value of the buffer will still be modified.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              January, 2024
+ */
+herr_t
+RV_JSON_escape_string(const char *in, char *out, size_t *out_size)
+{
+    herr_t ret_value = SUCCEED;
+    size_t in_size   = strlen(in);
+
+    char *out_ptr                                  = NULL;
+    char  escape_characters[NUM_JSON_ESCAPE_CHARS] = {'\b', '\f', '\n', '\r', '\t', '\"', '\\'};
+
+    if (out == NULL) {
+        /* Determine necessary buffer size */
+        *out_size = in_size + 1;
+
+        for (size_t i = 0; i < in_size; i++) {
+            char c = in[i];
+
+            for (size_t j = 0; j < NUM_JSON_ESCAPE_CHARS; j++) {
+                char ec = escape_characters[j];
+
+                /* Each escaped character requires additional '\' in final string */
+                if (c == ec)
+                    *out_size += 1;
+            }
+        }
+    }
+    else {
+        /* Escaped string is at least as long as original */
+        if (*out_size < strlen(in) + 1)
+            FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "escaped buffer is smaller than original");
+
+        /* Populate provided buffer */
+        out_ptr = out;
+
+        for (size_t i = 0; i < in_size; i++) {
+            char c = in[i];
+
+            for (size_t j = 0; j < NUM_JSON_ESCAPE_CHARS; j++) {
+                char ec = escape_characters[j];
+
+                if (c == ec) {
+                    if ((out_ptr - out + 1) > *out_size)
+                        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "buffer too small for encoded string");
+                    out_ptr[0] = '\\';
+                    out_ptr++;
+                }
+            }
+
+            if ((out_ptr - out + 1) > *out_size)
+                FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "buffer too small for encoded string");
+
+            out_ptr[0] = c;
+            out_ptr++;
+        }
+
+        if ((out_ptr - out + 1) > *out_size)
+            FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "buffer too small for encoded string");
+
+        out_ptr[0] = '\0';
+    }
+
+done:
+
+    return ret_value;
+}
