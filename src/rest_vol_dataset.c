@@ -1791,12 +1791,13 @@ static herr_t
 RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callback_data_in,
                                               void *callback_data_out)
 {
-    yajl_val parse_tree         = NULL, creation_properties_obj, key_obj;
-    hid_t   *DCPL               = (hid_t *)callback_data_out;
-    hid_t    fill_type          = H5I_INVALID_HID;
-    char    *encoded_fill_value = NULL;
-    char    *decoded_fill_value = NULL;
-    herr_t   ret_value          = SUCCEED;
+    yajl_val      parse_tree         = NULL, creation_properties_obj, key_obj;
+    hid_t        *DCPL               = (hid_t *)callback_data_out;
+    hid_t         fill_type          = H5I_INVALID_HID;
+    char         *encoded_fill_value = NULL;
+    char         *decoded_fill_value = NULL;
+    unsigned int *ud_parameters      = NULL;
+    herr_t        ret_value          = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving dataset's creation properties from server's HTTP response\n\n");
@@ -2289,13 +2290,45 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callbac
                     break;
                 }
 
-                    /* TODO: support for other/user-defined filters */
-
                 default:
-                    /* Push error to stack; but don't fail this function */
-                    FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
-                                    "warning: invalid filter with class '%s' and ID '%lld' on DCPL",
-                                    filter_class, filter_ID);
+                    if (strcmp(filter_class, "H5Z_FILTER_USER")) {
+                        /* Push error to stack; but don't fail this function */
+                        FUNC_DONE_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                                        "warning: invalid filter with class '%s' and ID '%lld' on DCPL",
+                                        filter_class, filter_ID);
+                    }
+
+                    /* Parse user-defined filter from JSON */
+                    const char *ud_parameter_keys[] = {"parameters", (const char *)0};
+
+                    yajl_val params_array = NULL;
+
+                    if (NULL == (params_array = yajl_tree_get(filter_obj, ud_parameter_keys, yajl_t_array)))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                                        "retrieval of user-defined filter parameters failed");
+
+                    if (NULL ==
+                        (ud_parameters = RV_calloc(sizeof(unsigned int) * YAJL_GET_ARRAY(params_array)->len)))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
+                                        "can't allocate memory for user-defined filter parameters");
+
+                    for (size_t j = 0; j < YAJL_GET_ARRAY(params_array)->len; j++) {
+                        /* Get each integer parameter */
+                        long long int val = YAJL_GET_INTEGER(YAJL_GET_ARRAY(params_array)->values[j]);
+
+                        if (val < 0)
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                                            "invalid parameter value for user-defined filter");
+
+                        ud_parameters[j] = (unsigned int)val;
+                    }
+
+                    if (H5Pset_filter(*DCPL, (H5Z_filter_t)filter_ID, H5Z_FLAG_OPTIONAL,
+                                      YAJL_GET_ARRAY(params_array)->len, ud_parameters) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL,
+                                        "can't set user-defined filter on DCPL");
+
+                    break;
             }
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -2422,7 +2455,11 @@ done:
         if (H5Tclose(fill_type) < 0)
             FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype of fill value");
 
+    if (ud_parameters)
+        RV_free(ud_parameters);
+
     return ret_value;
+
 } /* end RV_parse_dataset_creation_properties_callback() */
 
 /*-------------------------------------------------------------------------
@@ -2459,6 +2496,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
     void  *fill_value     = NULL;
     char  *encode_buf_out = NULL;
     char  *fill_value_str = NULL;
+    char  *ud_parameters  = NULL;
     herr_t ret_value      = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -3145,7 +3183,9 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                     default: /* User-defined filter */
                     {
-                        char             *parameters = NULL;
+                        size_t ud_parameters_size = 0;
+                        size_t ud_parameters_len  = 0;
+
                         const char *const fmt_string = "{"
                                                        "\"class\": \"H5Z_FILTER_USER\","
                                                        "\"id\": %d,"
@@ -3164,8 +3204,52 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                         /* Retrieve all of the parameters for the user-defined filter */
 
+                        /* Start/end brackets and null byte */
+                        ud_parameters_size += 3;
+
+                        for (size_t j = 0; j < cd_nelmts; j++) {
+                            /* N bytes needed to store an N digit number,
+                             *  floor(log10) + 1 of an N digit number is >= N,
+                             *  plus two bytes for space and comma characters in the list */
+                            double num_digits = 0;
+
+                            if (cd_values[j] == 0) {
+                                num_digits = 1;
+                            }
+                            else {
+                                num_digits = floor(log10((double)cd_values[j]));
+                            }
+
+                            ud_parameters_size += (size_t)num_digits + 1 + 2;
+                        }
+
+                        if ((ud_parameters = RV_calloc(ud_parameters_size)) == NULL)
+                            FUNC_GOTO_ERROR(H5E_CANTFILTER, H5E_CANTALLOC, FAIL,
+                                            "can't allocate memory for filter parameters");
+
+                        /* Assemble JSON array for user-defined filter parameters */
+                        memset(ud_parameters, '[', 1);
+                        ud_parameters_len += 1;
+
+                        for (size_t j = 0; j < cd_nelmts; j++) {
+                            int _param_len =
+                                snprintf(ud_parameters + ud_parameters_len,
+                                         ud_parameters_size - ud_parameters_len, "%d", cd_values[j]);
+                            ud_parameters_len += (size_t)_param_len;
+
+                            if (j != cd_nelmts - 1) {
+                                strcat(ud_parameters + (size_t)ud_parameters_len, ", ");
+                                ud_parameters_len += 2;
+                            }
+                        }
+
+                        memset(ud_parameters + ud_parameters_len, ']', 1);
+                        ud_parameters_len += 1;
+                        memset(ud_parameters + ud_parameters_len, '\0', 1);
+                        ud_parameters_len += 1;
+
                         /* Check whether the buffer needs to be grown */
-                        bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH + strlen(parameters) + 1;
+                        bytes_to_print = strlen(fmt_string) + MAX_NUM_LENGTH + strlen(ud_parameters) + 1;
 
                         buf_ptrdiff = out_string_curr_pos - out_string;
                         if (buf_ptrdiff < 0)
@@ -3178,7 +3262,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
 
                         if ((bytes_printed =
                                  snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
-                                          fmt_string, filter_id, parameters)) < 0)
+                                          fmt_string, filter_id, ud_parameters)) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                         if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
@@ -3548,6 +3632,9 @@ done:
 
     if (fill_value_str)
         RV_free(fill_value_str);
+
+    if (ud_parameters)
+        RV_free(ud_parameters);
 
     return ret_value;
 } /* end RV_convert_dataset_creation_properties_to_JSON() */
