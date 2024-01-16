@@ -74,6 +74,7 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     size_t       datatype_body_len     = 0;
     size_t       path_size             = 0;
     size_t       path_len              = 0;
+    const char  *base_URL              = NULL;
     char        *host_header           = NULL;
     char        *commit_request_body   = NULL;
     char        *datatype_body         = NULL;
@@ -101,6 +102,9 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
+
+    if ((base_URL = parent->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object does not have valid server URL");
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -255,6 +259,12 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     printf("-> Datatype commit URL: %s\n\n", request_url);
 #endif
 
+    if (CURLE_OK !=
+        curl_easy_setopt(curl, CURLOPT_USERNAME, new_datatype->domain->u.file.server_info.username))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
+    if (CURLE_OK !=
+        curl_easy_setopt(curl, CURLOPT_PASSWORD, new_datatype->domain->u.file.server_info.password))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
@@ -393,8 +403,8 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
     loc_info_out.GCPL_base64 = NULL;
 
     /* Locate datatype and set domain */
-    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_loc_info_callback, NULL,
-                                        &loc_info_out);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_loc_info_callback,
+                                        &datatype->domain->u.file.server_info, &loc_info_out);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't locate datatype by path");
 
