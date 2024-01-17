@@ -55,21 +55,21 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
     RV_object_t *new_attribute = NULL;
     upload_info  uinfo;
     size_t       create_request_nalloc = 0;
-    size_t       host_header_len       = 0;
     size_t       datatype_body_len     = 0;
     size_t       attr_name_len         = 0;
     size_t       path_size             = 0;
     size_t       path_len              = 0;
-    char        *host_header           = NULL;
-    char        *create_request_body   = NULL;
-    char        *datatype_body         = NULL;
-    char        *shape_body            = NULL;
-    char         request_url[URL_MAX_LENGTH];
+    htri_t       search_ret;
+    char        *create_request_body = NULL;
+    char        *datatype_body       = NULL;
+    char        *shape_body          = NULL;
+    char         request_endpoint[URL_MAX_LENGTH];
+    const char  *parent_obj_type_header  = NULL;
     char        *url_encoded_attr_name   = NULL;
     int          create_request_body_len = 0;
     int          url_len                 = 0;
-    const char  *base_URL                = NULL;
     void        *ret_value               = NULL;
+    long         http_response           = -1;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received attribute create call with following parameters:\n");
@@ -98,7 +98,7 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
         H5I_DATASET != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file, group, datatype or dataset");
 
-    if ((base_URL = parent->domain->u.file.server_info.base_URL) == NULL)
+    if (!parent->domain->u.file.server_info.base_URL)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object does not have valid server URL");
 
     /* Check for write access */
@@ -142,8 +142,6 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
 
         if (H5I_INVALID_HID == loc_params->loc_data.loc_by_name.lapl_id)
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "invalid LAPL");
-
-        htri_t search_ret;
 
         new_attribute->u.attribute.parent_obj_type = H5I_UNINIT;
 
@@ -216,7 +214,7 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
 
     /* Form the Datatype portion of the Attribute create request */
     if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE,
-                                    parent->domain->u.file.server_version) < 0)
+                                    parent->domain->u.file.server_info.version) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL,
                         "can't convert attribute's datatype to JSON representation");
 
@@ -244,22 +242,6 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
     printf("-> Attribute create request JSON:\n%s\n\n", create_request_body);
 #endif
 
-    /* Setup the host header */
-    host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for request Host header");
-
-    strcpy(host_header, host_string);
-
-    curl_headers = curl_slist_append(curl_headers, strncat(host_header, parent->domain->u.file.filepath_name,
-                                                           host_header_len - strlen(host_string) - 1));
-
-    /* Disable use of Expect: 100 Continue HTTP response */
-    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-    /* Instruct cURL that we are sending JSON */
-    curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
-
     /* URL-encode the attribute name to ensure that the resulting URL for the creation
      * operation contains no illegal characters
      */
@@ -272,93 +254,28 @@ RV_attr_create(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_
      * or
      * "/datasets/<id>/attributes/<attr name>",
      * depending on the type of the object the attribute is being attached to. */
-    switch (new_attribute->u.attribute.parent_obj_type) {
-        case H5I_FILE:
-        case H5I_GROUP:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s", base_URL,
-                                    new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error");
+    if (RV_set_object_type_header(new_attribute->u.attribute.parent_obj_type, &parent_obj_type_header) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "parent object not a group, datatype or dataset");
 
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL,
-                                "attribute create URL exceeded maximum URL size");
+    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s/attributes/%s", parent_obj_type_header,
+                            new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error");
 
-            break;
-
-        case H5I_DATATYPE:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s", base_URL,
-                                    new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error");
-
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL,
-                                "attribute create URL exceeded maximum URL size");
-
-            break;
-
-        case H5I_DATASET:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s", base_URL,
-                                    new_attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error");
-
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL,
-                                "attribute create URL exceeded maximum URL size");
-
-            break;
-
-        case H5I_ATTR:
-        case H5I_UNINIT:
-        case H5I_BADID:
-        case H5I_DATASPACE:
-        case H5I_VFL:
-        case H5I_VOL:
-        case H5I_GENPROP_CLS:
-        case H5I_GENPROP_LST:
-        case H5I_ERROR_CLASS:
-        case H5I_ERROR_MSG:
-        case H5I_ERROR_STACK:
-        case H5I_NTYPES:
-        default:
-            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL,
-                            "parent object not a file, group, datatype or dataset");
-    } /* end switch */
+    if (url_len >= URL_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "attribute create URL exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> URL for attribute creation request: %s\n\n", request_url);
+    printf("-> URL for attribute creation request: %s\n\n", request_endpoint);
 #endif
 
     uinfo.buffer      = create_request_body;
     uinfo.buffer_size = (size_t)create_request_body_len;
     uinfo.bytes_sent  = 0;
 
-    if (CURLE_OK !=
-        curl_easy_setopt(curl, CURLOPT_USERNAME, new_attribute->domain->u.file.server_info.username))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
-    if (CURLE_OK !=
-        curl_easy_setopt(curl, CURLOPT_PASSWORD, new_attribute->domain->u.file.server_info.password))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set up cURL to make HTTP PUT request: %s",
-                        curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, &uinfo))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL PUT data: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)create_request_body_len))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL PUT data size: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Creating attribute\n\n");
-
-    printf("   /**********************************\\\n");
-    printf("-> | Making PUT request to the server |\n");
-    printf("   \\**********************************/\n\n");
-#endif
-
-    CURL_PERFORM(curl, H5E_ATTR, H5E_CANTCREATE, NULL);
+    http_response = RV_curl_put(&new_attribute->domain->u.file.server_info, request_endpoint,
+                                new_attribute->domain->u.file.filepath_name, &uinfo, CONTENT_TYPE_JSON);
+    if (!HTTP_SUCCESS(http_response))
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTCREATE, NULL, "can't create attribute");
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Created attribute\n\n");
@@ -390,8 +307,6 @@ done:
         RV_free(datatype_body);
     if (shape_body)
         RV_free(shape_body);
-    if (host_header)
-        RV_free(host_header);
     if (url_encoded_attr_name)
         curl_free(url_encoded_attr_name);
 
@@ -399,15 +314,6 @@ done:
     if (new_attribute && !ret_value)
         if (RV_attr_close(new_attribute, FAIL, NULL) < 0)
             FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTCLOSEOBJ, NULL, "can't close attribute");
-
-    /* Unset cURL UPLOAD option to ensure that future requests don't try to use PUT calls */
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 0))
-        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't unset cURL PUT option: %s", curl_err_buf);
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    } /* end if */
 
     PRINT_ERROR_STACK;
 
@@ -435,15 +341,12 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
     RV_object_t *parent          = (RV_object_t *)obj;
     RV_object_t *attribute       = NULL;
     size_t       attr_name_len   = 0;
-    size_t       host_header_len = 0;
     size_t       path_size       = 0;
     size_t       path_len        = 0;
-    char        *host_header     = NULL;
     char        *found_attr_name = NULL;
-    char         request_url[URL_MAX_LENGTH];
+    char         request_endpoint[URL_MAX_LENGTH];
     char        *url_encoded_attr_name  = NULL;
     const char  *parent_obj_type_header = NULL;
-    const char  *base_URL               = NULL;
     int          url_len                = 0;
     void        *ret_value              = NULL;
 
@@ -477,7 +380,7 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
         H5I_DATASET != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file, group, datatype or dataset");
 
-    if ((base_URL = parent->domain->u.file.server_info.base_URL) == NULL)
+    if (!parent->domain->u.file.server_info.base_URL)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object does not have valid server URL");
 
     if (aapl_id == H5I_INVALID_HID)
@@ -604,21 +507,6 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
                                     "can't locate object that attribute is attached to");
             }
 
-            /* Setup the host header */
-            host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL,
-                                "can't allocate space for request Host header");
-
-            strcpy(host_header, host_string);
-
-            curl_headers =
-                curl_slist_append(curl_headers, strncat(host_header, attribute->domain->u.file.filepath_name,
-                                                        host_header_len - strlen(host_string) - 1));
-
-            /* Disable use of Expect: 100 Continue HTTP response */
-            curl_headers = curl_slist_append(curl_headers, "Expect:");
-
             /* Redirect cURL from the base URL to
              * "/groups/<id>/attributes/<attr name>",
              * "/datatypes/<id>/attributes/<attr name>"
@@ -630,7 +518,7 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL,
                                 "parent object not a group, datatype or dataset");
 
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s?%s&include_attrs=1", base_URL,
+            if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s?%s&include_attrs=1",
                                     parent_obj_type_header, attribute->u.attribute.parent_obj_URI,
                                     request_idx_type)) < 0)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error");
@@ -639,40 +527,18 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL,
                                 "attribute open URL exceeded maximum URL size");
 
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_USERNAME, attribute->domain->u.file.server_info.username))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_PASSWORD, attribute->domain->u.file.server_info.password))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s",
-                                curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
-
-            CURL_PERFORM(curl, H5E_ATTR, H5E_CANTGET, NULL);
+            if (RV_curl_get(&attribute->domain->u.file.server_info, request_endpoint,
+                            attribute->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't get attribute");
 
             if (0 > RV_parse_response(response_buffer.buffer, (const void *)&loc_params->loc_data.loc_by_idx,
                                       &found_attr_name, RV_copy_attribute_name_by_index))
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_PARSEERROR, NULL, "failed to retrieve attribute names");
 
-            if (host_header) {
-                RV_free(host_header);
-                host_header = NULL;
-            }
-
             if (url_encoded_attr_name) {
                 curl_free(url_encoded_attr_name);
                 url_encoded_attr_name = NULL;
             }
-
-            if (curl_headers) {
-                curl_slist_free_all(curl_headers);
-                curl_headers = NULL;
-            } /* end if */
 
             break;
         } /* H5VL_OBJECT_BY_IDX */
@@ -684,24 +550,9 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
 
     /* Make a GET request to the server to retrieve information about the attribute */
 
-    /* Setup the host header */
-    host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, NULL, "can't allocate space for request Host header");
-
-    strcpy(host_header, host_string);
-
-    curl_headers =
-        curl_slist_append(curl_headers, strncat(host_header, attribute->domain->u.file.filepath_name,
-                                                host_header_len - strlen(host_string) - 1));
-
-    /* Disable use of Expect: 100 Continue HTTP response */
-    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
     /* URL-encode the attribute name to ensure that the resulting URL for the open
      * operation contains no illegal characters
      */
-
     const char *target_attr_name = found_attr_name ? (const char *)found_attr_name : attr_name;
 
     attr_name_len = strlen(target_attr_name);
@@ -717,39 +568,20 @@ RV_attr_open(void *obj, const H5VL_loc_params_t *loc_params, const char *attr_na
     if (RV_set_object_type_header(attribute->u.attribute.parent_obj_type, &parent_obj_type_header) < 0)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, NULL, "parent object not a group, datatype or dataset");
 
-    if ((url_len =
-             snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL, parent_obj_type_header,
-                      attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
+    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s/attributes/%s", parent_obj_type_header,
+                            attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "snprintf error");
 
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, NULL, "attribute open URL exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> URL for attribute open request: %s\n\n", request_url);
+    printf("-> URL for attribute open request: %s\n\n", request_endpoint);
 #endif
 
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, attribute->domain->u.file.server_info.username))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, attribute->domain->u.file.server_info.password))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s",
-                        curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Retrieving attribute's info\n\n");
-
-    printf("   /**********************************\\\n");
-    printf("-> | Making GET request to the server |\n");
-    printf("   \\**********************************/\n\n");
-#endif
-
-    CURL_PERFORM(curl, H5E_ATTR, H5E_CANTGET, NULL);
+    if (RV_curl_get(&attribute->domain->u.file.server_info, request_endpoint,
+                    attribute->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, NULL, "can't get attribute");
 
     /* Set up a Dataspace for the opened Attribute */
     if ((attribute->u.attribute.space_id = RV_parse_dataspace(response_buffer.buffer)) < 0)
@@ -802,8 +634,6 @@ done:
     } /* end if */
 #endif
 
-    if (host_header)
-        RV_free(host_header);
     if (url_encoded_attr_name)
         curl_free(url_encoded_attr_name);
 
@@ -814,11 +644,6 @@ done:
 
     if (found_attr_name)
         RV_free(found_attr_name);
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    } /* end if */
 
     PRINT_ERROR_STACK;
 
@@ -844,14 +669,11 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
     hbool_t      is_transfer_binary = FALSE;
     htri_t       is_variable_str;
     size_t       dtype_size;
-    size_t       host_header_len       = 0;
-    size_t       read_size             = 0;
-    char        *host_header           = NULL;
     char        *url_encoded_attr_name = NULL;
-    char         request_url[URL_MAX_LENGTH];
-    const char  *base_URL  = NULL;
-    int          url_len   = 0;
-    herr_t       ret_value = SUCCEED;
+    char         request_endpoint[URL_MAX_LENGTH];
+    const char  *parent_obj_type_header = NULL;
+    int          url_len                = 0;
+    herr_t       ret_value              = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received attribute read call with following parameters:\n");
@@ -866,7 +688,7 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
     if (!buf)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "read buffer was NULL");
 
-    if ((base_URL = attribute->domain->u.file.server_info.base_URL) == NULL)
+    if (!attribute->domain->u.file.server_info.base_URL)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "attribute does not have valid server URL");
 
     /* Determine whether it's possible to receive the data as a binary blob instead of as JSON */
@@ -889,23 +711,8 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
     printf("-> Attribute's datatype size: %zu\n\n", dtype_size);
 #endif
 
-    /* Setup the host header */
-    host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
-
-    strcpy(host_header, host_string);
-
-    curl_headers =
-        curl_slist_append(curl_headers, strncat(host_header, attribute->domain->u.file.filepath_name,
-                                                host_header_len - strlen(host_string) - 1));
-
-    /* Disable use of Expect: 100 Continue HTTP response */
-    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
     /* Instruct cURL on which type of transfer to perform, binary or JSON */
-    curl_headers = curl_slist_append(curl_headers, is_transfer_binary ? "Accept: application/octet-stream"
-                                                                      : "Accept: application/json");
+    content_type_t content_type = is_transfer_binary ? CONTENT_TYPE_OCTET_STREAM : CONTENT_TYPE_JSON;
 
     /* URL-encode the attribute name to ensure that the resulting URL for the read
      * operation contains no illegal characters
@@ -919,85 +726,24 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
      * or
      * "/datasets/<id>/attributes/<attr name>/value",
      * depending on the type of the object the attribute is attached to. */
-    switch (attribute->u.attribute.parent_obj_type) {
-        case H5I_FILE:
-        case H5I_GROUP:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s/value", base_URL,
-                                    attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+    if (RV_set_object_type_header(attribute->u.attribute.parent_obj_type, &parent_obj_type_header) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset");
 
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                "attribute read URL exceeded maximum URL size");
+    if ((url_len =
+             snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s/attributes/%s/value", parent_obj_type_header,
+                      attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-            break;
-
-        case H5I_DATATYPE:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s/value",
-                                    base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) <
-                0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                "attribute read URL exceeded maximum URL size");
-
-            break;
-
-        case H5I_DATASET:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s/value",
-                                    base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) <
-                0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                "attribute read URL exceeded maximum URL size");
-
-            break;
-
-        case H5I_ATTR:
-        case H5I_UNINIT:
-        case H5I_BADID:
-        case H5I_DATASPACE:
-        case H5I_VFL:
-        case H5I_VOL:
-        case H5I_GENPROP_CLS:
-        case H5I_GENPROP_LST:
-        case H5I_ERROR_CLASS:
-        case H5I_ERROR_MSG:
-        case H5I_ERROR_STACK:
-        case H5I_NTYPES:
-        default:
-            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                            "parent object not a file, group, datatype or dataset");
-    } /* end switch */
+    if (url_len >= URL_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "attribute read URL exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> URL for attribute read request: %s\n\n", request_url);
+    printf("-> URL for attribute read request: %s\n\n", request_endpoint);
 #endif
 
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, attribute->domain->u.file.server_info.username))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, attribute->domain->u.file.server_info.password))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
-                        curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Reading attribute\n\n");
-
-    printf("   /**********************************\\\n");
-    printf("-> | Making GET request to the server |\n");
-    printf("   \\**********************************/\n\n");
-#endif
-
-    CURL_PERFORM(curl, H5E_ATTR, H5E_READERROR, FAIL);
+    if (RV_curl_get(&attribute->domain->u.file.server_info, request_endpoint,
+                    attribute->domain->u.file.filepath_name, content_type) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_READERROR, FAIL, "can't read from attribute");
 
     memcpy(buf, response_buffer.buffer, (size_t)file_select_npoints * dtype_size);
 
@@ -1006,15 +752,8 @@ done:
     printf("-> Attribute read response buffer:\n%s\n\n", response_buffer.buffer);
 #endif
 
-    if (host_header)
-        RV_free(host_header);
     if (url_encoded_attr_name)
         curl_free(url_encoded_attr_name);
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    } /* end if */
 
     PRINT_ERROR_STACK;
 
@@ -1039,16 +778,15 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
     upload_info  uinfo;
     curl_off_t   write_len;
     hssize_t     file_select_npoints;
-    htri_t       is_variable_str;
-    hbool_t      is_transfer_binary;
+    htri_t       is_variable_str    = -1;
+    hbool_t      is_transfer_binary = FALSE;
     size_t       dtype_size;
     size_t       write_body_len        = 0;
-    size_t       host_header_len       = 0;
-    char        *host_header           = NULL;
     char        *url_encoded_attr_name = NULL;
-    char         request_url[URL_MAX_LENGTH];
-    const char  *base_URL  = NULL;
-    int          url_len   = 0;
+    char         request_endpoint[URL_MAX_LENGTH];
+    const char  *parent_obj_type_header = NULL;
+    int          url_len                = 0;
+    long         http_response;
     herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1063,8 +801,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not an attribute");
     if (!buf)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "write buffer was NULL");
-
-    if ((base_URL = attribute->domain->u.file.server_info.base_URL) == NULL)
+    if (!attribute->domain->u.file.server_info.base_URL)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "attribute does not have valid server URL");
 
     /* Check for write access */
@@ -1077,6 +814,8 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
 
     if ((is_variable_str = H5Tis_variable_str(dtype_id)) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
+
+    is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
 
     if ((file_select_npoints = H5Sget_select_npoints(attribute->u.attribute.space_id)) < 0)
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "attribute's dataspace is invalid");
@@ -1091,26 +830,6 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
 
     write_body_len = (size_t)file_select_npoints * dtype_size;
 
-    /* Setup the host header */
-    host_header_len = strlen(attribute->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
-
-    strcpy(host_header, host_string);
-
-    curl_headers =
-        curl_slist_append(curl_headers, strncat(host_header, attribute->domain->u.file.filepath_name,
-                                                host_header_len - strlen(host_string) - 1));
-
-    /* Disable use of Expect: 100 Continue HTTP response */
-    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-    /* Instruct cURL on which type of transfer to perform, binary or JSON */
-    is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
-    curl_headers =
-        curl_slist_append(curl_headers, is_transfer_binary ? "Content-Type: application/octet-stream"
-                                                           : "Content-Type: application/json");
-
     /* URL-encode the attribute name to ensure that the resulting URL for the write
      * operation contains no illegal characters
      */
@@ -1123,62 +842,19 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
      * or
      * "/datasets/<id>/attributes/<attr name>/value",
      * depending on the type of the object the attribute is attached to. */
-    switch (attribute->u.attribute.parent_obj_type) {
-        case H5I_FILE:
-        case H5I_GROUP:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s/value", base_URL,
-                                    attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+    if (RV_set_object_type_header(attribute->u.attribute.parent_obj_type, &parent_obj_type_header) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "parent object not a group, datatype or dataset");
 
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                "attribute write URL exceeded maximum URL size");
+    if ((url_len =
+             snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s/attributes/%s/value", parent_obj_type_header,
+                      attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-            break;
-
-        case H5I_DATATYPE:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s/value",
-                                    base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) <
-                0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                "attribute write URL exceeded maximum URL size");
-
-            break;
-
-        case H5I_DATASET:
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s/value",
-                                    base_URL, attribute->u.attribute.parent_obj_URI, url_encoded_attr_name)) <
-                0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-            if (url_len >= URL_MAX_LENGTH)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                "attribute write URL exceeded maximum URL size");
-
-            break;
-
-        case H5I_ATTR:
-        case H5I_UNINIT:
-        case H5I_BADID:
-        case H5I_DATASPACE:
-        case H5I_VFL:
-        case H5I_VOL:
-        case H5I_GENPROP_CLS:
-        case H5I_GENPROP_LST:
-        case H5I_ERROR_CLASS:
-        case H5I_ERROR_MSG:
-        case H5I_ERROR_STACK:
-        case H5I_NTYPES:
-        default:
-            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                            "parent object not a file, group, datatype or dataset");
-    } /* end switch */
+    if (url_len >= URL_MAX_LENGTH)
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "attribute write URL exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> URL for attribute write request: %s\n\n", request_url);
+    printf("-> URL for attribute write request: %s\n\n", request_endpoint);
 #endif
 
     /* Check to make sure that the size of the write body can safely be cast to a curl_off_t */
@@ -1193,54 +869,24 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
     uinfo.buffer_size = write_body_len;
     uinfo.bytes_sent  = 0;
 
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, attribute->domain->u.file.server_info.username))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, attribute->domain->u.file.server_info.password))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
-
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s",
-                        curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, &uinfo))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, write_len))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Writing attribute\n\n");
-
-    printf("   /**********************************\\\n");
-    printf("-> | Making PUT request to the server |\n");
-    printf("   \\**********************************/\n\n");
-#endif
-
+    // TODO
     /* Clear response buffer */
     memset(response_buffer.buffer, 0, response_buffer.buffer_size);
 
-    CURL_PERFORM(curl, H5E_ATTR, H5E_WRITEERROR, FAIL);
+    http_response = RV_curl_put(&attribute->domain->u.file.server_info, request_endpoint,
+                                attribute->domain->u.file.filepath_name, &uinfo,
+                                (is_transfer_binary ? CONTENT_TYPE_OCTET_STREAM : CONTENT_TYPE_JSON));
+
+    if (!HTTP_SUCCESS(http_response))
+        FUNC_GOTO_ERROR(H5E_ATTR, H5E_WRITEERROR, FAIL, "can't write to attribute");
 
 done:
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Attribute write response buffer:\n%s\n\n", response_buffer.buffer);
 #endif
 
-    if (host_header)
-        RV_free(host_header);
     if (url_encoded_attr_name)
         curl_free(url_encoded_attr_name);
-
-    /* Unset cURL UPLOAD option to ensure that future requests don't try to use PUT calls */
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 0))
-        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't unset cURL PUT option: %s", curl_err_buf);
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    } /* end if */
 
     PRINT_ERROR_STACK;
 
@@ -1261,16 +907,13 @@ done:
 herr_t
 RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
 {
-    RV_object_t *loc_obj         = (RV_object_t *)obj;
-    size_t       host_header_len = 0;
-    char        *host_header     = NULL;
-    char         request_url[URL_MAX_LENGTH];
+    RV_object_t *loc_obj = (RV_object_t *)obj;
+    char         request_endpoint[URL_MAX_LENGTH];
     char        *url_encoded_attr_name  = NULL;
     char        *found_attr_name        = NULL;
     int          url_len                = 0;
     const char  *parent_obj_type_header = NULL;
     const char  *request_idx_type       = NULL;
-    const char  *base_URL               = NULL;
     herr_t       ret_value              = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1283,7 +926,7 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL,
                         "parent object not an attribute, file, group, datatype or dataset");
 
-    if ((base_URL = loc_obj->domain->u.file.server_info.base_URL) == NULL)
+    if (!loc_obj->domain->u.file.server_info.base_URL)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "location object does not have valid server URL");
 
     switch (args->op_type) {
@@ -1319,61 +962,19 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                         (url_encoded_attr_name = curl_easy_escape(curl, loc_obj->u.attribute.attr_name, 0)))
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name");
 
-                    switch (loc_obj->u.attribute.parent_obj_type) {
-                        case H5I_FILE:
-                        case H5I_GROUP:
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                                                    base_URL, loc_obj->u.attribute.parent_obj_URI,
-                                                    url_encoded_attr_name)) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+                    if (RV_set_object_type_header(loc_obj->u.attribute.parent_obj_type,
+                                                  &parent_obj_type_header) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
+                                        "can't get path header from parent object type");
 
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                                "H5Aget_info request URL exceeded maximum URL size");
+                    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s/attributes/%s",
+                                            parent_obj_type_header, loc_obj->u.attribute.parent_obj_URI,
+                                            url_encoded_attr_name)) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                            break;
-
-                        case H5I_DATATYPE:
-                            if ((url_len = snprintf(
-                                     request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s", base_URL,
-                                     loc_obj->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                                "H5Aget_info request URL exceeded maximum URL size");
-
-                            break;
-
-                        case H5I_DATASET:
-                            if ((url_len = snprintf(
-                                     request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s", base_URL,
-                                     loc_obj->u.attribute.parent_obj_URI, url_encoded_attr_name)) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                                "H5Aget_info request URL exceeded maximum URL size");
-
-                            break;
-
-                        case H5I_ATTR:
-                        case H5I_UNINIT:
-                        case H5I_BADID:
-                        case H5I_DATASPACE:
-                        case H5I_VFL:
-                        case H5I_VOL:
-                        case H5I_GENPROP_CLS:
-                        case H5I_GENPROP_LST:
-                        case H5I_ERROR_CLASS:
-                        case H5I_ERROR_MSG:
-                        case H5I_ERROR_STACK:
-                        case H5I_NTYPES:
-                        default:
-                            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                                            "parent object not a file, group, datatype or dataset");
-                    } /* end switch */
-
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
+                                        "H5Aget_info request URL exceeded maximum URL size");
                     break;
                 } /* H5VL_OBJECT_BY_SELF */
 
@@ -1416,59 +1017,18 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                     if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, attr_name, 0)))
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name");
 
-                    switch (parent_obj_type) {
-                        case H5I_FILE:
-                        case H5I_GROUP:
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                                                    base_URL, parent_obj_URI, url_encoded_attr_name)) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+                    if (RV_set_object_type_header(parent_obj_type, &parent_obj_type_header) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
+                                        "can't get path header from parent object type");
 
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                                "H5Aget_info_by_name request URL exceeded maximum URL size");
+                    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s/attributes/%s",
+                                            parent_obj_type_header, parent_obj_URI, url_encoded_attr_name)) <
+                        0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                            break;
-
-                        case H5I_DATATYPE:
-                            if ((url_len =
-                                     snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                                              base_URL, parent_obj_URI, url_encoded_attr_name)) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                                "H5Aget_info_by_name request URL exceeded maximum URL size");
-
-                            break;
-
-                        case H5I_DATASET:
-                            if ((url_len =
-                                     snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                                              base_URL, parent_obj_URI, url_encoded_attr_name)) < 0)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                                "H5Aget_info_by_name request URL exceeded maximum URL size");
-
-                            break;
-
-                        case H5I_ATTR:
-                        case H5I_UNINIT:
-                        case H5I_BADID:
-                        case H5I_DATASPACE:
-                        case H5I_VFL:
-                        case H5I_VOL:
-                        case H5I_GENPROP_CLS:
-                        case H5I_GENPROP_LST:
-                        case H5I_ERROR_CLASS:
-                        case H5I_ERROR_MSG:
-                        case H5I_ERROR_STACK:
-                        case H5I_NTYPES:
-                        default:
-                            FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                                            "parent object not a file, group, datatype or dataset");
-                    } /* end switch */
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
+                                        "H5Aget_info_by_name request URL exceeded maximum URL size");
 
                     break;
                 } /* H5VL_OBJECT_BY_NAME */
@@ -1516,21 +1076,6 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_PATH, FAIL,
                                         "can't locate object that attribute is attached to");
 
-                    /* Setup the host header */
-                    host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-                    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
-                                        "can't allocate space for request Host header");
-
-                    strcpy(host_header, host_string);
-
-                    curl_headers = curl_slist_append(
-                        curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name,
-                                              host_header_len - strlen(host_string) - 1));
-
-                    /* Disable use of Expect: 100 Continue HTTP response */
-                    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
                     /* Redirect cURL from the base URL to
                      * "/groups/<id>/attributes/<attr name>",
                      * "/datatypes/<id>/attributes/<attr name>"
@@ -1541,57 +1086,31 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
                                         "can't get path header from parent object type");
 
-                    if ((url_len =
-                             snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s?%s&include_attrs=1", base_URL,
-                                      parent_obj_type_header, parent_obj_URI, request_idx_type)) < 0)
+                    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s?%s&include_attrs=1",
+                                            parent_obj_type_header, parent_obj_URI, request_idx_type)) < 0)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
                                         "attribute open URL exceeded maximum URL size");
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME,
-                                                     loc_obj->domain->u.file.server_info.username))
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL username: %s",
-                                        curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD,
-                                                     loc_obj->domain->u.file.server_info.password))
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL password: %s",
-                                        curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
-                                        curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL,
-                                        "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
-                                        curl_err_buf);
 
-                    CURL_PERFORM(curl, H5E_ATTR, H5E_CANTGET, FAIL);
+                    if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+                                    loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't get attribute");
 
                     if (0 > RV_parse_response(response_buffer.buffer, &loc_params->loc_data.loc_by_idx,
                                               &found_attr_name, RV_copy_attribute_name_by_index))
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_PARSEERROR, FAIL, "failed to retrieve attribute names");
-
-                    if (host_header) {
-                        RV_free(host_header);
-                        host_header = NULL;
-                    }
 
                     if (url_encoded_attr_name) {
                         curl_free(url_encoded_attr_name);
                         url_encoded_attr_name = NULL;
                     }
 
-                    if (curl_headers) {
-                        curl_slist_free_all(curl_headers);
-                        curl_headers = NULL;
-                    } /* end if */
-
                     if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, found_attr_name, 0)))
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name");
 
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL,
+                    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s/attributes/%s",
                                             parent_obj_type_header, parent_obj_URI, url_encoded_attr_name)) <
                         0)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
@@ -1605,45 +1124,9 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
             } /* end switch */
 
             /* Make a GET request to the server to retrieve the attribute's info */
-
-            /* Setup the host header */
-            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
-                                "can't allocate space for request Host header");
-
-            strcpy(host_header, host_string);
-
-            curl_headers =
-                curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name,
-                                                        host_header_len - strlen(host_string) - 1));
-
-            /* Disable use of Expect: 100 Continue HTTP response */
-            curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
-                                curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Retrieving attribute info at URL: %s\n\n", request_url);
-
-            printf("   /**********************************\\\n");
-            printf("-> | Making GET request to the server |\n");
-            printf("   \\**********************************/\n\n");
-#endif
-
-            CURL_PERFORM(curl, H5E_ATTR, H5E_CANTGET, FAIL);
+            if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+                            loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't get attribute");
 
             /* Retrieve the attribute's info */
             if (RV_parse_response(response_buffer.buffer, NULL, attr_info, RV_get_attr_info_callback) < 0)
@@ -1724,21 +1207,6 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                             break;
                     }
 
-                    /* Setup the host header */
-                    host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-                    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
-                                        "can't allocate space for request Host header");
-
-                    strcpy(host_header, host_string);
-
-                    curl_headers = curl_slist_append(
-                        curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name,
-                                              host_header_len - strlen(host_string) - 1));
-
-                    /* Disable use of Expect: 100 Continue HTTP response */
-                    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
                     /* Redirect cURL from the base URL to
                      * "/groups/<id>/attributes/<attr name>",
                      * "/datatypes/<id>/attributes/<attr name>"
@@ -1749,34 +1217,17 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
                                         "parent object not a group, datatype or dataset");
 
-                    if ((url_len =
-                             snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s?%s&include_attrs=1", base_URL,
-                                      parent_obj_type_header, parent_obj_URI, request_idx_type)) < 0)
+                    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s?%s&include_attrs=1",
+                                            parent_obj_type_header, parent_obj_URI, request_idx_type)) < 0)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
                                         "attribute open URL exceeded maximum URL size");
 
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME,
-                                                     loc_obj->domain->u.file.server_info.username))
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL username: %s",
-                                        curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD,
-                                                     loc_obj->domain->u.file.server_info.password))
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL password: %s",
-                                        curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
-                                        curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL,
-                                        "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
-                                        curl_err_buf);
-
-                    CURL_PERFORM(curl, H5E_ATTR, H5E_CANTGET, FAIL);
+                    if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+                                    loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
+                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't get attribute");
 
                     if (0 > RV_parse_response(response_buffer.buffer, &loc_params->loc_data.loc_by_idx,
                                               &found_attr_name, RV_copy_attribute_name_by_index))
@@ -1789,20 +1240,10 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
                         name_buf[name_buf_size - 1] = '\0';
                     } /* end if */
 
-                    if (host_header) {
-                        RV_free(host_header);
-                        host_header = NULL;
-                    }
-
                     if (url_encoded_attr_name) {
                         curl_free(url_encoded_attr_name);
                         url_encoded_attr_name = NULL;
                     }
-
-                    if (curl_headers) {
-                        curl_slist_free_all(curl_headers);
-                        curl_headers = NULL;
-                    } /* end if */
 
                     break;
                 } /* H5VL_OBJECT_BY_IDX */
@@ -1846,15 +1287,8 @@ RV_attr_get(void *obj, H5VL_attr_get_args_t *args, hid_t dxpl_id, void **req)
     } /* end switch */
 
 done:
-    if (host_header)
-        RV_free(host_header);
     if (url_encoded_attr_name)
         curl_free(url_encoded_attr_name);
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    }
 
     if (found_attr_name) {
         RV_free(found_attr_name);
@@ -1881,34 +1315,34 @@ herr_t
 RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_specific_args_t *args,
                  hid_t dxpl_id, void **req)
 {
-    RV_object_t         *loc_obj             = (RV_object_t *)obj;
-    RV_object_t         *attr_iter_obj_typed = NULL;
-    RV_object_t         *attr                = NULL;
-    RV_object_t         *renamed_attr        = NULL;
-    RV_object_t         *attr_parent         = NULL;
-    H5I_type_t           parent_obj_type     = H5I_UNINIT;
-    size_t               host_header_len     = 0;
-    size_t               elem_size           = 0;
-    H5VL_attr_get_args_t attr_get_args;
-    H5VL_loc_params_t    attr_open_loc_params;
-    hssize_t             num_elems               = 0;
-    size_t               attr_name_to_delete_len = 0;
-    hid_t                attr_iter_object_id     = H5I_INVALID_HID;
-    hid_t                space_id                = H5I_INVALID_HID;
-    hid_t                type_id                 = H5I_INVALID_HID;
-    void                *buf                     = NULL;
-    void                *attr_iter_object        = NULL;
-    char                 parent_URI[URI_MAX_LENGTH];
-    char                *host_header = NULL;
-    char                *obj_URI;
-    char                 temp_URI[URI_MAX_LENGTH];
-    char                 request_url[URL_MAX_LENGTH];
-    char                 attr_name_to_delete[ATTRIBUTE_NAME_MAX_LENGTH];
-    char                *url_encoded_attr_name  = NULL;
-    const char          *parent_obj_type_header = NULL;
-    const char          *base_URL               = NULL;
-    int                  url_len                = 0;
-    herr_t               ret_value              = SUCCEED;
+    RV_object_t              *loc_obj             = (RV_object_t *)obj;
+    RV_object_t              *attr_iter_obj_typed = NULL;
+    RV_object_t              *attr                = NULL;
+    RV_object_t              *renamed_attr        = NULL;
+    RV_object_t              *attr_parent         = NULL;
+    H5I_type_t                parent_obj_type     = H5I_UNINIT;
+    size_t                    elem_size           = 0;
+    H5VL_attr_get_args_t      attr_get_args;
+    H5VL_loc_params_t         attr_open_loc_params;
+    H5VL_loc_params_t         attr_delete_loc_params;
+    H5VL_attr_specific_args_t attr_delete_args;
+    hssize_t                  num_elems               = 0;
+    size_t                    attr_name_to_delete_len = 0;
+    hid_t                     attr_iter_object_id     = H5I_INVALID_HID;
+    hid_t                     space_id                = H5I_INVALID_HID;
+    hid_t                     type_id                 = H5I_INVALID_HID;
+    void                     *buf                     = NULL;
+    void                     *attr_iter_object        = NULL;
+    char                      parent_URI[URI_MAX_LENGTH];
+    char                     *obj_URI;
+    char                      temp_URI[URI_MAX_LENGTH];
+    char                      request_endpoint[URL_MAX_LENGTH];
+    char                      attr_name_to_delete[ATTRIBUTE_NAME_MAX_LENGTH];
+    char                     *url_encoded_attr_name  = NULL;
+    const char               *parent_obj_type_header = NULL;
+    int                       url_len                = 0;
+    herr_t                    ret_value              = SUCCEED;
+    long                      http_response;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received attribute-specific call with following parameters:\n");
@@ -1918,9 +1352,6 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type &&
         H5I_DATATYPE != loc_obj->obj_type && H5I_DATASET != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file, group, datatype or dataset");
-
-    if ((base_URL = loc_obj->domain->u.file.server_info.base_URL) == NULL)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "location object does not have valid server URL");
 
     switch (args->op_type) {
         /* H5Adelete (_by_name/_by_idx) */
@@ -1967,7 +1398,7 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
                                 "parent object not a group, datatype or dataset");
 
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL,
+            if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s/attributes/%s",
                                     parent_obj_type_header, temp_URI, url_encoded_attr_name)) < 0)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
@@ -1975,44 +1406,13 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
                                 "H5Adelete(_by_name) request URL exceeded maximum URL size");
 
-            /* Setup the host header */
-            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
-                                "can't allocate space for request Host header");
+            http_response =
+                RV_curl_delete(&loc_obj->domain->u.file.server_info, (const char *)request_endpoint,
+                               (const char *)loc_obj->domain->u.file.filepath_name);
 
-            strcpy(host_header, host_string);
+            if (!HTTP_SUCCESS(http_response))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTREMOVE, FAIL, "can't delete attribute");
 
-            curl_headers =
-                curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name,
-                                                        host_header_len - strlen(host_string) - 1));
-
-            /* Disable use of Expect: 100 Continue HTTP response */
-            curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL,
-                                "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Deleting attribute at URL: %s\n\n", request_url);
-
-            printf("   /*************************************\\\n");
-            printf("-> | Making DELETE request to the server |\n");
-            printf("   \\*************************************/\n\n");
-#endif
-
-            CURL_PERFORM(curl, H5E_ATTR, H5E_CANTREMOVE, FAIL);
             break;
         }
 
@@ -2100,95 +1500,24 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
              * or
              * "/datasets/<id>/attributes/<attr name>,
              * depending on the type of the object the attribute is attached to. */
-            switch (parent_obj_type) {
-                case H5I_FILE:
-                case H5I_GROUP:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                                            base_URL, obj_URI, url_encoded_attr_name)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+            if (RV_set_object_type_header(parent_obj_type, &parent_obj_type_header) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
+                                "parent object not a group, datatype or dataset");
 
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Adelete(_by_name) request URL exceeded maximum URL size");
+            if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s/attributes/%s",
+                                    parent_obj_type_header, obj_URI, url_encoded_attr_name)) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                    break;
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
+                                "H5Adelete(_by_name) request URL exceeded maximum URL size");
 
-                case H5I_DATATYPE:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                                            base_URL, obj_URI, url_encoded_attr_name)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+            http_response =
+                RV_curl_delete(&loc_obj->domain->u.file.server_info, (const char *)request_endpoint,
+                               (const char *)loc_obj->domain->u.file.filepath_name);
 
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Adelete(_by_name) request URL exceeded maximum URL size");
-
-                    break;
-
-                case H5I_DATASET:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                                            base_URL, obj_URI, url_encoded_attr_name)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Adelete(_by_name) request URL exceeded maximum URL size");
-
-                    break;
-
-                case H5I_ATTR:
-                case H5I_UNINIT:
-                case H5I_BADID:
-                case H5I_DATASPACE:
-                case H5I_VFL:
-                case H5I_VOL:
-                case H5I_GENPROP_CLS:
-                case H5I_GENPROP_LST:
-                case H5I_ERROR_CLASS:
-                case H5I_ERROR_MSG:
-                case H5I_ERROR_STACK:
-                case H5I_NTYPES:
-                default:
-                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                                    "parent object not a file, group, datatype or dataset");
-            } /* end switch */
-
-            /* Setup the host header */
-            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
-                                "can't allocate space for request Host header");
-
-            strcpy(host_header, host_string);
-
-            curl_headers =
-                curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name,
-                                                        host_header_len - strlen(host_string) - 1));
-
-            /* Disable use of Expect: 100 Continue HTTP response */
-            curl_headers = curl_slist_append(curl_headers, "Expect:");
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL,
-                                "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Deleting attribute at URL: %s\n\n", request_url);
-
-            printf("   /*************************************\\\n");
-            printf("-> | Making DELETE request to the server |\n");
-            printf("   \\*************************************/\n\n");
-#endif
-
-            CURL_PERFORM(curl, H5E_ATTR, H5E_CANTREMOVE, FAIL);
+            if (!HTTP_SUCCESS(http_response))
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTREMOVE, FAIL, "can't delete attribute");
 
             break;
         } /* H5VL_ATTR_DELETE */
@@ -2197,7 +1526,6 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
         case H5VL_ATTR_EXISTS: {
             const char *attr_name = args->args.exists.name;
             hbool_t    *ret       = args->args.exists.exists;
-            long        http_response;
 
             switch (loc_params->type) {
                 /* H5Aexists */
@@ -2266,99 +1594,20 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
              * or
              * "/datasets/<id>/attributes/<attr name>,
              * depending on the type of the object the attribute is attached to. */
-            switch (parent_obj_type) {
-                case H5I_FILE:
-                case H5I_GROUP:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes/%s",
-                                            base_URL, obj_URI, url_encoded_attr_name)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+            if (RV_set_object_type_header(parent_obj_type, &parent_obj_type_header) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
+                                "parent object not a group, datatype or dataset");
 
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Aexists(_by_name) request URL exceeded maximum URL size");
+            if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s/attributes/%s",
+                                    parent_obj_type_header, obj_URI, url_encoded_attr_name)) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                    break;
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
+                                "H5Aexists(_by_name) request URL exceeded maximum URL size");
 
-                case H5I_DATATYPE:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes/%s",
-                                            base_URL, obj_URI, url_encoded_attr_name)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Aexists(_by_name) request URL exceeded maximum URL size");
-
-                    break;
-
-                case H5I_DATASET:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes/%s",
-                                            base_URL, obj_URI, url_encoded_attr_name)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Aexists(_by_name) request URL exceeded maximum URL size");
-
-                    break;
-
-                case H5I_ATTR:
-                case H5I_UNINIT:
-                case H5I_BADID:
-                case H5I_DATASPACE:
-                case H5I_VFL:
-                case H5I_VOL:
-                case H5I_GENPROP_CLS:
-                case H5I_GENPROP_LST:
-                case H5I_ERROR_CLASS:
-                case H5I_ERROR_MSG:
-                case H5I_ERROR_STACK:
-                case H5I_NTYPES:
-                default:
-                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                                    "parent object not a file, group, datatype or dataset");
-            } /* end switch */
-
-            /* Setup the host header */
-            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
-                                "can't allocate space for request Host header");
-
-            strcpy(host_header, host_string);
-
-            curl_headers =
-                curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name,
-                                                        host_header_len - strlen(host_string) - 1));
-
-            /* Disable use of Expect: 100 Continue HTTP response */
-            curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
-                                curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Attribute existence check at URL: %s\n\n", request_url);
-
-            printf("   /**********************************\\\n");
-            printf("-> | Making GET request to the server |\n");
-            printf("   \\**********************************/\n\n");
-#endif
-
-            CURL_PERFORM_NO_ERR(curl, FAIL);
-
-            if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't get HTTP response code");
+            http_response = RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+                                        loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON);
 
             if (HTTP_SUCCESS(http_response))
                 *ret = TRUE;
@@ -2674,57 +1923,17 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
              * or
              * "/datasets/<id>/attributes",
              * depending on the type of the object the attribute is attached to. */
-            switch (parent_obj_type) {
-                case H5I_FILE:
-                case H5I_GROUP:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/attributes", base_URL,
-                                            obj_URI)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
+            if (RV_set_object_type_header(parent_obj_type, &parent_obj_type_header) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
+                                "parent object not a group, datatype or dataset");
 
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Aiterate(_by_name) request URL exceeded maximum URL size");
+            if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s/attributes",
+                                    parent_obj_type_header, obj_URI)) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                    break;
-
-                case H5I_DATATYPE:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s/attributes",
-                                            base_URL, obj_URI)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Aiterate(_by_name) request URL exceeded maximum URL size");
-
-                    break;
-
-                case H5I_DATASET:
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s/attributes",
-                                            base_URL, obj_URI)) < 0)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    if (url_len >= URL_MAX_LENGTH)
-                        FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
-                                        "H5Aiterate(_by_name) request URL exceeded maximum URL size");
-
-                    break;
-
-                case H5I_ATTR:
-                case H5I_UNINIT:
-                case H5I_BADID:
-                case H5I_DATASPACE:
-                case H5I_VFL:
-                case H5I_VOL:
-                case H5I_GENPROP_CLS:
-                case H5I_GENPROP_LST:
-                case H5I_ERROR_CLASS:
-                case H5I_ERROR_MSG:
-                case H5I_ERROR_STACK:
-                case H5I_NTYPES:
-                default:
-                    FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                                    "parent object not a file, group, datatype or dataset");
-            } /* end switch */
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL,
+                                "H5Aiterate(_by_name) request URL exceeded maximum URL size");
 
             /* Register an hid_t for the attribute's parent object */
 
@@ -2761,44 +1970,9 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
 
             /* Make a GET request to the server to retrieve all of the attributes attached to the given object
              */
-
-            /* Setup the host header */
-            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
-                                "can't allocate space for request Host header");
-
-            strcpy(host_header, host_string);
-
-            curl_headers =
-                curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name,
-                                                        host_header_len - strlen(host_string) - 1));
-
-            /* Disable use of Expect: 100 Continue HTTP response */
-            curl_headers = curl_slist_append(curl_headers, "Expect:");
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
-                                curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Retrieving all attributes attached to object using URL: %s\n\n", request_url);
-
-            printf("   /**********************************\\\n");
-            printf("-> | Making GET request to the server |\n");
-            printf("   \\**********************************/\n\n");
-#endif
-
-            CURL_PERFORM(curl, H5E_ATTR, H5E_CANTGET, FAIL);
+            if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+                            loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't get attribute");
 
             if (RV_parse_response(response_buffer.buffer, &attr_iter_data, NULL, RV_attr_iter_callback) < 0)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "can't iterate over attributes");
@@ -2875,10 +2049,10 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
             attr_open_loc_params.obj_type =
                 (loc_params->type == H5VL_OBJECT_BY_SELF) ? loc_obj->obj_type : parent_obj_type;
 
-            if ((attr = (RV_object_t *)RV_attr_open((attr_parent != NULL) ? (void *)attr_parent : obj,
-                                                    (const H5VL_loc_params_t *)&attr_open_loc_params,
-                                                    args->args.rename.old_name, H5P_DEFAULT, H5P_DEFAULT,
-                                                    NULL)) == NULL)
+            if ((attr = (RV_object_t *)RV_attr_open(
+                     (loc_params->type == H5VL_OBJECT_BY_SELF) ? obj : (void *)attr_parent,
+                     (const H5VL_loc_params_t *)&attr_open_loc_params, args->args.rename.old_name,
+                     H5P_DEFAULT, H5P_DEFAULT, NULL)) == NULL)
                 FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTOPENOBJ, FAIL, "can't open attribute");
 
             /* Create copy of attribute with same name */
@@ -2915,57 +2089,16 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
             attr = NULL;
 
             /* Delete original attribute */
+            attr_delete_loc_params.obj_type = H5I_ATTR;
+            attr_delete_loc_params.type     = H5VL_OBJECT_BY_SELF;
 
-            /* Setup the host header */
-            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTALLOC, FAIL,
-                                "can't allocate space for request Host header");
+            attr_delete_args.op_type       = H5VL_ATTR_DELETE;
+            attr_delete_args.args.del.name = args->args.rename.old_name;
 
-            strcpy(host_header, host_string);
-
-            curl_headers =
-                curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name,
-                                                        host_header_len - strlen(host_string) - 1));
-
-            /* Disable use of Expect: 100 Continue HTTP response */
-            curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-            /* Set request url */
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-
-            if (RV_set_object_type_header(parent_obj_type, &parent_obj_type_header) < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL,
-                                "parent object not a group, datatype or dataset");
-
-            /* URL-encode the attribute name so that the resulting URL
-             * doesn't contain any illegal characters */
-            if (NULL == (url_encoded_attr_name = curl_easy_escape(curl, args->args.rename.old_name, 0)))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTENCODE, FAIL, "can't URL-encode attribute name");
-
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s/attributes/%s", base_URL,
-                                    parent_obj_type_header,
-                                    (loc_params->type == H5VL_OBJECT_BY_SELF) ? loc_obj->URI : parent_URI,
-                                    url_encoded_attr_name)) < 0)
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
-                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTSET, FAIL,
-                                "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Deleting attribute at URL: %s\n\n", request_url);
-
-            printf("   /*************************************\\\n");
-            printf("-> | Making DELETE request to the server |\n");
-            printf("   \\*************************************/\n\n");
-#endif
-
-            CURL_PERFORM(curl, H5E_ATTR, H5E_CANTDELETE, FAIL);
+            if (RV_attr_specific((loc_params->type == H5VL_OBJECT_BY_SELF) ? obj : (void *)attr_parent,
+                                 (const H5VL_loc_params_t *)&attr_delete_loc_params,
+                                 (H5VL_attr_specific_args_t *)&attr_delete_args, H5P_DEFAULT, NULL) < 0)
+                FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTDELETE, FAIL, "can't delete attr with old name");
 
             break;
         }
@@ -2975,9 +2108,6 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
     } /* end switch */
 
 done:
-    if (host_header)
-        RV_free(host_header);
-
     if (attr_iter_object_id >= 0) {
         if (H5I_FILE == parent_obj_type) {
             if (H5Fclose(attr_iter_object_id) < 0)
@@ -3033,19 +2163,9 @@ done:
                                 "attribute's parent object is not group, dataset, or datatype");
                 break;
         }
-    /* In case a custom DELETE request was made, reset the request to NULL
-     * to prevent any possible future issues with requests
-     */
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, FAIL, "can't reset cURL custom request: %s", curl_err_buf);
 
     if (url_encoded_attr_name)
         curl_free(url_encoded_attr_name);
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    } /* end if */
 
     if (buf)
         RV_free(buf);

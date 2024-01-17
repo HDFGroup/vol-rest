@@ -582,6 +582,12 @@ typedef struct dataset_read_info {
 
 typedef enum transfer_type_t { UNINIT = 0, READ = 1, WRITE = 2 } transfer_type_t;
 
+typedef enum content_type_t {
+    CONTENT_TYPE_UNINIT       = 0,
+    CONTENT_TYPE_JSON         = 1,
+    CONTENT_TYPE_OCTET_STREAM = 2
+} content_type_t;
+
 typedef struct dataset_transfer_info {
     struct curl_slist     *curl_headers;
     char                  *host_headers;
@@ -748,6 +754,15 @@ herr_t RV_curl_multi_perform(CURL *curl_multi_ptr, dataset_transfer_info *transf
                              herr_t(success_callback)(hid_t mem_type_id, hid_t mem_space_id,
                                                       hid_t file_type_id, hid_t file_space_id, void *buf,
                                                       struct response_buffer resp_buffer));
+
+/* Helper functions for cURL requests to the server */
+long RV_curl_delete(server_info_t *server_info, const char *request_endpoint, const char *filename);
+long RV_curl_put(server_info_t *server_info, const char *request_endpoint, const char *filename,
+                 upload_info *uinfo, content_type_t content_type);
+long RV_curl_get(server_info_t *server_info, const char *request_endpoint, const char *filename,
+                 content_type_t content_type);
+long RV_curl_post(server_info_t *server_info, const char *request_endpoint, const char *filename,
+                  const char *post_data, size_t post_size, content_type_t content_type);
 
 /* Dtermine if datatype conversion is necessary */
 htri_t RV_need_tconv(hid_t src_type_id, hid_t dst_type_id);

@@ -265,14 +265,12 @@ herr_t
 RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_args_t *args, hid_t dxpl_id,
               void **req)
 {
-    RV_object_t *loc_obj         = (RV_object_t *)obj;
-    size_t       host_header_len = 0;
-    char        *host_header     = NULL;
-    char         request_url[URL_MAX_LENGTH];
-    char        *found_object_name = NULL;
-    const char  *base_URL          = NULL;
-    int          url_len           = 0;
-    herr_t       ret_value         = SUCCEED;
+    RV_object_t *loc_obj = (RV_object_t *)obj;
+    char         request_endpoint[URL_MAX_LENGTH];
+    char        *found_object_name      = NULL;
+    const char  *parent_obj_type_header = NULL;
+    int          url_len                = 0;
+    herr_t       ret_value              = SUCCEED;
     loc_info     loc_info_out;
 
     loc_info_out.GCPL_base64 = NULL;
@@ -290,9 +288,6 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type &&
         H5I_DATATYPE != loc_obj->obj_type && H5I_DATASET != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file, group, dataset or committed datatype");
-
-    if ((base_URL = loc_obj->domain->u.file.server_info.base_URL) == NULL)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "location object does not have valid server URL");
 
     switch (args->op_type) {
         case H5VL_OBJECT_GET_NAME: {
@@ -344,60 +339,17 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                      * depending on the type of the object. Also set the
                      * object's type in the H5O_info2_t struct.
                      */
-                    switch (obj_type) {
-                        case H5I_FILE:
-                        case H5I_GROUP: {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL,
-                                                    loc_obj->URI)) < 0)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
+                    if (RV_set_object_type_header(obj_type, &parent_obj_type_header) < 0)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL,
+                                        "target object not a group, datatype or dataset");
 
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
-                                                "H5Oget_info request URL size exceeded maximum URL size");
+                    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s",
+                                            parent_obj_type_header, loc_obj->URI)) < 0)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                            break;
-                        } /* H5I_FILE H5I_GROUP */
-
-                        case H5I_DATATYPE: {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL,
-                                                    loc_obj->URI)) < 0)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
-                                                "H5Oget_info request URL size exceeded maximum URL size");
-
-                            break;
-                        } /* H5I_DATATYPE */
-
-                        case H5I_DATASET: {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL,
-                                                    loc_obj->URI)) < 0)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
-                                                "H5Oget_info request URL size exceeded maximum URL size");
-
-                            break;
-                        } /* H5I_DATASET */
-
-                        case H5I_ATTR:
-                        case H5I_UNINIT:
-                        case H5I_BADID:
-                        case H5I_DATASPACE:
-                        case H5I_VFL:
-                        case H5I_VOL:
-                        case H5I_GENPROP_CLS:
-                        case H5I_GENPROP_LST:
-                        case H5I_ERROR_CLASS:
-                        case H5I_ERROR_MSG:
-                        case H5I_ERROR_STACK:
-                        case H5I_NTYPES:
-                        default:
-                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL,
-                                            "loc_id object is not a group, datatype or dataset");
-                    } /* end switch */
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
+                                        "H5Oget_info request URL size exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
                     printf("-> H5Oget_info(): Object type: %s\n\n", object_type_to_string(obj_type));
@@ -443,63 +395,17 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                      * depending on the type of the object. Also set the
                      * object's type in the H5O_info2_t struct.
                      */
-                    switch (obj_type) {
-                        case H5I_FILE:
-                        case H5I_GROUP: {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL,
-                                                    temp_URI)) < 0)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
+                    if (RV_set_object_type_header(obj_type, &parent_obj_type_header) < 0)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL,
+                                        "target object not a group, datatype or dataset");
 
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(
-                                    H5E_OBJECT, H5E_SYSERRSTR, FAIL,
-                                    "H5Oget_info_by_name request URL size exceeded maximum URL size");
+                    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s",
+                                            parent_obj_type_header, temp_URI)) < 0)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-                            break;
-                        } /* H5I_FILE H5I_GROUP */
-
-                        case H5I_DATATYPE: {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes/%s", base_URL,
-                                                    temp_URI)) < 0)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(
-                                    H5E_OBJECT, H5E_SYSERRSTR, FAIL,
-                                    "H5Oget_info_by_name request URL size exceeded maximum URL size");
-
-                            break;
-                        } /* H5I_DATATYPE */
-
-                        case H5I_DATASET: {
-                            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datasets/%s", base_URL,
-                                                    temp_URI)) < 0)
-                                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                            if (url_len >= URL_MAX_LENGTH)
-                                FUNC_GOTO_ERROR(
-                                    H5E_OBJECT, H5E_SYSERRSTR, FAIL,
-                                    "H5Oget_info_by_name request URL size exceeded maximum URL size");
-
-                            break;
-                        } /* H5I_DATASET */
-
-                        case H5I_ATTR:
-                        case H5I_UNINIT:
-                        case H5I_BADID:
-                        case H5I_DATASPACE:
-                        case H5I_VFL:
-                        case H5I_VOL:
-                        case H5I_GENPROP_CLS:
-                        case H5I_GENPROP_LST:
-                        case H5I_ERROR_CLASS:
-                        case H5I_ERROR_MSG:
-                        case H5I_ERROR_STACK:
-                        case H5I_NTYPES:
-                        default:
-                            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL,
-                                            "loc_id object is not a group, datatype or dataset");
-                    } /* end switch */
+                    if (url_len >= URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL,
+                                        "H5Oget_info_by_name request URL size exceeded maximum URL size");
 
                     break;
                 } /* H5VL_OBJECT_BY_NAME */
@@ -512,8 +418,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
                     htri_t      search_ret;
                     char        temp_URI[URI_MAX_LENGTH];
-                    const char *request_idx_type       = NULL;
-                    const char *parent_obj_type_header = NULL;
+                    const char *request_idx_type = NULL;
 
                     obj_type = H5I_UNINIT;
 
@@ -561,63 +466,26 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_PATH, FAIL, "can't locate parent object");
 
-                    /* Setup the host header */
-                    host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-                    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
-                                        "can't allocate space for request Host header");
+                    if (RV_set_object_type_header(obj_type, &parent_obj_type_header) < 0)
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL,
+                                        "parent object not a group, datatype or dataset");
 
-                    strcpy(host_header, host_string);
-
-                    curl_headers = curl_slist_append(
-                        curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name,
-                                              host_header_len - strlen(host_string) - 1));
-
-                    /* Disable use of Expect: 100 Continue HTTP response */
-                    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links?%s", base_URL,
-                                            temp_URI, request_idx_type)) < 0)
+                    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s/links?%s",
+                                            parent_obj_type_header, temp_URI, request_idx_type)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                         "attribute open URL exceeded maximum URL size");
 
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME,
-                                                     loc_obj->domain->u.file.server_info.username))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s",
-                                        curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD,
-                                                     loc_obj->domain->u.file.server_info.password))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s",
-                                        curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
-                                        curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL,
-                                        "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
-                                        curl_err_buf);
-
-                    CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
+                    if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+                                    loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get link");
 
                     if (0 > RV_parse_response(response_buffer.buffer,
                                               (void *)&loc_params->loc_data.loc_by_idx, &found_object_name,
                                               RV_copy_link_name_by_index))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "failed to retrieve link names");
-
-                    if (host_header) {
-                        RV_free(host_header);
-                        host_header = NULL;
-                    }
-
-                    if (curl_headers) {
-                        curl_slist_free_all(curl_headers);
-                        curl_headers = NULL;
-                    } /* end if */
 
                     /* Use name of link to get object URI for final request */
 
@@ -636,7 +504,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL,
                                         "object at index not a group, datatype or dataset");
 
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s", base_URL,
+                    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s",
                                             parent_obj_type_header, loc_info_out.URI)) < 0)
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_SYSERRSTR, FAIL, "snprintf error");
 
@@ -653,47 +521,9 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
             } /* end switch */
 
             /* Make a GET request to the server to retrieve the number of attributes attached to the object */
-
-            /* Setup the host header */
-            host_header_len = strlen(loc_info_out.domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTALLOC, FAIL,
-                                "can't allocate space for request Host header");
-
-            strcpy(host_header, host_string);
-
-            curl_headers = curl_slist_append(curl_headers,
-                                             strncat(host_header, loc_info_out.domain->u.file.filepath_name,
-                                                     host_header_len - strlen(host_string) - 1));
-
-            /* Disable use of Expect: 100 Continue HTTP response */
-            curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
-                                curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL,
-                                "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
-                                curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Retrieving object info using URL: %s\n\n", request_url);
-
-            printf("   /**********************************\\\n");
-            printf("-> | Making GET request to the server |\n");
-            printf("   \\**********************************/\n\n");
-#endif
-
-            CURL_PERFORM(curl, H5E_OBJECT, H5E_CANTGET, FAIL);
+            if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+                            loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't get object");
 
             /* Retrieve the attribute count for the object */
             if (RV_parse_response(response_buffer.buffer, NULL, obj_info, RV_get_object_info_callback) < 0)
@@ -718,14 +548,6 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
     } /* end switch */
 
 done:
-    if (host_header)
-        RV_free(host_header);
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    } /* end if */
-
     if (found_object_name) {
         RV_free(found_object_name);
         found_object_name = NULL;
@@ -764,11 +586,8 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
     RV_object_t       *attr_object    = NULL;
     hid_t              iter_object_id = H5I_INVALID_HID;
     char               visit_by_name_URI[URI_MAX_LENGTH];
-    char               request_url[URL_MAX_LENGTH];
-    char              *host_header     = NULL;
-    int                url_len         = 0;
-    size_t             host_header_len = 0;
-
+    char               request_endpoint[URL_MAX_LENGTH];
+    int                url_len = 0;
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received object-specific call with following parameters:\n");
     printf("     - Object-specific call type: %s\n", object_specific_type_to_string(args->op_type));
@@ -1041,8 +860,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             /* To build object table, information about parent object will be needed */
             object_iter_data.iter_obj_parent = iter_object;
 
-            if (url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s",
-                                   iter_object->domain->u.file.server_info.base_URL, object_type_header,
+            if (url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s", object_type_header,
                                    object_iter_data.iter_obj_parent->URI) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
@@ -1093,54 +911,9 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             /* Unlike H5Lvisit, H5Ovisit executes the provided callback on the directly specified object. */
 
             /* Make GET request to server */
-
-            /* Setup the host header */
-            host_header_len = strlen(object_iter_data.iter_obj_parent->domain->u.file.filepath_name) +
-                              strlen(host_string) + 1;
-            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
-                                "can't allocate space for request Host header");
-
-            strcpy(host_header, host_string);
-
-            curl_headers = curl_slist_append(
-                curl_headers,
-                strncat(host_header, object_iter_data.iter_obj_parent->domain->u.file.filepath_name,
-                        host_header_len - strlen(host_string) - 1));
-
-            /* Disable use of Expect: 100 Continue HTTP response */
-            curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
-                                curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Retrieving all links in group using URL: %s\n\n", request_url);
-
-            printf("   /**********************************\\\n");
-            printf("-> | Making GET request to the server |\n");
-            printf("   \\**********************************/\n\n");
-#endif
-
-            /* Do a first request to populate obj info in order to execute the callback on the top-level given
-             * object */
-            CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
-
-            if (curl_headers) {
-                curl_slist_free_all(curl_headers);
-                curl_headers = NULL;
-            }
+            if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+                            loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get link to object");
 
             if (RV_parse_response(response_buffer.buffer, NULL, &oinfo, RV_get_object_info_callback) < 0)
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to get object info");
@@ -1161,38 +934,18 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             switch (iter_object_type) {
                 case H5I_FILE:
                 case H5I_GROUP:
-                    if (url_len =
-                            snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s%s",
-                                     object_iter_data.iter_obj_parent->domain->u.file.server_info.base_URL,
-                                     object_type_header, object_iter_data.iter_obj_parent->URI,
-                                     (!strcmp(object_type_header, "groups") ? "/links" : "")) < 0)
+                    if (url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/%s/%s%s", object_type_header,
+                                           object_iter_data.iter_obj_parent->URI,
+                                           (!strcmp(object_type_header, "groups") ? "/links" : "")) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                         "H5Oiterate/visit request URL size exceeded maximum URL size");
 
-                    curl_headers = curl_slist_append(curl_headers, host_header);
-
-                    /* Disable use of Expect: 100 Continue HTTP response */
-                    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
-                                        curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL,
-                                        "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
-                                        curl_err_buf);
-
-                    CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
-
-                    if (curl_headers) {
-                        curl_slist_free_all(curl_headers);
-                        curl_headers = NULL;
-                    }
+                    if (RV_curl_get(&loc_obj->domain->u.file.server_info, request_endpoint,
+                                    loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't get link to object");
 
                     if (RV_parse_response(response_buffer.buffer, &object_iter_data, NULL,
                                           RV_object_iter_callback) < 0)
@@ -1226,9 +979,6 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
     } /* end switch */
 
 done:
-    if (host_header)
-        RV_free(host_header);
-
     RV_free(attr_loc_params);
 
     if (attr_object)
@@ -1587,12 +1337,12 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
     char               *visit_buffer = NULL;
     char               *link_section_start, *link_section_end;
     char               *url_encoded_link_name = NULL;
-    char                request_url[URL_MAX_LENGTH];
-    herr_t              ret_value   = SUCCEED;
-    int                 url_len     = 0;
-    H5I_type_t          obj_type    = H5I_UNINIT;
-    char               *host_header = NULL;
-    RV_object_t        *subgroup    = NULL;
+    char                request_endpoint[URL_MAX_LENGTH];
+    herr_t              ret_value = SUCCEED;
+    int                 url_len   = 0;
+    H5I_type_t          obj_type  = H5I_UNINIT;
+    RV_object_t        *subgroup  = NULL;
+    long                response_code;
 
     if (!HTTP_response)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response was NULL");
@@ -1810,72 +1560,21 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
                                      curl, H5_rest_basename(YAJL_GET_STRING(link_field_obj)), 0)))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
 
-                    if ((url_len =
-                             snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links",
-                                      object_iter_data->iter_obj_parent->domain->u.file.server_info.base_URL,
-                                      url_encoded_link_name)) < 0)
+                    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/groups/%s/links",
+                                            url_encoded_link_name)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                         "link GET request URL size exceeded maximum URL size");
 
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
-                                        curl_err_buf);
+                    response_code = RV_curl_get(
+                        &object_iter_data->iter_obj_parent->domain->u.file.server_info, request_endpoint,
+                        object_iter_data->iter_obj_parent->domain->u.file.filepath_name, CONTENT_TYPE_JSON);
 
-                    /* Set up host header */
-                    if (host_header) {
-                        RV_free(host_header);
-                        host_header = NULL;
-                    }
-
-                    if (curl_headers) {
-                        curl_slist_free_all(curl_headers);
-                        curl_headers = NULL;
-                    }
-
-                    size_t host_header_len =
-                        strlen(object_iter_data->iter_obj_parent->domain->u.file.filepath_name) +
-                        strlen(host_string) + 1;
-                    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
-                                        "can't allocate space for request Host header");
-
-                    strcpy(host_header, host_string);
-
-                    curl_headers = curl_slist_append(
-                        curl_headers,
-                        strncat(host_header, object_iter_data->iter_obj_parent->domain->u.file.filepath_name,
-                                host_header_len - strlen(host_string) - 1));
-
-                    /* Disable use of Expect: 100 Continue HTTP response */
-                    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-                    if (CURLE_OK !=
-                        curl_easy_setopt(
-                            curl, CURLOPT_USERNAME,
-                            object_iter_data->iter_obj_parent->domain->u.file.server_info.username))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s",
-                                        curl_err_buf);
-                    if (CURLE_OK !=
-                        curl_easy_setopt(
-                            curl, CURLOPT_PASSWORD,
-                            object_iter_data->iter_obj_parent->domain->u.file.server_info.password))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s",
-                                        curl_err_buf);
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
-                                        curl_err_buf);
-#ifdef RV_CONNECTOR_DEBUG
-                    printf("-> Retrieving all links in subgroup using URL: %s\n\n", request_url);
-
-                    printf("   /**********************************\\\n");
-                    printf("-> | Making GET request to the server |\n");
-                    printf("   \\**********************************/\n\n");
-#endif
-
-                    CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
+                    if (!(HTTP_SUCCESS(response_code)))
+                        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "can't get object: HTTP %ld",
+                                        response_code);
 
                     /* Use the group we are recursing into as the parent during the recursion */
                     if ((subgroup = RV_malloc(sizeof(RV_object_t))) == NULL)
@@ -1926,15 +1625,6 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
 
         /* Continue on to the next link subsection */
         link_section_start = link_section_end + 1;
-
-        if (host_header) {
-            RV_free(host_header);
-            host_header = NULL;
-        }
-        if (curl_headers) {
-            curl_slist_free_all(curl_headers);
-            curl_headers = NULL;
-        }
     } /* end for */
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1963,12 +1653,6 @@ done:
         yajl_tree_free(parse_tree);
     if (visit_buffer)
         RV_free(visit_buffer);
-    if (host_header)
-        RV_free(host_header);
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    }
 
     return ret_value;
 } /* end RV_build_object_table */

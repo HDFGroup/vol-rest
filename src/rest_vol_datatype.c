@@ -70,21 +70,19 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     RV_object_t *new_datatype          = NULL;
     size_t       commit_request_nalloc = 0;
     size_t       link_body_nalloc      = 0;
-    size_t       host_header_len       = 0;
     size_t       datatype_body_len     = 0;
     size_t       path_size             = 0;
     size_t       path_len              = 0;
-    const char  *base_URL              = NULL;
-    char        *host_header           = NULL;
     char        *commit_request_body   = NULL;
     char        *datatype_body         = NULL;
     char        *link_body             = NULL;
     char        *path_dirname          = NULL;
-    char         request_url[URL_MAX_LENGTH];
+    char         request_endpoint[URL_MAX_LENGTH];
     int          commit_request_len = 0;
     int          link_body_len      = 0;
     int          url_len            = 0;
     void        *ret_value          = NULL;
+    long         http_response;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received datatype commit call with following parameters:\n");
@@ -102,9 +100,6 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
-
-    if ((base_URL = parent->domain->u.file.server_info.base_URL) == NULL)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object does not have valid server URL");
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -158,7 +153,7 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
 
     /* Convert the datatype into JSON to be used in the request body */
     if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE,
-                                    parent->domain->u.file.server_version) < 0)
+                                    parent->domain->u.file.server_info.version) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert datatype to JSON representation");
 
     /* If this is not a H5Tcommit_anon call, create a link for the Datatype
@@ -231,24 +226,8 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     printf("-> Datatype commit request body:\n%s\n\n", commit_request_body);
 #endif
 
-    /* Setup the host header */
-    host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header");
-
-    strcpy(host_header, host_string);
-
-    curl_headers = curl_slist_append(curl_headers, strncat(host_header, parent->domain->u.file.filepath_name,
-                                                           host_header_len - strlen(host_string) - 1));
-
-    /* Disable use of Expect: 100 Continue HTTP response */
-    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-    /* Instruct cURL that we are sending JSON */
-    curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
-
     /* Redirect cURL from the base URL to "/datatypes" to commit the datatype */
-    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/datatypes", base_URL)) < 0)
+    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/datatypes")) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, NULL, "snprintf error");
 
     if (url_len >= URL_MAX_LENGTH)
@@ -256,36 +235,16 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
                         "datatype create URL size exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> Datatype commit URL: %s\n\n", request_url);
+    printf("-> Datatype commit URL: %s\n\n", request_endpoint);
 #endif
 
-    if (CURLE_OK !=
-        curl_easy_setopt(curl, CURLOPT_USERNAME, new_datatype->domain->u.file.server_info.username))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
-    if (CURLE_OK !=
-        curl_easy_setopt(curl, CURLOPT_PASSWORD, new_datatype->domain->u.file.server_info.password))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s",
-                        curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDS, commit_request_body))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL POST data: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)commit_request_len))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL POST data size: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
+    http_response = RV_curl_post(&parent->domain->u.file.server_info, request_endpoint,
+                                 parent->domain->u.file.filepath_name, (const char *)commit_request_body,
+                                 (size_t)commit_request_len, CONTENT_TYPE_JSON);
 
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Committing datatype\n\n");
-
-    printf("   /***********************************\\\n");
-    printf("-> | Making POST request to the server |\n");
-    printf("   \\***********************************/\n\n");
-#endif
-
-    CURL_PERFORM(curl, H5E_DATATYPE, H5E_BADVALUE, NULL);
+    if (!HTTP_SUCCESS(http_response))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, NULL, "couldn't commit datatype: received HTTP %ld",
+                        http_response);
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Committed datatype\n\n");
@@ -317,8 +276,6 @@ done:
         RV_free(path_dirname);
     if (commit_request_body)
         RV_free(commit_request_body);
-    if (host_header)
-        RV_free(host_header);
     if (datatype_body)
         RV_free(datatype_body);
     if (link_body)
@@ -328,11 +285,6 @@ done:
     if (new_datatype && !ret_value)
         if (RV_datatype_close(new_datatype, FAIL, NULL) < 0)
             FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, NULL, "can't close datatype");
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    } /* end if */
 
     PRINT_ERROR_STACK;
 
