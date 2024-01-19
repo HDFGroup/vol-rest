@@ -158,7 +158,7 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
 
     /* Convert the datatype into JSON to be used in the request body */
     if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE,
-                                    parent->domain->u.file.server_version) < 0)
+                                    parent->domain->u.file.server_info.version) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert datatype to JSON representation");
 
     /* If this is not a H5Tcommit_anon call, create a link for the Datatype

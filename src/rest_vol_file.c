@@ -967,7 +967,7 @@ RV_iterate_copy_hid_cb(hid_t obj_id, void *udata)
     herr_t               ret_value               = H5_ITER_CONT;
     get_obj_ids_udata_t *iterate_cb_args         = (get_obj_ids_udata_t *)udata;
     char                *containing_filename     = NULL;
-    size_t               containing_filename_len = 0;
+    ssize_t              containing_filename_len = 0;
     H5I_type_t           id_type                 = H5I_UNINIT;
     htri_t               is_committed            = FALSE;
 
@@ -993,11 +993,11 @@ RV_iterate_copy_hid_cb(hid_t obj_id, void *udata)
         if ((containing_filename_len = H5Fget_name(obj_id, NULL, 0)) < 0)
             FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTGET, FAIL, "unable to get length of filename");
 
-        if ((containing_filename = RV_malloc(containing_filename_len + 1)) == NULL)
+        if ((containing_filename = RV_malloc((size_t)containing_filename_len + 1)) == NULL)
             FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL, "can't allocate space for filename");
 
         /* Get name */
-        if (H5Fget_name(obj_id, containing_filename, containing_filename_len + 1) < 0)
+        if (H5Fget_name(obj_id, containing_filename, (size_t)containing_filename_len + 1) < 0)
             FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTGET, FAIL, "unable to get filename");
 
         if (!strcmp(iterate_cb_args->local_filename, containing_filename)) {
