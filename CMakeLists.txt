@@ -87,7 +87,6 @@ set (HDF5_VOL_REST_LIBSH_TARGET        "${HDF5_VOL_REST_LIB_CORENAME}-shared")
 set (HDF5_VOL_REST_TEST_LIB_TARGET     "${HDF5_VOL_REST_TEST_LIB_CORENAME}-static")
 set (HDF5_VOL_REST_TEST_LIBSH_TARGET   "${HDF5_VOL_REST_TEST_LIB_CORENAME}-shared")
 
-
 #-----------------------------------------------------------------------------
 # Define some CMake variables for use later in the project
 #-----------------------------------------------------------------------------
@@ -118,19 +117,29 @@ if (HDF5_ENABLE_THREADSAFE AND NOT Threads_FOUND)
   find_package(Threads)
 endif ()
 
+set (CURL_TARGET_LIBTYPE shared)
+
+
 find_package (CURL 7.61 REQUIRED)
 if (CURL_FOUND)
+  # FindCURL module is not always found on windows; set paths manually
+  if (WIN32)
+    set (CURL_INCLUDE_DIRS "${CURL_ROOT}\\include")
+    set (LINK_LIBS ${LINK_LIBS} Ws2_32.lib Wldap32.lib)
+    
+    if (CURL_USE_STATIC_LIBRARIES)
+      set (CURL_LIBRARIES "${CURL_ROOT}\\lib\\libcurl.lib")
+    else ()
+      set (CURL_LIBRARIES "${CURL_ROOT}\\bin\\libcurl.dll")
+    endif()
+  endif()
+
   include_directories(${CURL_INCLUDE_DIRS})
-  set (LINK_LIBS ${LINK_LIBS} CURL::libcurl)
-  set_target_properties(CURL::libcurl PROPERTIES
-    IMPORTED_LOCATION ${CURL_ROOT}/lib/libcurl.lib)
+  set (LINK_LIBS ${LINK_LIBS} ${CURL_LIBRARIES})
 else ()
-  message (FATAL_ERROR "cURL not found; please check CURL_INCLUDE_DIR")
+  message (FATAL_ERROR "cURL not found; please check CURL_ROOT")
 endif ()
 
-if (WIN32)
-  set (LINK_LIBS ${LINK_LIBS} Ws2_32.lib)
-endif ()
 # Include custom module for finding YAJL
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${HDF5_VOL_REST_RESOURCES_MOD_DIR}")
 
@@ -369,6 +378,10 @@ if (NOT BUILD_SHARED_LIBS)
 endif ()
 if (BUILD_SHARED_LIBS)
   set (HDF5_VOL_REST_LIBRARIES_TO_EXPORT ${HDF5_VOL_REST_LIBRARIES_TO_EXPORT} ${HDF5_VOL_REST_LIBSH_TARGET} CACHE INTERNAL "Store which libraries should be exported" FORCE)
+  # Value is not automatically inherited from cache on Windows
+  if (WIN32)
+    set (HDF5_VOL_REST_LIBRARIES_TO_EXPORT ${HDF5_VOL_REST_LIBRARIES_TO_EXPORT} ${HDF5_VOL_REST_LIBSH_TARGET})
+  endif()
 endif ()
 
 option (BUILD_STATIC_LIBS "Build Static Libraries" OFF)
@@ -377,6 +390,10 @@ if (BUILD_STATIC_LIBS)
   set (HDF5_VOL_REST_ENABLE_STATIC_LIB YES)
   set (LINK_STATIC_LIBS ${LINK_LIBS})
   set (HDF5_VOL_REST_LIBRARIES_TO_EXPORT ${HDF5_VOL_REST_LIBRARIES_TO_EXPORT} ${HDF5_VOL_REST_LIB_TARGET} CACHE INTERNAL "Store which libraries should be exported" FORCE)
+  # Value is not automatically inherited from cache on Windows
+  if (WIN32)
+    set (HDF5_VOL_REST_LIBRARIES_TO_EXPORT ${HDF5_VOL_REST_LIBRARIES_TO_EXPORT} ${HDF5_VOL_REST_LIB_TARGET})
+  endif()
 endif ()
 
 set (CMAKE_POSITION_INDEPENDENT_CODE ON)

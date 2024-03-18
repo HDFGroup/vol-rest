@@ -3,6 +3,7 @@
 #-----------------------------------------------------------------------------
 set (HDF_PREFIX "H5")
 include(CheckFunctionExists)
+include(CheckLibraryExists)
 
 if (NOT DEFINED "H5_DEFAULT_PLUGINDIR")
   if (WINDOWS)
