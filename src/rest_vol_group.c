@@ -44,23 +44,21 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     RV_object_t *parent                = (RV_object_t *)obj;
     RV_object_t *new_group             = NULL;
     size_t       create_request_nalloc = 0;
-    size_t       host_header_len       = 0;
     size_t       base64_buf_size       = 0;
     size_t       plist_nalloc          = 0;
     size_t       path_size             = 0;
     size_t       path_len              = 0;
-    const char  *base_URL              = NULL;
-    char        *host_header           = NULL;
     char        *create_request_body   = NULL;
     char        *path_dirname          = NULL;
     char        *base64_plist_buffer   = NULL;
     char         target_URI[URI_MAX_LENGTH];
-    char         request_url[URL_MAX_LENGTH];
+    char         request_endpoint[URL_MAX_LENGTH];
     char        *escaped_group_name      = NULL;
     int          create_request_body_len = 0;
     int          url_len                 = 0;
     void        *binary_plist_buffer     = NULL;
     void        *ret_value               = NULL;
+    long         http_response;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received group create call with following parameters:\n");
@@ -76,9 +74,6 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
-
-    if ((base_URL = parent->domain->u.file.server_info.base_URL) == NULL)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object does not have valid server URL");
 
     if (gapl_id == H5I_INVALID_HID)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid GAPL");
@@ -165,6 +160,7 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
                 if (H5Pget_create_intermediate_group(lcpl_id, &crt_intmd_group))
                     FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTGET, NULL, "can't get flag value in lcpl");
 
+                /* If group in provided path doesn't exist, create it */
                 if (crt_intmd_group) {
                     /* Remove trailing slash to avoid infinite loop due to H5_dirname */
                     if (path_dirname[strlen(path_dirname) - 1] == '/')
@@ -179,7 +175,12 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
                     search_ret = RV_find_object_by_path(parent, path_dirname, &obj_type,
                                                         RV_copy_object_URI_callback, NULL, target_URI);
 
-                    RV_group_close(intmd_group, H5P_DEFAULT, NULL);
+                    if (!search_ret || search_ret < 0)
+                        FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "couldn't get URI of intermediate group");
+
+                    if (RV_group_close(intmd_group, H5P_DEFAULT, NULL) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, NULL,
+                                        "can't close intermediate group");
                 }
                 else
                     FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate target for group link");
@@ -241,59 +242,25 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
 #endif
     } /* end if */
 
-    /* Setup the host header */
-    host_header_len = strlen(parent->domain->u.file.filepath_name) + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for request Host header");
-
-    strcpy(host_header, host_string);
-
-    curl_headers = curl_slist_append(curl_headers, strncat(host_header, parent->domain->u.file.filepath_name,
-                                                           host_header_len - strlen(host_string) - 1));
-
-    /* Disable use of Expect: 100 Continue HTTP response */
-    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-    /* Instruct cURL that we are sending JSON */
-    curl_headers = curl_slist_append(curl_headers, "Content-Type: application/json");
-
     /* Redirect cURL from the base URL to "/groups" to create the group */
-    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups", base_URL)) < 0)
+    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/groups")) < 0)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error");
 
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "group create URL size exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> Group create request URL: %s\n\n", request_url);
+    printf("-> Group create request URL: %s\n\n", request_endpoint);
 #endif
 
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, new_group->domain->u.file.server_info.username))
-        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, new_group->domain->u.file.server_info.password))
-        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
-        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set up cURL to make HTTP POST request: %s",
-                        curl_err_buf);
-    if (CURLE_OK !=
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, create_request_body ? create_request_body : ""))
-        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL POST data: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)create_request_body_len))
-        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL POST data size: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
+    http_response = RV_curl_post(curl, &new_group->domain->u.file.server_info, request_endpoint,
+                                 parent->domain->u.file.filepath_name,
+                                 create_request_body ? (const char *)create_request_body : "",
+                                 (size_t)create_request_body_len, CONTENT_TYPE_JSON);
 
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Creating group\n\n");
-
-    printf("   /***********************************\\\n");
-    printf("-> | Making POST request to the server |\n");
-    printf("   \\***********************************/\n\n");
-#endif
-
-    CURL_PERFORM(curl, H5E_SYM, H5E_CANTCREATE, NULL);
+    if (!HTTP_SUCCESS(http_response))
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTCREATE, NULL, "can't create group: received HTTP %ld",
+                        http_response);
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Created group\n\n");
@@ -325,8 +292,6 @@ done:
         RV_free(path_dirname);
     if (create_request_body)
         RV_free(create_request_body);
-    if (host_header)
-        RV_free(host_header);
 
     /* Clean up allocated group object if there was an issue */
     if (new_group && !ret_value)
@@ -337,11 +302,6 @@ done:
         RV_free(base64_plist_buffer);
     if (binary_plist_buffer)
         RV_free(binary_plist_buffer);
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    } /* end if */
 
     if (escaped_group_name)
         RV_free(escaped_group_name);
@@ -507,12 +467,9 @@ done:
 herr_t
 RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
 {
-    RV_object_t *loc_obj         = (RV_object_t *)obj;
-    size_t       host_header_len = 0;
-    char        *host_header     = NULL;
-    char         request_url[URL_MAX_LENGTH];
+    RV_object_t *loc_obj = (RV_object_t *)obj;
+    char         request_endpoint[URL_MAX_LENGTH];
     int          url_len   = 0;
-    const char  *base_URL  = NULL;
     herr_t       ret_value = SUCCEED;
 
     loc_info loc_info_out;
@@ -525,8 +482,6 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
 
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a group");
-    if ((base_URL = loc_obj->domain->u.file.server_info.base_URL) == NULL)
-        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object does not have valid server URL");
 
     switch (args->op_type) {
         /* H5Gget_create_plist */
@@ -554,8 +509,8 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
 #endif
 
                     /* Redirect cURL from the base URL to "/groups/<id>" to get information about the group */
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL,
-                                            loc_obj->URI)) < 0)
+                    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/groups/%s", loc_obj->URI)) <
+                        0)
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
@@ -603,8 +558,7 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
 #endif
 
                     /* Redirect cURL from the base URL to "/groups/<id>" to get information about the group */
-                    if ((url_len =
-                             snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s", base_URL, temp_URI)) < 0)
+                    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/groups/%s", temp_URI)) < 0)
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
@@ -630,44 +584,9 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
                     FUNC_GOTO_ERROR(H5E_SYM, H5E_BADVALUE, FAIL, "invalid loc_params type");
             } /* end switch */
 
-            /* Setup the host header */
-            host_header_len = strlen(loc_obj->domain->u.file.filepath_name) + strlen(host_string) + 1;
-            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, FAIL, "can't allocate space for request Host header");
-
-            strcpy(host_header, host_string);
-
-            curl_headers =
-                curl_slist_append(curl_headers, strncat(host_header, loc_obj->domain->u.file.filepath_name,
-                                                        host_header_len - strlen(host_string) - 1));
-
-            /* Disable use of Expect: 100 Continue HTTP response */
-            curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
-            if (CURLE_OK !=
-                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
-                                curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Retrieving group info at URL: %s\n\n", request_url);
-
-            printf("   /**********************************\\\n");
-            printf("-> | Making GET request to the server |\n");
-            printf("   \\**********************************/\n\n");
-#endif
-
-            /* Make request to server to retrieve the group info */
-            CURL_PERFORM(curl, H5E_SYM, H5E_CANTGET, FAIL);
+            if (RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
+                            loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTGET, FAIL, "can't get group");
 
             /* Parse response from server and retrieve the relevant group information
              * (currently, just the number of links in the group)
@@ -692,14 +611,6 @@ done:
         RV_free(loc_info_out.GCPL_base64);
         loc_info_out.GCPL_base64 = NULL;
     }
-
-    if (host_header)
-        RV_free(host_header);
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    } /* end if */
 
     PRINT_ERROR_STACK;
 

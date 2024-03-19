@@ -50,17 +50,17 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
 {
     RV_object_t *new_file = NULL;
     size_t       name_length;
-    size_t       host_header_len         = 0;
     size_t       base64_buf_size         = 0;
     size_t       plist_nalloc            = 0;
     size_t       create_request_nalloc   = 0;
     int          create_request_body_len = 0;
-    char        *host_header             = NULL;
     char        *base64_plist_buffer     = NULL;
     const char  *fmt_string              = NULL;
     char        *create_request_body     = NULL;
     void        *ret_value               = NULL;
     void        *binary_plist_buffer     = NULL;
+    const char  *request_endpoint        = NULL;
+    long         http_response;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file create call with following parameters:\n");
@@ -131,76 +131,23 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
     strncpy(new_file->u.file.filepath_name, name, name_length);
     new_file->u.file.filepath_name[name_length] = '\0';
 
-    /* Setup the host header */
-    host_header_len = name_length + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header");
-
-    strcpy(host_header, host_string);
-
-    curl_headers = curl_slist_append(curl_headers, strncat(host_header, name, name_length));
-
-    /* Disable use of Expect: 100 Continue HTTP response */
-    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, new_file->u.file.server_info.username))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, new_file->u.file.server_info.password))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, new_file->u.file.server_info.base_URL))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
-
     /* Before making the actual request, check the file creation flags for
      * the use of H5F_ACC_TRUNC. In this case, we want to check with the
      * server before trying to create a file which already exists.
      */
     if (flags & H5F_ACC_TRUNC) {
-        long http_response;
 
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s",
-                            curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-        printf("-> H5F_ACC_TRUNC specified; checking if file exists\n\n");
-
-        printf("   /**********************************\\\n");
-        printf("-> | Making GET request to the server |\n");
-        printf("   \\**********************************/\n\n");
-#endif
-
-        /* Note that we use the special version of CURL_PERFORM because if
-         * the file doesn't exist, and the check for this throws a 404 response,
-         * the standard CURL_PERFORM would fail this entire function. We don't
-         * want this, we just want to get an idea of whether the file exists
-         * or not.
-         */
-        CURL_PERFORM_NO_ERR(curl, NULL);
-
-        if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTGET, NULL, "can't get HTTP response code");
+        /* Don't fail function if this file doesn't exist */
+        http_response = RV_curl_get(curl, &new_file->u.file.server_info, "/", new_file->u.file.filepath_name,
+                                    CONTENT_TYPE_JSON);
 
         /* If the file exists, go ahead and delete it before proceeding */
         if (HTTP_SUCCESS(http_response)) {
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL,
-                                "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);
+            http_response = RV_curl_delete(curl, &new_file->u.file.server_info, "/",
+                                           (const char *)new_file->u.file.filepath_name);
 
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> File existed and H5F_ACC_TRUNC specified; deleting file\n\n");
-
-            printf("   /*************************************\\\n");
-            printf("-> | Making DELETE request to the server |\n");
-            printf("   \\*************************************/\n\n");
-#endif
-
-            CURL_PERFORM(curl, H5E_FILE, H5E_CANTREMOVE, NULL);
-
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't reset cURL custom request: %s",
-                                curl_err_buf);
+            if (!HTTP_SUCCESS(http_response))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTREMOVE, NULL, "can't delete existing file");
         } /* end if */
     }     /* end if */
 
@@ -240,22 +187,11 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
     uinfo.buffer_size = (size_t)create_request_body_len;
     uinfo.bytes_sent  = 0;
 
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP PUT request: %s",
-                        curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_READDATA, &uinfo))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL PUT data: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)create_request_body_len))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL PUT data size: %s", curl_err_buf);
+    http_response = RV_curl_put(curl, &new_file->u.file.server_info, "/", new_file->u.file.filepath_name,
+                                &uinfo, CONTENT_TYPE_JSON);
 
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Creating file\n\n");
-
-    printf("   /**********************************\\\n");
-    printf("-> | Making PUT request to the server |\n");
-    printf("   \\**********************************/\n\n");
-#endif
-    CURL_PERFORM(curl, H5E_FILE, H5E_CANTCREATE, NULL);
+    if (!HTTP_SUCCESS(http_response))
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't create file");
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Created file\n\n");
@@ -288,9 +224,6 @@ done:
     } /* end if */
 #endif
 
-    if (host_header)
-        RV_free(host_header);
-
     RV_free(base64_plist_buffer);
     RV_free(binary_plist_buffer);
     RV_free(create_request_body);
@@ -299,19 +232,6 @@ done:
     if (new_file && !ret_value)
         if (RV_file_close(new_file, FAIL, NULL) < 0)
             FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEOBJ, NULL, "can't close file");
-
-    /* Reset cURL custom request to prevent issues with future requests */
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        FUNC_DONE_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't reset cURL custom request: %s", curl_err_buf);
-
-    /* Unset cURL UPLOAD option to ensure that future requests don't try to use PUT calls */
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 0))
-        FUNC_DONE_ERROR(H5E_ATTR, H5E_CANTSET, NULL, "can't unset cURL PUT option: %s", curl_err_buf);
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    } /* end if */
 
     PRINT_ERROR_STACK;
 
@@ -336,9 +256,8 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
 {
     RV_object_t *file = NULL;
     size_t       name_length;
-    size_t       host_header_len = 0;
-    char        *host_header     = NULL;
-    void        *ret_value       = NULL;
+    void        *ret_value = NULL;
+    long         http_response;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file open call with following parameters:\n");
@@ -384,39 +303,11 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     strncpy(file->u.file.filepath_name, name, name_length);
     file->u.file.filepath_name[name_length] = '\0';
 
-    /* Setup the host header */
-    host_header_len = name_length + strlen(host_string) + 1;
-    if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for request Host header");
+    http_response =
+        RV_curl_get(curl, &file->u.file.server_info, "/", file->u.file.filepath_name, CONTENT_TYPE_JSON);
 
-    strcpy(host_header, host_string);
-
-    curl_headers = curl_slist_append(curl_headers, strncat(host_header, name, name_length));
-
-    /* Disable use of Expect: 100 Continue HTTP response */
-    curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, file->u.file.server_info.username))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, file->u.file.server_info.password))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, file->u.file.server_info.base_URL))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s",
-                        curl_err_buf);
-
-#ifdef RV_CONNECTOR_DEBUG
-    printf("-> Retrieving info for file open\n\n");
-
-    printf("   /**********************************\\\n");
-    printf("-> | Making GET request to the server |\n");
-    printf("   \\**********************************/\n\n");
-#endif
-
-    CURL_PERFORM(curl, H5E_FILE, H5E_CANTOPENFILE, NULL);
+    if (!HTTP_SUCCESS(http_response))
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTOPENFILE, NULL, "can't get file");
 
     /* Store the opened file's URI */
     if (RV_parse_response(response_buffer.buffer, NULL, file->URI, RV_copy_object_URI_callback) < 0)
@@ -459,18 +350,10 @@ done:
     }
 #endif
 
-    if (host_header)
-        RV_free(host_header);
-
     /* Clean up allocated file object if there was an issue */
     if (file && !ret_value)
         if (RV_file_close(file, FAIL, NULL) < 0)
             FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEOBJ, NULL, "can't close file");
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    } /* end if */
 
     PRINT_ERROR_STACK;
 
@@ -670,14 +553,12 @@ done:
 herr_t
 RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void **req)
 {
-    RV_object_t   *file      = (RV_object_t *)obj;
-    herr_t         ret_value = SUCCEED;
-    size_t         host_header_len;
-    size_t         name_length;
-    long           http_response;
-    char          *host_header = NULL;
-    const char    *filename    = NULL;
-    char          *request_url = NULL;
+    RV_object_t   *file          = (RV_object_t *)obj;
+    herr_t         ret_value     = SUCCEED;
+    size_t         name_length   = 0;
+    long           http_response = 0;
+    const char    *filename      = NULL;
+    char           request_endpoint[URL_MAX_LENGTH];
     server_info_t *server_info = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -704,50 +585,14 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
             name_length = strlen(filename);
 
-            /* Setup the host header */
-            host_header_len = name_length + strlen(host_string) + 1;
-
-            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
-                                "can't allocate space for request Host header");
-
-            strcpy(host_header, host_string);
-
-            curl_headers = curl_slist_append(curl_headers, strncat(host_header, filename, name_length));
-
-            /* Disable use of Expect: 100 Continue HTTP response */
-            curl_headers = curl_slist_append(curl_headers, "Expect:");
-
-            if (NULL == (request_url = (char *)RV_malloc(
-                             strlen(flush_string) + strlen(target_domain->u.file.server_info.base_URL) + 1)))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for request URL");
-
-            snprintf(request_url, URL_MAX_LENGTH, "%s%s", target_domain->u.file.server_info.base_URL,
-                     flush_string);
-
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, file->u.file.server_info.username))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, file->u.file.server_info.password))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
+            snprintf(request_endpoint, URL_MAX_LENGTH, "%s", flush_string);
             /* Server only checks for flush parameter on PUT operations */
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL to make HTTP PUTrequest: %s",
-                                curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)0))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL upload size: %s", curl_err_buf);
 
-            CURL_PERFORM_NO_ERR(curl, FAIL);
-
-            if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "can't get HTTP response code from cURL: %s",
-                                curl_err_buf);
-
-            if (http_response != HTTP_NO_CONTENT)
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTFLUSH, FAIL, "invalid server response from flush");
+            if (HTTP_NO_CONTENT !=
+                (http_response = RV_curl_put(curl, &file->u.file.server_info, request_endpoint,
+                                             file->u.file.filepath_name, NULL, CONTENT_TYPE_JSON)))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTFLUSH, FAIL, "unexpected return from flush: HTTP %zu",
+                                http_response);
 
             break;
         }
@@ -795,20 +640,6 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
             name_length = strlen(filename);
 
-            /* Setup the host header */
-            host_header_len = name_length + strlen(host_string) + 1;
-
-            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
-                                "can't allocate space for request Host header");
-
-            strcpy(host_header, host_string);
-
-            curl_headers = curl_slist_append(curl_headers, strncat(host_header, filename, name_length));
-
-            /* Disable use of Expect: 100 Continue HTTP response */
-            curl_headers = curl_slist_append(curl_headers, "Expect:");
-
             /* H5Fdelete doesn't receive a file handle, so the username/password must be pulled
              * from environment for now */
             if ((server_info = RV_calloc(sizeof(server_info_t))) == NULL)
@@ -817,21 +648,10 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             if (H5_rest_set_connection_information(server_info) < 0)
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "can't get server connection information");
 
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, server_info->username))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, server_info->password))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
+            http_response = RV_curl_delete(curl, server_info, "/", filename);
 
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, server_info->base_URL))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
-
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
-                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL,
-                                "can't set up cURL to make HTTP DELETE request: %s", curl_err_buf);
-
-            CURL_PERFORM(curl, H5E_FILE, H5E_CLOSEERROR, FAIL);
+            if (!HTTP_SUCCESS(http_response))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CLOSEERROR, FAIL, "can't delete file");
 
             break;
         } /* H5VL_FILE_DELETE */
@@ -846,23 +666,6 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
 done:
     PRINT_ERROR_STACK;
-
-    if (curl_headers) {
-        curl_slist_free_all(curl_headers);
-        curl_headers = NULL;
-    } /* end if */
-
-    /* Restore CUSTOMREQUEST to internal default */
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, NULL))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP DELETE request: %s",
-                        curl_err_buf);
-
-    if (host_header) {
-        RV_free(host_header);
-    }
-
-    if (request_url)
-        RV_free(request_url);
 
     if (server_info) {
         RV_free(server_info->base_URL);
