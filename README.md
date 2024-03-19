@@ -1,7 +1,5 @@
 # HDF5 REST VOL connector <!-- omit in toc -->
 
-HDF5 REST VOL connector - currently under development
-
 [![build status](https://img.shields.io/github/actions/workflow/status/HDFGroup/vol-rest/main.yml?branch=master&label=build%20and%20test)](https://github.com/HDFGroup/vol-rest/actions?query=branch%3Amaster)
 
 ### Table of Contents: <!-- omit in toc -->
@@ -16,10 +14,10 @@ HDF5 REST VOL connector - currently under development
     - [II.B.ii. One-step Build](#iibii-one-step-build)
       - [II.B.ii.a. Build Script Options](#iibiia-build-script-options)
     - [II.B.iii. Manual Build](#iibiii-manual-build)
-      - [Autotools](#autotools)
-      - [CMake](#cmake)
-      - [II.B.iii.a. Options for `configure`](#iibiiia-options-for-configure)
-      - [II.B.iii.b. Options for CMake](#iibiiib-options-for-cmake)
+      - [II.B.iii.a Manual Build with Autotools](#iibiiia-manual-build-with-autotools)
+      - [II.B.iii.b Autotools options](#iibiiib-autotools-options)
+      - [II.B.iii.c Manual Build with CMake](#iibiiic-manual-build-with-cmake)
+      - [II.B.iii.d CMake options](#iibiiid-cmake-options)
     - [II.B.iv. Building at HDF5 Build Time](#iibiv-building-at-hdf5-build-time)
     - [II.B.v. Build Results](#iibv-build-results)
 - [III. Using/Testing the REST VOL connector](#iii-usingtesting-the-rest-vol-connector)
@@ -60,12 +58,11 @@ Before building and using the HDF5 REST VOL connector, a few requirements must b
 To build the REST VOL connector, the following libraries are required:
 
 + libhdf5 - The [HDF5](https://www.hdfgroup.org/downloads/hdf5/) library. The HDF5 library
-            used must be at least version 1.12.0; for convenience, a source distribution of
-            HDF5 has been included with the REST VOL connector and can be used during the
-            build process. If a pre-built HDF5 distribution is being used instead, it should
-            be built as a shared library only for maximal compatibility with the REST VOL
-            connector. Using statically-built HDF5 libraries can cause issues with the REST
-            VOL connector under certain circumstances.
+            used must be at least version 1.14.0. Only the shared library should be built for
+            maximal compatibility with the REST VOL connector. Using statically-built HDF5 
+            libraries can cause issues with the REST VOL connector under certain circumstances. 
+            Additionally, the HDF5 library must have its high-level interface enabled at build time
+            unless the REST VOL examples are disabled.
 
 + libcurl (ver. 7.61.0 or greater) - networking support
     + https://curl.haxx.se/
@@ -80,11 +77,11 @@ below for more information.
 
 ### II.A.ii. HDF5 REST API server access
 
-Additionally, the HDF5 REST VOL connector requires access to a server which implements
-the HDF5 REST API.
+The HDF5 REST VOL connector requires access to a server which implements
+the HDF5 REST API. The Highly Scalable Data Service (HSDS) is one such server.
 
 For more information on The HDF Group's officially supported service, please see
-https://www.hdfgroup.org/hdf-kita.
+https://www.hdfgroup.org/solutions/highly-scalable-data-service-hsds/.
 
 
 ## II.B. Building the REST VOL connector
@@ -180,19 +177,13 @@ Additionally, the CMake build scripts have the following configuration options:
 In general, the process for building the REST VOL connector involves either obtaining a VOL-enabled
 HDF5 distribution or building one from source. Then, the REST VOL connector is built using that
 HDF5 distribution by including the appropriate header files and linking against the HDF5 library.
-If you wish to manually build HDF5 from the included source distribution, first run the following
-commands from the root directory of the REST VOL connector source code in order to checkout the git
-submodule and then proceed to build HDF5 as normal.
-
-```bash
-$ git submodule init
-$ git submodule update
-```
 
 Once you have a VOL-enabled HDF5 distribution available, follow the instructions below for your
 respective build system in order to build the REST VOL connector against the HDF5 distribution.
 
-#### Autotools
+#### II.B.iii.a Manual Build with Autotools
+
+To perform a manual build of the REST VOL using autotools:
 
 ```bash
 $ cd rest-vol
@@ -203,45 +194,10 @@ $ make check (requires HDF5 REST API server access -- see section II.A.ii.)
 $ make install
 ```
 
-#### CMake
-
-First, create a build directory within the source tree:
-
-```bash
-$ cd rest-vol
-$ mkdir build
-$ cd build
-```
-
-Then, if all of the required components (HDF5, cURL and YAJL) are located within the system path,
-building the connector should be as simple as running the following two commands to first have CMake
-generate the build files to use and then to build the connector. If the required components are
-located somewhere other than the system path, refer to section II.B.iii.b. for information on how to
-point to their locations.
-
-```bash
-$ cmake -DPREBUILT_HDF5_DIR=HDF5_DIR [options] ..
-$ make && make install (command may differ depending on platform and cmake generator used)
-```
-
-and, optionally, run the following to generate a system package for the REST VOL connector:
-
-```bash
-$ cpack
-```
-
-The options that can be specified to control the build process are covered in section II.B.iii.b.
-Note that by default CMake will generate Unix Makefiles for the build, but other build files can
-be generated by specifying the `-G` option for the `cmake` command; 
-see [CMake Generators](https://cmake.org/cmake/help/v3.16/manual/cmake-generators.7.html) for more
-information.
-
-#### II.B.iii.a. Options for `configure`
+#### II.B.iii.b Autotools Options
 
 When building the REST VOL connector manually using Autotools, the following options are
-available to `configure`.
-
-The options in the supplied Autotools build script are mapped to the corresponding options here:
+available to `configure`:
 
     -h, --help      Prints out a help message indicating script usage and available
                     options.
@@ -280,24 +236,48 @@ The options in the supplied Autotools build script are mapped to the correspondi
                     YAJL is not installed to a system path.
 
 
-#### II.B.iii.b. Options for CMake
+#### II.B.iii.c Manual Build with CMake
+
+First, create a build directory within the source tree:
+
+```bash
+$ cd rest-vol
+$ mkdir build
+$ cd build
+```
+
+Then, if all of the required components (HDF5, cURL and YAJL) are located within the system path,
+building the connector should be as simple as running the following two commands to first have CMake
+generate the build files to use and then to build the connector. If the required components are
+located somewhere other than the system path, refer to section II.B.iii.b. for information on how to
+point to their locations.
+
+```bash
+$ cmake -DPREBUILT_HDF5_DIR=HDF5_DIR [options] ..
+$ make && make install (command may differ depending on platform and cmake generator used)
+```
+
+and, optionally, run the following to generate a system package for the REST VOL connector:
+
+```bash
+$ cpack
+```
+
+The options that can be specified to control the build process are covered in section II.B.iii.d
+Note that by default CMake will generate Unix Makefiles for the build, but other build files can
+be generated by specifying the `-G` option for the `cmake` command; 
+see [CMake Generators](https://cmake.org/cmake/help/v3.16/manual/cmake-generators.7.html) for more
+information.
+
+#### II.B.iii.d CMake Options
 
 When building the REST VOL connector manually using CMake, the following CMake variables are
 available for controlling the build process. These can be supplied to the `cmake` command by
 prepending them with `-D`. Some of these options may be needed if, for example, the required
 components mentioned previously cannot be found within the system path.
 
-CMake-specific options:
-
   * `CMAKE_INSTALL_PREFIX` - This option controls the install directory that the resulting output files are written to. The default value is `/usr/local`.
   * `CMAKE_BUILD_TYPE` - This option controls the type of build used for the VOL connector. Valid values are Release, Debug, RelWithDebInfo and MinSizeRel; the default build type is RelWithDebInfo.
-
-HDF5-specific options:
-
-  * `HDF5_USE_STATIC_LIBRARIES` - Indicate if the static HDF5 libraries should be used for linking. The default value is `OFF`.
-
-REST VOL Connector-specific options:
-
   * `PREBUILT_HDF5_DIR` - Specifies a directory which contains a pre-built HDF5 distribution which uses the VOL abstraction layer. By default, the REST VOL connector's CMake build will attempt to build the included HDF5 source distribution, then use that to build the connector itself. However, if a VOL-enabled HDF5 distribution is already available, this option can be set to point to the directory of the HDF5 distribution. In this case, CMake will use that HDF5 distribution to build the REST VOL connector and will not attempt to build HDF5 again.
   * `BUILD_TESTING` - This option is used to enable/disable building of the REST VOL connector's tests. The default value is `ON`.
   * `BUILD_EXAMPLES` - This option is used to enable/disable building of the REST VOL connector's HDF5 examples. The default value is `ON`.
@@ -365,10 +345,11 @@ to the REST VOL User's Guide under `docs/users_guide.pdf`.
 
 # IV. More Information
 
-+ HDF in the Cloud
-    + https://www.hdfgroup.org/hdf-kita
-    + https://www.hdfgroup.org/solutions/hdf-cloud
-    + https://www.slideshare.net/HDFEOS/hdf-cloud-services
++ Highly Scalable Data Service (HSDS) - A python-based implementation of the HDF5 REST API which
+  can send and receive HDF5 data through the use of HTTP requests
+    + https://www.hdfgroup.org/solutions/highly-scalable-data-service-hsds/
+    + https://github.com/HDFGroup/hsds
+    + https://www.youtube.com/watch?v=9b5TO7drqqE
 
 + RESTful HDF5 - A description of the HDF5 REST API
     + https://support.hdfgroup.org/pubs/papers/RESTful_HDF5.pdf
@@ -377,8 +358,5 @@ to the REST VOL User's Guide under `docs/users_guide.pdf`.
 + HDF5-JSON - A specification of and tools for representing HDF5 in JSON
     + http://hdf5-json.readthedocs.io/en/latest/
 
-+ HDF Server (h5serv) - A python-based implementation of the HDF5 REST API which
-  can send and receive HDF5 data through the use of HTTP requests
-    + https://github.com/HDFGroup/h5serv
-    + https://support.hdfgroup.org/projects/hdfserver/
-    + https://s3.amazonaws.com/hdfgroup/docs/HDFServer_SciPy2015.pdf
++ HDF in the Cloud
+  + https://www.slideshare.net/HDFEOS/hdf-cloud-services
