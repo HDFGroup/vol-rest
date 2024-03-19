@@ -84,6 +84,10 @@
 #define HTTP_SERVER_ERROR_MIN 500 /* Minimum and maximum values for the 500 class of */
 #define HTTP_SERVER_ERROR_MAX 599 /* HTTP server error responses */
 
+#define HTTP_NO_CONTENT 204 /* HTTP server code for 'No Content' response */
+
+#define DEFAULT_POLL_TIMEOUT_MS 100
+
 /* Macros to check for various classes of HTTP response */
 #define HTTP_INFORMATIONAL(status_code)                                                                      \
     (status_code >= HTTP_INFORMATIONAL_MIN && status_code <= HTTP_INFORMATIONAL_MAX)
@@ -192,9 +196,36 @@
 #define CURL_PERFORM_NO_ERR(curl_ptr, ret_value)                                                             \
     CURL_PERFORM_INTERNAL(curl_ptr, FALSE, H5E_NONE_MAJOR, H5E_NONE_MINOR, ret_value)
 
-/* Helper macro to find the matching JSON '}' symbol for a given '{' symbol. This macro is
- * used to extract out all of the JSON within a JSON object so that processing can be done
- * on it.
+/* Counterpart of CURL_PERFORM that takes a response_buffer argument,
+ * instead of using the global response buffer.
+ * Currently not used. */
+#define CURL_PERFORM_NO_GLOBAL(curl_ptr, local_response_buffer, ERR_MAJOR, ERR_MINOR, ret_value)             \
+    CURL_PERFORM_INTERNAL_NO_GLOBAL(curl_ptr, response_buffer, TRUE, ERR_MAJOR, ERR_MINOR, ret_value)
+
+#define CURL_PERFORM_INTERNAL_NO_GLOBAL(curl_ptr, local_response_buffer, handle_HTTP_response, ERR_MAJOR,    \
+                                        ERR_MINOR, ret_value)                                                \
+    do {                                                                                                     \
+        CURLcode result = curl_easy_perform(curl_ptr);                                                       \
+                                                                                                             \
+        /* Reset the cURL response buffer write position pointer */                                          \
+        local_response_buffer.curr_buf_ptr = local_response_buffer.buffer;                                   \
+                                                                                                             \
+        if (CURLE_OK != result)                                                                              \
+            FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "%s", curl_easy_strerror(result));              \
+                                                                                                             \
+        if (handle_HTTP_response) {                                                                          \
+            long response_code;                                                                              \
+                                                                                                             \
+            if (CURLE_OK != curl_easy_getinfo(curl_ptr, CURLINFO_RESPONSE_CODE, &response_code))             \
+                FUNC_GOTO_ERROR(ERR_MAJOR, ERR_MINOR, ret_value, "can't get HTTP response code");            \
+                                                                                                             \
+            HANDLE_RESPONSE(response_code, ERR_MAJOR, ERR_MINOR, ret_value);                                 \
+        } /* end if */                                                                                       \
+    } while (0)
+
+/* Helper macro to find the matching JSON '}' symbol for a given '{' symbol. This macro is                   \
+ * used to extract out all of the JSON within a JSON object so that processing can be done                   \
+ * on it.                                                                                                    \
  */
 #define FIND_JSON_SECTION_END(start_ptr, end_ptr, ERR_MAJOR, ret_value)                                      \
     do {                                                                                                     \
@@ -312,7 +343,7 @@
         H5VL_CAP_FLAG_OBJECT_MORE | H5VL_CAP_FLAG_CREATION_ORDER | H5VL_CAP_FLAG_ITERATE |                   \
         H5VL_CAP_FLAG_BY_IDX | H5VL_CAP_FLAG_GET_PLIST | H5VL_CAP_FLAG_EXTERNAL_LINKS |                      \
         H5VL_CAP_FLAG_HARD_LINKS | H5VL_CAP_FLAG_SOFT_LINKS | H5VL_CAP_FLAG_TRACK_TIMES |                    \
-        H5VL_CAP_FLAG_FILTERS
+        H5VL_CAP_FLAG_FILTERS | H5VL_CAP_FLAG_FILL_VALUES
 /**********************************
  *                                *
  *        Global Variables        *
@@ -339,10 +370,10 @@ extern char curl_err_buf[];
  */
 extern struct curl_slist *curl_headers;
 
-/*
- * Saved copy of the base URL for operating on
+/* Default initial size for the response buffer allocated which cURL writes
+ * its responses into
  */
-extern char *base_URL;
+#define CURL_RESPONSE_BUFFER_DEFAULT_SIZE 1024
 
 #ifdef RV_TRACK_MEM_USAGE
 /*
@@ -390,6 +421,18 @@ struct response_buffer {
     size_t buffer_size;
 };
 extern struct response_buffer response_buffer;
+
+/* Struct containing information about open objects of each type in the VOL*/
+typedef struct RV_type_info {
+    size_t           open_count;
+    rv_hash_table_t *table;
+} RV_type_info;
+
+/* TODO - This is copied directly from the library */
+#define TYPE_BITS         7
+#define TYPE_MASK         (((hid_t)1 << TYPE_BITS) - 1)
+#define H5I_MAX_NUM_TYPES TYPE_MASK
+extern RV_type_info *RV_type_info_array_g[];
 
 /**************************
  *                        *
@@ -448,11 +491,20 @@ typedef struct {
 } upload_info;
 
 /* Structure that keeps track of semantic version. */
-typedef struct server_api_version {
+typedef struct {
     size_t major;
     size_t minor;
     size_t patch;
 } server_api_version;
+
+/* Structure containing information to connect to and evaluate
+ * features of a server */
+typedef struct server_info_t {
+    char              *username;
+    char              *password;
+    char              *base_URL;
+    server_api_version version;
+} server_info_t;
 
 /*
  * Definitions for the basic objects which the REST VOL uses
@@ -463,12 +515,12 @@ typedef struct server_api_version {
 typedef struct RV_object_t RV_object_t;
 
 typedef struct RV_file_t {
-    unsigned           intent;
-    unsigned           ref_count;
-    char              *filepath_name;
-    hid_t              fcpl_id;
-    hid_t              fapl_id;
-    server_api_version server_version;
+    unsigned      intent;
+    unsigned      ref_count;
+    char         *filepath_name;
+    server_info_t server_info;
+    hid_t         fcpl_id;
+    hid_t         fapl_id;
 } RV_file_t;
 
 typedef struct RV_group_t {
@@ -514,6 +566,52 @@ struct RV_object_t {
         RV_file_t     file;
     } u;
 };
+
+/* Structures to hold information for cURL requests to read/write to datasets */
+typedef struct dataset_write_info {
+    char       *write_body;
+    char       *base64_encoded_values;
+    curl_off_t  write_len;
+    upload_info uinfo;
+    const void *buf;
+} dataset_write_info;
+
+typedef struct dataset_read_info {
+    H5S_sel_type sel_type;
+    curl_off_t   post_len;
+    void        *buf;
+} dataset_read_info;
+
+typedef enum transfer_type_t { UNINIT = 0, READ = 1, WRITE = 2 } transfer_type_t;
+
+typedef struct dataset_transfer_info {
+    struct curl_slist     *curl_headers;
+    char                  *host_headers;
+    CURL                  *curl_easy_handle; /* An easy handle for a single transfer */
+    char                   curl_err_buf[CURL_ERROR_SIZE];
+    size_t                 current_backoff_duration;
+    size_t                 time_of_fail;
+    struct response_buffer resp_buffer;
+
+    RV_object_t *dataset;
+    char        *request_url;
+    hid_t        mem_type_id;
+    hid_t        mem_space_id;
+    hid_t        file_space_id;
+    hid_t        file_type_id;
+    char        *selection_body;
+
+    /* Fields for type conversion */
+    void *tconv_buf;
+    void *bkg_buf;
+
+    transfer_type_t transfer_type;
+
+    union {
+        dataset_write_info write_info;
+        dataset_read_info  read_info;
+    } u;
+} dataset_transfer_info;
 
 /*
  * A struct which is filled out and passed to the link and attribute
@@ -567,6 +665,17 @@ typedef struct loc_info {
     RV_object_t *domain;
 } loc_info;
 
+/* Enum to indicate if the supplied read buffer can be used as a type conversion or background buffer */
+typedef enum {
+    RV_TCONV_REUSE_NONE,  /* Cannot reuse buffer */
+    RV_TCONV_REUSE_TCONV, /* Use buffer as type conversion buffer */
+    RV_TCONV_REUSE_BKG    /* Use buffer as background buffer */
+} RV_tconv_reuse_t;
+
+typedef struct get_link_val_out {
+    size_t *in_buf_size;
+    void   *buf;
+} get_link_val_out;
 /****************************
  *                          *
  *        Prototypes        *
@@ -577,8 +686,8 @@ typedef struct loc_info {
 extern "C" {
 #endif
 
-/* Function to set the connection information for the connector to connect to the server */
-herr_t H5_rest_set_connection_information(void);
+/* Function to set the connection information on a file for the connector to connect to the server */
+herr_t H5_rest_set_connection_information(server_info_t *server_info);
 
 /* Alternate, more portable version of the basename function which doesn't modify its argument */
 const char *H5_rest_basename(const char *path);
@@ -587,29 +696,32 @@ const char *H5_rest_basename(const char *path);
 char *H5_rest_dirname(const char *path);
 
 /* Helper function to parse an HTTP response according to the given parse callback function */
-herr_t RV_parse_response(char *HTTP_response, void *callback_data_in, void *callback_data_out,
-                         herr_t (*parse_callback)(char *, void *, void *));
+herr_t RV_parse_response(char *HTTP_response, const void *callback_data_in, void *callback_data_out,
+                         herr_t (*parse_callback)(char *, const void *, void *));
 
 /* Callback for RV_parse_response() to capture an object's URI */
-herr_t RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_copy_object_URI_callback(char *HTTP_response, const void *callback_data_in,
+                                   void *callback_data_out);
 
 /* Callback for RV_parse_response() to capture an object's creation properties */
-herr_t RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_copy_object_loc_info_callback(char *HTTP_response, const void *callback_data_in,
+                                        void *callback_data_out);
 
 /* Callback for RV_parse_response() to access the name of the n-th returned attribute */
-herr_t RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_copy_attribute_name_by_index(char *HTTP_response, const void *callback_data_in,
+                                       void *callback_data_out);
 
 /* Callback for RV_parse_response() to access the name of the n-th returned link */
-herr_t RV_copy_link_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_copy_link_name_by_index(char *HTTP_response, const void *callback_data_in, void *callback_data_out);
 
 /* Callback for RV_parse_response() to capture the version of the server api */
-herr_t RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void *callback_data_out);
 
 /* Helper function to find an object given a starting object to search from and a path */
 
 htri_t RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
-                              herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
-                              void *callback_data_out);
+                              herr_t (*obj_found_callback)(char *, const void *, void *),
+                              void *callback_data_in, void *callback_data_out);
 
 /* Helper function to parse a JSON string representing an HDF5 Dataspace and
  * setup an hid_t for the Dataspace */
@@ -628,14 +740,52 @@ int H5_rest_compare_string_keys(void *value1, void *value2);
 /* Helper function to initialize an object's name based on its parent's name. */
 herr_t RV_set_object_handle_path(const char *obj_path, const char *parent_path, char **buf);
 
+size_t H5_rest_curl_write_data_callback_no_global(char *buffer, size_t size, size_t nmemb, void *userp);
+
 /* Helper to turn an object type into a string for a server request */
 herr_t RV_set_object_type_header(H5I_type_t parent_obj_type, const char **parent_obj_type_header);
 
+/* Helper function to parse an object's allocated size from server response */
+herr_t RV_parse_allocated_size_callback(char *HTTP_response, const void *callback_data_in,
+                                        void *callback_data_out);
+
 void RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
+
+/* Counterpart of CURL_PERFORM that takes a curl multi handle,
+ * and waits until all requests on it have finished before returning. */
+herr_t RV_curl_multi_perform(CURL *curl_multi_ptr, dataset_transfer_info *transfer_info, size_t count);
+
+/* Callbacks used for post-processing after a curl request succeeds */
+herr_t RV_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hid_t file_space_id,
+                          void *buf, struct response_buffer resp_buffer);
+
+/* Dtermine if datatype conversion is necessary */
+htri_t RV_need_tconv(hid_t src_type_id, hid_t dst_type_id);
+
+/* Initialize variables and buffers used for type conversion */
+herr_t RV_tconv_init(hid_t src_type_id, size_t *src_type_size, hid_t dst_type_id, size_t *dst_type_size,
+                     size_t num_elem, hbool_t clear_tconv_buf, hbool_t dst_file, void **tconv_buf,
+                     void **bkg_buf, RV_tconv_reuse_t *reuse, hbool_t *fill_bkg);
+
+/* REST VOL Datatype helper */
+herr_t RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested,
+                                   server_api_version server_version);
+
+/* Helper function to escape control characters for JSON strings */
+herr_t RV_JSON_escape_string(const char *in, char *out, size_t *out_size);
 
 #define SERVER_VERSION_MATCHES_OR_EXCEEDS(version, major_needed, minor_needed, patch_needed)                 \
     (version.major > major_needed) || (version.major == major_needed && version.minor > minor_needed) ||     \
         (version.major == major_needed && version.minor == minor_needed && version.patch >= patch_needed)
+
+#define SERVER_VERSION_SUPPORTS_FILL_VALUE_ENCODING(version)                                                 \
+    (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 1))
+
+#define SERVER_VERSION_SUPPORTS_GET_STORAGE_SIZE(version)                                                    \
+    (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 5))
+
+#define SERVER_VERSION_SUPPORTS_FIXED_LENGTH_UTF8(version)                                                   \
+    (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 5))
 
 #ifdef __cplusplus
 }

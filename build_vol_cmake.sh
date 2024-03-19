@@ -21,10 +21,6 @@ INSTALL_DIR="${SCRIPT_DIR}/rest_vol_build"
 # Set the default build directory
 BUILD_DIR="${SCRIPT_DIR}/rest_vol_cmake_build_files"
 
-# Default name of the directory for the included HDF5 source distribution,
-# as well as the default directory where it gets installed
-HDF5_DIR="src/hdf5"
-
 # By default, tell CMake to generate Unix Makefiles
 CMAKE_GENERATOR="Unix Makefiles"
 
@@ -40,8 +36,7 @@ CONNECTOR_DEBUG_OPT=
 CURL_DEBUG_OPT=
 MEM_TRACK_OPT=
 THREAD_SAFE_OPT=
-PREBUILT_HDF5_OPT=
-PREBUILT_HDF5_DIR=
+HDF5_INSTALL_DIR=
 CURL_OPT=
 YAJL_OPT=
 YAJL_LIB_OPT=
@@ -78,7 +73,7 @@ usage()
     echo "              is 'source directory/rest_vol_build'."
     echo
     echo "      -H DIR  To specify a directory where HDF5 has already"
-    echo "              been built."
+    echo "              been installed."
     echo
     echo "      -B DIR  Specifies the directory that CMake should use as"
     echo "              the build tree location. Default is"
@@ -96,7 +91,7 @@ usage()
     echo
 }
 
-optspec=":hctdmstG:H:C:Y:B:P:-"
+optspec=":hctdmstlG:H:C:Y:B:P:-"
 while getopts "$optspec" optchar; do
     case "${optchar}" in
     h)
@@ -143,8 +138,7 @@ while getopts "$optspec" optchar; do
         echo
         ;;
     H)
-        PREBUILT_HDF5_OPT="-DPREBUILT_HDF5_DIR=$OPTARG"
-        PREBUILT_HDF5_DIR="$OPTARG"
+        HDF5_INSTALL_DIR="$OPTARG"
         echo "Set HDF5 install directory to: $OPTARG"
         echo
         ;;
@@ -181,13 +175,13 @@ if [ "$NPROCS" -eq "0" ]; then
     fi
 fi
 
-# Ensure that the HDF5 submodule gets checked out
-if [ -z "$(ls -A ${SCRIPT_DIR}/${HDF5_DIR})" ]; then
+# Ensure that the vol-tests submodule gets checked out
+if [ -z "$(ls -A ${SCRIPT_DIR}/test/vol-tests)" ]; then
     git submodule init
     git submodule update
 fi
 
-# Once HDF5 has been built, build the REST VOL connector against HDF5.
+# Build the REST VOL connector against HDF5.
 echo "*******************************************"
 echo "* Building REST VOL connector and test suite *"
 echo "*******************************************"
@@ -201,7 +195,7 @@ rm -f "${BUILD_DIR}/CMakeCache.txt"
 
 cd "${BUILD_DIR}"
 
-CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "${CMAKE_GENERATOR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${PREBUILT_HDF5_OPT}" "${CURL_OPT}" "${YAJL_OPT}" "${YAJL_LIB_OPT}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}"
+CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "${CMAKE_GENERATOR}" "-DHDF5_ROOT=${HDF5_INSTALL_DIR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${CURL_OPT}" "${YAJL_OPT}" "${YAJL_LIB_OPT}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}"
 
 echo "Build files have been generated for CMake generator '${CMAKE_GENERATOR}'"
 
@@ -210,7 +204,7 @@ if [ "${CMAKE_GENERATOR}" = "Unix Makefiles" ]; then
   make -j${NPROCS} && make install || exit 1
 fi
 
-echo "REST VOL (and HDF5) built"
+echo "REST VOL built"
 
 # Clean out the old CMake cache
 rm -f "${BUILD_DIR}/CMakeCache.txt"
@@ -220,13 +214,7 @@ rm -f "${BUILD_DIR}/CMakeCache.txt"
 mkdir -p "${BUILD_DIR}/tests/vol-tests"
 cd "${BUILD_DIR}/tests/vol-tests"
 
-if [ -z "$PREBUILT_HDF5_DIR" ]; then
-    HDF5_INSTALL_DIR=$HDF5_DIR
-else
-    HDF5_INSTALL_DIR=$PREBUILT_HDF5_DIR
-fi
-
-CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "${CMAKE_GENERATOR}" -DHDF5_DIR=${HDF5_INSTALL_DIR} -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}/test/vol-tests"
+CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "${CMAKE_GENERATOR}"  "-DHDF5_DIR=${HDF5_INSTALL_DIR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}/test/vol-tests"
 
 echo "Build files generated for vol-tests"
 

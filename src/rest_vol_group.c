@@ -18,7 +18,7 @@
 #include "rest_vol_group.h"
 
 /* Set of callbacks for RV_parse_response() */
-static herr_t RV_get_group_info_callback(char *HTTP_response, void *callback_data_in,
+static herr_t RV_get_group_info_callback(char *HTTP_response, const void *callback_data_in,
                                          void *callback_data_out);
 
 /* JSON keys to retrieve the number of links in a group */
@@ -49,12 +49,14 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     size_t       plist_nalloc          = 0;
     size_t       path_size             = 0;
     size_t       path_len              = 0;
+    const char  *base_URL              = NULL;
     char        *host_header           = NULL;
     char        *create_request_body   = NULL;
     char        *path_dirname          = NULL;
     char        *base64_plist_buffer   = NULL;
     char         target_URI[URI_MAX_LENGTH];
     char         request_url[URL_MAX_LENGTH];
+    char        *escaped_group_name      = NULL;
     int          create_request_body_len = 0;
     int          url_len                 = 0;
     void        *binary_plist_buffer     = NULL;
@@ -74,6 +76,12 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
 
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
+
+    if ((base_URL = parent->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object does not have valid server URL");
+
+    if (gapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid GAPL");
 
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
@@ -125,6 +133,7 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     if (name) {
         const char *path_basename = H5_rest_basename(name);
         hbool_t     empty_dirname;
+        size_t      escaped_name_size = 0;
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Creating JSON link for group\n\n");
@@ -201,7 +210,17 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
         if (RV_base64_encode(binary_plist_buffer, plist_nalloc, &base64_plist_buffer, &base64_buf_size) < 0)
             FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTENCODE, NULL, "failed to base64 encode plist binary");
 
-        create_request_nalloc = strlen(fmt_string) + strlen(path_basename) +
+        /* Escape group name to be sent as JSON */
+        if (RV_JSON_escape_string(path_basename, escaped_group_name, &escaped_name_size) < 0)
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTENCODE, NULL, "can't get size of JSON escaped group name");
+
+        if ((escaped_group_name = RV_malloc(escaped_name_size)) == NULL)
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for escaped group name");
+
+        if (RV_JSON_escape_string(path_basename, escaped_group_name, &escaped_name_size) < 0)
+            FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTENCODE, NULL, "can't JSON escape group name");
+
+        create_request_nalloc = strlen(fmt_string) + strlen(escaped_group_name) +
                                 (empty_dirname ? strlen(parent->URI) : strlen(target_URI)) + base64_buf_size +
                                 1;
         if (NULL == (create_request_body = (char *)RV_malloc(create_request_nalloc)))
@@ -209,7 +228,7 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
                             "can't allocate space for group create request body");
 
         if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc, fmt_string,
-                                                empty_dirname ? parent->URI : target_URI, path_basename,
+                                                empty_dirname ? parent->URI : target_URI, escaped_group_name,
                                                 (char *)base64_plist_buffer)) < 0)
             FUNC_GOTO_ERROR(H5E_SYM, H5E_SYSERRSTR, NULL, "snprintf error");
 
@@ -249,6 +268,10 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     printf("-> Group create request URL: %s\n\n", request_url);
 #endif
 
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, new_group->domain->u.file.server_info.username))
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, new_group->domain->u.file.server_info.password))
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
@@ -279,6 +302,10 @@ RV_group_create(void *obj, const H5VL_loc_params_t *loc_params, const char *name
     /* Store the newly-created group's URI */
     if (RV_parse_response(response_buffer.buffer, NULL, new_group->URI, RV_copy_object_URI_callback) < 0)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTCREATE, NULL, "can't parse new group's URI");
+
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_GROUP]->table, (char *)new_group->URI,
+                             (char *)new_group) == 0)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "Failed to add group to type info array");
 
     ret_value = (void *)new_group;
 
@@ -315,6 +342,9 @@ done:
         curl_slist_free_all(curl_headers);
         curl_headers = NULL;
     } /* end if */
+
+    if (escaped_group_name)
+        RV_free(escaped_group_name);
 
     PRINT_ERROR_STACK;
 
@@ -365,6 +395,9 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
     if (!parent->handle_path)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_BADVALUE, NULL, "parent object has NULL path");
 
+    if (gapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid GAPL");
+
     /* Allocate and setup internal Group struct */
     if (NULL == (group = (RV_object_t *)RV_malloc(sizeof(*group))))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "can't allocate space for group object");
@@ -389,8 +422,8 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
     loc_info_out.domain      = group->domain;
     loc_info_out.GCPL_base64 = NULL;
 
-    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_loc_info_callback, NULL,
-                                        &loc_info_out);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_loc_info_callback,
+                                        &group->domain->u.file.server_info, &loc_info_out);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, NULL, "can't locate group by path");
 
@@ -401,7 +434,7 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
 #endif
 
     /* Decode creation properties, if server supports them and file has them */
-    if (SERVER_VERSION_MATCHES_OR_EXCEEDS(parent->domain->u.file.server_version, 0, 8, 0) &&
+    if (SERVER_VERSION_MATCHES_OR_EXCEEDS(parent->domain->u.file.server_info.version, 0, 8, 0) &&
         loc_info_out.GCPL_base64) {
         if (RV_base64_decode(loc_info_out.GCPL_base64, strlen(loc_info_out.GCPL_base64),
                              (char **)&binary_gcpl, binary_gcpl_size) < 0)
@@ -427,6 +460,9 @@ RV_group_open(void *obj, const H5VL_loc_params_t *loc_params, const char *name, 
     } /* end if */
     else
         group->u.group.gapl_id = H5P_GROUP_ACCESS_DEFAULT;
+
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_GROUP]->table, (char *)group->URI, (char *)group) == 0)
+        FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTALLOC, NULL, "Failed to add group to type info array");
 
     ret_value = (void *)group;
 
@@ -476,6 +512,7 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
     char        *host_header     = NULL;
     char         request_url[URL_MAX_LENGTH];
     int          url_len   = 0;
+    const char  *base_URL  = NULL;
     herr_t       ret_value = SUCCEED;
 
     loc_info loc_info_out;
@@ -488,6 +525,8 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
 
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a group");
+    if ((base_URL = loc_obj->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object does not have valid server URL");
 
     switch (args->op_type) {
         /* H5Gget_create_plist */
@@ -548,9 +587,9 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
                     loc_info_out.domain      = loc_obj->domain;
                     loc_info_out.GCPL_base64 = NULL;
 
-                    search_ret =
-                        RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type,
-                                               RV_copy_object_loc_info_callback, NULL, &loc_info_out);
+                    search_ret = RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name,
+                                                        &obj_type, RV_copy_object_loc_info_callback,
+                                                        &loc_obj->domain->u.file.server_info, &loc_info_out);
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_SYM, H5E_PATH, FAIL, "can't locate group");
 
@@ -605,6 +644,12 @@ RV_group_get(void *obj, H5VL_group_get_args_t *args, hid_t dxpl_id, void **req)
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
+                FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
@@ -703,6 +748,9 @@ RV_group_close(void *grp, hid_t dxpl_id, void **req)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close GCPL");
     } /* end if */
 
+    if (RV_type_info_array_g[H5I_GROUP])
+        rv_hash_table_remove(RV_type_info_array_g[H5I_GROUP]->table, (char *)_grp->URI);
+
     if (RV_file_close(_grp->domain, H5P_DEFAULT, NULL) < 0) {
         FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");
     }
@@ -737,7 +785,7 @@ done:
  *              November, 2017
  */
 static herr_t
-RV_get_group_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_get_group_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     H5G_info_t *group_info = (H5G_info_t *)callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;

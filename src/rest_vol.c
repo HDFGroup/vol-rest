@@ -29,10 +29,13 @@
 /* Default size for buffer used when transforming an HDF5 dataspace into JSON. */
 #define DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE 256
 
-/* Default initial size for the response buffer allocated which cURL writes
- * its responses into
- */
-#define CURL_RESPONSE_BUFFER_DEFAULT_SIZE 1024
+/* Defines for multi-curl settings */
+#define BACKOFF_INITIAL_DURATION 10000000 /* 10,000,000 ns -> 0.01 sec */
+#define BACKOFF_SCALE_FACTOR     1.5
+#define BACKOFF_MAX_BEFORE_FAIL  3000000000 /* 30,000,000,000 ns -> 30 sec */
+
+/* Number of unique characters which need to be escaped before being sent as JSON */
+#define NUM_JSON_ESCAPE_CHARS 7
 /*
  * The VOL connector identification number.
  */
@@ -67,11 +70,6 @@ char curl_err_buf[CURL_ERROR_SIZE];
  */
 struct curl_slist *curl_headers = NULL;
 
-/*
- * Saved copy of the base URL for operating on
- */
-char *base_URL = NULL;
-
 #ifdef RV_TRACK_MEM_USAGE
 /*
  * Counter to keep track of the currently allocated amount of bytes
@@ -96,6 +94,9 @@ typedef struct H5_rest_ad_info_t {
     char    client_secret[128];
     hbool_t unattended;
 } H5_rest_ad_info_t;
+
+/* Global array containing information about open objects */
+RV_type_info *RV_type_info_array_g[H5I_MAX_NUM_TYPES] = {0};
 
 /* Host header string for specifying the host (Domain) for requests */
 const char *const host_string = "X-Hdf-domain: ";
@@ -136,6 +137,9 @@ const char *link_collection_keys2[] = {"collection", (const char *)0};
 
 const char *attributes_keys[] = {"attributes", (const char *)0};
 
+/* JSON keys to retrieve allocated size */
+const char *allocated_size_keys[] = {"allocated_size", (const char *)0};
+
 /* Default size for the buffer to allocate during base64-encoding if the caller
  * of RV_base64_encode supplies a 0-sized buffer.
  */
@@ -144,12 +148,15 @@ const char *attributes_keys[] = {"attributes", (const char *)0};
 /* JSON key to retrieve the version of server from a request to a file. */
 const char *server_version_keys[] = {"version", (const char *)0};
 
+/* Used for cURL's base URL if the connection is through a local socket */
+const char *socket_base_url = "0";
+
 /* Internal initialization/termination functions which are called by
  * the public functions H5rest_init() and H5rest_term() */
 static herr_t H5_rest_init(hid_t vipl_id);
 static herr_t H5_rest_term(void);
 
-static herr_t H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info);
+static herr_t H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL);
 
 /* Introspection callbacks */
 static herr_t H5_rest_get_conn_cls(void *obj, H5VL_get_conn_lvl_t lvl, const struct H5VL_class_t **conn_cls);
@@ -164,10 +171,17 @@ static size_t H5_rest_curl_write_data_callback(char *buffer, size_t size, size_t
 static char *H5_rest_url_encode_path(const char *path);
 
 /* Helper function to parse an object's type from server response */
-herr_t RV_parse_type(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_parse_object_class(char *HTTP_response, const void *callback_data_in, void *callback_data_out);
 
 /* Helper function to parse an object's creation properties from server response */
 herr_t RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf);
+
+/* Return the index of the curl handle into the array of handles */
+herr_t RV_get_index_of_matching_handle(dataset_transfer_info *transfer_info, size_t count, CURL *handle,
+                                       size_t *handle_index);
+
+/* Stub that throws an error when called */
+void *RV_wrap_get_object(const void *obj);
 
 /* The REST VOL connector's class structure. */
 static const H5VL_class_t H5VL_rest_g = {
@@ -443,6 +457,12 @@ H5_rest_init(hid_t vipl_id)
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
 #endif
 
+    /* Set up global type info array */
+    for (size_t i = 0; i < H5I_MAX_NUM_TYPES; i++) {
+        RV_type_info_array_g[i]        = RV_calloc(sizeof(RV_type_info));
+        RV_type_info_array_g[i]->table = rv_hash_table_new(rv_hash_string, H5_rest_compare_string_keys);
+    }
+
     /* Register the connector with HDF5's error reporting API */
     if ((H5_rest_err_class_g = H5Eregister_class(HDF5_VOL_REST_ERR_CLS_NAME, HDF5_VOL_REST_LIB_NAME,
                                                  HDF5_VOL_REST_LIB_VER)) < 0)
@@ -589,12 +609,6 @@ H5_rest_term(void)
     if (!H5_rest_initialized_g)
         FUNC_GOTO_DONE(SUCCEED);
 
-    /* Free base URL */
-    if (base_URL) {
-        RV_free(base_URL);
-        base_URL = NULL;
-    }
-
     /* Free memory for cURL response buffer */
     if (response_buffer.buffer) {
         RV_free(response_buffer.buffer);
@@ -607,6 +621,17 @@ H5_rest_term(void)
         curl = NULL;
         curl_global_cleanup();
     } /* end if */
+
+    /* Cleanup type info array */
+    if (RV_type_info_array_g) {
+        for (size_t i = 0; i < H5I_MAX_NUM_TYPES; i++) {
+            if (RV_type_info_array_g[i]) {
+                rv_hash_table_free(RV_type_info_array_g[i]->table);
+                RV_free(RV_type_info_array_g[i]);
+                RV_type_info_array_g[i] = NULL;
+            }
+        }
+    }
 
     /*
      * "Forget" connector ID. This should normally be called by the library
@@ -653,9 +678,6 @@ H5Pset_fapl_rest_vol(hid_t fapl_id)
     if ((ret_value = H5Pset_vol(fapl_id, H5_rest_id_g, NULL)) < 0)
         FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't set REST VOL connector in FAPL");
 
-    if (H5_rest_set_connection_information() < 0)
-        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't set REST VOL connector connection information");
-
 done:
     PRINT_ERROR_STACK;
 
@@ -694,13 +716,15 @@ done:
  *              June, 2018
  */
 herr_t
-H5_rest_set_connection_information(void)
+H5_rest_set_connection_information(server_info_t *server_info)
 {
     H5_rest_ad_info_t ad_info;
-    const char       *URL;
-    size_t            URL_len     = 0;
     FILE             *config_file = NULL;
     herr_t            ret_value   = SUCCEED;
+
+    const char *username = NULL;
+    const char *password = NULL;
+    const char *base_URL = NULL;
 
     memset(&ad_info, 0, sizeof(ad_info));
 
@@ -709,70 +733,16 @@ H5_rest_set_connection_information(void)
      * the environment.
      */
 
-    if ((URL = getenv("HSDS_ENDPOINT"))) {
+    if (base_URL = getenv("HSDS_ENDPOINT")) {
 
-        if (!strncmp(URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
-            /* This is just a placeholder URL for curl's syntax, its specific value is unimportant */
-            URL     = "0";
-            URL_len = 1;
+        username = getenv("HSDS_USERNAME");
+        password = getenv("HSDS_PASSWORD");
 
-            if (!base_URL || (0 != (strncmp(base_URL, URL, strlen(URL))))) {
-
-                /* If previous value is incorrect, reassign */
-                if (base_URL) {
-                    free(base_URL);
-                    base_URL = NULL;
-                }
-
-                if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
-                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
-                                    "can't allocate space necessary for placeholder base URL");
-
-                strncpy(base_URL, URL, URL_len);
-                base_URL[URL_len] = '\0';
-            }
-        }
-        else {
-            /*
-             * Save a copy of the base URL being worked on so that operations like
-             * creating a Group can be redirected to "base URL"/groups by building
-             * off of the base URL supplied.
-             */
-            URL_len = strlen(URL);
-
-            if (!base_URL || (0 != (strncmp(base_URL, URL, strlen(URL))))) {
-
-                /* If previous value is incorrect, reassign */
-                if (base_URL) {
-                    free(base_URL);
-                    base_URL = NULL;
-                }
-
-                if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
-                    FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
-                                    "can't allocate space necessary for placeholder base URL");
-
-                strncpy(base_URL, URL, URL_len);
-                base_URL[URL_len] = '\0';
-            }
+        if (!strncmp(base_URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
+            base_URL = socket_base_url;
         }
 
-        const char *username = getenv("HSDS_USERNAME");
-        const char *password = getenv("HSDS_PASSWORD");
-
-        if (username || password) {
-            /* Attempt to set authentication information */
-            if (username && strlen(username)) {
-                if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, username))
-                    FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf);
-            } /* end if */
-
-            if (password && strlen(password)) {
-                if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, password))
-                    FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf);
-            } /* end if */
-        }     /* end if */
-        else {
+        if (!username && !password) {
             const char *clientID      = getenv("HSDS_AD_CLIENT_ID");
             const char *tenantID      = getenv("HSDS_AD_TENANT_ID");
             const char *resourceID    = getenv("HSDS_AD_RESOURCE_ID");
@@ -790,7 +760,7 @@ H5_rest_set_connection_information(void)
             } /* end if */
 
             /* Attempt authentication with Active Directory */
-            if (H5_rest_authenticate_with_AD(&ad_info) < 0)
+            if (H5_rest_authenticate_with_AD(&ad_info, base_URL) < 0)
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't authenticate with Active Directory");
         } /* end else */
     }     /* end if */
@@ -866,43 +836,14 @@ H5_rest_set_connection_information(void)
 
             if (!strcmp(key, "hs_endpoint")) {
                 if (val) {
-                    /*
-                     * Save a copy of the base URL being worked on so that operations like
-                     * creating a Group can be redirected to "base URL"/groups by building
-                     * off of the base URL supplied.
-                     */
-                    URL_len = strlen(val);
-
-                    if (!base_URL || (0 != (strncmp(base_URL, val, URL_len)))) {
-
-                        /* If previous value is incorrect, reassign */
-                        if (base_URL) {
-                            free(base_URL);
-                            base_URL = NULL;
-                        }
-
-                        if (NULL == (base_URL = (char *)RV_malloc(URL_len + 1)))
-                            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
-                                            "can't allocate space necessary for placeholder base URL");
-
-                        strncpy(base_URL, val, URL_len);
-                        base_URL[URL_len] = '\0';
+                    if (!strncmp(base_URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
+                        base_URL = socket_base_url;
                     }
-
+                    else {
+                        base_URL = val;
+                    }
                 } /* end if */
             }     /* end if */
-            else if (!strcmp(key, "hs_username")) {
-                if (val && strlen(val)) {
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, val))
-                        FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set username: %s", curl_err_buf);
-                } /* end if */
-            }     /* end else if */
-            else if (!strcmp(key, "hs_password")) {
-                if (val && strlen(val)) {
-                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, val))
-                        FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTSET, FAIL, "can't set password: %s", curl_err_buf);
-                } /* end if */
-            }     /* end else if */
             else if (!strcmp(key, "hs_ad_app_id")) {
                 if (val && strlen(val))
                     strncpy(ad_info.clientID, val, sizeof(ad_info.clientID) - 1);
@@ -925,7 +866,7 @@ H5_rest_set_connection_information(void)
 
         /* Attempt authentication with Active Directory if ID values are present */
         if (ad_info.clientID[0] != '\0' && ad_info.tenantID[0] != '\0' && ad_info.resourceID[0] != '\0')
-            if (H5_rest_authenticate_with_AD(&ad_info) < 0)
+            if (!base_URL || (H5_rest_authenticate_with_AD(&ad_info, base_URL) < 0))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "can't authenticate with Active Directory");
     } /* end else */
 
@@ -934,9 +875,44 @@ H5_rest_set_connection_information(void)
                         "must specify a base URL - please set HSDS_ENDPOINT environment variable or create a "
                         "config file");
 
+    /* Copy server information */
+    if (server_info) {
+        if (username) {
+            if ((server_info->username = RV_calloc(strlen(username) + 1)) == NULL)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for username");
+
+            strcpy(server_info->username, username);
+        }
+
+        if (password) {
+            if ((server_info->password = RV_calloc(strlen(password) + 1)) == NULL)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for password");
+
+            strcpy(server_info->password, password);
+        }
+
+        if (base_URL) {
+            if ((server_info->base_URL = RV_calloc(strlen(base_URL) + 1)) == NULL)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for URL");
+
+            strcpy(server_info->base_URL, base_URL);
+        }
+    }
+
 done:
     if (config_file)
         fclose(config_file);
+
+    if (ret_value < 0 && server_info) {
+        RV_free(server_info->username);
+        server_info->username = NULL;
+
+        RV_free(server_info->password);
+        server_info->password = NULL;
+
+        RV_free(server_info->base_URL);
+        server_info->base_URL = NULL;
+    }
 
     PRINT_ERROR_STACK;
 
@@ -961,7 +937,7 @@ done:
  *-------------------------------------------------------------------------
  */
 static herr_t
-H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info)
+H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
 {
     const char *access_token_key[]  = {"access_token", (const char *)0};
     const char *refresh_token_key[] = {"refresh_token", (const char *)0};
@@ -1415,6 +1391,67 @@ done:
 } /* end H5_rest_curl_write_data_callback() */
 
 /*-------------------------------------------------------------------------
+ * Function:    H5_rest_curl_write_data_callback_no_global
+ *
+ * Purpose:     A callback for cURL which allows cURL to write its
+ *              responses from the server into a growing string buffer
+ *              which is processed by this VOL connector after each server
+ *              interaction.
+ *
+ *              This callback use userp to find a buffer to write to, instead
+ *              of using the global buffer. This allows it to safely be used by
+ *              multiple curl handles at the same time.
+ *
+ * Return:      Amount of bytes equal to the amount given to this callback
+ *              by cURL on success/differing amount of bytes on failure
+ *
+ * Programmer:  Matthew Larson
+ *              June, 2023
+ */
+size_t
+H5_rest_curl_write_data_callback_no_global(char *buffer, size_t size, size_t nmemb, void *userp)
+{
+    ptrdiff_t               buf_ptrdiff;
+    size_t                  data_size             = size * nmemb;
+    size_t                  ret_value             = 0;
+    struct response_buffer *local_response_buffer = (struct response_buffer *)userp;
+
+    /* If the server response is larger than the currently allocated amount for the
+     * response buffer, grow the response buffer by a factor of 2
+     */
+    buf_ptrdiff = (local_response_buffer->curr_buf_ptr + data_size) - local_response_buffer->buffer;
+    if (buf_ptrdiff < 0)
+        FUNC_GOTO_ERROR(
+            H5E_INTERNAL, H5E_BADVALUE, 0,
+            "unsafe cast: response buffer pointer difference was negative - this should not happen!");
+
+    /* Avoid using the 'CHECKED_REALLOC' macro here because we don't necessarily
+     * want to free the connector's response buffer if the reallocation fails.
+     */
+    while ((size_t)(buf_ptrdiff + 1) > local_response_buffer->buffer_size) {
+        char *tmp_realloc;
+
+        if (NULL == (tmp_realloc = (char *)RV_realloc(local_response_buffer->buffer,
+                                                      2 * local_response_buffer->buffer_size)))
+            FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, 0, "can't reallocate space for response buffer");
+
+        local_response_buffer->curr_buf_ptr =
+            tmp_realloc + (local_response_buffer->curr_buf_ptr - local_response_buffer->buffer);
+        local_response_buffer->buffer = tmp_realloc;
+        local_response_buffer->buffer_size *= 2;
+    } /* end while */
+
+    memcpy(local_response_buffer->curr_buf_ptr, buffer, data_size);
+    local_response_buffer->curr_buf_ptr += data_size;
+    *local_response_buffer->curr_buf_ptr = '\0';
+
+    ret_value = data_size;
+
+done:
+    return ret_value;
+} /* end H5_rest_curl_write_data_callback_no_global() */
+
+/*-------------------------------------------------------------------------
  * Function:    H5_rest_basename
  *
  * Purpose:     A portable implementation of the basename routine which
@@ -1502,7 +1539,8 @@ H5_rest_url_encode_path(const char *_path)
     if (!_path)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "path was NULL");
 
-    path = (char *)_path;
+    /* Silence compiler const warnings */
+    memcpy(&path, &_path, sizeof(char *));
 
     /* Retrieve the length of the possible path prefix, which could be something like '/', '.', etc. */
     cur_pos = path;
@@ -1629,7 +1667,7 @@ done:
 
 /* Helper function to parse an object's type from server response */
 herr_t
-RV_parse_type(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_parse_object_class(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     yajl_val    parse_tree = NULL, key_obj;
     char       *parsed_object_string;
@@ -1678,7 +1716,7 @@ done:
         yajl_tree_free(parse_tree);
 
     return ret_value;
-} /* end RV_parse_type */
+} /* end RV_parse_object_class */
 
 /*---------------------------------------------------------------------------
  * Function:    H5_rest_get_conn_cls
@@ -1767,8 +1805,8 @@ done:
  *
  */
 herr_t
-RV_parse_response(char *HTTP_response, void *callback_data_in, void *callback_data_out,
-                  herr_t (*parse_callback)(char *, void *, void *))
+RV_parse_response(char *HTTP_response, const void *callback_data_in, void *callback_data_out,
+                  herr_t (*parse_callback)(char *, const void *, void *))
 {
     herr_t ret_value = SUCCEED;
 
@@ -1800,7 +1838,7 @@ done:
  *              July, 2017
  */
 herr_t
-RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_copy_object_URI_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     yajl_val parse_tree = NULL, key_obj;
     char    *parsed_string;
@@ -1952,7 +1990,7 @@ done:
  */
 htri_t
 RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
-                       herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
+                       herr_t (*obj_found_callback)(char *, const void *, void *), void *callback_data_in,
                        void *callback_data_out)
 {
     RV_object_t       *external_file    = NULL;
@@ -1966,6 +2004,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
     char              *url_encoded_path_name = NULL;
     const char        *ext_filename          = NULL;
     const char        *ext_obj_path          = NULL;
+    const char        *base_URL;
     char               request_url[URL_MAX_LENGTH];
     long               http_response;
     int                url_len = 0;
@@ -1982,13 +2021,14 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
     if (H5I_FILE != parent_obj->obj_type && H5I_GROUP != parent_obj->obj_type &&
         H5I_DATATYPE != parent_obj->obj_type && H5I_DATASET != parent_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file, group, datatype or dataset");
-
+    if ((base_URL = parent_obj->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object does not have valid server URL");
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Finding object by path '%s' from parent object of type %s with URI %s\n\n", obj_path,
            object_type_to_string(parent_obj->obj_type), parent_obj->URI);
 #endif
 
-    version = parent_obj->domain->u.file.server_version;
+    version = parent_obj->domain->u.file.server_info.version;
 
     /* In order to not confuse the server, make sure the path has no leading spaces */
     while (*obj_path == ' ')
@@ -2168,6 +2208,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
                         curl_err_buf);
+
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
 
@@ -2194,7 +2235,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
 
     if (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 0)) {
 
-        if (0 > RV_parse_response(response_buffer.buffer, NULL, target_object_type, RV_parse_type))
+        if (0 > RV_parse_response(response_buffer.buffer, NULL, target_object_type, RV_parse_object_class))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "failed to get type from URI");
     }
     else {
@@ -2224,14 +2265,20 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
                        H5L_TYPE_SOFT == link_info.type ? "soft" : "external");
 #endif
 
-                if (RV_parse_response(response_buffer.buffer, &link_val_len, NULL, RV_get_link_val_callback) <
-                    0)
+                get_link_val_out get_link_val_args;
+                get_link_val_args.in_buf_size = &link_val_len;
+                get_link_val_args.buf         = NULL;
+
+                if (RV_parse_response(response_buffer.buffer, NULL, &get_link_val_args,
+                                      RV_get_link_val_callback) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve size of link's value");
 
                 if (NULL == (tmp_link_val = RV_malloc(link_val_len)))
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link's value");
 
-                if (RV_parse_response(response_buffer.buffer, &link_val_len, tmp_link_val,
+                get_link_val_args.buf = tmp_link_val;
+
+                if (RV_parse_response(response_buffer.buffer, NULL, &get_link_val_args,
                                       RV_get_link_val_callback) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link's value");
 
@@ -2371,12 +2418,13 @@ done:
  *              May, 2023
  */
 herr_t
-RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_copy_object_loc_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val  parse_tree = NULL, key_obj;
-    char     *parsed_string;
-    loc_info *loc_info_out = (loc_info *)callback_data_out;
-    herr_t    ret_value    = SUCCEED;
+    yajl_val             parse_tree = NULL, key_obj;
+    char                *parsed_string;
+    loc_info            *loc_info_out = (loc_info *)callback_data_out;
+    const server_info_t *server_info  = (const server_info_t *)callback_data_in;
+    herr_t               ret_value    = SUCCEED;
 
     char *GCPL_buf = NULL;
 
@@ -2393,6 +2441,8 @@ RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, vo
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
     if (!loc_info_out)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL");
+    if (!server_info)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "server info was NULL");
 
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
@@ -2454,25 +2504,39 @@ RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, vo
             FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL,
                             "failed to allocate memory for new domain path");
 
-        strncpy(new_domain->u.file.filepath_name, found_domain.u.file.filepath_name,
-                strlen(found_domain.u.file.filepath_name) + 1);
+        strcpy(new_domain->u.file.filepath_name, found_domain.u.file.filepath_name);
 
-        new_domain->u.file.intent         = loc_info_out->domain->u.file.intent;
-        new_domain->u.file.fapl_id        = H5Pcopy(loc_info_out->domain->u.file.fapl_id);
-        new_domain->u.file.fcpl_id        = H5Pcopy(loc_info_out->domain->u.file.fcpl_id);
-        new_domain->u.file.ref_count      = 1;
-        new_domain->u.file.server_version = found_domain.u.file.server_version;
+        if ((new_domain->u.file.server_info.username = RV_malloc(strlen(server_info->username) + 1)) == NULL)
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for copied username");
+
+        strcpy(new_domain->u.file.server_info.username, server_info->username);
+
+        if ((new_domain->u.file.server_info.password = RV_malloc(strlen(server_info->password) + 1)) == NULL)
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for copied password");
+
+        strcpy(new_domain->u.file.server_info.password, server_info->password);
+
+        if ((new_domain->u.file.server_info.base_URL = RV_malloc(strlen(server_info->base_URL) + 1)) == NULL)
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for copied URL");
+
+        strcpy(new_domain->u.file.server_info.base_URL, server_info->base_URL);
+
+        new_domain->u.file.intent              = loc_info_out->domain->u.file.intent;
+        new_domain->u.file.fapl_id             = H5Pcopy(loc_info_out->domain->u.file.fapl_id);
+        new_domain->u.file.fcpl_id             = H5Pcopy(loc_info_out->domain->u.file.fcpl_id);
+        new_domain->u.file.ref_count           = 1;
+        new_domain->u.file.server_info.version = found_domain.u.file.server_info.version;
 
         /* Allocate root "path" on heap for consistency with other RV_object_t types */
         if ((new_domain->handle_path = RV_malloc(2)) == NULL)
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for filepath");
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for filepath");
 
         strncpy(new_domain->handle_path, "/", 2);
 
         /* Assume that original domain and external domain have the same server version.
          * This will always be true unless it becomes possible for external links to point to
          * objects on different servers entirely. */
-        memcpy(&new_domain->u.file.server_version, &loc_info_out->domain->u.file.server_version,
+        memcpy(&new_domain->u.file.server_info.version, &loc_info_out->domain->u.file.server_info.version,
                sizeof(server_api_version));
 
         if (RV_file_close(loc_info_out->domain, H5P_DEFAULT, NULL) < 0)
@@ -2487,7 +2551,7 @@ done:
     if (parse_tree)
         yajl_tree_free(parse_tree);
 
-    if (ret_value < 0) {
+    if ((ret_value < 0) && GCPL_buf) {
         RV_free(GCPL_buf);
         GCPL_buf                  = NULL;
         loc_info_out->GCPL_base64 = NULL;
@@ -2509,16 +2573,16 @@ done:
  *              May, 2023
  */
 herr_t
-RV_copy_link_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_copy_link_name_by_index(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val           parse_tree = NULL, key_obj = NULL, link_obj = NULL;
-    const char        *parsed_link_name   = NULL;
-    char              *parsed_link_buffer = NULL;
-    H5VL_loc_by_idx_t *idx_params         = (H5VL_loc_by_idx_t *)callback_data_in;
-    hsize_t            index              = 0;
-    char             **link_name          = (char **)callback_data_out;
-    const char        *curr_key           = NULL;
-    herr_t             ret_value          = SUCCEED;
+    yajl_val                 parse_tree = NULL, key_obj = NULL, link_obj = NULL;
+    const char              *parsed_link_name   = NULL;
+    char                    *parsed_link_buffer = NULL;
+    const H5VL_loc_by_idx_t *idx_params         = (const H5VL_loc_by_idx_t *)callback_data_in;
+    hsize_t                  index              = 0;
+    char                   **link_name          = (char **)callback_data_out;
+    const char              *curr_key           = NULL;
+    herr_t                   ret_value          = SUCCEED;
 
     if (!idx_params)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given index params ptr was NULL");
@@ -2605,15 +2669,15 @@ done:
  *              May, 2023
  */
 herr_t
-RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_copy_attribute_name_by_index(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val           parse_tree           = NULL, key_obj;
-    const char        *parsed_string        = NULL;
-    char              *parsed_string_buffer = NULL;
-    H5VL_loc_by_idx_t *idx_params           = (H5VL_loc_by_idx_t *)callback_data_in;
-    hsize_t            index                = 0;
-    char             **attr_name            = (char **)callback_data_out;
-    herr_t             ret_value            = SUCCEED;
+    yajl_val                 parse_tree           = NULL, key_obj;
+    const char              *parsed_string        = NULL;
+    char                    *parsed_string_buffer = NULL;
+    const H5VL_loc_by_idx_t *idx_params           = (const H5VL_loc_by_idx_t *)callback_data_in;
+    hsize_t                  index                = 0;
+    char                   **attr_name            = (char **)callback_data_out;
+    herr_t                   ret_value            = SUCCEED;
 
     if (!attr_name)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given attr_name was NULL");
@@ -3052,7 +3116,7 @@ herr_t
 RV_base64_encode(const void *in, size_t in_size, char **out, size_t *out_size)
 {
     const uint8_t *buf       = (const uint8_t *)in;
-    const char     charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const char     charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     uint32_t       three_byte_set;
     uint8_t        c0, c1, c2, c3;
     size_t         i;
@@ -3248,7 +3312,7 @@ RV_base64_decode(const char *in, size_t in_size, char **out, size_t *out_size)
             four_byte_set = (((uint32_t)c0) << 18) | (((uint32_t)c1) << 12) | (((uint32_t)c2) << 6) |
                             (((uint32_t)c3) << 0);
 
-            c0 = (uint8_t)(four_byte_set >> 24); // 0
+            c0 = (uint8_t)(four_byte_set >> 24);
             c1 = (uint8_t)(four_byte_set >> 16);
             c2 = (uint8_t)(four_byte_set >> 8);
             c3 = (uint8_t)(four_byte_set >> 0);
@@ -3270,7 +3334,7 @@ done:
 
 /* Helper function to store the version of the external HSDS server */
 herr_t
-RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     yajl_val            parse_tree     = NULL, key_obj;
     herr_t              ret_value      = SUCCEED;
@@ -3336,6 +3400,45 @@ done:
     return ret_value;
 }
 
+/* Helper function to parse an object's allocated size from server response */
+herr_t
+RV_parse_allocated_size_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
+{
+    yajl_val parse_tree = NULL, key_obj = NULL;
+    herr_t   ret_value      = SUCCEED;
+    size_t  *allocated_size = (size_t *)callback_data_out;
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Retrieving allocated size from server's HTTP response\n\n");
+#endif
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
+
+    if (!allocated_size)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "allocated size pointer was NULL");
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
+
+    /* Retrieve size */
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, allocated_size_keys, yajl_t_number)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to parse allocated size");
+
+    if (!YAJL_IS_INTEGER(key_obj))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "parsed allocated size is not an integer");
+
+    if (YAJL_GET_INTEGER(key_obj) < 0)
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "parsed allocated size was negative");
+
+    *allocated_size = (size_t)YAJL_GET_INTEGER(key_obj);
+done:
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    return ret_value;
+}
+
 /*-------------------------------------------------------------------------
  * Function:    RV_set_object_type_header
  *
@@ -3386,6 +3489,239 @@ RV_set_object_type_header(H5I_type_t parent_obj_type, const char **parent_obj_ty
 done:
     return (ret_value);
 } /* end RV_set_object_type_header */
+
+/* Return the index of the curl handle into the array of handles */
+herr_t
+RV_get_index_of_matching_handle(dataset_transfer_info *transfer_info, size_t count, CURL *handle,
+                                size_t *handle_index)
+{
+    herr_t ret_value = SUCCEED;
+
+    if (!handle)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "cURL handle provided for index match is NULL");
+
+    *handle_index = count + 1;
+
+    for (size_t i = 0; i < count; i++) {
+        /* May have been cleaned up early after successful request */
+        if (!transfer_info[i].curl_easy_handle) {
+            continue;
+        }
+
+        if (transfer_info[i].curl_easy_handle == handle) {
+            *handle_index = i;
+            break;
+        }
+    }
+done:
+    return ret_value;
+}
+
+herr_t
+RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_info, size_t count)
+{
+
+    herr_t         ret_value               = SUCCEED;
+    int            num_still_running       = 0;
+    int            num_prev_running        = 0;
+    int            num_curlm_msgs          = 0;
+    int            events_occurred         = 0;
+    CURLMsg       *curl_multi_msg          = NULL;
+    CURL         **failed_handles_to_retry = NULL;
+    size_t         fail_count              = 0;
+    size_t         succeed_count           = 0;
+    size_t         num_finished            = 0;
+    size_t         handle_index            = 0;
+    fd_set         fdread;
+    fd_set         fdwrite;
+    fd_set         fdexcep;
+    int            maxfd      = -1;
+    long           timeout_ms = 0;
+    struct timeval timeout;
+
+    if ((failed_handles_to_retry = calloc(count, sizeof(CURL *))) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
+                        "can't allocate space for cURL headers to be retried");
+    /*
+    Lowers CPU usage dramatically, but also vastly increases time taken for requests to local storage
+    when the number of datasets is small.
+    struct timespec delay;
+    delay.tv_sec  = 0;
+    delay.tv_nsec = DELAY_BETWEEN_HANDLE_CHECKS;
+    */
+
+    memset(failed_handles_to_retry, 0, sizeof(CURL *) * count);
+
+    do {
+        maxfd           = -1;
+        fail_count      = 0;
+        succeed_count   = 0;
+        timeout_ms      = 0;
+        timeout.tv_sec  = 0;
+        timeout.tv_usec = 0;
+
+        if (CURLM_OK != curl_multi_timeout(curl_multi_handle, &timeout_ms))
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "unable to get curl timeout");
+
+        timeout_ms = ((timeout_ms < 0) || (timeout_ms > DEFAULT_POLL_TIMEOUT_MS)) ? DEFAULT_POLL_TIMEOUT_MS
+                                                                                  : timeout_ms;
+
+        timeout.tv_sec  = timeout_ms / 1000;
+        timeout.tv_usec = (timeout_ms % 1000) * 1000;
+
+        FD_ZERO(&fdread);
+        FD_ZERO(&fdwrite);
+        FD_ZERO(&fdexcep);
+
+        if (CURLM_OK != curl_multi_fdset(curl_multi_handle, &fdread, &fdwrite, &fdexcep, &maxfd))
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "unable to get curl fd set");
+
+        if (maxfd != -1)
+            select(maxfd + 1, &fdread, &fdwrite, &fdexcep, &timeout);
+
+        if (CURLM_OK != curl_multi_perform(curl_multi_handle, &num_still_running))
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "cURL multi perform error");
+
+        while ((num_prev_running != num_still_running) &&
+               (curl_multi_msg = curl_multi_info_read(curl_multi_handle, &num_curlm_msgs))) {
+            long response_code;
+
+            if (curl_multi_msg && (curl_multi_msg->msg == CURLMSG_DONE)) {
+                if (CURLE_OK !=
+                    curl_easy_getinfo(curl_multi_msg->easy_handle, CURLINFO_RESPONSE_CODE, &response_code))
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "can't get HTTP response code");
+
+                /* Gracefully handle 503 Error, which can result from sending too many simultaneous
+                 * requests */
+                if (response_code == 503) {
+
+                    if (RV_get_index_of_matching_handle(transfer_info, count, curl_multi_msg->easy_handle,
+                                                        &handle_index) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL,
+                                        "can't get handle information for retry");
+
+                    /* Restart request next time for writes */
+                    if (transfer_info[handle_index].transfer_type == WRITE)
+                        transfer_info[handle_index].u.write_info.uinfo.bytes_sent = 0;
+                    /* Restart request next time for reads */
+                    transfer_info[handle_index].resp_buffer.curr_buf_ptr =
+                        transfer_info[handle_index].resp_buffer.buffer;
+
+                    if (CURLM_OK != curl_multi_remove_handle(curl_multi_handle, curl_multi_msg->easy_handle))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL,
+                                        "failed to remove denied cURL handle");
+
+                    /* Identify the handle by its original index */
+                    failed_handles_to_retry[handle_index] = curl_multi_msg->easy_handle;
+
+                    struct timespec tms;
+
+                    clock_gettime(CLOCK_MONOTONIC, &tms);
+
+                    transfer_info[handle_index].time_of_fail =
+                        (size_t)tms.tv_sec * 1000 * 1000 * 1000 + (size_t)tms.tv_nsec;
+
+                    transfer_info[handle_index].current_backoff_duration =
+                        (transfer_info[handle_index].current_backoff_duration == 0)
+                            ? BACKOFF_INITIAL_DURATION
+                            : (size_t)((double)transfer_info[handle_index].current_backoff_duration *
+                                       BACKOFF_SCALE_FACTOR);
+
+                    /* Randomize time to avoid doing all retry attempts at once */
+                    int random_factor = rand();
+                    transfer_info[handle_index].current_backoff_duration =
+                        (size_t)((double)transfer_info[handle_index].current_backoff_duration *
+                                 (1.0 + ((double)random_factor / (double)RAND_MAX)));
+
+                    if (transfer_info[handle_index].current_backoff_duration >= BACKOFF_MAX_BEFORE_FAIL)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL,
+                                        "Unable to reach server for write: 503 service unavailable");
+                    fail_count++;
+                }
+                else if (response_code == 200) {
+                    num_finished++;
+                    succeed_count++;
+
+                    if (RV_get_index_of_matching_handle(transfer_info, count, curl_multi_msg->easy_handle,
+                                                        &handle_index) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL,
+                                        "can't get handle information for retry");
+
+                    switch (transfer_info[handle_index].transfer_type) {
+                        case (READ):
+                            if (RV_dataset_read_cb(transfer_info[handle_index].mem_type_id,
+                                                   transfer_info[handle_index].mem_space_id,
+                                                   transfer_info[handle_index].file_type_id,
+                                                   transfer_info[handle_index].file_space_id,
+                                                   transfer_info[handle_index].u.read_info.buf,
+                                                   transfer_info[handle_index].resp_buffer) < 0)
+                                FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL,
+                                                "failed to post-process data read from dataset");
+                            break;
+                        case (WRITE):
+                            /* No post-processing necessary */
+                            break;
+                        case (UNINIT):
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid transfer type");
+                            break;
+                    }
+
+                    /* Clean up */
+                    if (CURLM_OK != curl_multi_remove_handle(curl_multi_handle, curl_multi_msg->easy_handle))
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL,
+                                        "failed to remove finished cURL handle");
+
+                    curl_easy_cleanup(curl_multi_msg->easy_handle);
+
+                    transfer_info[handle_index].curl_easy_handle = NULL;
+
+                    if (transfer_info[handle_index].transfer_type == WRITE) {
+                        RV_free(transfer_info[handle_index].u.write_info.write_body);
+                        transfer_info[handle_index].u.write_info.write_body = NULL;
+
+                        RV_free(transfer_info[handle_index].u.write_info.base64_encoded_values);
+                        transfer_info[handle_index].u.write_info.base64_encoded_values = NULL;
+                    }
+
+                    RV_free(transfer_info[handle_index].request_url);
+                    transfer_info[handle_index].request_url = NULL;
+
+                    RV_free(transfer_info[handle_index].resp_buffer.buffer);
+                    transfer_info[handle_index].resp_buffer.buffer = NULL;
+                }
+                else {
+                    HANDLE_RESPONSE(response_code, H5E_DATASET, H5E_WRITEERROR, FAIL);
+                }
+            }
+        } /* end while (curl_multi_msg); */
+
+        /* TODO: Replace with an epoll-like structure of some kind, manually iterating this will probably
+         * be slow */
+        struct timespec curr_time;
+        clock_gettime(CLOCK_MONOTONIC, &curr_time);
+        size_t curr_time_ns = (size_t)curr_time.tv_sec * 1000 * 1000 * 1000 + (size_t)curr_time.tv_nsec;
+
+        for (size_t i = 0; i < count; i++) {
+            if (failed_handles_to_retry[i] && ((curr_time_ns - transfer_info[i].time_of_fail) >=
+                                               transfer_info[i].current_backoff_duration)) {
+                if (CURLM_OK != curl_multi_add_handle(curl_multi_handle, failed_handles_to_retry[i]))
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "failed to re-add denied cURL handle");
+
+                failed_handles_to_retry[i] = NULL;
+            }
+        }
+
+        /*
+        nanosleep(&delay, NULL);
+        */
+        num_prev_running = num_still_running;
+    } while (num_still_running > 0);
+
+done:
+    RV_free(failed_handles_to_retry);
+
+    return ret_value;
+}
 
 /* Helper function to initialize an object's name based on its parent's name.
  * Allocates memory that must be closed by caller. */
@@ -3497,3 +3833,84 @@ RV_free_visited_link_hash_table_key(rv_hash_table_key_t value)
     RV_free(value);
     value = NULL;
 } /* end RV_free_visited_link_hash_table_key() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_JSON_escape_string
+ *
+ * Purpose:     Helper function to escape control characters for JSON strings.
+ *              If 'out' is NULL, out_size will be changed to the buffer size
+ *              needed for the escaped version of 'in'.
+ *              If 'out' is non-NULL, it should be a buffer of out_size bytes
+ *              that will be populated with the escaped version of 'in'.
+ *              If the provided buffer is too small and this operation fails,
+ *              the value of the buffer will still be modified.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              January, 2024
+ */
+herr_t
+RV_JSON_escape_string(const char *in, char *out, size_t *out_size)
+{
+    herr_t ret_value = SUCCEED;
+    size_t in_size   = strlen(in);
+
+    char *out_ptr                                  = NULL;
+    char  escape_characters[NUM_JSON_ESCAPE_CHARS] = {'\b', '\f', '\n', '\r', '\t', '\"', '\\'};
+
+    if (out == NULL) {
+        /* Determine necessary buffer size */
+        *out_size = in_size + 1;
+
+        for (size_t i = 0; i < in_size; i++) {
+            char c = in[i];
+
+            for (size_t j = 0; j < NUM_JSON_ESCAPE_CHARS; j++) {
+                char ec = escape_characters[j];
+
+                /* Each escaped character requires additional '\' in final string */
+                if (c == ec)
+                    *out_size += 1;
+            }
+        }
+    }
+    else {
+        /* Escaped string is at least as long as original */
+        if (*out_size < strlen(in) + 1)
+            FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "escaped buffer is smaller than original");
+
+        /* Populate provided buffer */
+        out_ptr = out;
+
+        for (size_t i = 0; i < in_size; i++) {
+            char c = in[i];
+
+            for (size_t j = 0; j < NUM_JSON_ESCAPE_CHARS; j++) {
+                char ec = escape_characters[j];
+
+                if (c == ec) {
+                    if ((out_ptr - out + 1) > *out_size)
+                        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "buffer too small for encoded string");
+                    out_ptr[0] = '\\';
+                    out_ptr++;
+                }
+            }
+
+            if ((out_ptr - out + 1) > *out_size)
+                FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "buffer too small for encoded string");
+
+            out_ptr[0] = c;
+            out_ptr++;
+        }
+
+        if ((out_ptr - out + 1) > *out_size)
+            FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "buffer too small for encoded string");
+
+        out_ptr[0] = '\0';
+    }
+
+done:
+
+    return ret_value;
+}

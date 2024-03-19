@@ -26,8 +26,14 @@ herr_t RV_datatype_get(void *obj, H5VL_datatype_get_args_t *args, hid_t dxpl_id,
 herr_t RV_datatype_close(void *dt, hid_t dxpl_id, void **req);
 
 /* REST VOL Datatype helper functions */
-hid_t  RV_parse_datatype(char *type, hbool_t need_truncate);
-herr_t RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested);
+hid_t RV_parse_datatype(char *type, hbool_t need_truncate);
+
+/* Determine whether datatype conversion is necessary between 'same' datatypes */
+static htri_t RV_detect_vl_vlstr_ref(hid_t type_id);
+
+/* Determine if a background buffer is needed for type conversion */
+static htri_t RV_need_bkg(hid_t src_type_id, hid_t dst_type_id, hbool_t dst_file, size_t *dst_type_size,
+                          hbool_t *fill_bkg);
 
 #ifdef __cplusplus
 }

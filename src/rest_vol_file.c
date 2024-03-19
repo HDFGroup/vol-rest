@@ -17,6 +17,21 @@
 
 #include "rest_vol_file.h"
 
+herr_t RV_iterate_copy_hid_cb(hid_t obj_id, void *udata);
+herr_t RV_iterate_count_obj_cb(hid_t obj_id, void *udata);
+
+struct get_obj_count_udata_t {
+    size_t obj_count;
+    char  *local_filename;
+} typedef get_obj_count_udata_t;
+
+struct get_obj_ids_udata_t {
+    hid_t *obj_id_list;
+    size_t obj_count;
+    size_t max_obj_count;
+    char  *local_filename;
+} typedef get_obj_ids_udata_t;
+
 /*-------------------------------------------------------------------------
  * Function:    RV_file_create
  *
@@ -55,19 +70,15 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
     printf("     - Default FAPL? %s\n\n", (H5P_FILE_ACCESS_DEFAULT == fapl_id) ? "yes" : "no");
 #endif
 
-    /*
-     * If the connector has been dynamically loaded, the FAPL used for
-     * creating the file will be a default FAPL, so we need to ensure
-     * that the connection information gets set.
-     */
-    if (fapl_id == H5P_FILE_ACCESS_DEFAULT)
-        if (H5_rest_set_connection_information() < 0)
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL,
-                            "can't set REST VOL connector connection information");
+    if (fapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid FAPL");
 
     /* Allocate and setup internal File struct */
     if (NULL == (new_file = (RV_object_t *)RV_malloc(sizeof(*new_file))))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for file object");
+
+    if (H5_rest_set_connection_information(&new_file->u.file.server_info) < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
 
     new_file->URI[0]               = '\0';
     new_file->obj_type             = H5I_FILE;
@@ -132,9 +143,13 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
     /* Disable use of Expect: 100 Continue HTTP response */
     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, new_file->u.file.server_info.username))
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, new_file->u.file.server_info.password))
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, new_file->u.file.server_info.base_URL))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
 
     /* Before making the actual request, check the file creation flags for
@@ -251,9 +266,13 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't parse new file's URI");
 
     /* Store server version */
-    if (RV_parse_response(response_buffer.buffer, NULL, &new_file->u.file.server_version,
+    if (RV_parse_response(response_buffer.buffer, NULL, &new_file->u.file.server_info.version,
                           RV_parse_server_version) < 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't parse server  version");
+
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_FILE]->table, (char *)new_file->URI,
+                             (char *)new_file) == 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "Failed to add file to type info array");
 
     ret_value = (void *)new_file;
 
@@ -328,19 +347,15 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     printf("     - Default FAPL? %s\n\n", (H5P_FILE_ACCESS_DEFAULT == fapl_id) ? "yes" : "no");
 #endif
 
-    /*
-     * If the connector has been dynamically loaded, the FAPL used for
-     * creating the file will be a default FAPL, so we need to ensure
-     * that the connection information gets set.
-     */
-    if (fapl_id == H5P_FILE_ACCESS_DEFAULT)
-        if (H5_rest_set_connection_information() < 0)
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL,
-                            "can't set REST VOL connector connection information");
+    if (fapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid FAPL");
 
     /* Allocate and setup internal File struct */
     if (NULL == (file = (RV_object_t *)RV_malloc(sizeof(*file))))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for file object");
+
+    if (H5_rest_set_connection_information(&file->u.file.server_info) < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
 
     file->URI[0]               = '\0';
     file->obj_type             = H5I_FILE;
@@ -381,13 +396,17 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     /* Disable use of Expect: 100 Continue HTTP response */
     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, file->u.file.server_info.username))
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, file->u.file.server_info.password))
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, file->u.file.server_info.base_URL))
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set up cURL to make HTTP GET request: %s",
                         curl_err_buf);
-    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, NULL, "can't set cURL request URL: %s", curl_err_buf);
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving info for file open\n\n");
@@ -404,7 +423,7 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTOPENFILE, NULL, "can't parse file's URI");
 
     /* Store server version */
-    if (RV_parse_response(response_buffer.buffer, NULL, &file->u.file.server_version,
+    if (RV_parse_response(response_buffer.buffer, NULL, &file->u.file.server_info.version,
                           RV_parse_server_version) < 0)
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTCREATE, NULL, "can't parse server version");
 
@@ -422,6 +441,9 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     /* Set up a FCPL for the file so that H5Fget_create_plist() will function correctly */
     if ((file->u.file.fcpl_id = H5Pcreate(H5P_FILE_CREATE)) < 0)
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create FCPL for file");
+
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_FILE]->table, (char *)file->URI, (char *)file) == 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "Failed to add file to type info array");
 
     ret_value = (void *)file;
 
@@ -471,6 +493,7 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
 {
     RV_object_t *_obj      = (RV_object_t *)obj;
     herr_t       ret_value = SUCCEED;
+    unsigned int requested_types;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file get call with following parameters:\n");
@@ -539,14 +562,90 @@ RV_file_get(void *obj, H5VL_file_get_args_t *args, hid_t dxpl_id, void **req)
 
         /* H5Fget_obj_count */
         case H5VL_FILE_GET_OBJ_COUNT:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_obj_count is unsupported");
-            break;
+            requested_types = args->args.get_obj_count.types;
 
+            if (args->args.get_obj_count.count == NULL)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "given object id count pointer is NULL");
+
+            get_obj_count_udata_t count_cb_args;
+            count_cb_args.obj_count = 0;
+
+            /* Requests with H5F_OBJ_ALL for file_id do not pass through the
+             * VOL layer - assume single-file request */
+            count_cb_args.local_filename = _obj->domain->u.file.filepath_name;
+
+            if (requested_types & H5F_OBJ_FILE)
+                if (H5Iiterate(H5I_FILE, RV_iterate_count_obj_cb, &count_cb_args) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over file ids");
+
+            if (requested_types & H5F_OBJ_GROUP)
+                if (H5Iiterate(H5I_GROUP, RV_iterate_count_obj_cb, &count_cb_args) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over group ids");
+
+            if (requested_types & H5F_OBJ_DATATYPE)
+                if (H5Iiterate(H5I_DATATYPE, RV_iterate_count_obj_cb, &count_cb_args) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over datatype ids");
+
+            if (requested_types & H5F_OBJ_DATASET)
+                if (H5Iiterate(H5I_DATASET, RV_iterate_count_obj_cb, &count_cb_args) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over dataset ids");
+
+            if (requested_types & H5F_OBJ_ATTR)
+                if (H5Iiterate(H5I_ATTR, RV_iterate_count_obj_cb, &count_cb_args) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over attribute ids");
+
+            /* Return count */
+            *args->args.get_obj_count.count = count_cb_args.obj_count;
+
+            break;
         /* H5Fget_obj_ids */
         case H5VL_FILE_GET_OBJ_IDS:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fget_obj_ids is unsupported");
-            break;
+            if (args->args.get_obj_ids.oid_list == NULL)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "given object id list buffer is NULL");
 
+            if (args->args.get_obj_ids.count == NULL)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "given object id count buffer is NULL");
+
+            if (args->args.get_obj_ids.max_objs < 0)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "invalid max object parameter");
+
+            if (args->args.get_obj_ids.max_objs == 0)
+                FUNC_GOTO_DONE(SUCCEED);
+
+            *args->args.get_obj_ids.count = 0;
+            requested_types               = args->args.get_obj_ids.types;
+
+            get_obj_ids_udata_t iterate_cb_args;
+            iterate_cb_args.obj_id_list   = args->args.get_obj_ids.oid_list;
+            iterate_cb_args.obj_count     = 0;
+            iterate_cb_args.max_obj_count = args->args.get_obj_ids.max_objs;
+            /* Requests for object ids in all files do not pass through the
+             * VOL layer - assume single-file request */
+            iterate_cb_args.local_filename = _obj->domain->u.file.filepath_name;
+
+            if (requested_types & H5F_OBJ_FILE)
+                if (H5Iiterate(H5I_FILE, RV_iterate_copy_hid_cb, &iterate_cb_args) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over file ids");
+
+            if (requested_types & H5F_OBJ_GROUP)
+                if (H5Iiterate(H5I_GROUP, RV_iterate_copy_hid_cb, &iterate_cb_args) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over group ids");
+
+            if (requested_types & H5F_OBJ_DATATYPE)
+                if (H5Iiterate(H5I_DATATYPE, RV_iterate_copy_hid_cb, &iterate_cb_args) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over datatype ids");
+
+            if (requested_types & H5F_OBJ_DATASET)
+                if (H5Iiterate(H5I_DATASET, RV_iterate_copy_hid_cb, &iterate_cb_args) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over dataset ids");
+
+            if (requested_types & H5F_OBJ_ATTR)
+                if (H5Iiterate(H5I_ATTR, RV_iterate_copy_hid_cb, &iterate_cb_args) < 0)
+                    FUNC_GOTO_ERROR(H5E_FILE, H5E_OBJECTITERERROR, FAIL, "can't iterate over attribute ids");
+
+            *args->args.get_obj_ids.count = iterate_cb_args.obj_count;
+
+            break;
         default:
             FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "can't get this type of information from file");
     } /* end switch */
@@ -571,11 +670,15 @@ done:
 herr_t
 RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void **req)
 {
-    RV_object_t *file        = (RV_object_t *)obj;
-    herr_t       ret_value   = SUCCEED;
-    char        *host_header = NULL;
-    size_t       host_header_len;
-    size_t       name_length;
+    RV_object_t   *file      = (RV_object_t *)obj;
+    herr_t         ret_value = SUCCEED;
+    size_t         host_header_len;
+    size_t         name_length;
+    long           http_response;
+    char          *host_header = NULL;
+    const char    *filename    = NULL;
+    char          *request_url = NULL;
+    server_info_t *server_info = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file-specific call with following parameters:\n");
@@ -592,9 +695,62 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
     switch (args->op_type) {
         /* H5Fflush */
-        case H5VL_FILE_FLUSH:
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "H5Fflush is unsupported");
+        case H5VL_FILE_FLUSH: {
+            /* H5Fflush() may be passed an object within the domain, so explicitly target
+             * the containing domain. */
+            RV_object_t *target_domain = file->domain;
+            filename                   = target_domain->u.file.filepath_name;
+            const char *flush_string   = "/?flush=1&rescan=1";
+
+            name_length = strlen(filename);
+
+            /* Setup the host header */
+            host_header_len = name_length + strlen(host_string) + 1;
+
+            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for request Host header");
+
+            strcpy(host_header, host_string);
+
+            curl_headers = curl_slist_append(curl_headers, strncat(host_header, filename, name_length));
+
+            /* Disable use of Expect: 100 Continue HTTP response */
+            curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+            if (NULL == (request_url = (char *)RV_malloc(
+                             strlen(flush_string) + strlen(target_domain->u.file.server_info.base_URL) + 1)))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for request URL");
+
+            snprintf(request_url, URL_MAX_LENGTH, "%s%s", target_domain->u.file.server_info.base_URL,
+                     flush_string);
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, file->u.file.server_info.username))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, file->u.file.server_info.password))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
+            /* Server only checks for flush parameter on PUT operations */
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL to make HTTP PUTrequest: %s",
+                                curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)0))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL upload size: %s", curl_err_buf);
+
+            CURL_PERFORM_NO_ERR(curl, FAIL);
+
+            if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "can't get HTTP response code from cURL: %s",
+                                curl_err_buf);
+
+            if (http_response != HTTP_NO_CONTENT)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTFLUSH, FAIL, "invalid server response from flush");
+
             break;
+        }
 
         /* H5Freopen */
         case H5VL_FILE_REOPEN: {
@@ -609,10 +765,10 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
         /* H5Fis_accessible */
         case H5VL_FILE_IS_ACCESSIBLE: {
-            hbool_t    *ret_is_accessible = args->args.is_accessible.accessible;
-            const char *filename          = args->args.is_accessible.filename;
-            hid_t       fapl_id           = args->args.is_accessible.fapl_id;
-            void       *ret_file          = NULL;
+            hbool_t *ret_is_accessible = args->args.is_accessible.accessible;
+            filename                   = args->args.is_accessible.filename;
+            hid_t fapl_id              = args->args.is_accessible.fapl_id;
+            void *ret_file             = NULL;
             /* Initialize in case of failure */
 
             *ret_is_accessible = FALSE;
@@ -635,8 +791,7 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
 
         /* H5Fdelete */
         case H5VL_FILE_DELETE: {
-            long        http_response;
-            const char *filename = args->args.del.filename;
+            filename = args->args.del.filename;
 
             name_length = strlen(filename);
 
@@ -654,9 +809,22 @@ RV_file_specific(void *obj, H5VL_file_specific_args_t *args, hid_t dxpl_id, void
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+            /* H5Fdelete doesn't receive a file handle, so the username/password must be pulled
+             * from environment for now */
+            if ((server_info = RV_calloc(sizeof(server_info_t))) == NULL)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL, "can't allocate space for server information");
+
+            if (H5_rest_set_connection_information(server_info) < 0)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "can't get server connection information");
+
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME, server_info->username))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD, server_info->password))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
+
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
-            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, base_URL))
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, server_info->base_URL))
                 FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
 
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
@@ -691,6 +859,16 @@ done:
 
     if (host_header) {
         RV_free(host_header);
+    }
+
+    if (request_url)
+        RV_free(request_url);
+
+    if (server_info) {
+        RV_free(server_info->base_URL);
+        RV_free(server_info->username);
+        RV_free(server_info->password);
+        RV_free(server_info);
     }
 
     return ret_value;
@@ -747,10 +925,19 @@ RV_file_close(void *file, hid_t dxpl_id, void **req)
             _file->u.file.filepath_name = NULL;
         }
 
-        if (_file->handle_path) {
-            RV_free(_file->handle_path);
-            _file->handle_path = NULL;
-        }
+        RV_free(_file->u.file.server_info.username);
+        RV_free(_file->u.file.server_info.password);
+        RV_free(_file->u.file.server_info.base_URL);
+
+        _file->u.file.server_info.username = NULL;
+        _file->u.file.server_info.password = NULL;
+        _file->u.file.server_info.base_URL = NULL;
+
+        RV_free(_file->handle_path);
+        _file->handle_path = NULL;
+
+        if (RV_type_info_array_g[H5I_FILE])
+            rv_hash_table_remove(RV_type_info_array_g[H5I_FILE]->table, (char *)_file->URI);
 
         RV_free(_file);
     }
@@ -762,3 +949,134 @@ done:
 
     return ret_value;
 } /* end RV_file_close() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_iterate_copy_hid_cb
+ *
+ * Purpose:     Callback for H5Iiterate() that copies the hid_t
+ *              of each library object into a list.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              August, 2023
+ */
+herr_t
+RV_iterate_copy_hid_cb(hid_t obj_id, void *udata)
+{
+    herr_t               ret_value               = H5_ITER_CONT;
+    get_obj_ids_udata_t *iterate_cb_args         = (get_obj_ids_udata_t *)udata;
+    char                *containing_filename     = NULL;
+    ssize_t              containing_filename_len = 0;
+    H5I_type_t           id_type                 = H5I_UNINIT;
+    htri_t               is_committed            = FALSE;
+
+    if (iterate_cb_args->obj_count >= iterate_cb_args->max_obj_count)
+        FUNC_GOTO_DONE(H5_ITER_STOP);
+
+    /* Do not copy the id of transient datatypes */
+    if ((id_type = H5Iget_type(obj_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_ID, FAIL, "can't get identifier type");
+
+    if ((id_type == H5I_DATATYPE)) {
+        if ((is_committed = H5Tcommitted(obj_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_DATATYPE, FAIL, "can't check if datatype is committed");
+
+        if (!is_committed)
+            FUNC_GOTO_DONE(H5_ITER_CONT);
+    }
+
+    if (iterate_cb_args->local_filename) {
+        /* Require that obj id reside in local file */
+
+        /* Get size of name */
+        if ((containing_filename_len = H5Fget_name(obj_id, NULL, 0)) < 0)
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTGET, FAIL, "unable to get length of filename");
+
+        if ((containing_filename = RV_malloc((size_t)containing_filename_len + 1)) == NULL)
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL, "can't allocate space for filename");
+
+        /* Get name */
+        if (H5Fget_name(obj_id, containing_filename, (size_t)containing_filename_len + 1) < 0)
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTGET, FAIL, "unable to get filename");
+
+        if (!strcmp(iterate_cb_args->local_filename, containing_filename)) {
+            iterate_cb_args->obj_id_list[iterate_cb_args->obj_count] = obj_id;
+            iterate_cb_args->obj_count++;
+        }
+    }
+    else {
+        iterate_cb_args->obj_id_list[iterate_cb_args->obj_count] = obj_id;
+        iterate_cb_args->obj_count++;
+    }
+
+done:
+
+    if (containing_filename)
+        RV_free(containing_filename);
+
+    return ret_value;
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_iterate_copy_hid_cb
+ *
+ * Purpose:     Callback for H5Iiterate() that count the number
+ *              of open objects in the library.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              September, 2023
+ */
+herr_t
+RV_iterate_count_obj_cb(hid_t obj_id, void *udata)
+{
+    herr_t                 ret_value               = H5_ITER_CONT;
+    get_obj_count_udata_t *count_cb_args           = (get_obj_count_udata_t *)udata;
+    char                  *containing_filename     = NULL;
+    ssize_t                containing_filename_len = 0;
+    H5I_type_t             id_type                 = H5I_UNINIT;
+    htri_t                 is_committed            = FALSE;
+
+    /* Do not copy the id of transient datatypes */
+    if ((id_type = H5Iget_type(obj_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_ID, FAIL, "can't get identifier type");
+
+    if (id_type == H5I_DATATYPE) {
+        if ((is_committed = H5Tcommitted(obj_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_DATATYPE, FAIL, "can't check if datatype is committed");
+
+        if (!is_committed)
+            FUNC_GOTO_DONE(H5_ITER_CONT);
+    }
+
+    if (count_cb_args->local_filename) {
+        /* Require that obj id reside in local file */
+
+        /* Get size of name */
+        if ((containing_filename_len = H5Fget_name(obj_id, NULL, 0)) < 0)
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTGET, FAIL, "unable to get length of filename");
+
+        if ((containing_filename = RV_malloc((size_t)containing_filename_len + 1)) == NULL)
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTALLOC, FAIL, "can't allocate space for filename");
+
+        /* Get name */
+        if (H5Fget_name(obj_id, containing_filename, (size_t)containing_filename_len + 1) < 0)
+            FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_CANTGET, FAIL, "unable to get filename");
+
+        if (!strcmp(count_cb_args->local_filename, containing_filename)) {
+            count_cb_args->obj_count++;
+        }
+    }
+    else {
+        count_cb_args->obj_count++;
+    }
+
+done:
+
+    if (containing_filename)
+        RV_free(containing_filename);
+
+    return ret_value;
+}

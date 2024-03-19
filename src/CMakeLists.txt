@@ -65,8 +65,9 @@ set (HDF5_VOL_REST_PUBLIC_HEADERS
 
 if (BUILD_STATIC_LIBS)
   add_library (${HDF5_VOL_REST_LIB_TARGET} STATIC ${HDF5_VOL_REST_SRCS} ${HDF5_VOL_REST_HDRS})
-  TARGET_C_PROPERTIES (${HDF5_VOL_REST_LIB_TARGET} STATIC " " " ")
-  target_link_libraries (${HDF5_VOL_REST_LIB_TARGET} PUBLIC ${HDF5_LIBRARIES_TO_EXPORT} ${LINK_LIBS})
+  RV_TARGET_C_PROPERTIES (${HDF5_VOL_REST_LIB_TARGET} STATIC " " " ")
+  target_link_libraries (${HDF5_VOL_REST_LIB_TARGET} PUBLIC ${LINK_LIBS})
+
   if (NOT WIN32)
     target_link_libraries (${HDF5_VOL_REST_LIB_TARGET} PRIVATE dl)
   endif ()
@@ -84,14 +85,14 @@ if (BUILD_STATIC_LIBS)
     )
   endif ()
 
-  #add_dependencies(${HDF5_VOL_REST_LIB_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
+  #add_dependencies(${HDF5_VOL_REST_LIB_TARGET} ${HDF5_LIBRARIES})
 endif ()
 
 if (BUILD_SHARED_LIBS)
   file (MAKE_DIRECTORY "${HDF5_VOL_REST_BINARY_DIR}/shared")
   add_library (${HDF5_VOL_REST_LIBSH_TARGET} SHARED ${HDF5_VOL_REST_SRCS} ${HDF5_VOL_REST_HDRS})
-  TARGET_C_PROPERTIES (${HDF5_VOL_REST_LIBSH_TARGET} SHARED " " " ")
-  target_link_libraries (${HDF5_VOL_REST_LIBSH_TARGET} PUBLIC ${HDF5_LIBRARIES_TO_EXPORT} ${LINK_SHARED_LIBS})
+  RV_TARGET_C_PROPERTIES (${HDF5_VOL_REST_LIBSH_TARGET} SHARED " " " ")
+  target_link_libraries (${HDF5_VOL_REST_LIBSH_TARGET} PUBLIC ${LINK_SHARED_LIBS})
   if (NOT WIN32)
     target_link_libraries (${HDF5_VOL_REST_LIBSH_TARGET} PRIVATE dl)
   endif ()
@@ -103,34 +104,7 @@ if (BUILD_SHARED_LIBS)
       INTERFACE_COMPILE_DEFINITIONS HDF5_VOL_REST_BUILT_AS_DYNAMIC_LIB=1
   )
 
-  #add_dependencies(${HDF5_VOL_REST_LIBSH_TARGET} ${HDF5_LIBRARIES_TO_EXPORT})
-endif ()
-
-#-----------------------------------------------------------------------------
-# Make the REST VOL build depend on H5pubconf.h existing
-#-----------------------------------------------------------------------------
-if (PREBUILT_HDF5_DIR)
-  add_custom_target(
-    rest_vol_pubconf_depend
-    DEPENDS ${PREBUILT_HDF5_DIR}/include/H5pubconf.h
-  )
-elseif (NOT PREBUILT_HDF5_DIR AND HDF5_FOUND)
-  add_custom_target(
-    rest_vol_pubconf_depend
-    DEPENDS ${HDF5_INCLUDE_DIRS}/H5pubconf.h
-  )
-else ()
-  add_custom_target(
-    rest_vol_pubconf_depend
-    DEPENDS ${CMAKE_BINARY_DIR}/${HDF5_DIR_NAME}/src/H5pubconf.h
-  )
-endif ()
-
-if (BUILD_STATIC_LIBS)
-  add_dependencies(${HDF5_VOL_REST_LIB_TARGET} rest_vol_pubconf_depend)
-endif ()
-if (BUILD_SHARED_LIBS)
-  add_dependencies(${HDF5_VOL_REST_LIBSH_TARGET} rest_vol_pubconf_depend)
+  #add_dependencies(${HDF5_VOL_REST_LIBSH_TARGET} ${HDF5_LIBRARIES})
 endif ()
 
 #-----------------------------------------------------------------------------

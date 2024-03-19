@@ -18,7 +18,8 @@
       - [II.B.iii.b Autotools options](#iibiiib-autotools-options)
       - [II.B.iii.c Manual Build with CMake](#iibiiic-manual-build-with-cmake)
       - [II.B.iii.d CMake options](#iibiiid-cmake-options)
-    - [II.B.iv. Build Results](#iibiv-build-results)
+    - [II.B.iv. Building at HDF5 Build Time](#iibiv-building-at-hdf5-build-time)
+    - [II.B.v. Build Results](#iibv-build-results)
 - [III. Using/Testing the REST VOL connector](#iii-usingtesting-the-rest-vol-connector)
 - [IV. More Information](#iv-more-information)
 
@@ -63,7 +64,7 @@ To build the REST VOL connector, the following libraries are required:
             Additionally, the HDF5 library must have its high-level interface enabled at build time
             unless the REST VOL examples are disabled.
 
-+ libcurl - networking support
++ libcurl (ver. 7.61.0 or greater) - networking support
     + https://curl.haxx.se/
 
 + libyajl (ver. 2.0.4 or greater) - JSON parsing and construction
@@ -122,7 +123,7 @@ include the flag `-H <dir>` where `dir` is the path to the HDF5 install prefix.
 
 NOTE: For those who are capable of using both build systems, the autotools build currently
 does not support out-of-tree builds. If the REST VOL source directory is used for an autotools
-build, it is important not to re-use the source directory for a later build using CMake.
+build, it is important not to reuse the source directory for a later build using CMake.
 This can cause build conflicts and result in strange and unexpected behavior.
 
 
@@ -294,8 +295,11 @@ components mentioned previously cannot be found within the system path.
 Note, when setting BUILD_SHARED_LIBS=ON and YAJL_USE_STATIC_LIBRARIES=ON, the static YAJL libraries have be build with the position independent code (PIC) option enabled. In the static YAJL build,
 this PIC option has been turned off by default.
 
+### II.B.iv. Building at HDF5 Build Time
 
-### II.B.iv. Build Results
+It is also possible to build the REST VOL as part of the build process for the HDF5 library, using CMake's FetchContent module. This can be done using a local copy of the REST VOL's source code, or by providing the information for the repository to be automatically cloned from a branch of a Github repository. For full instructions on this process, see [Building and testing HDF5 VOL connectors with CMake FetchContent](https://github.com/HDFGroup/hdf5/blob/develop/doc/cmake-vols-fetchcontent.md).
+
+### II.B.v. Build Results
 
 If the build is successful, the following files will be written into the installation directory:
 

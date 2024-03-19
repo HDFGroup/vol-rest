@@ -18,22 +18,23 @@
 #include "rest_vol_object.h"
 
 /* Set of callbacks for RV_parse_response() */
-static herr_t RV_get_object_info_callback(char *HTTP_response, void *callback_data_in,
+static herr_t RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in,
                                           void *callback_data_out);
 
 /* Callback to iterate over objects given in HTTP response */
-static herr_t RV_object_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_object_iter_callback(char *HTTP_response, const void *callback_data_in,
+                                      void *callback_data_out);
 
 /* Helper functions to work with a table of objects for object iteration */
 static herr_t RV_build_object_table(char *HTTP_response, hbool_t is_recursive,
                                     int (*sort_func)(const void *, const void *),
                                     object_table_entry **object_table, size_t *num_entries,
-                                    iter_data *object_iter_data, rv_hash_table_t *visited_link_table);
+                                    const iter_data *object_iter_data, rv_hash_table_t *visited_link_table);
 
 /* Function to go through each object in table and perform an operation */
 static herr_t RV_traverse_object_table(object_table_entry *object_table,
                                        rv_hash_table_t *visited_object_table, size_t num_entries,
-                                       iter_data *iter_data, const char *cur_object_rel_path);
+                                       const iter_data *iter_data, const char *cur_object_rel_path);
 
 static void RV_free_object_table(object_table_entry *object_table, size_t num_entries);
 
@@ -270,6 +271,7 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
     char        *host_header     = NULL;
     char         request_url[URL_MAX_LENGTH];
     char        *found_object_name = NULL;
+    const char  *base_URL          = NULL;
     int          url_len           = 0;
     herr_t       ret_value         = SUCCEED;
     loc_info     loc_info_out;
@@ -289,6 +291,9 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type &&
         H5I_DATATYPE != loc_obj->obj_type && H5I_DATASET != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "not a file, group, dataset or committed datatype");
+
+    if ((base_URL = loc_obj->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "location object does not have valid server URL");
 
     switch (args->op_type) {
         case H5VL_OBJECT_GET_NAME: {
@@ -421,9 +426,9 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                     /* loc_info_out.domain was copied at function start */
 
                     /* Locate group and set domain */
-                    search_ret =
-                        RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type,
-                                               RV_copy_object_loc_info_callback, NULL, &loc_info_out);
+                    search_ret = RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name,
+                                                        &obj_type, RV_copy_object_loc_info_callback,
+                                                        &loc_obj->domain->u.file.server_info, &loc_info_out);
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, FAIL, "can't locate object by path");
 
@@ -521,9 +526,9 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                     /* loc_info_out.domain was copied at function start */
 
                     /* Locate group and set domain */
-                    search_ret =
-                        RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name, &obj_type,
-                                               RV_copy_object_loc_info_callback, NULL, &loc_info_out);
+                    search_ret = RV_find_object_by_path(loc_obj, loc_params->loc_data.loc_by_name.name,
+                                                        &obj_type, RV_copy_object_loc_info_callback,
+                                                        &loc_obj->domain->u.file.server_info, &loc_info_out);
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, FAIL, "can't locate object by path");
 
@@ -532,8 +537,8 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
 
                     switch (loc_params->loc_data.loc_by_idx.idx_type) {
                         case (H5_INDEX_CRT_ORDER):
-                            if (SERVER_VERSION_MATCHES_OR_EXCEEDS(loc_obj->domain->u.file.server_version, 0,
-                                                                  8, 0)) {
+                            if (SERVER_VERSION_MATCHES_OR_EXCEEDS(loc_obj->domain->u.file.server_info.version,
+                                                                  0, 8, 0)) {
                                 request_idx_type = "&CreateOrder=1";
                             }
                             else {
@@ -580,6 +585,14 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                         "attribute open URL exceeded maximum URL size");
 
+                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERNAME,
+                                                     loc_obj->domain->u.file.server_info.username))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s",
+                                        curl_err_buf);
+                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_PASSWORD,
+                                                     loc_obj->domain->u.file.server_info.password))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s",
+                                        curl_err_buf);
                     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
                                         curl_err_buf);
@@ -593,8 +606,8 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                     CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
 
                     if (0 > RV_parse_response(response_buffer.buffer,
-                                              (void *)&loc_params->loc_data.loc_by_idx, &found_object_name,
-                                              RV_copy_link_name_by_index))
+                                              (const void *)&loc_params->loc_data.loc_by_idx,
+                                              &found_object_name, RV_copy_link_name_by_index))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "failed to retrieve link names");
 
                     if (host_header) {
@@ -614,9 +627,9 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                         loc_info_out.GCPL_base64 = NULL;
                     }
 
-                    search_ret =
-                        RV_find_object_by_path(loc_obj, found_object_name, &obj_type,
-                                               RV_copy_object_loc_info_callback, NULL, &loc_info_out);
+                    search_ret = RV_find_object_by_path(loc_obj, found_object_name, &obj_type,
+                                                        RV_copy_object_loc_info_callback,
+                                                        &loc_obj->domain->u.file.server_info, &loc_info_out);
                     if (!search_ret || search_ret < 0)
                         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PATH, FAIL, "can't locate object by path");
 
@@ -657,6 +670,12 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
                                 curl_err_buf);
@@ -827,7 +846,7 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
                     /* Increment refs for specific type */
                     switch (loc_obj->obj_type) {
                         case H5I_FILE:
-                            /* Copy fapl, fcpl, and filepath name to new object */
+                            /* Copy plists, filepath, and server info to new object */
 
                             if (H5I_INVALID_HID ==
                                 (iter_object->u.file.fapl_id = H5Pcopy(loc_obj->u.file.fapl_id)))
@@ -842,6 +861,33 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
 
                             strncpy(iter_object->u.file.filepath_name, loc_obj->u.file.filepath_name,
                                     strlen(loc_obj->u.file.filepath_name) + 1);
+
+                            if ((iter_object->u.file.server_info.username =
+                                     RV_malloc(strlen(loc_obj->u.file.server_info.username) + 1)) == NULL)
+                                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
+                                                "can't allocate space for copied username");
+
+                            strncpy(iter_object->u.file.server_info.username,
+                                    loc_obj->u.file.server_info.username,
+                                    strlen(loc_obj->u.file.server_info.username) + 1);
+
+                            if ((iter_object->u.file.server_info.password =
+                                     RV_malloc(strlen(loc_obj->u.file.server_info.password) + 1)) == NULL)
+                                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
+                                                "can't allocate space for copied password");
+
+                            strncpy(iter_object->u.file.server_info.password,
+                                    loc_obj->u.file.server_info.password,
+                                    strlen(loc_obj->u.file.server_info.password) + 1);
+
+                            if ((iter_object->u.file.server_info.base_URL =
+                                     RV_malloc(strlen(loc_obj->u.file.server_info.base_URL) + 1)) == NULL)
+                                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
+                                                "can't allocate space for copied URL");
+
+                            strncpy(iter_object->u.file.server_info.base_URL,
+                                    loc_obj->u.file.server_info.base_URL,
+                                    strlen(loc_obj->u.file.server_info.base_URL) + 1);
 
                             /* This is a copy of the file, not a reference to the same memory */
                             loc_obj->domain->u.file.ref_count--;
@@ -996,7 +1042,8 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             /* To build object table, information about parent object will be needed */
             object_iter_data.iter_obj_parent = iter_object;
 
-            if (url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s", base_URL, object_type_header,
+            if (url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s",
+                                   iter_object->domain->u.file.server_info.base_URL, object_type_header,
                                    object_iter_data.iter_obj_parent->URI) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
@@ -1065,6 +1112,12 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
@@ -1085,6 +1138,11 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
              * object */
             CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
 
+            if (curl_headers) {
+                curl_slist_free_all(curl_headers);
+                curl_headers = NULL;
+            }
+
             if (RV_parse_response(response_buffer.buffer, NULL, &oinfo, RV_get_object_info_callback) < 0)
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to get object info");
 
@@ -1104,20 +1162,38 @@ RV_object_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_s
             switch (iter_object_type) {
                 case H5I_FILE:
                 case H5I_GROUP:
-                    if (url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s%s", base_URL,
-                                           object_type_header, object_iter_data.iter_obj_parent->URI,
-                                           (!strcmp(object_type_header, "groups") ? "/links" : "")) < 0)
+                    if (url_len =
+                            snprintf(request_url, URL_MAX_LENGTH, "%s/%s/%s%s",
+                                     object_iter_data.iter_obj_parent->domain->u.file.server_info.base_URL,
+                                     object_type_header, object_iter_data.iter_obj_parent->URI,
+                                     (!strcmp(object_type_header, "groups") ? "/links" : "")) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                         "H5Oiterate/visit request URL size exceeded maximum URL size");
 
+                    curl_headers = curl_slist_append(curl_headers, host_header);
+
+                    /* Disable use of Expect: 100 Continue HTTP response */
+                    curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
+                                        curl_err_buf);
+                    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL,
+                                        "can't set up cURL to make HTTP GET request: %s", curl_err_buf);
                     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
                                         curl_err_buf);
 
                     CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
+
+                    if (curl_headers) {
+                        curl_slist_free_all(curl_headers);
+                        curl_headers = NULL;
+                    }
 
                     if (RV_parse_response(response_buffer.buffer, &object_iter_data, NULL,
                                           RV_object_iter_callback) < 0)
@@ -1214,7 +1290,7 @@ done:
  *              November, 2017
  */
 static herr_t
-RV_get_object_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     H5O_info2_t *obj_info   = (H5O_info2_t *)callback_data_out;
     yajl_val     parse_tree = NULL, key_obj;
@@ -1381,12 +1457,12 @@ H5_rest_cmp_objects_by_creation_order_inc(const void *object1, const void *objec
  *              May, 2023
  */
 herr_t
-RV_object_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_object_iter_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     object_table_entry *object_table             = NULL;
     rv_hash_table_t    *visited_link_table       = NULL;
     rv_hash_table_t    *visited_object_table     = NULL;
-    iter_data          *object_iter_data         = (iter_data *)callback_data_in;
+    const iter_data    *object_iter_data         = (const iter_data *)callback_data_in;
     size_t              object_table_num_entries = 0;
     herr_t              ret_value                = SUCCEED;
     char                URL[URL_MAX_LENGTH];
@@ -1501,8 +1577,8 @@ done:
  */
 herr_t
 RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(const void *, const void *),
-                      object_table_entry **object_table, size_t *num_entries, iter_data *object_iter_data,
-                      rv_hash_table_t *visited_link_table)
+                      object_table_entry **object_table, size_t *num_entries,
+                      const iter_data *object_iter_data, rv_hash_table_t *visited_link_table)
 {
     object_table_entry *table      = NULL;
     yajl_val            parse_tree = NULL, key_obj;
@@ -1735,8 +1811,10 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
                                      curl, H5_rest_basename(YAJL_GET_STRING(link_field_obj)), 0)))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
 
-                    if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links", base_URL,
-                                            url_encoded_link_name)) < 0)
+                    if ((url_len =
+                             snprintf(request_url, URL_MAX_LENGTH, "%s/groups/%s/links",
+                                      object_iter_data->iter_obj_parent->domain->u.file.server_info.base_URL,
+                                      url_encoded_link_name)) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                     if (url_len >= URL_MAX_LENGTH)
@@ -1775,6 +1853,18 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
                     /* Disable use of Expect: 100 Continue HTTP response */
                     curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+                    if (CURLE_OK !=
+                        curl_easy_setopt(
+                            curl, CURLOPT_USERNAME,
+                            object_iter_data->iter_obj_parent->domain->u.file.server_info.username))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s",
+                                        curl_err_buf);
+                    if (CURLE_OK !=
+                        curl_easy_setopt(
+                            curl, CURLOPT_PASSWORD,
+                            object_iter_data->iter_obj_parent->domain->u.file.server_info.password))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s",
+                                        curl_err_buf);
                     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s",
                                         curl_err_buf);
@@ -1920,7 +2010,8 @@ RV_free_object_table(object_table_entry *object_table, size_t num_entries)
  */
 static herr_t
 RV_traverse_object_table(object_table_entry *object_table, rv_hash_table_t *visited_object_table,
-                         size_t num_entries, iter_data *object_iter_data, const char *cur_object_rel_path)
+                         size_t num_entries, const iter_data *object_iter_data,
+                         const char *cur_object_rel_path)
 {
     herr_t        ret_value = SUCCEED;
     static size_t depth     = 0;

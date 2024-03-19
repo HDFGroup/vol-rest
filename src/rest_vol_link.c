@@ -24,17 +24,19 @@
 #define H5L_EXT_FLAGS_ALL 0
 
 /* Set of callbacks for RV_parse_response() */
-static herr_t RV_get_link_name_by_idx_callback(char *HTTP_response, void *callback_data_in,
+static herr_t RV_get_link_name_by_idx_callback(char *HTTP_response, const void *callback_data_in,
                                                void *callback_data_out);
-static herr_t RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_link_iter_callback(char *HTTP_response, const void *callback_data_in,
+                                    void *callback_data_out);
 
 /* Helper functions to work with a table of links for link iteration */
 static herr_t RV_build_link_table(char *HTTP_response, hbool_t is_recursive,
                                   int (*sort_func)(const void *, const void *), link_table_entry **link_table,
-                                  size_t *num_entries, rv_hash_table_t *visited_link_table);
+                                  size_t *num_entries, rv_hash_table_t *visited_link_table,
+                                  const char *base_URL);
 static void   RV_free_link_table(link_table_entry *link_table, size_t num_entries);
-static herr_t RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_data *iter_data,
-                                     const char *cur_link_rel_path);
+static herr_t RV_traverse_link_table(link_table_entry *link_table, size_t num_entries,
+                                     const iter_data *iter_data, const char *cur_link_rel_path);
 
 /* Qsort callbacks to sort links by name or creation order */
 static int H5_rest_cmp_links_by_creation_order_inc(const void *link1, const void *link2);
@@ -74,6 +76,7 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
     size_t             create_request_nalloc = 0;
     size_t             host_header_len       = 0;
     void              *hard_link_target_obj;
+    const char        *base_URL            = NULL;
     char              *host_header         = NULL;
     char              *create_request_body = NULL;
     char               request_url[URL_MAX_LENGTH];
@@ -94,7 +97,6 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
     printf("     - Default LCPL? %s\n", (H5P_LINK_CREATE_DEFAULT == lcpl_id) ? "yes" : "no");
     printf("     - Default LAPL? %s\n\n", (H5P_LINK_ACCESS_DEFAULT == lapl_id) ? "yes" : "no");
 #endif
-
     if (lcpl_id == H5I_INVALID_HID)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "invalid LCPL");
 
@@ -119,6 +121,12 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
         if (!new_link_loc_obj)
             new_link_loc_obj = (RV_object_t *)hard_link_target_obj;
     } /* end if */
+
+    if (!new_link_loc_obj)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link location object is NULL");
+
+    if ((base_URL = new_link_loc_obj->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "link creation requires valid server URL");
 
     /* Validate loc_id and check for write access on the file */
     if (H5I_FILE != new_link_loc_obj->obj_type && H5I_GROUP != new_link_loc_obj->obj_type)
@@ -336,7 +344,12 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
     uinfo.buffer      = create_request_body;
     uinfo.buffer_size = (size_t)create_request_body_len;
     uinfo.bytes_sent  = 0;
-
+    if (CURLE_OK !=
+        curl_easy_setopt(curl, CURLOPT_USERNAME, new_link_loc_obj->domain->u.file.server_info.username))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+    if (CURLE_OK !=
+        curl_easy_setopt(curl, CURLOPT_PASSWORD, new_link_loc_obj->domain->u.file.server_info.password))
+        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UPLOAD, 1))
@@ -462,6 +475,7 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
     RV_object_t *loc_obj = (RV_object_t *)obj;
     hbool_t      empty_dirname;
     size_t       host_header_len       = 0;
+    const char  *base_URL              = NULL;
     char        *host_header           = NULL;
     char        *link_dir_name         = NULL;
     char        *url_encoded_link_name = NULL;
@@ -477,6 +491,9 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
     printf("     - Link loc_obj's object type: %s\n", object_type_to_string(loc_obj->obj_type));
     printf("     - Link loc_obj's domain path: %s\n\n", loc_obj->domain->u.file.filepath_name);
 #endif
+
+    if ((base_URL = loc_obj->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "location object does not have valid server URL");
 
     switch (args->op_type) {
         /* H5Lget_info */
@@ -565,7 +582,12 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
 
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
-
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
@@ -599,6 +621,7 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
             htri_t                search_ret;
             char                 *link_name_buf      = args->args.get_name.name;
             size_t                link_name_buf_size = args->args.get_name.name_size;
+            size_t                idx_p              = 0;
             size_t               *ret_size           = args->args.get_name.name_len;
 
             /*
@@ -615,9 +638,11 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
             by_idx_data.is_recursive               = FALSE;
             by_idx_data.index_type                 = loc_params->loc_data.loc_by_idx.idx_type;
             by_idx_data.iter_order                 = loc_params->loc_data.loc_by_idx.order;
-            by_idx_data.idx_p                      = &loc_params->loc_data.loc_by_idx.n;
             by_idx_data.iter_function.link_iter_op = NULL;
             by_idx_data.op_data                    = NULL;
+            by_idx_data.iter_obj_parent            = loc_obj;
+            idx_p                                  = loc_params->loc_data.loc_by_idx.n;
+            by_idx_data.idx_p                      = &idx_p;
 
             /*
              * Setup information to be passed back from link name retrieval callback
@@ -658,6 +683,12 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
@@ -773,6 +804,12 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
@@ -792,7 +829,12 @@ RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get_args_t
             CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
 
             /* Retrieve the link value */
-            if (RV_parse_response(response_buffer.buffer, &buf_size, out_buf, RV_get_link_val_callback) < 0)
+            get_link_val_out get_link_val_args;
+            get_link_val_args.in_buf_size = &buf_size;
+            get_link_val_args.buf         = out_buf;
+
+            if (RV_parse_response(response_buffer.buffer, NULL, &get_link_val_args,
+                                  RV_get_link_val_callback) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link value");
 
             break;
@@ -844,6 +886,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
     size_t       host_header_len        = 0;
     hid_t        link_iter_group_id     = H5I_INVALID_HID;
     void        *link_iter_group_object = NULL;
+    const char  *base_URL               = NULL;
     char        *host_header            = NULL;
     char        *link_path_dirname      = NULL;
     char         temp_URI[URI_MAX_LENGTH];
@@ -862,6 +905,9 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
 
     if (H5I_FILE != loc_obj->obj_type && H5I_GROUP != loc_obj->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parent object not a file or group");
+
+    if ((base_URL = loc_obj->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "location object does not have valid server URL");
 
     switch (args->op_type) {
         /* H5Ldelete */
@@ -942,6 +988,12 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE"))
@@ -1020,6 +1072,12 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
@@ -1056,6 +1114,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
             link_iter_data.idx_p                      = args->args.iterate.idx_p;
             link_iter_data.iter_function.link_iter_op = args->args.iterate.op;
             link_iter_data.op_data                    = args->args.iterate.op_data;
+            link_iter_data.iter_obj_parent            = loc_obj;
 
             if (!link_iter_data.iter_function.link_iter_op)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_LINKITERERROR, FAIL, "no link iteration function specified");
@@ -1165,6 +1224,12 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
             /* Disable use of Expect: 100 Continue HTTP response */
             curl_headers = curl_slist_append(curl_headers, "Expect:");
 
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_USERNAME, loc_obj->domain->u.file.server_info.username))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_PASSWORD, loc_obj->domain->u.file.server_info.password))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
             if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
@@ -1243,7 +1308,7 @@ done:
  *              December, 2017
  */
 herr_t
-RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_get_link_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     H5L_info2_t *link_info  = (H5L_info2_t *)callback_data_out;
     yajl_val     parse_tree = NULL, key_obj;
@@ -1293,7 +1358,11 @@ RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *cal
      * to the size of a soft, external or user-defined link's value, including the NULL terminator
      */
     if (strcmp(parsed_string, "H5L_TYPE_HARD")) {
-        if (RV_parse_response(HTTP_response, &link_info->u.val_size, NULL, RV_get_link_val_callback) < 0)
+        get_link_val_out get_link_val_args;
+        get_link_val_args.in_buf_size = &link_info->u.val_size;
+        get_link_val_args.buf         = NULL;
+
+        if (RV_parse_response(HTTP_response, NULL, &get_link_val_args, RV_get_link_val_callback) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link value size");
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1341,14 +1410,15 @@ done:
  *              December, 2017
  */
 herr_t
-RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_get_link_val_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val parse_tree  = NULL, key_obj;
-    size_t  *in_buf_size = (size_t *)callback_data_in;
-    char    *link_path;
-    char    *link_class;
-    char    *out_buf   = (char *)callback_data_out;
-    herr_t   ret_value = SUCCEED;
+    yajl_val          parse_tree        = NULL, key_obj;
+    get_link_val_out *get_link_val_args = (get_link_val_out *)callback_data_out;
+    size_t           *in_buf_size       = get_link_val_args->in_buf_size;
+    char             *link_path;
+    char             *link_class;
+    char             *out_buf   = get_link_val_args->buf;
+    herr_t            ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving link's value from server's HTTP response\n\n");
@@ -1490,7 +1560,7 @@ done:
  *              September, 2017
  */
 herr_t
-RV_get_link_obj_type_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_get_link_obj_type_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     H5I_type_t *obj_type   = (H5I_type_t *)callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;
@@ -1583,11 +1653,11 @@ done:
  *              November, 2018
  */
 static herr_t
-RV_get_link_name_by_idx_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_get_link_name_by_idx_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     link_name_by_idx_data *link_name_data = (link_name_by_idx_data *)callback_data_out;
     link_table_entry      *link_table     = NULL;
-    iter_data             *by_idx_data    = (iter_data *)callback_data_in;
+    const iter_data       *by_idx_data    = (const iter_data *)callback_data_in;
     size_t                 link_table_num_entries;
     int (*link_table_sort_func)(const void *, const void *);
     herr_t ret_value = SUCCEED;
@@ -1626,7 +1696,8 @@ RV_get_link_name_by_idx_callback(char *HTTP_response, void *callback_data_in, vo
 #endif
 
     if (RV_build_link_table(HTTP_response, by_idx_data->is_recursive, link_table_sort_func, &link_table,
-                            &link_table_num_entries, NULL) < 0)
+                            &link_table_num_entries, NULL,
+                            by_idx_data->iter_obj_parent->domain->u.file.server_info.base_URL) < 0)
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table");
 
     /* Check to make sure the index given is within bounds */
@@ -1684,11 +1755,11 @@ done:
  *              December, 2017
  */
 static herr_t
-RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_link_iter_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     link_table_entry *link_table         = NULL;
     rv_hash_table_t  *visited_link_table = NULL;
-    iter_data        *link_iter_data     = (iter_data *)callback_data_in;
+    const iter_data  *link_iter_data     = (const iter_data *)callback_data_in;
     size_t            link_table_num_entries;
     herr_t            ret_value = SUCCEED;
 
@@ -1725,7 +1796,8 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
          */
         if (RV_build_link_table(HTTP_response, link_iter_data->is_recursive,
                                 H5_rest_cmp_links_by_creation_order_inc, &link_table, &link_table_num_entries,
-                                visited_link_table) < 0)
+                                visited_link_table,
+                                link_iter_data->iter_obj_parent->domain->u.file.server_info.base_URL) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table");
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1734,7 +1806,8 @@ RV_link_iter_callback(char *HTTP_response, void *callback_data_in, void *callbac
     } /* end if */
     else {
         if (RV_build_link_table(HTTP_response, link_iter_data->is_recursive, NULL, &link_table,
-                                &link_table_num_entries, visited_link_table) < 0)
+                                &link_table_num_entries, visited_link_table,
+                                link_iter_data->iter_obj_parent->domain->u.file.server_info.base_URL) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL, "can't build link table");
     } /* end else */
 
@@ -1787,7 +1860,8 @@ done:
  */
 static herr_t
 RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(const void *, const void *),
-                    link_table_entry **link_table, size_t *num_entries, rv_hash_table_t *visited_link_table)
+                    link_table_entry **link_table, size_t *num_entries, rv_hash_table_t *visited_link_table,
+                    const char *base_URL)
 {
     link_table_entry *table      = NULL;
     yajl_val          parse_tree = NULL, key_obj;
@@ -1984,7 +2058,7 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(
 
                     if (RV_build_link_table(response_buffer.buffer, is_recursive, sort_func,
                                             &table[i].subgroup.subgroup_link_table,
-                                            &table[i].subgroup.num_entries, visited_link_table) < 0)
+                                            &table[i].subgroup.num_entries, visited_link_table, base_URL) < 0)
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTBUILDLINKTABLE, FAIL,
                                         "can't build link table for subgroup '%s'", table[i].link_name);
 
@@ -2065,7 +2139,7 @@ RV_free_link_table(link_table_entry *link_table, size_t num_entries)
  *              January, 2018
  */
 static herr_t
-RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, iter_data *link_iter_data,
+RV_traverse_link_table(link_table_entry *link_table, size_t num_entries, const iter_data *link_iter_data,
                        const char *cur_link_rel_path)
 {
     static size_t depth = 0;

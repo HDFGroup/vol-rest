@@ -272,7 +272,7 @@ if (NOT HDF5_VOL_REST_NO_PACKAGES)
       set (CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES")
       set (CPACK_PACKAGE_INSTALL_REGISTRY_KEY "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}")
     endif ()
-    # set the install/unistall icon used for the installer itself
+    # set the install/uninstall icon used for the installer itself
     # There is a bug in NSI that does not handle full unix paths properly.
     set (CPACK_NSIS_MUI_ICON "${HDF5_VOL_REST_RESOURCES_EXT_DIR}\\\\hdf.ico")
     set (CPACK_NSIS_MUI_UNIICON "${HDF5_VOL_REST_RESOURCES_EXT_DIR}\\\\hdf.ico")

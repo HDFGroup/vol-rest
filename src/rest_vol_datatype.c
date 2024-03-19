@@ -74,6 +74,7 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     size_t       datatype_body_len     = 0;
     size_t       path_size             = 0;
     size_t       path_len              = 0;
+    const char  *base_URL              = NULL;
     char        *host_header           = NULL;
     char        *commit_request_body   = NULL;
     char        *datatype_body         = NULL;
@@ -102,9 +103,15 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
 
+    if ((base_URL = parent->domain->u.file.server_info.base_URL) == NULL)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object does not have valid server URL");
+
     /* Check for write access */
     if (!(parent->domain->u.file.intent & H5F_ACC_RDWR))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, NULL, "no write intent on file");
+
+    if (tapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid TAPL");
 
     /* Allocate and setup internal Datatype struct */
     if (NULL == (new_datatype = (RV_object_t *)RV_malloc(sizeof(*new_datatype))))
@@ -150,7 +157,8 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
         new_datatype->u.datatype.tcpl_id = H5P_DATATYPE_CREATE_DEFAULT;
 
     /* Convert the datatype into JSON to be used in the request body */
-    if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE) < 0)
+    if (RV_convert_datatype_to_JSON(type_id, &datatype_body, &datatype_body_len, FALSE,
+                                    parent->domain->u.file.server_info.version) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, NULL, "can't convert datatype to JSON representation");
 
     /* If this is not a H5Tcommit_anon call, create a link for the Datatype
@@ -251,6 +259,12 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     printf("-> Datatype commit URL: %s\n\n", request_url);
 #endif
 
+    if (CURLE_OK !=
+        curl_easy_setopt(curl, CURLOPT_USERNAME, new_datatype->domain->u.file.server_info.username))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL username: %s", curl_err_buf);
+    if (CURLE_OK !=
+        curl_easy_setopt(curl, CURLOPT_PASSWORD, new_datatype->domain->u.file.server_info.password))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL password: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSET, NULL, "can't set cURL HTTP headers: %s", curl_err_buf);
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 1))
@@ -280,6 +294,10 @@ RV_datatype_commit(void *obj, const H5VL_loc_params_t *loc_params, const char *n
     /* Store the newly-committed Datatype's URI */
     if (RV_parse_response(response_buffer.buffer, NULL, new_datatype->URI, RV_copy_object_URI_callback) < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, NULL, "can't parse committed datatype's URI");
+
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_DATATYPE]->table, (char *)new_datatype->URI,
+                             (char *)new_datatype) == 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "Failed to add datatype to type info array");
 
     ret_value = (void *)new_datatype;
 
@@ -359,6 +377,9 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
     if (H5I_FILE != parent->obj_type && H5I_GROUP != parent->obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "parent object not a file or group");
 
+    if (tapl_id == H5I_INVALID_HID)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid TAPL");
+
     /* Allocate and setup internal Datatype struct */
     if (NULL == (datatype = (RV_object_t *)RV_malloc(sizeof(*datatype))))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "can't allocate space for datatype object");
@@ -382,8 +403,8 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
     loc_info_out.GCPL_base64 = NULL;
 
     /* Locate datatype and set domain */
-    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_loc_info_callback, NULL,
-                                        &loc_info_out);
+    search_ret = RV_find_object_by_path(parent, name, &obj_type, RV_copy_object_loc_info_callback,
+                                        &datatype->domain->u.file.server_info, &loc_info_out);
     if (!search_ret || search_ret < 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PATH, NULL, "can't locate datatype by path");
 
@@ -412,6 +433,10 @@ RV_datatype_open(void *obj, const H5VL_loc_params_t *loc_params, const char *nam
        we still use one here specifically for H5Tget_create_plist(). */
     if ((datatype->u.datatype.tcpl_id = H5Pcreate(H5P_DATATYPE_CREATE)) < 0)
         FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTCREATE, NULL, "can't create TCPL for datatype");
+
+    if (rv_hash_table_insert(RV_type_info_array_g[H5I_DATATYPE]->table, (char *)datatype->URI,
+                             (char *)datatype) == 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, NULL, "Failed to add datatype to type info array");
 
     ret_value = (void *)datatype;
 
@@ -561,6 +586,9 @@ RV_datatype_close(void *dt, hid_t dxpl_id, void **req)
             FUNC_DONE_ERROR(H5E_PLIST, H5E_CANTCLOSEOBJ, FAIL, "can't close TCPL");
     } /* end if */
 
+    if (RV_type_info_array_g[H5I_DATATYPE])
+        rv_hash_table_remove(RV_type_info_array_g[H5I_DATATYPE]->table, (char *)_dtype->URI);
+
     if (RV_file_close(_dtype->domain, H5P_DEFAULT, NULL) < 0)
         FUNC_DONE_ERROR(H5E_FILE, H5E_CANTCLOSEFILE, FAIL, "can't close file");
 
@@ -694,7 +722,8 @@ done:
  *              July, 2017
  */
 herr_t
-RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested)
+RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_len, hbool_t nested,
+                            server_api_version server_version)
 {
     H5T_class_t type_class;
     const char *leading_string = "\"type\": "; /* Leading string for all datatypes */
@@ -840,11 +869,35 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
 
         case H5T_STRING: {
             const char *const cset_ascii_string = "H5T_CSET_ASCII";
-            htri_t            is_vlen;
+            const char *const cset_utf8_string  = "H5T_CSET_UTF8";
+            const char       *cset              = NULL;
+            H5T_cset_t        char_set          = H5T_CSET_ERROR;
+
+            char_set = H5Tget_cset(type_id);
+
+            htri_t is_vlen;
 
             if ((is_vlen = H5Tis_variable_str(type_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
                                 "can't determine if datatype is variable-length string");
+
+            switch (char_set) {
+                case (H5T_CSET_ASCII):
+                    cset = cset_ascii_string;
+                    break;
+                case (H5T_CSET_UTF8):
+                    if (!is_vlen && !(SERVER_VERSION_SUPPORTS_FIXED_LENGTH_UTF8(server_version)))
+                        FUNC_GOTO_ERROR(
+                            H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                            "fixed-length UTF8 strings not supported until server version 0.8.5+");
+
+                    cset = cset_utf8_string;
+                    break;
+                case (H5T_CSET_ERROR):
+                default:
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid character set for string");
+                    break;
+            }
 
             /* Build the Datatype body by appending the character set for the string type,
              * any type of string padding, and the length of the string */
@@ -862,8 +915,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                                                     "\"length\": \"H5T_VARIABLE\""
                                                     "}";
 
-                bytes_to_print =
-                    (strlen(fmt_string) - 4) + strlen(cset_ascii_string) + strlen(nullterm_string) + 1;
+                bytes_to_print = (strlen(fmt_string) - 4) + strlen(cset) + strlen(nullterm_string) + 1;
 
                 buf_ptrdiff = out_string_curr_pos - out_string;
                 if (buf_ptrdiff < 0)
@@ -875,7 +927,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                                 out_string_curr_pos, H5E_DATATYPE, FAIL);
 
                 if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - leading_string_len,
-                                              fmt_string, cset_ascii_string, nullterm_string)) < 0)
+                                              fmt_string, cset, nullterm_string)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                 if ((size_t)bytes_printed >= out_string_len - leading_string_len)
@@ -893,8 +945,8 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                                                    "\"length\": %zu"
                                                    "}";
 
-                bytes_to_print = (strlen(fmt_string) - 7) + strlen(cset_ascii_string) +
-                                 strlen(nullpad_string) + MAX_NUM_LENGTH + 1;
+                bytes_to_print =
+                    (strlen(fmt_string) - 7) + strlen(cset) + strlen(nullpad_string) + MAX_NUM_LENGTH + 1;
 
                 buf_ptrdiff = out_string_curr_pos - out_string;
                 if (buf_ptrdiff < 0)
@@ -906,7 +958,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                                 out_string_curr_pos, H5E_DATATYPE, FAIL);
 
                 if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - leading_string_len,
-                                              fmt_string, cset_ascii_string, nullpad_string, type_size)) < 0)
+                                              fmt_string, cset, nullpad_string, type_size)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                 if ((size_t)bytes_printed >= out_string_len - leading_string_len)
@@ -964,8 +1016,8 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
                 printf("-> Converting compound datatype member %zu to JSON\n\n", i);
 #endif
 
-                if (RV_convert_datatype_to_JSON(compound_member, &compound_member_strings[i], NULL, FALSE) <
-                    0)
+                if (RV_convert_datatype_to_JSON(compound_member, &compound_member_strings[i], NULL, FALSE,
+                                                server_version) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
                                     "can't convert compound datatype member to JSON representation");
 
@@ -1226,8 +1278,8 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
             printf("-> Converting array datatype's base datatype to JSON\n\n");
 #endif
 
-            if (RV_convert_datatype_to_JSON(type_base_class, &array_base_type, &array_base_type_len, TRUE) <
-                0)
+            if (RV_convert_datatype_to_JSON(type_base_class, &array_base_type, &array_base_type_len, TRUE,
+                                            server_version) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
                                 "can't convert datatype to JSON representation");
 
@@ -1670,7 +1722,7 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
         /* Currently, only H5T_CSET_ASCII character set is supported */
-        if (strcmp(charSet, "H5T_CSET_ASCII"))
+        if (strcmp(charSet, "H5T_CSET_ASCII") && strcmp(charSet, "H5T_CSET_UTF8"))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
                             "unsupported character set for string datatype");
 
@@ -1705,9 +1757,12 @@ RV_convert_JSON_to_datatype(const char *type)
         if ((datatype = H5Tcreate(H5T_STRING, is_variable_str ? H5T_VARIABLE : (size_t)fixed_length)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create string datatype");
 
-        if (H5Tset_cset(datatype, H5T_CSET_ASCII) < 0)
+        if (!strcmp(charSet, "H5T_CSET_ASCII") && (H5Tset_cset(datatype, H5T_CSET_ASCII) < 0))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL,
-                            "can't set character set for string datatype");
+                            "can't set ASCII character set for string datatype");
+        if (!strcmp(charSet, "H5T_CSET_UTF8") && (H5Tset_cset(datatype, H5T_CSET_UTF8) < 0))
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL,
+                            "can't set UTF-8 character set for string datatype");
 
         if (H5Tset_strpad(datatype, is_variable_str ? H5T_STR_NULLTERM : H5T_STR_NULLPAD) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL,
@@ -2144,3 +2199,442 @@ RV_convert_predefined_datatype_to_string(hid_t type_id)
 done:
     return ret_value;
 } /* end RV_convert_predefined_datatype_to_string() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_detect_vl_vlstr_ref
+ *
+ * Purpose:     Determine if datatype conversion is necessary even if the
+ *              types are the same.
+ *
+ * Return:      Success:        1 if conversion needed, 0 otherwise
+ *              Failure:        -1
+ *
+ *-------------------------------------------------------------------------
+ */
+static htri_t
+RV_detect_vl_vlstr_ref(hid_t type_id)
+{
+    hid_t       memb_type_id = -1;
+    H5T_class_t tclass;
+    htri_t      ret_value = FALSE;
+
+    /* Get datatype class */
+    if (H5T_NO_CLASS == (tclass = H5Tget_class(type_id)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get type class");
+
+    switch (tclass) {
+        case H5T_INTEGER:
+        case H5T_FLOAT:
+        case H5T_TIME:
+        case H5T_BITFIELD:
+        case H5T_OPAQUE:
+        case H5T_ENUM:
+            /* No conversion necessary */
+            ret_value = FALSE;
+
+            break;
+
+        case H5T_STRING:
+            /* Check for vlen string, need conversion if it's vl */
+            if ((ret_value = H5Tis_variable_str(type_id)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't check for variable length string");
+
+            break;
+
+        case H5T_COMPOUND: {
+            int nmemb;
+            int i;
+
+            /* Get number of compound members */
+            if ((nmemb = H5Tget_nmembers(type_id)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                "can't get number of destination compound members");
+
+            /* Iterate over compound members, checking for a member in
+             * dst_type_id with no match in src_type_id */
+            for (i = 0; i < nmemb; i++) {
+                /* Get member type */
+                if ((memb_type_id = H5Tget_member_type(type_id, (unsigned)i)) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound member type");
+
+                /* Recursively check member type, this will fill in the
+                 * member size */
+                if ((ret_value = RV_detect_vl_vlstr_ref(memb_type_id)) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTINIT, FAIL,
+                                    "can't check if background buffer needed");
+
+                /* Close member type */
+                if (H5Tclose(memb_type_id) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CLOSEERROR, FAIL, "can't close member type");
+                memb_type_id = -1;
+
+                /* If any member needs conversion the entire compound does
+                 */
+                if (ret_value) {
+                    ret_value = TRUE;
+                    break;
+                } /* end if */
+            }     /* end for */
+
+            break;
+        } /* end block */
+
+        case H5T_ARRAY:
+            /* Get parent type */
+            if ((memb_type_id = H5Tget_super(type_id)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get array parent type");
+
+            /* Recursively check parent type */
+            if ((ret_value = RV_detect_vl_vlstr_ref(memb_type_id)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTINIT, FAIL, "can't check if background buffer needed");
+
+            /* Close parent type */
+            if (H5Tclose(memb_type_id) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CLOSEERROR, FAIL, "can't close array parent type");
+            memb_type_id = -1;
+
+            break;
+
+        case H5T_REFERENCE:
+        case H5T_VLEN:
+            /* Always need type conversion for references and vlens */
+            ret_value = TRUE;
+
+            break;
+
+        case H5T_NO_CLASS:
+        case H5T_NCLASSES:
+        default:
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid type class");
+    } /* end switch */
+
+done:
+    /* Cleanup on failure */
+    if (memb_type_id >= 0)
+        if (H5Idec_ref(memb_type_id) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTDEC, FAIL, "failed to close member type");
+
+    return ret_value;
+} /* end RV_detect_vl_vlstr_ref*/
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_need_tconv
+ *
+ * Purpose:     Determine if datatype conversion is necessary.
+ *
+ * Return:      Success:        1 if conversion needed, 0 otherwise
+ *              Failure:        -1
+ *
+ *-------------------------------------------------------------------------
+ */
+htri_t
+RV_need_tconv(hid_t src_type_id, hid_t dst_type_id)
+{
+    htri_t types_equal;
+    htri_t ret_value;
+
+    /* Check if the types are equal */
+    if ((types_equal = H5Tequal(src_type_id, dst_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCOMPARE, FAIL, "can't check if types are equal");
+
+    if (types_equal) {
+        /* Check if conversion is needed anyways due to presence of a vlen or
+         * reference type */
+        if ((ret_value = RV_detect_vl_vlstr_ref(src_type_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTINIT, FAIL, "can't check for vlen or reference type");
+    } /* end if */
+    else
+        ret_value = TRUE;
+
+done:
+    return ret_value;
+} /* end RV_need_tconv() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_need_bkg
+ *
+ * Purpose:     Determine if a background buffer is needed for conversion.
+ *
+ * Return:      Success:        1 if bkg buffer needed, 0 otherwise
+ *              Failure:        -1
+ *
+ * Programmer:  Neil Fortner
+ *              February, 2017
+ *
+ *-------------------------------------------------------------------------
+ */
+static htri_t
+RV_need_bkg(hid_t src_type_id, hid_t dst_type_id, hbool_t dst_file, size_t *dst_type_size, hbool_t *fill_bkg)
+{
+    hid_t       memb_type_id     = -1;
+    hid_t       src_memb_type_id = -1;
+    char       *memb_name        = NULL;
+    size_t      memb_size;
+    H5T_class_t tclass;
+    htri_t      ret_value = FALSE;
+
+    assert(dst_type_size);
+    assert(fill_bkg);
+
+    /* Get destination type size */
+    if ((*dst_type_size = H5Tget_size(dst_type_id)) == 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get source type size");
+
+    /* Get datatype class */
+    if (H5T_NO_CLASS == (tclass = H5Tget_class(dst_type_id)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get type class");
+
+    switch (tclass) {
+        case H5T_INTEGER:
+        case H5T_FLOAT:
+        case H5T_TIME:
+        case H5T_STRING:
+        case H5T_BITFIELD:
+        case H5T_OPAQUE:
+        case H5T_ENUM:
+
+            /* No background buffer necessary */
+            ret_value = FALSE;
+
+            break;
+
+        case H5T_REFERENCE:
+        case H5T_VLEN:
+
+            /* If the destination type is in the file, the background buffer
+             * is necessary so we can delete old sequences. */
+            if (dst_file) {
+                ret_value = TRUE;
+                *fill_bkg = TRUE;
+            } /* end if */
+            else
+                ret_value = FALSE;
+
+            break;
+
+        case H5T_COMPOUND: {
+            int    nmemb;
+            size_t size_used = 0;
+            int    src_i;
+            int    i;
+
+            /* We must always provide a background buffer for compound
+             * conversions.  Only need to check further to see if it must be
+             * filled. */
+            ret_value = TRUE;
+
+            /* Get number of compound members */
+            if ((nmemb = H5Tget_nmembers(dst_type_id)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                "can't get number of destination compound members");
+
+            /* Iterate over compound members, checking for a member in
+             * dst_type_id with no match in src_type_id */
+            for (i = 0; i < nmemb; i++) {
+                /* Get member type */
+                if ((memb_type_id = H5Tget_member_type(dst_type_id, (unsigned)i)) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound member type");
+
+                /* Get member name */
+                if (NULL == (memb_name = H5Tget_member_name(dst_type_id, (unsigned)i)))
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound member name");
+
+                /* Check for matching name in source type */
+                H5E_BEGIN_TRY
+                {
+                    src_i = H5Tget_member_index(src_type_id, memb_name);
+                }
+                H5E_END_TRY
+
+                /* Free memb_name */
+                if (H5free_memory(memb_name) < 0)
+                    FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTFREE, FAIL, "can't free member name");
+                memb_name = NULL;
+
+                /* If no match was found, this type is not being filled in,
+                 * so we must fill the background buffer */
+                if (src_i < 0) {
+                    if (H5Tclose(memb_type_id) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CLOSEERROR, FAIL, "can't close member type");
+                    memb_type_id = -1;
+                    *fill_bkg    = TRUE;
+                    FUNC_GOTO_DONE(TRUE);
+                } /* end if */
+
+                /* Open matching source type */
+                if ((src_memb_type_id = H5Tget_member_type(src_type_id, (unsigned)src_i)) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound member type");
+
+                /* Recursively check member type, this will fill in the
+                 * member size */
+                if (RV_need_bkg(src_memb_type_id, memb_type_id, dst_file, &memb_size, fill_bkg) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTINIT, FAIL,
+                                    "can't check if background buffer needed");
+
+                /* Close source member type */
+                if (H5Tclose(src_memb_type_id) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CLOSEERROR, FAIL, "can't close member type");
+                src_memb_type_id = -1;
+
+                /* Close member type */
+                if (H5Tclose(memb_type_id) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CLOSEERROR, FAIL, "can't close member type");
+                memb_type_id = -1;
+
+                /* If the source member type needs the background filled, so
+                 * does the parent */
+                if (*fill_bkg)
+                    FUNC_GOTO_DONE(TRUE);
+
+                /* Keep track of the size used in compound */
+                size_used += memb_size;
+            } /* end for */
+
+            /* Check if all the space in the type is used.  If not, we must
+             * fill the background buffer. */
+            /* TODO: This is only necessary on read, we don't care about
+             * compound gaps in the "file" DSINC */
+            assert(size_used <= *dst_type_size);
+            if (size_used != *dst_type_size)
+                *fill_bkg = TRUE;
+
+            break;
+        } /* end block */
+
+        case H5T_ARRAY:
+            /* Get parent type */
+            if ((memb_type_id = H5Tget_super(dst_type_id)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get array parent type");
+
+            /* Get source parent type */
+            if ((src_memb_type_id = H5Tget_super(src_type_id)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get array parent type");
+
+            /* Recursively check parent type */
+            if ((ret_value = RV_need_bkg(src_memb_type_id, memb_type_id, dst_file, &memb_size, fill_bkg)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTINIT, FAIL, "can't check if background buffer needed");
+
+            /* Close source parent type */
+            if (H5Tclose(src_memb_type_id) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CLOSEERROR, FAIL, "can't close array parent type");
+            src_memb_type_id = -1;
+
+            /* Close parent type */
+            if (H5Tclose(memb_type_id) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CLOSEERROR, FAIL, "can't close array parent type");
+            memb_type_id = -1;
+
+            break;
+
+        case H5T_NO_CLASS:
+        case H5T_NCLASSES:
+        default:
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid type class");
+    } /* end switch */
+
+done:
+    /* Cleanup on failure */
+    if (ret_value < 0) {
+        if (memb_type_id >= 0)
+            if (H5Idec_ref(memb_type_id) < 0)
+                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTDEC, FAIL, "failed to close member type");
+        if (src_memb_type_id >= 0)
+            if (H5Idec_ref(src_memb_type_id) < 0)
+                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTDEC, FAIL, "failed to close source member type");
+        RV_free(memb_name);
+        memb_name = NULL;
+    } /* end if */
+
+    return ret_value;
+} /* end RV_need_bkg() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_tconv_init
+ *
+ * Purpose:     Initialize several variables necessary for type conversion.
+ *              - Checks if background buffer must be allocated and filled
+ *              - Allocates conversion buffer if reuse of dst buffer is not possible
+ *              - Allocates background buffer if needed and reuse is not possible
+ *
+ * Return:      Success:        0
+ *              Failure:        -1
+ *
+ *-------------------------------------------------------------------------
+ */
+herr_t
+RV_tconv_init(hid_t src_type_id, size_t *src_type_size, hid_t dst_type_id, size_t *dst_type_size,
+              size_t num_elem, hbool_t clear_tconv_buf, hbool_t dst_file, void **tconv_buf, void **bkg_buf,
+              RV_tconv_reuse_t *reuse, hbool_t *fill_bkg)
+{
+    htri_t need_bkg;
+    herr_t ret_value = SUCCEED;
+
+    assert(src_type_size);
+    assert(dst_type_size);
+    assert(tconv_buf);
+    assert(!*tconv_buf);
+    assert(bkg_buf);
+    assert(!*bkg_buf);
+    assert(fill_bkg);
+    assert(!*fill_bkg);
+
+    /*
+     * If there is no selection in the file dataspace, don't bother
+     * trying to allocate any type conversion buffers.
+     */
+    if (num_elem == 0)
+        FUNC_GOTO_DONE(SUCCEED);
+
+    /* Get source type size */
+    if ((*src_type_size = H5Tget_size(src_type_id)) == 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get source type size");
+
+    /* Check if we need a background buffer */
+    if ((need_bkg = RV_need_bkg(src_type_id, dst_type_id, dst_file, dst_type_size, fill_bkg)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTINIT, FAIL, "can't check if background buffer needed");
+
+    /* Check for reusable destination buffer */
+    if (reuse) {
+        assert(*reuse == RV_TCONV_REUSE_NONE);
+
+        /* Use dest buffer for type conversion if it large enough, otherwise
+         * use it for the background buffer if one is needed. */
+        if (*dst_type_size >= *src_type_size)
+            *reuse = RV_TCONV_REUSE_TCONV;
+        else if (need_bkg)
+            *reuse = RV_TCONV_REUSE_BKG;
+    } /* end if */
+
+    /* Allocate conversion buffer if it is not being reused */
+    if (!reuse || (*reuse != RV_TCONV_REUSE_TCONV)) {
+        if (clear_tconv_buf) {
+            if (NULL == (*tconv_buf = RV_calloc(
+                             num_elem * (*src_type_size > *dst_type_size ? *src_type_size : *dst_type_size))))
+                FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't allocate type conversion buffer");
+        } /* end if */
+        else if (NULL ==
+                 (*tconv_buf = RV_malloc(
+                      num_elem * (*src_type_size > *dst_type_size ? *src_type_size : *dst_type_size))))
+            FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't allocate type conversion buffer");
+    } /* end if */
+
+    /* Allocate background buffer if one is needed and it is not being
+     * reused */
+    if (need_bkg && (!reuse || (*reuse != RV_TCONV_REUSE_BKG)))
+        if (NULL == (*bkg_buf = RV_calloc(num_elem * *dst_type_size)))
+            FUNC_GOTO_ERROR(H5E_RESOURCE, H5E_CANTALLOC, FAIL, "can't allocate background buffer");
+
+done:
+    /* Cleanup on failure */
+    if (ret_value < 0) {
+        RV_free(*tconv_buf);
+        RV_free(*bkg_buf);
+
+        *tconv_buf = NULL;
+        *bkg_buf   = NULL;
+        if (reuse)
+            *reuse = RV_TCONV_REUSE_NONE;
+    } /* end if */
+
+    return ret_value;
+} /* end RV_tconv_init() */

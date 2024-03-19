@@ -17,11 +17,25 @@ find_path(YAJL_INCLUDE_DIR yajl/yajl_version.h DOC "YAJL include directory")
 find_library(YAJL_SHARED_LIBRARY NAMES yajl libyajl DOC "Shared YAJL library")
 find_library(YAJL_STATIC_LIBRARY NAMES yajl_s libyajl_s DOC "Static YAJL library")
 
+# Version
+if (YAJL_INCLUDE_DIR)
+  file(STRINGS "${YAJL_INCLUDE_DIR}/yajl/yajl_version.h" YAJL_H REGEX "^#define YAJL_MAJOR ")
+  string(REGEX REPLACE "#define YAJL_MAJOR ([0-9]+).*$" "\\1" YAJL_MAJOR "${YAJL_H}")
+  file(STRINGS "${YAJL_INCLUDE_DIR}/yajl/yajl_version.h" YAJL_H REGEX "^#define YAJL_MINOR ")
+  string(REGEX REPLACE "#define YAJL_MINOR ([0-9]+).*$" "\\1" YAJL_MINOR "${YAJL_H}")
+  file(STRINGS "${YAJL_INCLUDE_DIR}/yajl/yajl_version.h" YAJL_H REGEX "^#define YAJL_MICRO ")
+  string(REGEX REPLACE "#define YAJL_MICRO ([0-9]+).*$" "\\1" YAJL_MICRO "${YAJL_H}")
+  set(YAJL_VERSION "${YAJL_MAJOR}.${YAJL_MINOR}.${YAJL_MICRO}")
+endif ()
+
+
 include(FindPackageHandleStandardArgs)
 # handle the QUIETLY and REQUIRED arguments and set LIBYAJL_FOUND to TRUE
 # if all listed variables are TRUE
-find_package_handle_standard_args(YAJL DEFAULT_MSG
-                                  YAJL_SHARED_LIBRARY YAJL_STATIC_LIBRARY YAJL_INCLUDE_DIR)
+find_package_handle_standard_args(YAJL
+  FOUND_VAR YAJL_FOUND
+  REQUIRED_VARS YAJL_SHARED_LIBRARY YAJL_STATIC_LIBRARY YAJL_INCLUDE_DIR
+  VERSION_VAR YAJL_VERSION)
 
 if (YAJL_FOUND)
   add_library(yajl-shared SHARED IMPORTED)
