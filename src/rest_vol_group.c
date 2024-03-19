@@ -18,7 +18,7 @@
 #include "rest_vol_group.h"
 
 /* Set of callbacks for RV_parse_response() */
-static herr_t RV_get_group_info_callback(char *HTTP_response, void *callback_data_in,
+static herr_t RV_get_group_info_callback(char *HTTP_response, const void *callback_data_in,
                                          void *callback_data_out);
 
 /* JSON keys to retrieve the number of links in a group */
@@ -785,7 +785,7 @@ done:
  *              November, 2017
  */
 static herr_t
-RV_get_group_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_get_group_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     H5G_info_t *group_info = (H5G_info_t *)callback_data_out;
     yajl_val    parse_tree = NULL, key_obj;

@@ -573,11 +573,13 @@ typedef struct dataset_write_info {
     char       *base64_encoded_values;
     curl_off_t  write_len;
     upload_info uinfo;
+    const void *buf;
 } dataset_write_info;
 
 typedef struct dataset_read_info {
     H5S_sel_type sel_type;
     curl_off_t   post_len;
+    void        *buf;
 } dataset_read_info;
 
 typedef enum transfer_type_t { UNINIT = 0, READ = 1, WRITE = 2 } transfer_type_t;
@@ -592,7 +594,6 @@ typedef struct dataset_transfer_info {
     struct response_buffer resp_buffer;
 
     RV_object_t *dataset;
-    void        *buf;
     char        *request_url;
     hid_t        mem_type_id;
     hid_t        mem_space_id;
@@ -671,6 +672,10 @@ typedef enum {
     RV_TCONV_REUSE_BKG    /* Use buffer as background buffer */
 } RV_tconv_reuse_t;
 
+typedef struct get_link_val_out {
+    size_t *in_buf_size;
+    void   *buf;
+} get_link_val_out;
 /****************************
  *                          *
  *        Prototypes        *
@@ -691,29 +696,32 @@ const char *H5_rest_basename(const char *path);
 char *H5_rest_dirname(const char *path);
 
 /* Helper function to parse an HTTP response according to the given parse callback function */
-herr_t RV_parse_response(char *HTTP_response, void *callback_data_in, void *callback_data_out,
-                         herr_t (*parse_callback)(char *, void *, void *));
+herr_t RV_parse_response(char *HTTP_response, const void *callback_data_in, void *callback_data_out,
+                         herr_t (*parse_callback)(char *, const void *, void *));
 
 /* Callback for RV_parse_response() to capture an object's URI */
-herr_t RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_copy_object_URI_callback(char *HTTP_response, const void *callback_data_in,
+                                   void *callback_data_out);
 
 /* Callback for RV_parse_response() to capture an object's creation properties */
-herr_t RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_copy_object_loc_info_callback(char *HTTP_response, const void *callback_data_in,
+                                        void *callback_data_out);
 
 /* Callback for RV_parse_response() to access the name of the n-th returned attribute */
-herr_t RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_copy_attribute_name_by_index(char *HTTP_response, const void *callback_data_in,
+                                       void *callback_data_out);
 
 /* Callback for RV_parse_response() to access the name of the n-th returned link */
-herr_t RV_copy_link_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_copy_link_name_by_index(char *HTTP_response, const void *callback_data_in, void *callback_data_out);
 
 /* Callback for RV_parse_response() to capture the version of the server api */
-herr_t RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void *callback_data_out);
 
 /* Helper function to find an object given a starting object to search from and a path */
 
 htri_t RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
-                              herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
-                              void *callback_data_out);
+                              herr_t (*obj_found_callback)(char *, const void *, void *),
+                              void *callback_data_in, void *callback_data_out);
 
 /* Helper function to parse a JSON string representing an HDF5 Dataspace and
  * setup an hid_t for the Dataspace */
@@ -738,16 +746,18 @@ size_t H5_rest_curl_write_data_callback_no_global(char *buffer, size_t size, siz
 herr_t RV_set_object_type_header(H5I_type_t parent_obj_type, const char **parent_obj_type_header);
 
 /* Helper function to parse an object's allocated size from server response */
-herr_t RV_parse_allocated_size_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_parse_allocated_size_callback(char *HTTP_response, const void *callback_data_in,
+                                        void *callback_data_out);
 
 void RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
 
 /* Counterpart of CURL_PERFORM that takes a curl multi handle,
  * and waits until all requests on it have finished before returning. */
-herr_t RV_curl_multi_perform(CURL *curl_multi_ptr, dataset_transfer_info *transfer_info, size_t count,
-                             herr_t(success_callback)(hid_t mem_type_id, hid_t mem_space_id,
-                                                      hid_t file_type_id, hid_t file_space_id, void *buf,
-                                                      struct response_buffer resp_buffer));
+herr_t RV_curl_multi_perform(CURL *curl_multi_ptr, dataset_transfer_info *transfer_info, size_t count);
+
+/* Callbacks used for post-processing after a curl request succeeds */
+herr_t RV_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hid_t file_space_id,
+                          void *buf, struct response_buffer resp_buffer);
 
 /* Dtermine if datatype conversion is necessary */
 htri_t RV_need_tconv(hid_t src_type_id, hid_t dst_type_id);

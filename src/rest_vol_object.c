@@ -18,22 +18,23 @@
 #include "rest_vol_object.h"
 
 /* Set of callbacks for RV_parse_response() */
-static herr_t RV_get_object_info_callback(char *HTTP_response, void *callback_data_in,
+static herr_t RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in,
                                           void *callback_data_out);
 
 /* Callback to iterate over objects given in HTTP response */
-static herr_t RV_object_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_object_iter_callback(char *HTTP_response, const void *callback_data_in,
+                                      void *callback_data_out);
 
 /* Helper functions to work with a table of objects for object iteration */
 static herr_t RV_build_object_table(char *HTTP_response, hbool_t is_recursive,
                                     int (*sort_func)(const void *, const void *),
                                     object_table_entry **object_table, size_t *num_entries,
-                                    iter_data *object_iter_data, rv_hash_table_t *visited_link_table);
+                                    const iter_data *object_iter_data, rv_hash_table_t *visited_link_table);
 
 /* Function to go through each object in table and perform an operation */
 static herr_t RV_traverse_object_table(object_table_entry *object_table,
                                        rv_hash_table_t *visited_object_table, size_t num_entries,
-                                       iter_data *iter_data, const char *cur_object_rel_path);
+                                       const iter_data *iter_data, const char *cur_object_rel_path);
 
 static void RV_free_object_table(object_table_entry *object_table, size_t num_entries);
 
@@ -605,8 +606,8 @@ RV_object_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_object_get_ar
                     CURL_PERFORM(curl, H5E_LINK, H5E_CANTGET, FAIL);
 
                     if (0 > RV_parse_response(response_buffer.buffer,
-                                              (void *)&loc_params->loc_data.loc_by_idx, &found_object_name,
-                                              RV_copy_link_name_by_index))
+                                              (const void *)&loc_params->loc_data.loc_by_idx,
+                                              &found_object_name, RV_copy_link_name_by_index))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "failed to retrieve link names");
 
                     if (host_header) {
@@ -1289,7 +1290,7 @@ done:
  *              November, 2017
  */
 static herr_t
-RV_get_object_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     H5O_info2_t *obj_info   = (H5O_info2_t *)callback_data_out;
     yajl_val     parse_tree = NULL, key_obj;
@@ -1456,12 +1457,12 @@ H5_rest_cmp_objects_by_creation_order_inc(const void *object1, const void *objec
  *              May, 2023
  */
 herr_t
-RV_object_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_object_iter_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     object_table_entry *object_table             = NULL;
     rv_hash_table_t    *visited_link_table       = NULL;
     rv_hash_table_t    *visited_object_table     = NULL;
-    iter_data          *object_iter_data         = (iter_data *)callback_data_in;
+    const iter_data    *object_iter_data         = (const iter_data *)callback_data_in;
     size_t              object_table_num_entries = 0;
     herr_t              ret_value                = SUCCEED;
     char                URL[URL_MAX_LENGTH];
@@ -1576,8 +1577,8 @@ done:
  */
 herr_t
 RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(const void *, const void *),
-                      object_table_entry **object_table, size_t *num_entries, iter_data *object_iter_data,
-                      rv_hash_table_t *visited_link_table)
+                      object_table_entry **object_table, size_t *num_entries,
+                      const iter_data *object_iter_data, rv_hash_table_t *visited_link_table)
 {
     object_table_entry *table      = NULL;
     yajl_val            parse_tree = NULL, key_obj;
@@ -2009,7 +2010,8 @@ RV_free_object_table(object_table_entry *object_table, size_t num_entries)
  */
 static herr_t
 RV_traverse_object_table(object_table_entry *object_table, rv_hash_table_t *visited_object_table,
-                         size_t num_entries, iter_data *object_iter_data, const char *cur_object_rel_path)
+                         size_t num_entries, const iter_data *object_iter_data,
+                         const char *cur_object_rel_path)
 {
     herr_t        ret_value = SUCCEED;
     static size_t depth     = 0;

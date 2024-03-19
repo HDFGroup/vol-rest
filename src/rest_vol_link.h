@@ -32,9 +32,10 @@ herr_t RV_link_get(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_get
 herr_t RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_specific_args_t *args,
                         hid_t dxpl_id, void **req);
 
-herr_t RV_get_link_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
-herr_t RV_get_link_val_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
-herr_t RV_get_link_obj_type_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_get_link_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out);
+herr_t RV_get_link_val_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out);
+herr_t RV_get_link_obj_type_callback(char *HTTP_response, const void *callback_data_in,
+                                     void *callback_data_out);
 
 #ifdef __cplusplus
 }

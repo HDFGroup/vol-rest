@@ -171,7 +171,7 @@ static size_t H5_rest_curl_write_data_callback(char *buffer, size_t size, size_t
 static char *H5_rest_url_encode_path(const char *path);
 
 /* Helper function to parse an object's type from server response */
-herr_t RV_parse_type(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_parse_object_class(char *HTTP_response, const void *callback_data_in, void *callback_data_out);
 
 /* Helper function to parse an object's creation properties from server response */
 herr_t RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf);
@@ -1539,7 +1539,8 @@ H5_rest_url_encode_path(const char *_path)
     if (!_path)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "path was NULL");
 
-    path = (char *)_path;
+    /* Silence compiler const warnings */
+    memcpy(&path, &_path, sizeof(char *));
 
     /* Retrieve the length of the possible path prefix, which could be something like '/', '.', etc. */
     cur_pos = path;
@@ -1666,7 +1667,7 @@ done:
 
 /* Helper function to parse an object's type from server response */
 herr_t
-RV_parse_type(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_parse_object_class(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     yajl_val    parse_tree = NULL, key_obj;
     char       *parsed_object_string;
@@ -1715,7 +1716,7 @@ done:
         yajl_tree_free(parse_tree);
 
     return ret_value;
-} /* end RV_parse_type */
+} /* end RV_parse_object_class */
 
 /*---------------------------------------------------------------------------
  * Function:    H5_rest_get_conn_cls
@@ -1804,8 +1805,8 @@ done:
  *
  */
 herr_t
-RV_parse_response(char *HTTP_response, void *callback_data_in, void *callback_data_out,
-                  herr_t (*parse_callback)(char *, void *, void *))
+RV_parse_response(char *HTTP_response, const void *callback_data_in, void *callback_data_out,
+                  herr_t (*parse_callback)(char *, const void *, void *))
 {
     herr_t ret_value = SUCCEED;
 
@@ -1837,7 +1838,7 @@ done:
  *              July, 2017
  */
 herr_t
-RV_copy_object_URI_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_copy_object_URI_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     yajl_val parse_tree = NULL, key_obj;
     char    *parsed_string;
@@ -1989,7 +1990,7 @@ done:
  */
 htri_t
 RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t *target_object_type,
-                       herr_t (*obj_found_callback)(char *, void *, void *), void *callback_data_in,
+                       herr_t (*obj_found_callback)(char *, const void *, void *), void *callback_data_in,
                        void *callback_data_out)
 {
     RV_object_t       *external_file    = NULL;
@@ -2234,7 +2235,7 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
 
     if (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 0)) {
 
-        if (0 > RV_parse_response(response_buffer.buffer, NULL, target_object_type, RV_parse_type))
+        if (0 > RV_parse_response(response_buffer.buffer, NULL, target_object_type, RV_parse_object_class))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "failed to get type from URI");
     }
     else {
@@ -2264,14 +2265,20 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
                        H5L_TYPE_SOFT == link_info.type ? "soft" : "external");
 #endif
 
-                if (RV_parse_response(response_buffer.buffer, &link_val_len, NULL, RV_get_link_val_callback) <
-                    0)
+                get_link_val_out get_link_val_args;
+                get_link_val_args.in_buf_size = &link_val_len;
+                get_link_val_args.buf         = NULL;
+
+                if (RV_parse_response(response_buffer.buffer, NULL, &get_link_val_args,
+                                      RV_get_link_val_callback) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve size of link's value");
 
                 if (NULL == (tmp_link_val = RV_malloc(link_val_len)))
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for link's value");
 
-                if (RV_parse_response(response_buffer.buffer, &link_val_len, tmp_link_val,
+                get_link_val_args.buf = tmp_link_val;
+
+                if (RV_parse_response(response_buffer.buffer, NULL, &get_link_val_args,
                                       RV_get_link_val_callback) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "can't retrieve link's value");
 
@@ -2411,13 +2418,13 @@ done:
  *              May, 2023
  */
 herr_t
-RV_copy_object_loc_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_copy_object_loc_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val       parse_tree = NULL, key_obj;
-    char          *parsed_string;
-    loc_info      *loc_info_out = (loc_info *)callback_data_out;
-    server_info_t *server_info  = (server_info_t *)callback_data_in;
-    herr_t         ret_value    = SUCCEED;
+    yajl_val             parse_tree = NULL, key_obj;
+    char                *parsed_string;
+    loc_info            *loc_info_out = (loc_info *)callback_data_out;
+    const server_info_t *server_info  = (const server_info_t *)callback_data_in;
+    herr_t               ret_value    = SUCCEED;
 
     char *GCPL_buf = NULL;
 
@@ -2566,16 +2573,16 @@ done:
  *              May, 2023
  */
 herr_t
-RV_copy_link_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_copy_link_name_by_index(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val           parse_tree = NULL, key_obj = NULL, link_obj = NULL;
-    const char        *parsed_link_name   = NULL;
-    char              *parsed_link_buffer = NULL;
-    H5VL_loc_by_idx_t *idx_params         = (H5VL_loc_by_idx_t *)callback_data_in;
-    hsize_t            index              = 0;
-    char             **link_name          = (char **)callback_data_out;
-    const char        *curr_key           = NULL;
-    herr_t             ret_value          = SUCCEED;
+    yajl_val                 parse_tree = NULL, key_obj = NULL, link_obj = NULL;
+    const char              *parsed_link_name   = NULL;
+    char                    *parsed_link_buffer = NULL;
+    const H5VL_loc_by_idx_t *idx_params         = (const H5VL_loc_by_idx_t *)callback_data_in;
+    hsize_t                  index              = 0;
+    char                   **link_name          = (char **)callback_data_out;
+    const char              *curr_key           = NULL;
+    herr_t                   ret_value          = SUCCEED;
 
     if (!idx_params)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given index params ptr was NULL");
@@ -2662,15 +2669,15 @@ done:
  *              May, 2023
  */
 herr_t
-RV_copy_attribute_name_by_index(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_copy_attribute_name_by_index(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val           parse_tree           = NULL, key_obj;
-    const char        *parsed_string        = NULL;
-    char              *parsed_string_buffer = NULL;
-    H5VL_loc_by_idx_t *idx_params           = (H5VL_loc_by_idx_t *)callback_data_in;
-    hsize_t            index                = 0;
-    char             **attr_name            = (char **)callback_data_out;
-    herr_t             ret_value            = SUCCEED;
+    yajl_val                 parse_tree           = NULL, key_obj;
+    const char              *parsed_string        = NULL;
+    char                    *parsed_string_buffer = NULL;
+    const H5VL_loc_by_idx_t *idx_params           = (const H5VL_loc_by_idx_t *)callback_data_in;
+    hsize_t                  index                = 0;
+    char                   **attr_name            = (char **)callback_data_out;
+    herr_t                   ret_value            = SUCCEED;
 
     if (!attr_name)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given attr_name was NULL");
@@ -3327,7 +3334,7 @@ done:
 
 /* Helper function to store the version of the external HSDS server */
 herr_t
-RV_parse_server_version(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     yajl_val            parse_tree     = NULL, key_obj;
     herr_t              ret_value      = SUCCEED;
@@ -3395,7 +3402,7 @@ done:
 
 /* Helper function to parse an object's allocated size from server response */
 herr_t
-RV_parse_allocated_size_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_parse_allocated_size_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     yajl_val parse_tree = NULL, key_obj = NULL;
     herr_t   ret_value      = SUCCEED;
@@ -3511,10 +3518,7 @@ done:
 }
 
 herr_t
-RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_info, size_t count,
-                      herr_t(success_callback)(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id,
-                                               hid_t file_space_id, void *buf,
-                                               struct response_buffer resp_buffer))
+RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_info, size_t count)
 {
 
     herr_t         ret_value               = SUCCEED;
@@ -3643,13 +3647,24 @@ RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_i
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL,
                                         "can't get handle information for retry");
 
-                    if (success_callback(
-                            transfer_info[handle_index].mem_type_id, transfer_info[handle_index].mem_space_id,
-                            transfer_info[handle_index].file_type_id,
-                            transfer_info[handle_index].file_space_id, transfer_info[handle_index].buf,
-                            transfer_info[handle_index].resp_buffer) < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL,
-                                        "failed to post-process data read from dataset");
+                    switch (transfer_info[handle_index].transfer_type) {
+                        case (READ):
+                            if (RV_dataset_read_cb(transfer_info[handle_index].mem_type_id,
+                                                   transfer_info[handle_index].mem_space_id,
+                                                   transfer_info[handle_index].file_type_id,
+                                                   transfer_info[handle_index].file_space_id,
+                                                   transfer_info[handle_index].u.read_info.buf,
+                                                   transfer_info[handle_index].resp_buffer) < 0)
+                                FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL,
+                                                "failed to post-process data read from dataset");
+                            break;
+                        case (WRITE):
+                            /* No post-processing necessary */
+                            break;
+                        case (UNINIT):
+                            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "invalid transfer type");
+                            break;
+                    }
 
                     /* Clean up */
                     if (CURLM_OK != curl_multi_remove_handle(curl_multi_handle, curl_multi_msg->easy_handle))

@@ -19,10 +19,10 @@
 #include <math.h>
 
 /* Set of callbacks for RV_parse_response() */
-static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callback_data_in,
+static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *callback_data_in,
                                                             void *callback_data_out);
 
-static herr_t RV_json_values_to_binary_callback(char *HTTP_response, void *callback_data_in,
+static herr_t RV_json_values_to_binary_callback(char *HTTP_response, const void *callback_data_in,
                                                 void *callback_data_out);
 
 /* Internal helper for RV_json_values_to_binary_callback */
@@ -51,12 +51,6 @@ static herr_t   RV_convert_obj_refs_to_buffer(const rv_obj_ref_t *ref_array, siz
 static herr_t   RV_convert_buffer_to_obj_refs(char *ref_buf, size_t ref_buf_len, rv_obj_ref_t **buf_out,
                                               size_t *buf_out_len);
 static hssize_t RV_convert_start_to_offset(hid_t space_id);
-
-/* Callbacks used for post-processing after a curl request succeeds */
-static herr_t rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id,
-                                 hid_t file_space_id, void *buf, struct response_buffer resp_buffer);
-static herr_t rv_dataset_write_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id,
-                                  hid_t file_space_id, void *buf, struct response_buffer resp_buffer);
 
 /* Struct for H5Dscatter's callback that allows it to scatter from a non-global response buffer */
 struct response_read_info {
@@ -551,7 +545,7 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
         transfer_info[i].u.read_info.sel_type     = H5S_SEL_ALL;
         transfer_info[i].transfer_type            = READ;
         transfer_info[i].dataset                  = (RV_object_t *)dset[i];
-        transfer_info[i].buf                      = buf[i];
+        transfer_info[i].u.read_info.buf          = buf[i];
         transfer_info[i].mem_space_id             = _mem_space_id[i];
         transfer_info[i].file_space_id            = _file_space_id[i];
         transfer_info[i].mem_type_id              = mem_type_id[i];
@@ -799,7 +793,7 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL,
                         "failed to set max concurrent streams for curl multi handle");
 
-    if (RV_curl_multi_perform(curl_multi_handle, transfer_info, count, rv_dataset_read_cb) < 0)
+    if (RV_curl_multi_perform(curl_multi_handle, transfer_info, count) < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "failed to perform dataset write");
 
 done:
@@ -867,11 +861,11 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
     dataset_transfer_info *transfer_info       = NULL;
     CURL                  *curl_multi_handle   = NULL;
 
-    hbool_t needs_tconv    = FALSE;
-    size_t  file_type_size = 0;
-    size_t  mem_type_size  = 0;
-    hbool_t fill_bkg       = FALSE;
-    void   *buf_to_write   = NULL;
+    hbool_t     needs_tconv    = FALSE;
+    size_t      file_type_size = 0;
+    size_t      mem_type_size  = 0;
+    hbool_t     fill_bkg       = FALSE;
+    const void *buf_to_write   = NULL;
 
     if ((transfer_info = RV_calloc(count * sizeof(dataset_transfer_info))) == NULL)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset transfer info");
@@ -921,7 +915,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         transfer_info[i].u.write_info.write_body            = NULL;
         transfer_info[i].u.write_info.base64_encoded_values = NULL;
         transfer_info[i].dataset                            = (RV_object_t *)dset[i];
-        transfer_info[i].buf                                = (void *)buf[i];
+        transfer_info[i].u.write_info.buf                   = buf[i];
         transfer_info[i].transfer_type                      = WRITE;
 
         transfer_info[i].mem_space_id             = _mem_space_id[i];
@@ -1054,7 +1048,9 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 
             /* Perform type conversion on response values */
             memset(transfer_info[i].tconv_buf, 0, file_type_size * (size_t)mem_select_npoints);
-            memcpy(transfer_info[i].tconv_buf, transfer_info[i].buf,
+            memcpy(transfer_info[i].tconv_buf,
+                   (transfer_info[i].transfer_type == READ) ? transfer_info[i].u.read_info.buf
+                                                            : transfer_info[i].u.write_info.buf,
                    mem_type_size * (size_t)mem_select_npoints);
 
             if (H5Tconvert(transfer_info[i].mem_type_id, transfer_info[i].file_type_id,
@@ -1064,7 +1060,15 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                                 "failed to convert file datatype to memory datatype");
         }
 
-        buf_to_write = (transfer_info[i].tconv_buf) ? transfer_info[i].tconv_buf : transfer_info[i].buf;
+        /* If type conversion was performed, write from conversion buffer. Otherwise, write from transfer
+         * buffer for this transfer type */
+        if (transfer_info[i].tconv_buf) {
+            buf_to_write = transfer_info[i].tconv_buf;
+        }
+        else {
+            buf_to_write = (transfer_info[i].transfer_type == READ) ? transfer_info[i].u.read_info.buf
+                                                                    : transfer_info[i].u.write_info.buf;
+        }
 
         /* Setup the size of the data being transferred and the data buffer itself (for non-simple
          * types like object references or variable length types)
@@ -1261,7 +1265,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL,
                         "failed to set max concurrent streams in curl multi handle");
 
-    if (RV_curl_multi_perform(curl_multi_handle, transfer_info, count, rv_dataset_write_cb) < 0)
+    if (RV_curl_multi_perform(curl_multi_handle, transfer_info, count) < 0)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "failed to perform dataset write");
 
 done:
@@ -1788,7 +1792,7 @@ done:
  *              November, 2017
  */
 static herr_t
-RV_parse_dataset_creation_properties_callback(char *HTTP_response, void *callback_data_in,
+RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *callback_data_in,
                                               void *callback_data_out)
 {
     yajl_val      parse_tree         = NULL, creation_properties_obj, key_obj;
@@ -4519,8 +4523,8 @@ dataset_read_scatter_op(const void **src_buf, size_t *src_buf_bytes_used, void *
 } /* end dataset_read_scatter_op() */
 
 /* Callback to be passed to rv_curl_multi_perform, for execution upon successful cURL request */
-static herr_t
-rv_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hid_t file_space_id, void *buf,
+herr_t
+RV_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hid_t file_space_id, void *buf,
                    struct response_buffer resp_buffer)
 {
     herr_t      ret_value      = SUCCEED;
@@ -4663,15 +4667,6 @@ done:
         RV_free(bkg_buf);
 
     return ret_value;
-}
-
-/* Callback to be passed to rv_curl_multi_perform, for execution upon successful cURL request */
-static herr_t
-rv_dataset_write_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hid_t file_space_id, void *buf,
-                    struct response_buffer resp_buffer)
-{
-    herr_t ret_value = SUCCEED;
-    return SUCCEED;
 }
 
 /*-------------------------------------------------------------------------
@@ -4895,16 +4890,17 @@ done:
  * Return:      Non-negative on success/Negative on failure
  */
 static herr_t
-RV_json_values_to_binary_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_json_values_to_binary_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
 
-    void   **out_buf    = (void **)callback_data_out;
-    hid_t    dtype_id   = *(hid_t *)callback_data_in;
-    yajl_val parse_tree = NULL, key_obj;
-    char    *parsed_string;
-    herr_t   ret_value    = SUCCEED;
-    void    *value_buffer = NULL;
-    size_t   dtype_size   = 0;
+    void      **out_buf    = (void **)callback_data_out;
+    const hid_t dtype_id   = *(const hid_t *)callback_data_in;
+    yajl_val    parse_tree = NULL, key_obj;
+    char       *parsed_string;
+    herr_t      ret_value    = SUCCEED;
+    void       *value_buffer = NULL;
+    size_t      dtype_size   = 0;
+    H5T_class_t dtype_class  = H5T_NO_CLASS;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting response JSON values to binary buffer\n\n");

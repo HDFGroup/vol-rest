@@ -18,14 +18,17 @@
 #include "rest_vol_attr.h"
 
 /* Set of callbacks for RV_parse_response() */
-static herr_t RV_get_attr_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
-static herr_t RV_attr_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+static herr_t RV_get_attr_info_callback(char *HTTP_response, const void *callback_data_in,
+                                        void *callback_data_out);
+static herr_t RV_attr_iter_callback(char *HTTP_response, const void *callback_data_in,
+                                    void *callback_data_out);
 
 /* Helper functions to work with a table of attributes for attribute iteration */
 static herr_t RV_build_attr_table(char *HTTP_response, hbool_t                                     sort,
                                   int (*sort_func)(const void *, const void *), attr_table_entry **attr_table,
                                   size_t *num_entries);
-static herr_t RV_traverse_attr_table(attr_table_entry *attr_table, size_t num_entries, iter_data *iter_data);
+static herr_t RV_traverse_attr_table(attr_table_entry *attr_table, size_t num_entries,
+                                     const iter_data *iter_data);
 
 /* Qsort callback to sort attributes by creation order */
 static int cmp_attributes_by_creation_order(const void *attr1, const void *attr2);
@@ -3145,7 +3148,7 @@ done:
  *              December, 2017
  */
 static herr_t
-RV_get_attr_info_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_get_attr_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     H5A_info_t *attr_info = (H5A_info_t *)callback_data_out;
     herr_t      ret_value = SUCCEED;
@@ -3183,10 +3186,10 @@ done:
  *              January, 2018
  */
 static herr_t
-RV_attr_iter_callback(char *HTTP_response, void *callback_data_in, void *callback_data_out)
+RV_attr_iter_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     attr_table_entry *attr_table     = NULL;
-    iter_data        *attr_iter_data = (iter_data *)callback_data_in;
+    const iter_data  *attr_iter_data = (const iter_data *)callback_data_in;
     size_t            attr_table_num_entries;
     herr_t            ret_value = SUCCEED;
 
@@ -3384,7 +3387,7 @@ done:
  *              January, 2018
  */
 static herr_t
-RV_traverse_attr_table(attr_table_entry *attr_table, size_t num_entries, iter_data *attr_iter_data)
+RV_traverse_attr_table(attr_table_entry *attr_table, size_t num_entries, const iter_data *attr_iter_data)
 {
     size_t last_idx;
     herr_t callback_ret;
