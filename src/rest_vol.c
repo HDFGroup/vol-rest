@@ -141,6 +141,10 @@ const char *attributes_keys[] = {"attributes", (const char *)0};
 /* JSON keys to retrieve allocated size */
 const char *allocated_size_keys[] = {"allocated_size", (const char *)0};
 
+/* JSON keys to retrieve information from a scan of a domain */
+const char *scan_info_keys[]       = {"scan_info", (const char *)0};
+const char *allocated_bytes_keys[] = {"allocated_bytes", (const char *)0};
+
 /* Default size for the buffer to allocate during base64-encoding if the caller
  * of RV_base64_encode supplies a 0-sized buffer.
  */
@@ -253,7 +257,7 @@ static const H5VL_class_t H5VL_rest_g = {
         RV_file_open,
         RV_file_get,
         RV_file_specific,
-        NULL,
+        RV_file_optional,
         RV_file_close,
     },
 
@@ -3376,9 +3380,9 @@ done:
     return ret_value;
 }
 
-/* Helper function to parse an object's allocated size from server response */
+/* Helper function to parse a non-domain object's allocated size from server response */
 herr_t
-RV_parse_allocated_size_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
+RV_parse_allocated_size_cb(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
     yajl_val parse_tree = NULL, key_obj = NULL;
     herr_t   ret_value      = SUCCEED;
@@ -4250,3 +4254,54 @@ done:
 
     return ret_value;
 }
+/*-------------------------------------------------------------------------
+ * Function:    RV_parse_domain_allocated_size_cb
+ *
+ * Purpose:     Given an HSDS response containing scan information about a
+ *              domain, retrieves the allocated_byte values and modifies
+ *              callback_data_out to point to it. HSDS returns scan info
+ *              on a domain request with the 'verbose' parameter
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              January, 2024
+ */
+herr_t
+RV_parse_domain_allocated_size_cb(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
+{
+    yajl_val parse_tree = NULL, key_obj;
+    char    *parsed_object_string;
+    size_t  *filesize  = (size_t *)callback_data_out;
+    herr_t   ret_value = SUCCEED;
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Retrieving filesize from server's HTTP response\n\n");
+#endif
+
+    if (!HTTP_response)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
+    if (!filesize)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output pointer was NULL");
+
+    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+        FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_PARSEERROR, FAIL, "parsing JSON failed");
+
+    if (NULL == (key_obj = yajl_tree_get(parse_tree, scan_info_keys, yajl_t_object)))
+        FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_PARSEERROR, FAIL, "couldn't get scan info");
+
+    if (NULL == (key_obj = yajl_tree_get(key_obj, allocated_bytes_keys, yajl_t_number))) {
+        FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_PARSEERROR, FAIL, "couldn't parse allocated bytes");
+    }
+
+    if (YAJL_GET_INTEGER(key_obj) < 0)
+        FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_PARSEERROR, FAIL, "parsed filesize is negative");
+
+    *filesize = (size_t)YAJL_GET_INTEGER(key_obj);
+
+done:
+    if (parse_tree)
+        yajl_tree_free(parse_tree);
+
+    return ret_value;
+} /* end RV_parse_domain_allocated_size_cb */
