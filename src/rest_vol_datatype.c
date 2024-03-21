@@ -2590,3 +2590,56 @@ done:
 
     return ret_value;
 } /* end RV_tconv_init() */
+
+/* Determine the subset relationsip (if any) between src and dst datatypes */
+herr_t
+RV_get_cmpd_subset_type(hid_t src_type_id, hid_t dst_type_id, RV_subset_t *subset)
+{
+    herr_t      ret_value      = SUCCEED;
+    H5T_class_t dst_type_class = H5T_NO_CLASS, src_type_class = H5T_NO_CLASS;
+    hid_t       src_member_type = H5I_INVALID_HID, dst_member_type = H5I_INVALID_HID;
+    int         dst_nmembs = 0, src_nmembs = 0;
+    htri_t      types_same           = false;
+    bool        match_for_src_member = false;
+
+    if (H5T_NO_CLASS == (src_type_class = H5Tget_class(src_type_id)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "source datatype is invalid");
+
+    if (H5T_NO_CLASS == (dst_type_class = H5Tget_class(dst_type_id)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "destination datatype is invalid");
+
+    if ((dst_type_class != H5T_COMPOUND) || (src_type_class != H5T_COMPOUND)) {
+        *subset = H5T_SUBSET_FALSE;
+        FUNC_GOTO_DONE(SUCCEED);
+    }
+
+    if ((dst_nmembs = H5Tget_nmembers(dst_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of destination datatype");
+
+    if ((src_nmembs = H5Tget_nmembers(src_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of source datatype");
+
+    /* The library just compares the number of members to determine if two
+     * compounds are subsets, so that should suffice here as well. */
+
+    if (src_nmembs > dst_nmembs) {
+        *subset = H5T_SUBSET_DST;
+    }
+    else if (src_nmembs < dst_nmembs) {
+        *subset = H5T_SUBSET_SRC;
+    }
+    else {
+        *subset = H5T_SUBSET_FALSE;
+    }
+
+done:
+    if (src_member_type > 0)
+        if (H5Tclose(src_member_type) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close source datatype member");
+
+    if (dst_member_type > 0)
+        if (H5Tclose(dst_member_type) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close destination datatype member");
+
+    return ret_value;
+}
