@@ -1695,12 +1695,13 @@ static herr_t
 RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *callback_data_in,
                                               void *callback_data_out)
 {
-    yajl_val      parse_tree         = NULL, creation_properties_obj, key_obj;
+    yajl_val      parse_tree = NULL, creation_properties_obj = NULL, key_obj = NULL, target_tree = NULL;
     hid_t        *DCPL               = (hid_t *)callback_data_out;
     hid_t         fill_type          = H5I_INVALID_HID;
     char         *encoded_fill_value = NULL;
     char         *decoded_fill_value = NULL;
     unsigned int *ud_parameters      = NULL;
+    const char   *path_name          = NULL;
     herr_t        ret_value          = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1715,9 +1716,27 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
+    target_tree = parse_tree;
+
+    /* If the response contains 'h5paths',
+     * it may describe multiple objects. Needs to be unwrapped first. */
+    if (NULL != yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)) {
+        if (NULL == (target_tree = yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)))
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
+
+        /* Access the first object under h5paths */
+        if (NULL == (path_name = target_tree->u.object.keys[0]))
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed path name was NULL");
+
+        const char *path_keys[] = {path_name, (const char *)0};
+
+        if (NULL == (target_tree = yajl_tree_get(target_tree, path_keys, yajl_t_object)))
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "unable to parse object under path key");
+    }
+
     /* Retrieve the creationProperties object */
     if (NULL ==
-        (creation_properties_obj = yajl_tree_get(parse_tree, creation_properties_keys, yajl_t_object)))
+        (creation_properties_obj = yajl_tree_get(target_tree, creation_properties_keys, yajl_t_object)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of creationProperties object failed");
 
     /********************************************************************************************

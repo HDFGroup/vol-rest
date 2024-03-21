@@ -74,10 +74,12 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
     RV_object_t       *new_link_loc_obj                = (RV_object_t *)obj;
     upload_info        uinfo;
     size_t             create_request_nalloc = 0;
+    size_t             escaped_link_size     = 0;
     void              *hard_link_target_obj;
     char              *create_request_body = NULL;
     char               request_endpoint[URL_MAX_LENGTH];
     char              *url_encoded_link_name   = NULL;
+    char              *escaped_link_name       = NULL;
     int                create_request_body_len = 0;
     int                url_len                 = 0;
     long               http_response;
@@ -131,6 +133,21 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
 
     if (!(new_link_loc_obj->domain->u.file.intent & H5F_ACC_RDWR))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_BADVALUE, FAIL, "no write intent on file");
+
+    /* If link name will be sent in request body, JSON escape it */
+    if (SERVER_VERSION_SUPPORTS_LONG_NAMES(new_link_loc_obj->domain->u.file.server_info.version) &&
+        loc_params->loc_data.loc_by_name.name) {
+        if (RV_JSON_escape_string(loc_params->loc_data.loc_by_name.name, escaped_link_name,
+                                  &escaped_link_size) < 0)
+            FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "can't get size of JSON escaped link name");
+
+        if ((escaped_link_name = RV_malloc(escaped_link_size)) < 0)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL, "can't allocate space for escaped link name");
+
+        if (RV_JSON_escape_string(loc_params->loc_data.loc_by_name.name, escaped_link_name,
+                                  &escaped_link_size) < 0)
+            FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "can't JSON escape link name");
+    }
 
     switch (args->op_type) {
         /* H5Lcreate_hard */
@@ -193,21 +210,46 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
 #endif
 
             {
-                const char *const fmt_string = "{\"id\": \"%s\"}";
+                const char *const fmt_string_no_title = "{\"id\": \"%s\"}";
+                const char *const fmt_string_title    = "{\"links\": {\"%s\": {\"id\": \"%s\"}}}";
 
                 /* Form the request body to create the Link */
-                create_request_nalloc = (strlen(fmt_string) - 2) + strlen(target_URI) + 1;
-                if (NULL == (create_request_body = (char *)RV_malloc(create_request_nalloc)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
-                                    "can't allocate space for link create request body");
+                if (SERVER_VERSION_SUPPORTS_LONG_NAMES(
+                        new_link_loc_obj->domain->u.file.server_info.version) &&
+                    loc_params->loc_data.loc_by_name.name) {
+                    /* Include escaped link name in body */
+                    create_request_nalloc =
+                        (strlen(fmt_string_title) - 4) + strlen(target_URI) + strlen(escaped_link_name) + 1;
 
-                if ((create_request_body_len =
-                         snprintf(create_request_body, create_request_nalloc, fmt_string, target_URI)) < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+                    if (NULL == (create_request_body = (char *)RV_malloc(create_request_nalloc)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for link create request body");
 
-                if ((size_t)create_request_body_len >= create_request_nalloc)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
-                                    "link create request body size exceeded allocated buffer size");
+                    if ((create_request_body_len =
+                             snprintf(create_request_body, create_request_nalloc, fmt_string_title,
+                                      escaped_link_name, target_URI)) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+                    if ((size_t)create_request_body_len >= create_request_nalloc)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                                        "link create request body size buffer size");
+                }
+                else {
+                    /* Body only contains target id */
+                    create_request_nalloc = (strlen(fmt_string_no_title) - 2) + strlen(target_URI) + 1;
+
+                    if (NULL == (create_request_body = (char *)RV_malloc(create_request_nalloc)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for link create request body");
+
+                    if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc,
+                                                            fmt_string_no_title, target_URI)) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+                    if ((size_t)create_request_body_len >= create_request_nalloc)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                                        "link create request body size exceeded allocated buffer size");
+                }
             }
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -227,21 +269,46 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
 #endif
 
             {
-                const char *const fmt_string = "{\"h5path\": \"%s\"}";
+                const char *const fmt_string_no_title = "{\"h5path\": \"%s\"}";
+                const char *const fmt_string_title    = "{\"links\": {\"%s\": {\"h5path\": \"%s\"}}}";
 
                 /* Form the request body to create the Link */
-                create_request_nalloc = (strlen(fmt_string) - 2) + strlen(link_target) + 1;
-                if (NULL == (create_request_body = (char *)RV_malloc(create_request_nalloc)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
-                                    "can't allocate space for link create request body");
+                if (SERVER_VERSION_SUPPORTS_LONG_NAMES(
+                        new_link_loc_obj->domain->u.file.server_info.version) &&
+                    loc_params->loc_data.loc_by_name.name) {
+                    /* Body contains link title */
+                    create_request_nalloc =
+                        (strlen(fmt_string_title) - 4) + strlen(link_target) + strlen(escaped_link_name) + 1;
 
-                if ((create_request_body_len =
-                         snprintf(create_request_body, create_request_nalloc, fmt_string, link_target)) < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+                    if (NULL == (create_request_body = (char *)RV_malloc(create_request_nalloc)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for link create request body");
 
-                if ((size_t)create_request_body_len >= create_request_nalloc)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
-                                    "link create request body size exceeded allocated buffer size");
+                    if ((create_request_body_len =
+                             snprintf(create_request_body, create_request_nalloc, fmt_string_title,
+                                      escaped_link_name, link_target)) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+                    if ((size_t)create_request_body_len >= create_request_nalloc)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                                        "link create request body size exceeded allocated buffer size");
+                }
+                else {
+                    /* Body only contains h5path */
+                    create_request_nalloc = (strlen(fmt_string_no_title) - 2) + strlen(link_target) + 1;
+
+                    if (NULL == (create_request_body = (char *)RV_malloc(create_request_nalloc)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for link create request body");
+
+                    if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc,
+                                                            fmt_string_no_title, link_target)) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+                    if ((size_t)create_request_body_len >= create_request_nalloc)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                                        "link create request body size exceeded allocated buffer size");
+                }
             }
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -271,22 +338,47 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
 #endif
 
             {
-                const char *const fmt_string = "{\"h5domain\": \"%s\", \"h5path\": \"%s\"}";
+                const char *const fmt_string_no_title = "{\"h5domain\": \"%s\", \"h5path\": \"%s\"}";
+                const char *const fmt_string_title =
+                    "{\"links\": {\"%s\": {\"h5domain\": \"%s\", \"h5path\": \"%s\"}}}";
 
                 /* Form the request body to create the Link */
-                create_request_nalloc =
-                    (strlen(fmt_string) - 4) + strlen(file_path) + strlen(link_target) + 1;
-                if (NULL == (create_request_body = (char *)RV_malloc(create_request_nalloc)))
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
-                                    "can't allocate space for link create request body");
+                if (SERVER_VERSION_SUPPORTS_LONG_NAMES(
+                        new_link_loc_obj->domain->u.file.server_info.version) &&
+                    loc_params->loc_data.loc_by_name.name) {
+                    /* Body contains link name */
+                    create_request_nalloc = (strlen(fmt_string_title) - 6) + strlen(file_path) +
+                                            strlen(link_target) + strlen(escaped_link_name) + 1;
 
-                if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc,
-                                                        fmt_string, file_path, link_target)) < 0)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+                    if (NULL == (create_request_body = (char *)RV_malloc(create_request_nalloc)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for link create request body");
 
-                if ((size_t)create_request_body_len >= create_request_nalloc)
-                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
-                                    "link create request body size exceeded allocated buffer size");
+                    if ((create_request_body_len =
+                             snprintf(create_request_body, create_request_nalloc, fmt_string_title,
+                                      escaped_link_name, file_path, link_target)) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+                    if ((size_t)create_request_body_len >= create_request_nalloc)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                                        "link create request body size exceeded allocated buffer size");
+                }
+                else {
+                    /* Body does not contain link name */
+                    create_request_nalloc =
+                        (strlen(fmt_string_no_title) - 4) + strlen(file_path) + strlen(link_target) + 1;
+                    if (NULL == (create_request_body = (char *)RV_malloc(create_request_nalloc)))
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for link create request body");
+
+                    if ((create_request_body_len = snprintf(create_request_body, create_request_nalloc,
+                                                            fmt_string_no_title, file_path, link_target)) < 0)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+                    if ((size_t)create_request_body_len >= create_request_nalloc)
+                        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                                        "link create request body size exceeded allocated buffer size");
+                }
             }
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -300,17 +392,26 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
             FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "Invalid link create type");
     } /* end switch */
 
-    /* URL-encode the name of the link to ensure that the resulting URL for the link
-     * creation operation doesn't contain any illegal characters
-     */
-    if (NULL == (url_encoded_link_name =
-                     curl_easy_escape(curl, H5_rest_basename(loc_params->loc_data.loc_by_name.name), 0)))
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
+    if (SERVER_VERSION_SUPPORTS_LONG_NAMES(new_link_loc_obj->domain->u.file.server_info.version) &&
+        loc_params->loc_data.loc_by_name.name) {
+        /* Redirect cURL from the base URL to "/groups/<id>/links" to create the link */
+        if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/groups/%s/links",
+                                new_link_loc_obj->URI)) < 0)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+    }
+    else {
+        /* URL-encode the name of the link to ensure that the resulting URL for the link
+         * creation operation doesn't contain any illegal characters
+         */
+        if (NULL == (url_encoded_link_name =
+                         curl_easy_escape(curl, H5_rest_basename(loc_params->loc_data.loc_by_name.name), 0)))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
 
-    /* Redirect cURL from the base URL to "/groups/<id>/links/<name>" to create the link */
-    if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/groups/%s/links/%s", new_link_loc_obj->URI,
-                            url_encoded_link_name)) < 0)
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+        /* Redirect cURL from the base URL to "/groups/<id>/links/<name>" to create the link */
+        if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/groups/%s/links/%s",
+                                new_link_loc_obj->URI, url_encoded_link_name)) < 0)
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+    }
 
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "link create URL size exceeded maximum URL size");
@@ -343,6 +444,8 @@ done:
         RV_free(create_request_body);
     if (url_encoded_link_name)
         curl_free(url_encoded_link_name);
+    if (escaped_link_name)
+        RV_free(escaped_link_name);
 
     PRINT_ERROR_STACK;
 
@@ -709,12 +812,16 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
 {
     RV_object_t *loc_obj = (RV_object_t *)obj;
     hbool_t      empty_dirname;
+    size_t       escaped_link_size      = 0;
+    size_t       request_body_len       = 0;
     hid_t        link_iter_group_id     = H5I_INVALID_HID;
     void        *link_iter_group_object = NULL;
     char        *link_path_dirname      = NULL;
     char         temp_URI[URI_MAX_LENGTH];
     char         request_endpoint[URL_MAX_LENGTH];
     char        *url_encoded_link_name = NULL;
+    char        *escaped_link_name     = NULL;
+    char        *request_body          = NULL;
     int          url_len               = 0;
     long         http_response;
     herr_t       ret_value = SUCCEED;
@@ -825,24 +932,88 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_PATH, FAIL, "can't locate parent group for link");
             } /* end if */
 
-            /* URL-encode the link name so that the resulting URL for the link GET
-             * operation doesn't contain any illegal characters
-             */
-            if (NULL == (url_encoded_link_name = curl_easy_escape(
-                             curl, H5_rest_basename(loc_params->loc_data.loc_by_name.name), 0)))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
+            /* Setup cURL to make the request */
+            if (SERVER_VERSION_SUPPORTS_LONG_NAMES(loc_obj->domain->u.file.server_info.version) &&
+                loc_params->loc_data.loc_by_name.name) {
+                /* Send link name in body of POST request */
+                const char *fmt_string    = "{\"titles\": [\"%s\"]}";
+                int         bytes_printed = 0;
 
-            if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/groups/%s/links/%s",
-                                    empty_dirname ? loc_obj->URI : temp_URI, url_encoded_link_name)) < 0)
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+                /* JSON escape link name */
+                if (RV_JSON_escape_string(H5_rest_basename(loc_params->loc_data.loc_by_name.name),
+                                          escaped_link_name, &escaped_link_size) < 0)
+                    FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "can't get size of JSON escaped link name");
+
+                if ((escaped_link_name = RV_malloc(escaped_link_size)) < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                    "can't allocate space for escaped link name");
+
+                if (RV_JSON_escape_string(H5_rest_basename(loc_params->loc_data.loc_by_name.name),
+                                          escaped_link_name, &escaped_link_size) < 0)
+                    FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "can't JSON escape link name");
+
+                request_body_len = strlen(fmt_string) - 2 + strlen(escaped_link_name) + 1;
+
+                if ((request_body = RV_malloc(request_body_len)) == NULL)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
+                                    "can't allocate space for link query body");
+
+                if ((bytes_printed =
+                         snprintf(request_body, request_body_len, fmt_string, escaped_link_name)) < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+                if (bytes_printed >= request_body_len)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
+                                    "request body size exceeded allocated buffer size");
+
+                if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/groups/%s/links",
+                                        empty_dirname ? loc_obj->URI : temp_URI)) < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+                    
+            }
+            else {
+                /* URL-encode the link name so that the resulting URL for the link GET
+                 * operation doesn't contain any illegal characters
+                 */
+                if (NULL == (url_encoded_link_name = curl_easy_escape(
+                                 curl, H5_rest_basename(loc_params->loc_data.loc_by_name.name), 0)))
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
+
+                if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/groups/%s/links/%s",
+                                        empty_dirname ? loc_obj->URI : temp_URI, url_encoded_link_name)) < 0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+            }
 
             if (url_len >= URL_MAX_LENGTH)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                 "H5Lexists request URL size exceeded maximum URL size");
 
-            http_response = RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Checking for existence of link using URL: %s\n\n", request_url);
+#endif
+        if (SERVER_VERSION_SUPPORTS_LONG_NAMES(loc_obj->domain->u.file.server_info.version)) {
+#ifdef RV_CONNECTOR_DEBUG
+            printf("   /**********************************\\\n");
+            printf("-> | Making POST request to the server |\n");
+            printf("   \\**********************************/\n\n");
+#endif
+
+                http_response = RV_curl_post(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
+                                            loc_obj->domain->u.file.filepath_name, request_body, bytes_printed, CONTENT_TYPE_JSON)
+            } else {
+#ifdef RV_CONNECTOR_DEBUG
+            printf("   /**********************************\\\n");
+            printf("-> | Making GET request to the server |\n");
+            printf("   \\**********************************/\n\n");
+#endif
+
+                http_response = RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
                                         loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON);
-            *ret          = HTTP_SUCCESS(http_response);
+            }
+
+        
+            *ret = HTTP_SUCCESS(http_response);
 
             break;
         } /* H5VL_LINK_EXISTS */
@@ -977,6 +1148,11 @@ done:
     /* Free the escaped portion of the URL */
     if (url_encoded_link_name)
         curl_free(url_encoded_link_name);
+
+    if (escaped_link_name)
+        RV_free(escaped_link_name);
+    if (request_body)
+        RV_free(request_body);
 
     PRINT_ERROR_STACK;
 
