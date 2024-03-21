@@ -395,8 +395,8 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
     if (SERVER_VERSION_SUPPORTS_LONG_NAMES(new_link_loc_obj->domain->u.file.server_info.version) &&
         loc_params->loc_data.loc_by_name.name) {
         /* Redirect cURL from the base URL to "/groups/<id>/links" to create the link */
-        if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/groups/%s/links",
-                                new_link_loc_obj->URI)) < 0)
+        if ((url_len =
+                 snprintf(request_endpoint, URL_MAX_LENGTH, "/groups/%s/links", new_link_loc_obj->URI)) < 0)
             FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
     }
     else {
@@ -424,7 +424,6 @@ RV_link_create(H5VL_link_create_args_t *args, void *obj, const H5VL_loc_params_t
     uinfo.buffer_size = (size_t)create_request_body_len;
     uinfo.bytes_sent  = 0;
 
-    // TODO - Check this uses right filename for external links
     http_response = RV_curl_put(curl, &new_link_loc_obj->domain->u.file.server_info, request_endpoint,
                                 new_link_loc_obj->domain->u.file.filepath_name, &uinfo, CONTENT_TYPE_JSON);
 
@@ -813,7 +812,7 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
     RV_object_t *loc_obj = (RV_object_t *)obj;
     hbool_t      empty_dirname;
     size_t       escaped_link_size      = 0;
-    size_t       request_body_len       = 0;
+    int          request_body_len       = 0;
     hid_t        link_iter_group_id     = H5I_INVALID_HID;
     void        *link_iter_group_object = NULL;
     char        *link_path_dirname      = NULL;
@@ -933,11 +932,10 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
             } /* end if */
 
             /* Setup cURL to make the request */
-            if (SERVER_VERSION_SUPPORTS_LONG_NAMES(loc_obj->domain->u.file.server_info.version) &&
-                loc_params->loc_data.loc_by_name.name) {
+            if (SERVER_VERSION_SUPPORTS_LONG_NAMES(loc_obj->domain->u.file.server_info.version)) {
                 /* Send link name in body of POST request */
-                const char *fmt_string    = "{\"titles\": [\"%s\"]}";
-                int         bytes_printed = 0;
+                const char *fmt_string = "{\"titles\": [\"%s\"]}";
+                int         bytes_printed;
 
                 /* JSON escape link name */
                 if (RV_JSON_escape_string(H5_rest_basename(loc_params->loc_data.loc_by_name.name),
@@ -952,14 +950,14 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
                                           escaped_link_name, &escaped_link_size) < 0)
                     FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "can't JSON escape link name");
 
-                request_body_len = strlen(fmt_string) - 2 + strlen(escaped_link_name) + 1;
+                request_body_len = (int)(strlen(fmt_string) - 2 + strlen(escaped_link_name) + 1);
 
-                if ((request_body = RV_malloc(request_body_len)) == NULL)
+                if ((request_body = RV_malloc((size_t)request_body_len)) == NULL)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTALLOC, FAIL,
                                     "can't allocate space for link query body");
 
                 if ((bytes_printed =
-                         snprintf(request_body, request_body_len, fmt_string, escaped_link_name)) < 0)
+                         snprintf(request_body, (size_t)request_body_len, fmt_string, escaped_link_name)) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
                 if (bytes_printed >= request_body_len)
@@ -969,7 +967,17 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
                 if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/groups/%s/links",
                                         empty_dirname ? loc_obj->URI : temp_URI)) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
-                    
+
+#ifdef RV_CONNECTOR_DEBUG
+                printf("-> Checking for existence of link using endpoint: %s\n\n", request_endpoint);
+#endif
+
+                if ((http_response = RV_curl_post(curl, &loc_obj->domain->u.file.server_info,
+                                                  request_endpoint, loc_obj->domain->u.file.filepath_name,
+                                                  request_body, (size_t)bytes_printed, CONTENT_TYPE_JSON)) <
+                    0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL,
+                                    "internal failure while making POST request to server");
             }
             else {
                 /* URL-encode the link name so that the resulting URL for the link GET
@@ -983,36 +991,28 @@ RV_link_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_link_speci
                                         empty_dirname ? loc_obj->URI : temp_URI, url_encoded_link_name)) < 0)
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
 
+#ifdef RV_CONNECTOR_DEBUG
+                printf("-> Checking for existence of link using endpoint: %s\n\n", request_endpoint);
+#endif
+                if ((http_response = RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
+                                                 loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON)) <
+                    0)
+                    FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL,
+                                    "internal failure while making GET request to server");
             }
 
             if (url_len >= URL_MAX_LENGTH)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                                 "H5Lexists request URL size exceeded maximum URL size");
 
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Checking for existence of link using URL: %s\n\n", request_url);
-#endif
-        if (SERVER_VERSION_SUPPORTS_LONG_NAMES(loc_obj->domain->u.file.server_info.version)) {
-#ifdef RV_CONNECTOR_DEBUG
-            printf("   /**********************************\\\n");
-            printf("-> | Making POST request to the server |\n");
-            printf("   \\**********************************/\n\n");
-#endif
+            if (HTTP_CLIENT_ERROR(http_response) && http_response != 404 && http_response != 410)
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "malformed client request: response code %zu\n",
+                                http_response);
 
-                http_response = RV_curl_post(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
-                                            loc_obj->domain->u.file.filepath_name, request_body, bytes_printed, CONTENT_TYPE_JSON)
-            } else {
-#ifdef RV_CONNECTOR_DEBUG
-            printf("   /**********************************\\\n");
-            printf("-> | Making GET request to the server |\n");
-            printf("   \\**********************************/\n\n");
-#endif
+            if (HTTP_SERVER_ERROR(http_response))
+                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "internal server failure: response code %zu\n",
+                                http_response);
 
-                http_response = RV_curl_get(curl, &loc_obj->domain->u.file.server_info, request_endpoint,
-                                        loc_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON);
-            }
-
-        
             *ret = HTTP_SUCCESS(http_response);
 
             break;

@@ -2144,10 +2144,9 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
             if (RV_JSON_escape_string(obj_path, escaped_obj_path, &escaped_path_size) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "can't escape object path");
 
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
-                                    "%s/?follow_soft_links=1&follow_external_links=1%s%s", base_URL,
-                                    is_relative_path ? "&parent_id=" : "",
-                                    is_relative_path ? parent_obj->URI : "")) < 0)
+            if ((url_len = snprintf(
+                     request_endpoint, URL_MAX_LENGTH, "/?follow_soft_links=1&follow_external_links=1%s%s",
+                     is_relative_path ? "&parent_id=" : "", is_relative_path ? parent_obj->URI : "")) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
         }
         else {
@@ -2155,8 +2154,8 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
             if (NULL == (url_encoded_path_name = H5_rest_url_encode_path(obj_path)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode object path");
 
-            if ((url_len = snprintf(request_url, URL_MAX_LENGTH,
-                                    "%s/?h5path=%s%s%s&follow_soft_links=1&follow_external_links=1", base_URL,
+            if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH,
+                                    "/?h5path=%s%s%s&follow_soft_links=1&follow_external_links=1",
                                     url_encoded_path_name, is_relative_path ? "&parent_id=" : "",
                                     is_relative_path ? parent_obj->URI : "")) < 0)
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "snprintf error");
@@ -2257,24 +2256,9 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
     if (url_len >= URL_MAX_LENGTH)
         FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL, "Request URL size exceeded maximum URL size");
 
-
     /* Make POST request that supports long paths if server supports it.
        Otherwise, make GET request */
     if (SERVER_VERSION_SUPPORTS_LONG_NAMES(version)) {
-#ifdef RV_CONNECTOR_DEBUG
-        printf("   /**********************************\\\n");
-        printf("-> | Making GET request to the server |\n");
-        printf("   \\**********************************/\n\n");
-#endif
-
-        http_response = RV_curl_get(curl, &parent_obj->domain->u.file.server_info, request_endpoint,
-                                    parent_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON);
-    } else {
-#ifdef RV_CONNECTOR_DEBUG
-        printf("   /**********************************\\\n");
-        printf("-> | Making POST request to the server |\n");
-        printf("   \\**********************************/\n\n");
-#endif
         const char *fmt_string       = "{\"h5paths\": [\"%s\"]}";
         size_t      request_body_len = 0;
         int         bytes_printed    = 0;
@@ -2291,8 +2275,18 @@ RV_find_object_by_path(RV_object_t *parent_obj, const char *obj_path, H5I_type_t
             FUNC_GOTO_ERROR(H5E_LINK, H5E_SYSERRSTR, FAIL,
                             "request body size exceeded allocated buffer size");
 
-        http_response = RV_curl_post(curl, &parent_obj->domain->u.file.server_info, request_endpoint,
-                                     parent_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON)
+        if ((http_response = RV_curl_post(curl, &parent_obj->domain->u.file.server_info, request_endpoint,
+                                          parent_obj->domain->u.file.filepath_name, request_body,
+                                          (size_t)bytes_printed, CONTENT_TYPE_JSON)) < 0)
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL,
+                            "internal failure while making POST request to server");
+    }
+    else {
+
+        if ((http_response = RV_curl_get(curl, &parent_obj->domain->u.file.server_info, request_endpoint,
+                                         parent_obj->domain->u.file.filepath_name, CONTENT_TYPE_JSON)) < 0)
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL,
+                            "internal failure while making GET request to server");
     }
 
     if (HTTP_SUCCESS(http_response))
@@ -2492,12 +2486,12 @@ done:
 herr_t
 RV_copy_object_loc_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val       parse_tree = NULL, key_obj = NULL, target_tree = NULL;
-    char          *parsed_string = NULL;
-    const char    *path_name     = NULL;
-    loc_info      *loc_info_out  = (loc_info *)callback_data_out;
-    server_info_t *server_info   = (server_info_t *)callback_data_in;
-    herr_t         ret_value     = SUCCEED;
+    yajl_val             parse_tree = NULL, key_obj = NULL, target_tree = NULL;
+    char                *parsed_string = NULL;
+    const char          *path_name     = NULL;
+    loc_info            *loc_info_out  = (loc_info *)callback_data_out;
+    const server_info_t *server_info   = (const server_info_t *)callback_data_in;
+    herr_t               ret_value     = SUCCEED;
 
     char *GCPL_buf = NULL;
 
