@@ -858,7 +858,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         transfer_info[i].u.write_info.vlen_buf              = NULL;
         transfer_info[i].u.write_info.base64_encoded_values = NULL;
         transfer_info[i].u.write_info.selection_buf         = NULL;
-        transfer_info[i].u.write_info.uinfo.buffer          = (const void*) buf[i];
+        transfer_info[i].u.write_info.uinfo.buffer          = (const void *)buf[i];
         transfer_info[i].u.write_info.uinfo.buffer_size     = 0;
         transfer_info[i].u.write_info.uinfo.bytes_sent      = 0;
     }
