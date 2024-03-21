@@ -18,12 +18,20 @@
 #include "rest_vol_dataset.h"
 #include <math.h>
 
+/* Helpers to serialize vlen data for writes. */
+static herr_t RV_vlen_data_to_json(const void *in, size_t nelems, hid_t dtype_id, void **out,
+                                   size_t *out_size);
+static herr_t RV_pack_vlen_data(const void *in, size_t nelems, hid_t dtype_id, void **out, size_t *out_size);
+
 /* Set of callbacks for RV_parse_response() */
 static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *callback_data_in,
                                                             void *callback_data_out);
 
 static herr_t RV_json_values_to_binary_callback(char *HTTP_response, const void *callback_data_in,
                                                 void *callback_data_out);
+
+/* Convert a binary buffer of packed vlen data to a buffer of hvl_t */
+static herr_t RV_unpack_vlen_data(char *in, hid_t vlen_dtype_id, size_t nelems, void **out);
 
 /* Internal helper for RV_json_values_to_binary_callback */
 herr_t RV_json_values_to_binary_recursive(yajl_val value_entry, hid_t dtype_id, void *value_buffer);
@@ -85,6 +93,7 @@ const char *value_keys[]                  = {"value", (const char *)0};
 #define DATASET_CREATE_MAX_COMPACT_ATTRIBUTES_DEFAULT 8
 #define DATASET_CREATE_MIN_DENSE_ATTRIBUTES_DEFAULT   6
 #define OBJECT_REF_STRING_LEN                         48
+#define DATASET_VLEN_JSON_BODY_DEFAULT_SIZE           512
 
 /* Defines for multi-CURL related settings */
 #define NUM_MAX_HOST_CONNS          10
@@ -491,7 +500,6 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
         transfer_info[i].file_type_id             = ((RV_object_t *)dset[i])->u.dataset.dtype_id;
         transfer_info[i].resp_buffer.buffer_size  = CURL_RESPONSE_BUFFER_DEFAULT_SIZE;
         transfer_info[i].resp_buffer.curr_buf_ptr = transfer_info[i].resp_buffer.buffer;
-        transfer_info[i].tconv_buf                = NULL;
         transfer_info[i].bkg_buf                  = NULL;
     }
 
@@ -527,7 +535,7 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
          * All or Hyperslab selection. Point selections are dealt with by POSTing the
          * point list as JSON in the request body.
          */
-        is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
+        is_transfer_binary = !is_variable_str;
 
         /* Follow the semantics for the use of H5S_ALL */
         if (H5S_ALL == transfer_info[i].mem_space_id && H5S_ALL == transfer_info[i].file_space_id) {
@@ -566,20 +574,16 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
 
             /* Since the selection in the dataset's file dataspace is not set
              * to "all", convert the selection into JSON */
-
-            /* Retrieve the selection type to choose how to format the dataspace selection */
-            if (H5S_SEL_ERROR ==
-                (transfer_info[i].u.read_info.sel_type = H5Sget_select_type(transfer_info[i].file_space_id)))
-                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type");
-            is_transfer_binary =
-                is_transfer_binary && (H5S_SEL_POINTS != transfer_info[i].u.read_info.sel_type);
-
             if (RV_convert_dataspace_selection_to_string(transfer_info[i].file_space_id,
                                                          &(transfer_info[i].selection_body),
                                                          &selection_body_len, is_transfer_binary) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL,
                                 "can't convert dataspace selection to string representation");
         } /* end else */
+
+        if (H5S_SEL_ERROR ==
+            (transfer_info[i].u.read_info.sel_type = H5Sget_select_type(transfer_info[i].file_space_id)))
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type");
 
         /* Verify that the number of selected points matches */
         if ((mem_select_npoints = H5Sget_select_npoints(transfer_info[i].mem_space_id)) < 0)
@@ -644,37 +648,16 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
          * added as a request parameter to the GET URL.
          */
         if (H5S_SEL_POINTS == transfer_info[i].u.read_info.sel_type) {
-            /* As the dataspace-selection-to-string function is not designed to include the enclosing '{' and
-             * '}', since returning just the selection string to the user makes more sense if they are
-             * including more elements in their JSON, we have to wrap the selection body here before sending
-             * it off to cURL
-             */
-
-            /* Ensure we have enough space to add the enclosing '{' and '}' */
-            if (NULL == (transfer_info[i].selection_body =
-                             (char *)RV_realloc(transfer_info[i].selection_body, selection_body_len + 3)))
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
-                                "can't reallocate space for point selection body");
-
-            /* Shift the whole string down by a byte */
-            memmove(transfer_info[i].selection_body + 1, transfer_info[i].selection_body,
-                    selection_body_len + 1);
-
-            /* Add in the braces */
-            transfer_info[i].selection_body[0]                      = '{';
-            transfer_info[i].selection_body[selection_body_len + 1] = '}';
-            transfer_info[i].selection_body[selection_body_len + 2] = '\0';
-
             /* Check to make sure that the size of the selection HTTP body can safely be cast to a curl_off_t
              */
             if (sizeof(curl_off_t) < sizeof(size_t))
-                ASSIGN_TO_SMALLER_SIZE(transfer_info[i].u.read_info.post_len, curl_off_t,
-                                       selection_body_len + 2, size_t)
+                ASSIGN_TO_SMALLER_SIZE(transfer_info[i].u.read_info.post_len, curl_off_t, selection_body_len,
+                                       size_t)
             else if (sizeof(curl_off_t) > sizeof(size_t))
-                transfer_info[i].u.read_info.post_len = (curl_off_t)(selection_body_len + 2);
+                transfer_info[i].u.read_info.post_len = (curl_off_t)(selection_body_len);
             else
                 ASSIGN_TO_SAME_SIZE_UNSIGNED_TO_SIGNED(transfer_info[i].u.read_info.post_len, curl_off_t,
-                                                       selection_body_len + 2, size_t)
+                                                       selection_body_len, size_t)
 
             if (CURLE_OK != curl_easy_setopt(transfer_info[i].curl_easy_handle, CURLOPT_POST, 1))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL,
@@ -692,8 +675,14 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL POST data size: %s",
                                 transfer_info[i].curl_err_buf);
 
-            transfer_info[i].curl_headers =
-                curl_slist_append(transfer_info[i].curl_headers, "Content-Type: application/json");
+            if (!is_transfer_binary) {
+                transfer_info[i].curl_headers =
+                    curl_slist_append(transfer_info[i].curl_headers, "Content-Type: application/json");
+            }
+            else {
+                transfer_info[i].curl_headers = curl_slist_append(transfer_info[i].curl_headers,
+                                                                  "Content-Type: application/octet-stream");
+            }
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Setup cURL to POST point list for dataset read\n\n");
@@ -783,11 +772,11 @@ herr_t
 RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_space_id[],
                  hid_t _file_space_id[], hid_t dxpl_id, const void *buf[], void **req)
 {
-    H5S_sel_type           sel_type = H5S_SEL_ALL;
-    H5T_class_t            dtype_class;
-    hbool_t                is_transfer_binary = FALSE;
-    htri_t                 contiguous         = FALSE;
-    htri_t                 is_variable_str;
+    H5S_sel_type           sel_type            = H5S_SEL_ALL;
+    H5T_class_t            dtype_class         = H5T_NO_CLASS;
+    hbool_t                is_transfer_binary  = FALSE;
+    htri_t                 contiguous          = FALSE;
+    htri_t                 is_variable_str     = FALSE;
     hssize_t               mem_select_npoints  = 0;
     hssize_t               file_select_npoints = 0;
     hssize_t               offset              = 0;
@@ -799,12 +788,12 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
     herr_t                 ret_value           = SUCCEED;
     dataset_transfer_info *transfer_info       = NULL;
     CURL                  *curl_multi_handle   = NULL;
+    curl_off_t             write_len           = 0;
 
-    hbool_t     needs_tconv    = FALSE;
-    size_t      file_type_size = 0;
-    size_t      mem_type_size  = 0;
-    hbool_t     fill_bkg       = FALSE;
-    const void *buf_to_write   = NULL;
+    hbool_t needs_tconv    = FALSE;
+    size_t  file_type_size = 0;
+    size_t  mem_type_size  = 0;
+    hbool_t fill_bkg       = FALSE;
 
     if ((transfer_info = RV_calloc(count * sizeof(dataset_transfer_info))) == NULL)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset transfer info");
@@ -814,7 +803,6 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 
     /* Initialize arrays */
     for (size_t i = 0; i < count; i++) {
-
         if (!buf[i])
             FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "a given write buffer was NULL");
 
@@ -851,11 +839,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up non global curl write data: %s",
                             transfer_info[i].curl_err_buf);
 
-        transfer_info[i].u.write_info.write_body            = NULL;
-        transfer_info[i].u.write_info.base64_encoded_values = NULL;
-        transfer_info[i].dataset                            = (RV_object_t *)dset[i];
-        transfer_info[i].u.write_info.buf                   = buf[i];
-        transfer_info[i].transfer_type                      = WRITE;
+        transfer_info[i].dataset       = (RV_object_t *)dset[i];
+        transfer_info[i].transfer_type = WRITE;
 
         transfer_info[i].mem_space_id             = _mem_space_id[i];
         transfer_info[i].file_space_id            = _file_space_id[i];
@@ -867,6 +852,15 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         transfer_info[i].resp_buffer.curr_buf_ptr = transfer_info[i].resp_buffer.buffer;
         transfer_info[i].tconv_buf                = NULL;
         transfer_info[i].bkg_buf                  = NULL;
+
+        transfer_info[i].u.write_info.gather_buf            = NULL;
+        transfer_info[i].u.write_info.serialize_buf         = NULL;
+        transfer_info[i].u.write_info.vlen_buf              = NULL;
+        transfer_info[i].u.write_info.base64_encoded_values = NULL;
+        transfer_info[i].u.write_info.selection_buf         = NULL;
+        transfer_info[i].u.write_info.uinfo.buffer          = (const void*) buf[i];
+        transfer_info[i].u.write_info.uinfo.buffer_size     = 0;
+        transfer_info[i].u.write_info.uinfo.bytes_sent      = 0;
     }
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -900,7 +894,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
          * All or Hyperslab selection. Point selections are dealt with by POSTing the
          * point list as JSON in the request body.
          */
-        is_transfer_binary = (H5T_VLEN != dtype_class) && !is_variable_str;
+        is_transfer_binary = !is_variable_str;
 
         /* Follow the semantics for the use of H5S_ALL */
         if (H5S_ALL == transfer_info[i].mem_space_id && H5S_ALL == transfer_info[i].file_space_id) {
@@ -965,31 +959,46 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         printf("-> %lld points selected in memory dataspace\n\n", mem_select_npoints);
 #endif
 
+        if ((file_type_size = H5Tget_size(transfer_info[i].file_type_id)) == 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to get size of file datatype");
+
+        if ((mem_type_size = H5Tget_size(transfer_info[i].mem_type_id)) == 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to get size of memory datatype");
+
+        write_body_len = (size_t)file_select_npoints * file_type_size;
+
+        if ((contiguous = RV_dataspace_selection_is_contiguous(transfer_info[i].mem_space_id)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL,
+                            "Unable to determine if the dataspace selection is contiguous");
+
+        if (!contiguous) {
+            if (NULL == (transfer_info[i].u.write_info.gather_buf = (char *)RV_malloc(write_body_len)))
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for the 'write_body' values");
+            if (H5Dgather(transfer_info[i].mem_space_id, transfer_info[i].u.write_info.uinfo.buffer,
+                          transfer_info[i].file_type_id, write_body_len,
+                          transfer_info[i].u.write_info.gather_buf, NULL, NULL) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "can't gather data to write buffer");
+            transfer_info[i].u.write_info.uinfo.buffer = transfer_info[i].u.write_info.gather_buf;
+        }
+
         /* Handle conversion from memory datatype to file datatype, if necessary */
         if ((needs_tconv = RV_need_tconv(transfer_info[i].file_type_id, transfer_info[i].mem_type_id)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to check if datatypes need conversion");
 
-        if (needs_tconv) {
+        if (needs_tconv > 0) {
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Beginning type conversion for write\n");
 #endif
-            if ((file_type_size = H5Tget_size(transfer_info[i].file_type_id)) == 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to get size of file datatype");
-
-            if ((mem_type_size = H5Tget_size(transfer_info[i].mem_type_id)) == 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to get size of memory datatype");
-
             /* Initialize type conversion */
             RV_tconv_init(transfer_info[i].mem_type_id, &mem_type_size, transfer_info[i].file_type_id,
                           &file_type_size, (size_t)file_select_npoints, TRUE, FALSE,
-                          &transfer_info[i].tconv_buf, &transfer_info[i].bkg_buf, NULL, &fill_bkg);
+                          (void **)&transfer_info[i].tconv_buf, &transfer_info[i].bkg_buf, NULL, &fill_bkg);
 
             /* Perform type conversion on response values */
             memset(transfer_info[i].tconv_buf, 0, file_type_size * (size_t)mem_select_npoints);
-            memcpy(transfer_info[i].tconv_buf,
-                   (transfer_info[i].transfer_type == READ) ? transfer_info[i].u.read_info.buf
-                                                            : transfer_info[i].u.write_info.buf,
+            memcpy(transfer_info[i].tconv_buf, transfer_info[i].u.write_info.uinfo.buffer,
                    mem_type_size * (size_t)mem_select_npoints);
 
             if (H5Tconvert(transfer_info[i].mem_type_id, transfer_info[i].file_type_id,
@@ -997,56 +1006,44 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                            H5P_DEFAULT) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
                                 "failed to convert file datatype to memory datatype");
-        }
 
-        /* If type conversion was performed, write from conversion buffer. Otherwise, write from transfer
-         * buffer for this transfer type */
-        if (transfer_info[i].tconv_buf) {
-            buf_to_write = transfer_info[i].tconv_buf;
-        }
-        else {
-            buf_to_write = (transfer_info[i].transfer_type == READ) ? transfer_info[i].u.read_info.buf
-                                                                    : transfer_info[i].u.write_info.buf;
+            transfer_info[i].u.write_info.uinfo.buffer = transfer_info[i].tconv_buf;
         }
 
         /* Setup the size of the data being transferred and the data buffer itself (for non-simple
          * types like object references or variable length types)
          */
         if ((H5T_REFERENCE != dtype_class) && (H5T_VLEN != dtype_class) && !is_variable_str) {
-            size_t dtype_size;
-
-            if (0 == (dtype_size = H5Tget_size(transfer_info[i].file_type_id)))
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "file datatype is invalid");
-
-            write_body_len = (size_t)file_select_npoints * dtype_size;
-            if ((contiguous = RV_dataspace_selection_is_contiguous(transfer_info[i].mem_space_id)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL,
-                                "Unable to determine if the dataspace selection is contiguous");
-            if (!contiguous) {
-                if (NULL == (transfer_info[i].u.write_info.write_body = (char *)RV_malloc(write_body_len)))
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
-                                    "can't allocate space for the 'write_body' values");
-                if (H5Dgather(transfer_info[i].mem_space_id, buf_to_write, transfer_info[i].file_type_id,
-                              write_body_len, transfer_info[i].u.write_info.write_body, NULL, NULL) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "can't gather data to write buffer");
-                buf_to_write = transfer_info[i].u.write_info.write_body;
-            }
-            else {
+            if (contiguous) {
                 if ((offset = RV_convert_start_to_offset(transfer_info[i].mem_space_id)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
                                     "Unable to determine memory offset value");
-                buf_to_write = (const void *)((const char *)buf_to_write + (size_t)offset * dtype_size);
+                transfer_info[i].u.write_info.uinfo.buffer =
+                    (const void *)((const char *)transfer_info[i].u.write_info.uinfo.buffer +
+                                   (size_t)offset * file_type_size);
             }
         } /* end if */
         else {
+            if (H5T_VLEN == dtype_class) {
+                /* Pack vlen data into single buffer for server */
+                if (RV_pack_vlen_data(transfer_info[i].u.write_info.uinfo.buffer, (size_t)file_select_npoints,
+                                      mem_type_id[0], (void **)&transfer_info[i].u.write_info.vlen_buf,
+                                      &write_body_len) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                                    "can't convert vlen data to a binary buffer");
+
+                transfer_info[i].u.write_info.uinfo.buffer = transfer_info[i].u.write_info.vlen_buf;
+            }
+
             if (H5T_STD_REF_OBJ == transfer_info[i].file_type_id) {
                 /* Convert the buffer of rest_obj_ref_t's to a binary buffer */
                 if (RV_convert_obj_refs_to_buffer(
-                        (const rv_obj_ref_t *)buf_to_write, (size_t)file_select_npoints,
-                        &(transfer_info[i].u.write_info.write_body), &write_body_len) < 0)
+                        (const rv_obj_ref_t *)transfer_info[i].u.write_info.uinfo.buffer,
+                        (size_t)file_select_npoints, (char **)&(transfer_info[i].u.write_info.serialize_buf),
+                        &write_body_len) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
                                     "can't convert object ref/s to ref string/s");
-                buf_to_write = transfer_info[i].u.write_info.write_body;
+                transfer_info[i].u.write_info.uinfo.buffer = transfer_info[i].u.write_info.serialize_buf;
             } /* end if */
         }     /* end else */
 
@@ -1106,30 +1103,29 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
                                 "can't allocate temporary buffer for base64-encoded write buffer");
 
-            if (RV_base64_encode(buf_to_write, write_body_len,
-                                 &(transfer_info[i].u.write_info.base64_encoded_values), &value_body_len) < 0)
+            if (RV_base64_encode(transfer_info[i].u.write_info.uinfo.buffer, write_body_len,
+                                 (char **)&transfer_info[i].u.write_info.base64_encoded_values,
+                                 &value_body_len) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTENCODE, FAIL, "can't base64-encode write buffer");
 
 #ifdef RV_CONNECTOR_DEBUG
-            printf("-> Base64-encoded data buffer: %s\n\n",
+            printf("-> Base64-encoded data buffer for dataset %zu: %s\n\n", i,
                    transfer_info[i].u.write_info.base64_encoded_values);
 #endif
-
-            if (transfer_info[i].u.write_info.write_body) {
-                RV_free(transfer_info[i].u.write_info.write_body);
-                transfer_info[i].u.write_info.write_body = NULL;
-            }
+            /* Copy encoded values into format string */
             write_body_len = (strlen(fmt_string) - 4) + selection_body_len + value_body_len;
-            if (NULL == (transfer_info[i].u.write_info.write_body = RV_malloc(write_body_len + 1)))
+            if (NULL == (transfer_info[i].u.write_info.selection_buf = RV_malloc(write_body_len + 1)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for write buffer");
 
             if ((bytes_printed =
-                     snprintf(transfer_info[i].u.write_info.write_body, write_body_len + 1, fmt_string,
+                     snprintf(transfer_info[i].u.write_info.selection_buf, write_body_len + 1, fmt_string,
                               selection_body, transfer_info[i].u.write_info.base64_encoded_values)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
+            transfer_info[i].u.write_info.uinfo.buffer = transfer_info[i].u.write_info.selection_buf;
+
 #ifdef RV_CONNECTOR_DEBUG
-            printf("-> Write body: %s\n\n", transfer_info[i].u.write_info.write_body);
+            printf("-> Write body: %s\n\n", transfer_info[i].u.write_info.selection_buf);
 #endif
 
             if (bytes_printed >= write_body_len + 1)
@@ -1142,22 +1138,18 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Setup cURL to POST point list for dataset write\n\n");
 #endif
-        } /* end if */
+        }
 
-        transfer_info[i].u.write_info.uinfo.buffer =
-            is_transfer_binary ? buf_to_write : transfer_info[i].u.write_info.write_body;
         transfer_info[i].u.write_info.uinfo.buffer_size = write_body_len;
         transfer_info[i].u.write_info.uinfo.bytes_sent  = 0;
 
         /* Check to make sure that the size of the write body can safely be cast to a curl_off_t */
         if (sizeof(curl_off_t) < sizeof(size_t))
-            ASSIGN_TO_SMALLER_SIZE(transfer_info[i].u.write_info.write_len, curl_off_t, write_body_len,
-                                   size_t)
+            ASSIGN_TO_SMALLER_SIZE(write_len, curl_off_t, write_body_len, size_t)
         else if (sizeof(curl_off_t) > sizeof(size_t))
-            transfer_info[i].u.write_info.write_len = (curl_off_t)write_body_len;
+            write_len = (curl_off_t)write_body_len;
         else
-            ASSIGN_TO_SAME_SIZE_UNSIGNED_TO_SIGNED(transfer_info[i].u.write_info.write_len, curl_off_t,
-                                                   write_body_len, size_t)
+            ASSIGN_TO_SAME_SIZE_UNSIGNED_TO_SIGNED(write_len, curl_off_t, write_body_len, size_t)
 
         if (CURLE_OK != curl_easy_setopt(transfer_info[i].curl_easy_handle, CURLOPT_UPLOAD, 1))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP PUT request: %s",
@@ -1167,8 +1159,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                                          &(transfer_info[i].u.write_info.uinfo)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data: %s",
                             transfer_info[i].curl_err_buf);
-        if (CURLE_OK != curl_easy_setopt(transfer_info[i].curl_easy_handle, CURLOPT_INFILESIZE_LARGE,
-                                         transfer_info[i].u.write_info.write_len))
+        if (CURLE_OK !=
+            curl_easy_setopt(transfer_info[i].curl_easy_handle, CURLOPT_INFILESIZE_LARGE, write_len))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL PUT data size: %s",
                             transfer_info[i].curl_err_buf);
         if (CURLE_OK != curl_easy_setopt(transfer_info[i].curl_easy_handle, CURLOPT_HTTPHEADER,
@@ -1180,7 +1172,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't set cURL request URL: %s",
                             transfer_info[i].curl_err_buf);
 
-        if (transfer_info[i].u.write_info.write_len > 0) {
+        if (write_len > 0) {
             if (CURLM_OK != curl_multi_add_handle(curl_multi_handle, transfer_info[i].curl_easy_handle))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL, "can't add cURL handle to multi handle: %s",
                                 transfer_info[i].curl_err_buf);
@@ -1190,6 +1182,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
             RV_free(selection_body);
             selection_body = NULL;
         }
+
     } /* End iteration over dsets to write to */
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1224,13 +1217,42 @@ done:
             curl_easy_cleanup(transfer_info[i].curl_easy_handle);
         }
 
-        RV_free(transfer_info[i].u.write_info.write_body);
-        RV_free(transfer_info[i].request_url);
-        RV_free(transfer_info[i].u.write_info.base64_encoded_values);
-        RV_free(transfer_info[i].resp_buffer.buffer);
+        if (transfer_info[i].tconv_buf) {
+            /* Clean up memory allocated by type conversion of vlen types */
+            if ((dtype_class = H5Tget_class(transfer_info[i].mem_type_id)) == H5T_NO_CLASS)
+                FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get mem dtype class");
 
-        if (transfer_info[i].tconv_buf)
+            if (dtype_class == H5T_VLEN) {
+                /* Type conversion buffer is packed, so free allocated buffers manually */
+                for (size_t j = 0; j < (size_t)file_select_npoints; j++) {
+                    hvl_t vl = ((hvl_t *)transfer_info[i].tconv_buf)[j];
+
+                    if (vl.p)
+                        RV_free(vl.p);
+                }
+            }
+
             RV_free(transfer_info[i].tconv_buf);
+            transfer_info[i].tconv_buf = NULL;
+        }
+
+        if (transfer_info[i].u.write_info.gather_buf)
+            RV_free(transfer_info[i].u.write_info.gather_buf);
+
+        if (transfer_info[i].u.write_info.serialize_buf)
+            RV_free(transfer_info[i].u.write_info.serialize_buf);
+
+        if (transfer_info[i].u.write_info.vlen_buf)
+            RV_free(transfer_info[i].u.write_info.vlen_buf);
+
+        if (transfer_info[i].u.write_info.base64_encoded_values)
+            RV_free(transfer_info[i].u.write_info.base64_encoded_values);
+
+        if (transfer_info[i].u.write_info.selection_buf)
+            RV_free(transfer_info[i].u.write_info.selection_buf);
+
+        RV_free(transfer_info[i].request_url);
+        RV_free(transfer_info[i].resp_buffer.buffer);
 
         if (transfer_info[i].bkg_buf)
             RV_free(transfer_info[i].bkg_buf);
@@ -3838,15 +3860,29 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                 break;
 
             case H5S_SEL_POINTS:
-                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_UNSUPPORTED, FAIL,
-                                "point selections are unsupported as a HTTP request parameter");
+                hssize_t num_points;
+                size_t   point_buf_size;
+#ifdef RV_CONNECTOR_DEBUG
+                printf("-> Point selection\n\n");
+#endif
+                /* Format the point selection as a binary buffer containing each coordinate index as an
+                 * hsize_t */
+                if ((num_points = H5Sget_select_npoints(space_id)) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of selected points");
+
+                point_buf_size = (size_t)(ndims * num_points) * sizeof(hsize_t);
+                CHECKED_REALLOC_NO_PTR(out_string, out_string_len, point_buf_size, H5E_DATASPACE, FAIL);
+
+                if (H5Sget_select_elem_pointlist(space_id, 0, (hsize_t)num_points, (hsize_t *)out_string) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve point list");
+
+                out_string_curr_pos = out_string + point_buf_size;
                 break;
 
             case H5S_SEL_HYPERSLABS: {
 #ifdef RV_CONNECTOR_DEBUG
                 printf("-> Hyperslab selection\n\n");
 #endif
-
                 /* Format the hyperslab selection according to the 'select' request/query parameter.
                  * This is composed of N triplets, one for each dimension of the dataspace, and looks like:
                  *
@@ -4437,17 +4473,19 @@ RV_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
 
     void *obj_ref_buf = NULL;
 
-    H5S_sel_type sel_type = H5S_SEL_NONE;
-    void        *json_buf = NULL;
+    H5S_sel_type sel_type  = H5S_SEL_NONE;
+    void        *json_buf  = NULL;
+    void        *vlen_buf  = NULL;
+    void        *tconv_buf = NULL;
+    void        *bkg_buf   = NULL;
 
-    void *tconv_buf = NULL;
-    void *bkg_buf   = NULL;
+    size_t  file_type_size = 0;
+    size_t  mem_type_size  = 0;
+    hbool_t needs_tconv    = FALSE;
+    hbool_t fill_bkg       = FALSE;
 
-    size_t           file_type_size = 0;
-    size_t           mem_type_size  = 0;
-    hbool_t          needs_tconv    = FALSE;
-    RV_tconv_reuse_t reuse          = RV_TCONV_REUSE_NONE;
-    hbool_t          fill_bkg       = FALSE;
+    /* Used to scatter read data into user buffer */
+    struct response_read_info resp_info;
 
     if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
@@ -4470,88 +4508,66 @@ RV_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
 
     mem_data_size = (size_t)file_select_npoints * mem_type_size;
 
+    if ((sel_type = H5Sget_select_type(file_space_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get selection type for file space");
+
     if ((H5T_REFERENCE != dtype_class) && (H5T_VLEN != dtype_class) && !is_variable_str) {
-        /* Scatter the read data out to the supplied read buffer according to the
-         * mem_type_id and mem_space_id given */
-        struct response_read_info resp_info;
-        resp_info.read_size = &mem_data_size;
-
-        if ((sel_type = H5Sget_select_type(file_space_id)) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get selection type for file space");
-
-        if (sel_type != H5S_SEL_POINTS) {
-            resp_info.buffer = resp_buffer.buffer;
-        }
-        else {
-            /* Server response is JSON instead of binary.
-             * Parse its 'value' field to a binary array to use for src_buf */
-            if (RV_parse_response(resp_buffer.buffer, (void *)&file_type_id, (void *)&json_buf,
-                                  RV_json_values_to_binary_callback) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "can't parse values");
-
-            resp_info.buffer = json_buf;
-        }
-
-        if ((needs_tconv = RV_need_tconv(file_type_id, mem_type_id)) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to check if datatypes need conversion");
-
-        if (needs_tconv) {
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Beginning type conversion\n");
-#endif
-
-            /* Initialize type conversion */
-            RV_tconv_init(file_type_id, &file_type_size, mem_type_id, &mem_type_size,
-                          (size_t)file_select_npoints, TRUE, FALSE, &tconv_buf, &bkg_buf, &reuse, &fill_bkg);
-
-            /* Perform type conversion on response values */
-            if (reuse == RV_TCONV_REUSE_TCONV) {
-                /* Use read buffer as type conversion buffer */
-                if (H5Tconvert(file_type_id, mem_type_id, (size_t)file_select_npoints, resp_info.buffer,
-                               bkg_buf, H5P_DEFAULT) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
-                                    "failed to convert file datatype to memory datatype");
-            }
-            else if (reuse == RV_TCONV_REUSE_BKG) {
-                /* Use read buffer as background buffer */
-                memcpy(tconv_buf, resp_info.buffer, file_type_size * (size_t)file_select_npoints);
-
-                if (H5Tconvert(file_type_id, mem_type_id, (size_t)file_select_npoints, tconv_buf,
-                               resp_info.buffer, H5P_DEFAULT) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
-                                    "failed to convert file datatype to memory datatype");
-                resp_info.buffer = tconv_buf;
-            }
-            else {
-                /* Use newly allocated buffer for type conversion */
-                memcpy(tconv_buf, resp_info.buffer, file_type_size * (size_t)file_select_npoints);
-
-                if (H5Tconvert(file_type_id, mem_type_id, (size_t)file_select_npoints, tconv_buf, bkg_buf,
-                               H5P_DEFAULT) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
-                                    "failed to convert file datatype to memory datatype");
-
-                resp_info.buffer = tconv_buf;
-            }
-        }
-
-        if (H5Dscatter(dataset_read_scatter_op, &resp_info, mem_type_id, mem_space_id, buf) < 0)
-            FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL, "can't scatter data to read buffer");
+        resp_info.buffer = resp_buffer.buffer;
     }
     else {
-        if (H5T_STD_REF_OBJ == mem_type_id) {
+        if (H5T_VLEN == dtype_class) {
+            /* Variable length data returned in "packed" binary form */
+            if (RV_unpack_vlen_data(resp_buffer.buffer, mem_type_id, (size_t)file_select_npoints, &vlen_buf) <
+                0)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "can't unpack vlen data from server");
+
+            resp_info.buffer = vlen_buf;
+        }
+        else if (H5T_STD_REF_OBJ == mem_type_id) {
             /* Convert the received binary buffer into a buffer of rest_obj_ref_t's */
             if (RV_convert_buffer_to_obj_refs(resp_buffer.buffer, (size_t)file_select_npoints,
                                               (rv_obj_ref_t **)&obj_ref_buf, &file_data_size) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
                                 "can't convert ref string/s to object ref array");
 
-            memcpy(buf, obj_ref_buf, file_data_size);
+            resp_info.buffer = obj_ref_buf;
         }
         else {
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype");
         }
     }
+
+    /* Perform type conversion if necessary */
+    if ((needs_tconv = RV_need_tconv(file_type_id, mem_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to check if datatypes need conversion");
+
+    if (needs_tconv) {
+#ifdef RV_CONNECTOR_DEBUG
+        printf("-> Beginning type conversion\n");
+#endif
+
+        /* Initialize type conversion */
+        if (RV_tconv_init(file_type_id, &file_type_size, mem_type_id, &mem_type_size,
+                          (size_t)file_select_npoints, TRUE, FALSE, &tconv_buf, &bkg_buf, NULL,
+                          &fill_bkg) < 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCONVERT, FAIL, "can't set up type conversion");
+
+        memset(tconv_buf, 0, (file_data_size > mem_data_size ? file_data_size : mem_data_size));
+        memcpy(tconv_buf, resp_info.buffer, file_data_size);
+
+        /* Perform type conversion on response values */
+        if (H5Tconvert(file_type_id, mem_type_id, (size_t)file_select_npoints, tconv_buf, bkg_buf,
+                       H5P_DEFAULT) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                            "failed to convert file datatype to memory datatype");
+
+        resp_info.buffer = tconv_buf;
+    }
+
+    resp_info.read_size = &mem_data_size;
+
+    if (H5Dscatter(dataset_read_scatter_op, &resp_info, mem_type_id, mem_space_id, buf) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_READERROR, FAIL, "can't scatter data to read buffer");
 
 done:
     if (obj_ref_buf)
@@ -4560,8 +4576,23 @@ done:
     if (json_buf)
         RV_free(json_buf);
 
-    if (tconv_buf)
+    if (tconv_buf) {
+        if (H5T_VLEN == dtype_class && vlen_buf) {
+            /* Returned buffer is densely packed and not laid out according to the filespace; free vlen data
+             * through iteration */
+            for (size_t i = 0; i < file_select_npoints; i++) {
+                hvl_t vl = ((hvl_t *)vlen_buf)[i];
+
+                if (vl.p)
+                    RV_free(vl.p);
+            }
+        }
         RV_free(tconv_buf);
+    }
+
+    if (vlen_buf) {
+        RV_free(vlen_buf);
+    }
 
     if (bkg_buf)
         RV_free(bkg_buf);
@@ -4793,14 +4824,13 @@ static herr_t
 RV_json_values_to_binary_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
 
-    void      **out_buf    = (void **)callback_data_out;
-    const hid_t dtype_id   = *(const hid_t *)callback_data_in;
-    yajl_val    parse_tree = NULL, key_obj;
-    char       *parsed_string;
-    herr_t      ret_value    = SUCCEED;
-    void       *value_buffer = NULL;
-    size_t      dtype_size   = 0;
-    H5T_class_t dtype_class  = H5T_NO_CLASS;
+    void   **out_buf    = (void **)callback_data_out;
+    hid_t    dtype_id   = H5I_INVALID_HID;
+    yajl_val parse_tree = NULL, key_obj;
+    char    *parsed_string;
+    herr_t   ret_value    = SUCCEED;
+    void    *value_buffer = NULL;
+    size_t   dtype_size   = 0;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting response JSON values to binary buffer\n\n");
@@ -4810,6 +4840,10 @@ RV_json_values_to_binary_callback(char *HTTP_response, const void *callback_data
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "HTTP response buffer was NULL");
     if (!out_buf)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL");
+    if (!callback_data_in)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "provided dtype id was NULL");
+
+    dtype_id = *(const hid_t *)callback_data_in;
 
     if ((dtype_size = H5Tget_size(dtype_id)) <= 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get datatype size");
@@ -4842,8 +4876,26 @@ done:
     if (ret_value >= 0 && value_buffer)
         *out_buf = value_buffer;
 
-    if (ret_value < 0 && value_buffer)
+    if (ret_value < 0 && value_buffer) {
+        H5T_class_t dtype_class = H5T_NO_CLASS;
+
+        if ((dtype_class = H5Tget_class(dtype_id)) < 0)
+            FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get datatype class");
+
+        if (dtype_class == H5T_VLEN) {
+            /* Reclaim each allocated vlen buffer */
+            hvl_t *curr = (hvl_t *)value_buffer;
+
+            while (curr->p) {
+                RV_free(curr->p);
+                curr->p = NULL;
+                curr += 1;
+            }
+        }
+
         RV_free(value_buffer);
+        *out_buf = NULL;
+    }
 
     return ret_value;
 }
@@ -4852,9 +4904,11 @@ done:
 herr_t
 RV_json_values_to_binary_recursive(yajl_val value_entry, hid_t dtype_id, void *value_buffer)
 {
-    herr_t      ret_value   = SUCCEED;
-    H5T_class_t dtype_class = H5T_NO_CLASS;
-    size_t      dtype_size  = 0;
+    herr_t      ret_value       = SUCCEED;
+    H5T_class_t dtype_class     = H5T_NO_CLASS;
+    size_t      dtype_size      = 0;
+    hid_t       parent_dtype_id = H5I_INVALID_HID;
+    hvl_t      *vl              = NULL;
 
     if ((dtype_size = H5Tget_size(dtype_id)) <= 0)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get datatype size");
@@ -4862,75 +4916,508 @@ RV_json_values_to_binary_recursive(yajl_val value_entry, hid_t dtype_id, void *v
     if ((dtype_class = H5Tget_class(dtype_id)) == H5T_NO_CLASS)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get datatype class");
 
-    if (dtype_class == H5T_INTEGER) {
-        if (H5Tequal(dtype_id, H5T_NATIVE_INT) != TRUE)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
-                            "parsing non-native integer types is unsupported");
+    switch (dtype_class) {
+        case (H5T_INTEGER): {
+            if (H5Tequal(dtype_id, H5T_NATIVE_INT) != TRUE)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                                "parsing non-native integer types is unsupported");
 
-        if (!YAJL_IS_INTEGER(value_entry))
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
-                            "parsed yajl val has incorrect type; expected integer");
-
-        *((int *)value_buffer) = (int)YAJL_GET_INTEGER(value_entry);
-    }
-    else if (dtype_class == H5T_FLOAT) {
-        if (H5Tequal(dtype_id, H5T_NATIVE_FLOAT) == TRUE) {
-            if (!YAJL_IS_DOUBLE(value_entry))
+            if (!YAJL_IS_INTEGER(value_entry))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
-                                "parsed yajl val has incorrect type; expected float-like");
+                                "parsed yajl val has incorrect type; expected integer");
 
-            *((float *)value_buffer) = (float)YAJL_GET_DOUBLE(value_entry);
-        }
-        else if (H5Tequal(dtype_id, H5T_NATIVE_DOUBLE) == TRUE) {
-            if (!YAJL_IS_DOUBLE(value_entry))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
-                                "parsed yajl val has incorrect type; expected double");
+            *((int *)value_buffer) = (int)YAJL_GET_INTEGER(value_entry);
+        } break;
 
-            *((double *)value_buffer) = YAJL_GET_DOUBLE(value_entry);
-        }
-        else {
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
-                            "parsing non-native float types is unsupported");
-        }
-    }
-    else if (dtype_class == H5T_COMPOUND) {
-        /* Recursively parse each member of the compound type */
-        int      nmembers        = 0;
-        size_t   offset          = 0;
-        size_t   member_size     = 0;
-        hid_t    member_dtype_id = H5I_INVALID_HID;
-        yajl_val member_val;
+        case (H5T_FLOAT): {
+            if (H5Tequal(dtype_id, H5T_NATIVE_FLOAT) == TRUE) {
+                if (!YAJL_IS_DOUBLE(value_entry))
+                    FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
+                                    "parsed yajl val has incorrect type; expected float-like");
 
-        if ((nmembers = H5Tget_nmembers(dtype_id)) < 0)
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
-                            "can't get number of members in compound datatype");
+                *((float *)value_buffer) = (float)YAJL_GET_DOUBLE(value_entry);
+            }
+            else if (H5Tequal(dtype_id, H5T_NATIVE_DOUBLE) == TRUE) {
+                if (!YAJL_IS_DOUBLE(value_entry))
+                    FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL,
+                                    "parsed yajl val has incorrect type; expected double");
 
-        for (int i = 0; i < nmembers; i++) {
-            if ((member_dtype_id = H5Tget_member_type(dtype_id, (unsigned int)i)) < 0)
+                *((double *)value_buffer) = YAJL_GET_DOUBLE(value_entry);
+            }
+            else {
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                                "parsing non-native float types is unsupported");
+            }
+        } break;
+
+        case (H5T_STRING): {
+            char *vlen_char = NULL;
+
+            if ((vlen_char = YAJL_GET_STRING(value_entry)) == NULL)
+                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed vlen character sequence was NULL");
+
+            memcpy((char *)value_buffer, vlen_char, dtype_size);
+
+        } break;
+
+        case (H5T_COMPOUND): {
+            /* Recursively parse each member of the compound type */
+            int      nmembers        = 0;
+            size_t   offset          = 0;
+            size_t   member_size     = 0;
+            hid_t    member_dtype_id = H5I_INVALID_HID;
+            yajl_val member_val;
+
+            if ((nmembers = H5Tget_nmembers(dtype_id)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
-                                "can't get datatype of member in compound datatype");
+                                "can't get number of members in compound datatype");
 
-            if ((member_size = H5Tget_size(member_dtype_id)) == 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get size of member datatype");
+            for (int i = 0; i < nmembers; i++) {
+                if ((member_dtype_id = H5Tget_member_type(dtype_id, (unsigned int)i)) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                    "can't get datatype of member in compound datatype");
 
-            if ((member_val = YAJL_GET_OBJECT(value_entry)->values[i]) == NULL)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
-                                "failed to parse member of compound type");
+                if ((member_size = H5Tget_size(member_dtype_id)) == 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get size of member datatype");
 
-            if (RV_json_values_to_binary_recursive(member_val, member_dtype_id,
-                                                   (void *)((char *)value_buffer + offset)) < 0)
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "failed to parse member datatype");
+                if ((member_val = YAJL_GET_OBJECT(value_entry)->values[i]) == NULL)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                                    "failed to parse member of compound type");
 
-            offset += member_size;
-            member_val      = NULL;
-            member_size     = 0;
-            member_dtype_id = H5I_INVALID_HID;
-        }
-    }
-    else {
-        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype class for parsing");
+                if (RV_json_values_to_binary_recursive(member_val, member_dtype_id,
+                                                       (void *)((char *)value_buffer + offset)) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "failed to parse member datatype");
+
+                offset += member_size;
+                member_val      = NULL;
+                member_size     = 0;
+                member_dtype_id = H5I_INVALID_HID;
+            }
+        } break;
+
+        case (H5T_VLEN): {
+            yajl_val seq_elem_val      = NULL;
+            size_t   parent_dtype_size = 0;
+            void    *seq_elem_ptr      = NULL;
+            vl                         = (hvl_t *)value_buffer;
+
+            if ((parent_dtype_id = H5Tget_super(dtype_id)) == H5I_INVALID_HID)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get base type of vlen sequence");
+
+            if ((parent_dtype_size = H5Tget_size(parent_dtype_id)) == 0)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get size of vlen parent type");
+
+            if (!YAJL_IS_ARRAY(value_entry))
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL,
+                                "server returned invalid json for vlen sequence");
+
+            if (YAJL_GET_ARRAY(value_entry) == NULL)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "couldn't parse returned vlen sequence");
+
+            if ((vl->len = YAJL_GET_ARRAY(value_entry)->len) <= 0)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL,
+                                "server returned vlen sequence with invalid length");
+
+            if ((vl->p = calloc(vl->len, parent_dtype_size)) == NULL)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for returned vlen seq data");
+
+            /* Recursively encode each element in the sequence and place it in the allocated buffer */
+            for (size_t i = 0; i < vl->len; i++) {
+                if ((seq_elem_val = YAJL_GET_ARRAY(value_entry)->values[i]) == NULL)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "can't parse vlen sequence element");
+
+                seq_elem_ptr = (void *)(((char *)vl->p) + i * parent_dtype_size);
+
+                if (RV_json_values_to_binary_recursive(seq_elem_val, parent_dtype_id, seq_elem_ptr) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL,
+                                    "can't parse element of vlen sequence");
+            }
+
+        } break;
+
+        default: {
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype class for parsing");
+        } break;
     }
 
 done:
+    if ((ret_value < 0) && (dtype_class == H5T_VLEN)) {
+        if (vl->p) {
+            RV_free(vl->p);
+            vl->p = NULL;
+        }
+    }
+
+    if (parent_dtype_id != H5I_INVALID_HID)
+        if (H5Tclose(parent_dtype_id) < 0)
+            FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, FAIL, "can't close vlen parent datatype");
+
+    return ret_value;
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_vlen_data_to_json
+ *
+ * Purpose:     Converts a buffer of hvl_t instances to a JSON value
+ *              which may be sent to the server as part of a write.
+ *
+ *              Allocates memory under the *out pointer on success which must be
+ *              freed by the calling function.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              January, 2024
+ */
+static herr_t
+RV_vlen_data_to_json(const void *_in, size_t nelems, hid_t dtype_id, void **out, size_t *out_size)
+{
+    herr_t       ret_value        = H5_ITER_CONT;
+    hid_t        parent_type      = H5I_INVALID_HID;
+    const hvl_t *in               = NULL;
+    H5T_class_t  parent_class     = H5T_NO_CLASS;
+    ptrdiff_t    elem_buf_ptrdiff = 0;
+
+    const char *const fmt_string          = "[%s]";
+    const char       *elem_fmt_string     = NULL;
+    char             *out_string          = NULL;
+    char             *out_string_curr_pos = NULL;
+    ptrdiff_t         out_diff            = 0;
+    int               bytes_printed       = 0;
+    size_t            tgt_out_size        = 0;
+    size_t            parent_dtype_size;
+
+    if (!out)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, H5_ITER_ERROR,
+                        "invalid NULL pointer provided for output of vlen to JSON conversion");
+
+    if (!_in)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, H5_ITER_ERROR,
+                        "invalid NULL pointer provided for input of vlen to JSON conversion");
+
+    in = (const hvl_t *)_in;
+
+    if ((parent_type = H5Tget_super(dtype_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "can't get base type of vlen type");
+
+    if ((parent_class = H5Tget_class(parent_type)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get class of parent of vlen dtype");
+
+    if ((parent_dtype_size = H5Tget_size(parent_type)) == 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get size of vlen seq base type");
+
+    if ((out_string = (char *)calloc(DATASET_VLEN_JSON_BODY_DEFAULT_SIZE, 1)) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for vlen data JSON");
+
+    *out_size           = DATASET_CREATION_PROPERTIES_BODY_DEFAULT_SIZE;
+    out_string_curr_pos = out_string;
+
+    /* Delineate start of list of sequences */
+    out_diff     = out_string_curr_pos - out_string;
+    tgt_out_size = (size_t)out_diff;
+    CHECKED_REALLOC(out_string, *out_size, tgt_out_size, out_string_curr_pos, H5E_DATASET, FAIL);
+    out_string = strcat(out_string, "[");
+    out_string_curr_pos += 1;
+
+    /* The amount of space needed to serialize each element can't be known ahead of time, so serialize each
+     * element into a temporary fixed-size buffer before copying it to the output buffer . */
+    for (size_t i = 0; i < nelems; i++) {
+        hvl_t seq = in[i];
+
+        /* Delineate start of this sequence */
+        out_diff     = out_string_curr_pos - out_string;
+        tgt_out_size = (size_t)(out_diff) + 1;
+        CHECKED_REALLOC(out_string, *out_size, tgt_out_size, out_string_curr_pos, H5E_DATASET, FAIL);
+        out_string = strcat(out_string, "[");
+        out_string_curr_pos += 1;
+
+        /* Stringify each element in a second fixed-size buffer, then copy to sequence buffer */
+        for (size_t j = 0; j < seq.len; j++) {
+#define MAX_SEQ_ELEM_BUF_SIZE 128
+            char  seq_elem_buffer[MAX_SEQ_ELEM_BUF_SIZE];
+            char *seq_elem_buffer_ptr = seq_elem_buffer;
+
+            memset(seq_elem_buffer, 0, MAX_SEQ_ELEM_BUF_SIZE);
+
+            switch (parent_class) {
+                case (H5T_INTEGER):
+                    if ((bytes_printed = snprintf(seq_elem_buffer_ptr, MAX_SEQ_ELEM_BUF_SIZE, "%d",
+                                                  ((int *)seq.p)[j])) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+                    seq_elem_buffer_ptr += bytes_printed;
+                    break;
+                case (H5T_FLOAT):
+                    if ((bytes_printed = snprintf(seq_elem_buffer_ptr, MAX_SEQ_ELEM_BUF_SIZE, "%f",
+                                                  ((float *)seq.p)[j])) < 0)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
+                    seq_elem_buffer_ptr += bytes_printed;
+                    break;
+                case (H5T_STRING):
+                    if (parent_dtype_size + 2 + 1 >= MAX_SEQ_ELEM_BUF_SIZE)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
+                                        "size of string element in vlen seq exceeded buffer size");
+
+                    *seq_elem_buffer_ptr = '"';
+                    seq_elem_buffer_ptr += 1;
+
+                    memcpy(seq_elem_buffer_ptr, ((char *)seq.p) + j * parent_dtype_size, parent_dtype_size);
+                    bytes_printed = (int)parent_dtype_size;
+                    seq_elem_buffer_ptr += parent_dtype_size;
+
+                    *seq_elem_buffer_ptr = '"';
+                    seq_elem_buffer_ptr += 1;
+                    *seq_elem_buffer_ptr = '\0';
+
+                    break;
+                default:
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "unsupported vlen parent type");
+                    break;
+            }
+
+            /* Check if room for comma */
+            if (bytes_printed + 1 > MAX_SEQ_ELEM_BUF_SIZE)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "vlen seq elem JSON exceeded buffer size");
+
+            /* Add comma if needed */
+            if (j != seq.len - 1) {
+                *seq_elem_buffer_ptr = ',';
+                seq_elem_buffer_ptr += 1;
+                *seq_elem_buffer_ptr = '\0';
+            }
+
+            elem_buf_ptrdiff = seq_elem_buffer_ptr - seq_elem_buffer;
+
+            /* Check that there is room in sequence buffer for this element string*/
+            out_diff     = out_string_curr_pos - out_string;
+            tgt_out_size = (size_t)(out_diff) + (size_t)elem_buf_ptrdiff;
+            CHECKED_REALLOC(out_string, *out_size, tgt_out_size, out_string_curr_pos, H5E_DATASET, FAIL);
+
+            out_string = strcat(out_string, seq_elem_buffer);
+            out_string_curr_pos += (size_t)elem_buf_ptrdiff;
+        }
+
+        /* Make sure sequence buffer has room for sequence-ending bracket and potential comma */
+        out_diff     = out_string_curr_pos - out_string;
+        tgt_out_size = (size_t)out_diff + 2;
+        CHECKED_REALLOC(out_string, *out_size, tgt_out_size, out_string_curr_pos, H5E_DATASET, FAIL);
+
+        out_string = strcat(out_string, "]");
+        out_string_curr_pos += 1;
+
+        /* If not the final sequence, add comma before next sequence */
+        if (i != nelems - 1) {
+            out_string = strcat(out_string, ",");
+            out_string_curr_pos += 1;
+        }
+    }
+
+    /* Add closing bracket to all vlen data and terminating byte */
+    out_diff     = out_string_curr_pos - out_string;
+    tgt_out_size = (size_t)out_diff + 1 + 1;
+
+    CHECKED_REALLOC(out_string, *out_size, tgt_out_size, out_string_curr_pos, H5E_DATASET, FAIL);
+    out_string = strcat(out_string, "]");
+
+    /* Return length of actual string, not string buffer size */
+    *out_size = strlen(out_string);
+
+done:
+
+    if (ret_value >= 0) {
+        *out = out_string;
+    }
+    else {
+        if (out_string) {
+            RV_free(out_string);
+        }
+    }
+
+    return ret_value;
+} /* end RV_vlen_data_to_json */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_pack_vlen_data
+ *
+ * Purpose:     Converts a buffer of hvl_t instances to a buffer containing
+ *              the length of sequence following by each sequence's data.
+ *
+ *              Allocate memory under the *out pointer on success which must
+ *              be freed by calling function.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              March, 2024
+ */
+static herr_t
+RV_pack_vlen_data(const void *_in, size_t nelems, hid_t dtype_id, void **out, size_t *out_size)
+{
+    herr_t      ret_value          = SUCCEED;
+    char       *out_buf            = NULL;
+    char       *out_buf_curr_pos   = NULL;
+    size_t      parent_dtype_size  = 0;
+    size_t      target_size        = 0;
+    hid_t       parent_dtype       = H5I_INVALID_HID;
+    H5T_class_t parent_dtype_class = H5T_NO_CLASS;
+
+    if (!_in)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given input buffer was NULL");
+
+    if (!out)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given output buffer was NULL");
+
+    if (!out_size)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given output size was NULL");
+
+    if (nelems == 0)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given input buffer must contain > 0 elements");
+
+    if ((parent_dtype = H5Tget_super(dtype_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get vlen parent datatype");
+
+    if ((parent_dtype_class = H5Tget_class(parent_dtype)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "can't get class of vlen parent dtype");
+
+    /* Only simple vlen types are currently supported */
+    if (parent_dtype_class != H5T_INTEGER && parent_dtype_class != H5T_FLOAT &&
+        parent_dtype_class != H5T_STRING)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL,
+                        "vlen datatypes are only supported for int, float, and string base types");
+
+    if ((parent_dtype_size = H5Tget_size(parent_dtype)) == 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get size of vlen parent datatype");
+
+    if ((out_buf = calloc(DATASET_VLEN_JSON_BODY_DEFAULT_SIZE, 1)) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for packed vlen data");
+
+    *out_size        = DATASET_CREATION_PROPERTIES_BODY_DEFAULT_SIZE;
+    out_buf_curr_pos = out_buf;
+
+    /* Pack each variable length sequence into the buffer */
+    for (size_t i = 0; i < nelems; i++) {
+        /* Make sure space exists for this sequence */
+        ptrdiff_t curr_size = out_buf_curr_pos - out_buf;
+        hvl_t     vl        = ((const hvl_t *)_in)[i];
+        uint64_t  len_bytes = 0;
+
+        target_size = (size_t)curr_size + sizeof(uint32_t) + vl.len * parent_dtype_size;
+
+        CHECKED_REALLOC(out_buf, *out_size, target_size, out_buf_curr_pos, H5E_DATASET, FAIL);
+
+        /* Copy sequence length and sequence contents into output buffer */
+        len_bytes = vl.len * parent_dtype_size;
+
+        /* Sequence length must fit into 4 bytes */
+        if (len_bytes > INT_MAX)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "sequence exceeded maximum size");
+
+        memcpy(out_buf_curr_pos, (uint64_t *)&len_bytes, sizeof(uint32_t));
+        out_buf_curr_pos += sizeof(uint32_t);
+
+        memcpy(out_buf_curr_pos, vl.p, vl.len * parent_dtype_size);
+        out_buf_curr_pos += vl.len * parent_dtype_size;
+    }
+
+    *out = out_buf;
+done:
+    if (ret_value < 0 && out_buf)
+        RV_free(out_buf);
+
+    return ret_value;
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_unpack_vlen_data
+ *
+ * Purpose:     Converts a buffer of packed hvl_t instances to a buffer of
+ *              hvl_t instances.
+ *
+ *              Allocates memory for hvl_t instances which should be freed with
+ *              H5Treclaim, and allocates under *out which should
+ *              be freed directly by the calling function.
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              March, 2024
+ */
+static herr_t
+RV_unpack_vlen_data(char *in, hid_t vlen_dtype_id, size_t nelems, void **out)
+{
+    herr_t ret_value = SUCCEED;
+    char  *out_buf   = NULL;
+    char  *out_buf_curr_ptr;
+    char  *in_buf_ptr   = in;
+    hid_t  parent_dtype = H5I_INVALID_HID;
+    size_t parent_dtype_size;
+    hvl_t *vl;
+
+    if (!in)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "provided vlen datatype was NULL");
+
+    if (!out)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "provided output pointer was NULL");
+
+    if ((out_buf = RV_calloc(nelems * sizeof(hvl_t))) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for unpacking vlen data");
+
+    if ((parent_dtype = H5Tget_super(vlen_dtype_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get parent of vlen datatype");
+
+    if ((parent_dtype_size = H5Tget_size(parent_dtype)) == 0)
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get size of vlen parent datatype");
+
+    for (size_t i = 0; i < nelems; i++) {
+        vl = ((hvl_t *)out_buf) + i;
+        uint32_t num_seq_bytes;
+
+        memcpy(&num_seq_bytes, in_buf_ptr, sizeof(uint32_t));
+        in_buf_ptr += sizeof(uint32_t);
+
+        if (num_seq_bytes % parent_dtype_size != 0)
+            FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                            "vlen sequence length is not a multiple of element size");
+
+        vl->len = num_seq_bytes / parent_dtype_size;
+
+        /* Allocate memory for and copy sequence data */
+        if (vl->len > 0) {
+            if ((vl->p = RV_calloc(num_seq_bytes)) == NULL)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for unpacking vlen data");
+
+            memcpy(vl->p, in_buf_ptr, num_seq_bytes);
+        }
+        else {
+            vl->p = NULL;
+        }
+
+        in_buf_ptr += num_seq_bytes;
+    }
+
+    *out = out_buf;
+
+done:
+
+    if (ret_value < 0 && out_buf) {
+        /* Free any memory allocated for individual sequences */
+        for (size_t i = 0; i < nelems; i++) {
+            vl = ((hvl_t *)out_buf) + i;
+
+            if (vl->len > 0 && vl->p) {
+                RV_free(vl->p);
+                vl->p = NULL;
+            }
+        }
+
+        RV_free(out_buf);
+    }
+
+    if (parent_dtype != H5I_INVALID_HID)
+        if (H5Tclose(parent_dtype) < 0)
+            FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTCLOSEOBJ, FAIL, "can't close vlen parent datatype");
+
     return ret_value;
 }

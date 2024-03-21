@@ -3615,6 +3615,8 @@ RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_i
                     fail_count++;
                 }
                 else if (response_code == 200) {
+                    H5T_class_t dtype_class = H5T_NO_CLASS;
+
                     num_finished++;
                     succeed_count++;
 
@@ -3652,11 +3654,60 @@ RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_i
                     transfer_info[handle_index].curl_easy_handle = NULL;
 
                     if (transfer_info[handle_index].transfer_type == WRITE) {
-                        RV_free(transfer_info[handle_index].u.write_info.write_body);
-                        transfer_info[handle_index].u.write_info.write_body = NULL;
+                        if (transfer_info[handle_index].tconv_buf) {
+                            if ((dtype_class = H5Tget_class(transfer_info[handle_index].mem_type_id)) ==
+                                H5T_NO_CLASS)
+                                FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get mem dtype class");
 
-                        RV_free(transfer_info[handle_index].u.write_info.base64_encoded_values);
-                        transfer_info[handle_index].u.write_info.base64_encoded_values = NULL;
+                            /* Clean up memory allocated by type conversion of vlen types */
+                            if (dtype_class == H5T_VLEN) {
+                                /* Buffer was gathered before type conversion, so we can manually free vlen
+                                 * memory by iteration */
+                                hssize_t num_elems = 0;
+                                if ((num_elems = H5Sget_select_npoints(
+                                         transfer_info[handle_index].mem_space_id)) <= 0)
+                                    FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                                                    "can't get number of elements in dataspace");
+
+                                hvl_t *vlen_buf = (hvl_t *)transfer_info[handle_index].tconv_buf;
+                                for (size_t i = 0; i < (size_t)num_elems; i++) {
+                                    if (vlen_buf[i].p) {
+                                        RV_free(vlen_buf[i].p);
+                                        vlen_buf[i].p = NULL;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (transfer_info[handle_index].u.write_info.gather_buf) {
+                            RV_free(transfer_info[handle_index].u.write_info.gather_buf);
+                            transfer_info[handle_index].u.write_info.gather_buf = NULL;
+                        }
+
+                        if (transfer_info[handle_index].u.write_info.serialize_buf) {
+                            RV_free(transfer_info[handle_index].u.write_info.serialize_buf);
+                            transfer_info[handle_index].u.write_info.serialize_buf = NULL;
+                        }
+
+                        if (transfer_info[handle_index].u.write_info.base64_encoded_values) {
+                            RV_free(transfer_info[handle_index].u.write_info.base64_encoded_values);
+                            transfer_info[handle_index].u.write_info.base64_encoded_values = NULL;
+                        }
+
+                        if (transfer_info[handle_index].u.write_info.selection_buf) {
+                            RV_free(transfer_info[handle_index].u.write_info.selection_buf);
+                            transfer_info[handle_index].u.write_info.selection_buf = NULL;
+                        }
+                    }
+
+                    if (transfer_info[handle_index].tconv_buf) {
+                        RV_free(transfer_info[handle_index].tconv_buf);
+                        transfer_info[handle_index].tconv_buf = NULL;
+                    }
+
+                    if (transfer_info[handle_index].bkg_buf) {
+                        RV_free(transfer_info[handle_index].bkg_buf);
+                        transfer_info[handle_index].bkg_buf = NULL;
                     }
 
                     RV_free(transfer_info[handle_index].request_url);
