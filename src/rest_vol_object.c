@@ -40,7 +40,6 @@ static void RV_free_object_table(object_table_entry *object_table, size_t num_en
 
 /* JSON keys to retrieve relevant information for H5Oget_info */
 const char *attribute_count_keys[] = {"attributeCount", (const char *)0};
-const char *hrefs_keys[]           = {"hrefs", (const char *)0};
 
 /*-------------------------------------------------------------------------
  * Function:    RV_object_open
@@ -1043,9 +1042,10 @@ static herr_t
 RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     H5O_info2_t *obj_info   = (H5O_info2_t *)callback_data_out;
-    yajl_val     parse_tree = NULL, key_obj;
+    yajl_val     parse_tree = NULL, key_obj = NULL, target_tree = NULL;
     size_t       i;
-    char        *object_id, *domain_path = NULL;
+    char        *object_id = NULL, *domain_path = NULL;
+    const char  *path_name = NULL;
     herr_t       ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1062,47 +1062,38 @@ RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, v
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
+    target_tree = parse_tree;
+
+    /* If the response contains 'h5paths',
+     * it may describe multiple objects. Needs to be unwrapped first. */
+    if (NULL != yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)) {
+        if (NULL == (target_tree = yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)))
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
+
+        /* Access the first object under h5paths */
+        if (NULL == (path_name = target_tree->u.object.keys[0]))
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed path name was NULL");
+
+        const char *path_keys[] = {path_name, (const char *)0};
+
+        if (NULL == (target_tree = yajl_tree_get(target_tree, path_keys, yajl_t_object)))
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "unable to parse object under path key");
+    }
+
     /*
      * Fill out the fileno and addr fields with somewhat faked data, as these fields are used
      * in other places to verify that two objects are different. The domain path is hashed
      * and converted to an unsigned long for the fileno field and the object's UUID string
      * is hashed to an haddr_t for the addr field.
      */
+    if (NULL == (key_obj = yajl_tree_get(target_tree, domain_keys, yajl_t_string)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't get domain from response");
 
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, hrefs_keys, yajl_t_array)))
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "retrieval of object HREFs failed");
+    if (!YAJL_IS_STRING(key_obj))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "retrieved domain was not a valid string");
 
-    /* Find the "home" href that corresponds to the object's domain path */
-    for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
-        yajl_val href_obj = YAJL_GET_ARRAY(key_obj)->values[i];
-        size_t   j;
-
-        if (!YAJL_IS_OBJECT(href_obj))
-            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "HREFs array value is not an object");
-
-        for (j = 0; j < YAJL_GET_OBJECT(href_obj)->len; j++) {
-            char *key_val;
-
-            if (NULL == (key_val = YAJL_GET_STRING(YAJL_GET_OBJECT(href_obj)->values[j])))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "HREF object key value was NULL");
-
-            /* If this object's "rel" key does not have the value "home", skip this object */
-            if (!strcmp(YAJL_GET_OBJECT(href_obj)->keys[j], "rel") && strcmp(key_val, "home")) {
-                domain_path = NULL;
-                break;
-            } /* end if */
-
-            if (!strcmp(YAJL_GET_OBJECT(href_obj)->keys[j], "href"))
-                domain_path = key_val;
-        } /* end for */
-
-        if (domain_path)
-            break;
-    } /* end for */
-
-    if (!domain_path)
-        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL,
-                        "unable to determine a value for object info file number field");
+    if (NULL == (domain_path = YAJL_GET_STRING(key_obj)))
+        FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "retrieved domain was NULL");
 
     obj_info->fileno = (unsigned long)rv_hash_string(domain_path);
 
@@ -1110,7 +1101,7 @@ RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, v
     printf("-> Object's file number: %lu\n", (unsigned long)obj_info->fileno);
 #endif
 
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, object_id_keys, yajl_t_string)))
+    if (NULL == (key_obj = yajl_tree_get(target_tree, object_id_keys, yajl_t_string)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "retrieval of object ID failed");
 
     if (NULL == (object_id = YAJL_GET_STRING(key_obj)))
@@ -1124,7 +1115,7 @@ RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, v
 #endif
 
     /* Retrieve the object's attribute count */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, attribute_count_keys, yajl_t_number)))
+    if (NULL == (key_obj = yajl_tree_get(target_tree, attribute_count_keys, yajl_t_number)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "retrieval of object attribute count failed");
 
     if (!YAJL_IS_INTEGER(key_obj))
@@ -1216,6 +1207,7 @@ RV_object_iter_callback(char *HTTP_response, const void *callback_data_in, void 
     size_t              object_table_num_entries = 0;
     herr_t              ret_value                = SUCCEED;
     char                URL[URL_MAX_LENGTH];
+    const char         *path_name = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Iterating recursively through objects according to server's HTTP response\n\n");
