@@ -108,6 +108,12 @@ const char *value_keys[]                  = {"value", (const char *)0};
  */
 #define BASE64_ENCODE_DEFAULT_BUFFER_SIZE 33554432 /* 32MB */
 
+/* Default separator character when specifying compounds members in a URL */
+#define COMPOUND_MEMBER_SEPARATOR ':'
+
+/* Query for server to operate on a subset of members in a compound type */
+#define COMPOUND_MEMBER_QUERY "fields="
+
 /*-------------------------------------------------------------------------
  * Function:    RV_dataset_create
  *
@@ -785,8 +791,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 {
     H5S_sel_type           sel_type = H5S_SEL_ALL;
     H5T_class_t            dtype_class;
-    hbool_t                is_transfer_binary = FALSE;
-    htri_t                 contiguous         = FALSE;
+    hbool_t                is_transfer_binary  = FALSE;
+    htri_t                 is_write_contiguous = FALSE;
     htri_t                 is_variable_str;
     hssize_t               mem_select_npoints  = 0;
     hssize_t               file_select_npoints = 0;
@@ -805,6 +811,11 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
     size_t      mem_type_size  = 0;
     hbool_t     fill_bkg       = FALSE;
     const void *buf_to_write   = NULL;
+
+    hbool_t has_selection_body = FALSE;
+    char    cmpd_query[URL_MAX_LENGTH];
+    char   *member_name             = NULL;
+    char   *url_encoded_member_name = NULL;
 
     if ((transfer_info = RV_calloc(count * sizeof(dataset_transfer_info))) == NULL)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset transfer info");
@@ -867,6 +878,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         transfer_info[i].resp_buffer.curr_buf_ptr = transfer_info[i].resp_buffer.buffer;
         transfer_info[i].tconv_buf                = NULL;
         transfer_info[i].bkg_buf                  = NULL;
+
+        transfer_info[i].u.write_info.dense_cmpd_subset_dtype_id = H5I_INVALID_HID;
     }
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -889,6 +902,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 
     /* Iterate over datasets to write to */
     for (size_t i = 0; i < count; i++) {
+        hbool_t is_compound_subset = FALSE;
+        size_t  dense_dtype_size   = 0;
 
         /* Determine whether it's possible to send the data as a binary blob instead of as JSON */
         if (H5T_NO_CLASS == (dtype_class = H5Tget_class(transfer_info[i].mem_type_id)))
@@ -970,29 +985,62 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to check if datatypes need conversion");
 
         if (needs_tconv) {
-
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Beginning type conversion for write\n");
 #endif
+            RV_subset_t subset_type     = H5T_SUBSET_BADVALUE;
+            hid_t       dest_dtype      = H5I_INVALID_HID;
+            size_t      dest_dtype_size = 0;
+
             if ((file_type_size = H5Tget_size(transfer_info[i].file_type_id)) == 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to get size of file datatype");
 
             if ((mem_type_size = H5Tget_size(transfer_info[i].mem_type_id)) == 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to get size of memory datatype");
 
-            /* Initialize type conversion */
-            RV_tconv_init(transfer_info[i].mem_type_id, &mem_type_size, transfer_info[i].file_type_id,
-                          &file_type_size, (size_t)file_select_npoints, TRUE, FALSE,
-                          &transfer_info[i].tconv_buf, &transfer_info[i].bkg_buf, NULL, &fill_bkg);
+            if ((RV_get_cmpd_subset_type(transfer_info[i].mem_type_id, transfer_info[i].file_type_id,
+                                         &subset_type)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                                "can't determine if write uses compound subsetting");
 
-            /* Perform type conversion on response values */
+            is_compound_subset = (subset_type == H5T_SUBSET_SRC);
+
+            if (is_compound_subset) {
+                if ((transfer_info[i].u.write_info.dense_cmpd_subset_dtype_id =
+                         H5Tcopy(transfer_info[i].mem_type_id)) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTCOPY, FAIL, "can't copy compound datatype");
+
+                if ((H5Tpack(transfer_info[i].u.write_info.dense_cmpd_subset_dtype_id)) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTPACK, FAIL, "can't pack compound datatype");
+
+                if ((dense_dtype_size =
+                         H5Tget_size(transfer_info[i].u.write_info.dense_cmpd_subset_dtype_id)) == 0)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get dense dtype size");
+
+                dest_dtype      = transfer_info[i].u.write_info.dense_cmpd_subset_dtype_id;
+                dest_dtype_size = dense_dtype_size;
+            }
+            else {
+                dest_dtype      = transfer_info[i].mem_type_id;
+                dest_dtype_size = mem_type_size;
+            }
+
+            /* Initialize type conversion */
+            RV_tconv_init(transfer_info[i].mem_type_id, &mem_type_size, dest_dtype, &dest_dtype_size,
+                          (size_t)file_select_npoints, TRUE, FALSE, &transfer_info[i].tconv_buf,
+                          &transfer_info[i].bkg_buf, NULL, &fill_bkg);
+
+            /* Copy memory to avoid modifying user-provided write buffer */
             memset(transfer_info[i].tconv_buf, 0, file_type_size * (size_t)mem_select_npoints);
             memcpy(transfer_info[i].tconv_buf,
                    (transfer_info[i].transfer_type == READ) ? transfer_info[i].u.read_info.buf
                                                             : transfer_info[i].u.write_info.buf,
                    mem_type_size * (size_t)mem_select_npoints);
 
-            if (H5Tconvert(transfer_info[i].mem_type_id, transfer_info[i].file_type_id,
+            /* Perform type conversion on values to write */
+            if (H5Tconvert(transfer_info[i].mem_type_id,
+                           (is_compound_subset ? transfer_info[i].u.write_info.dense_cmpd_subset_dtype_id
+                                               : transfer_info[i].file_type_id),
                            (size_t)file_select_npoints, transfer_info[i].tconv_buf, transfer_info[i].bkg_buf,
                            H5P_DEFAULT) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
@@ -1013,16 +1061,22 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
          * types like object references or variable length types)
          */
         if ((H5T_REFERENCE != dtype_class) && (H5T_VLEN != dtype_class) && !is_variable_str) {
-            size_t dtype_size;
+            size_t write_dtype_size = 0;
 
-            if (0 == (dtype_size = H5Tget_size(transfer_info[i].file_type_id)))
-                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "file datatype is invalid");
+            if (!is_compound_subset) {
+                if (0 == (write_dtype_size = H5Tget_size(transfer_info[i].file_type_id)))
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "file datatype is invalid");
+            }
+            else {
+                write_dtype_size = dense_dtype_size;
+            }
 
-            write_body_len = (size_t)file_select_npoints * dtype_size;
-            if ((contiguous = RV_dataspace_selection_is_contiguous(transfer_info[i].mem_space_id)) < 0)
+            write_body_len = (size_t)file_select_npoints * write_dtype_size;
+            if ((is_write_contiguous = RV_dataspace_selection_is_contiguous(transfer_info[i].mem_space_id)) <
+                0)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL,
                                 "Unable to determine if the dataspace selection is contiguous");
-            if (!contiguous) {
+            if (!is_write_contiguous) {
                 if (NULL == (transfer_info[i].u.write_info.write_body = (char *)RV_malloc(write_body_len)))
                     FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
                                     "can't allocate space for the 'write_body' values");
@@ -1035,7 +1089,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                 if ((offset = RV_convert_start_to_offset(transfer_info[i].mem_space_id)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
                                     "Unable to determine memory offset value");
-                buf_to_write = (const void *)((const char *)buf_to_write + (size_t)offset * dtype_size);
+                buf_to_write = (const void *)((const char *)buf_to_write + (size_t)offset * write_dtype_size);
             }
         } /* end if */
         else {
@@ -1071,13 +1125,84 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
             transfer_info[i].curl_headers,
             is_transfer_binary ? "Content-Type: application/octet-stream" : "Content-Type: application/json");
 
+        has_selection_body = is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type);
+
         /* Redirect cURL from the base URL to "/datasets/<id>/value" to write the value out */
-        if ((url_len = snprintf(
-                 transfer_info[i].request_url, URL_MAX_LENGTH, "%s/datasets/%s/value%s%s",
-                 transfer_info[i].dataset->domain->u.file.server_info.base_URL, transfer_info[i].dataset->URI,
-                 is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? "?select=" : "",
-                 is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type) ? selection_body
-                                                                                      : "")) < 0)
+        if (is_compound_subset) {
+            char     *cmpd_query_ptr   = cmpd_query;
+            ptrdiff_t cmpd_query_len   = 0;
+            size_t    num_cmpd_members = 0;
+
+            /* Retrieve compound information for request */
+            if (RV_get_cmpd_subset_nmembers(transfer_info[i].mem_type_id,
+                                            transfer_info[i].u.write_info.dense_cmpd_subset_dtype_id,
+                                            &num_cmpd_members) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get compound subset information");
+
+            /* Construct compound member selection string for request URL */
+            if (!(SERVER_VERSION_SUPPORTS_MEMBER_SELECTION(
+                    transfer_info[i].dataset->domain->u.file.server_info.version)))
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL,
+                                "compound member selection on write requires server >= 0.8.5");
+
+            /* If using element selection and member selection, preface member query with '&' to join it to
+               previous queries. Otherwise, it's the first query, so preface it with '?' */
+            if (has_selection_body) {
+                cmpd_query_ptr[0] = '&';
+                cmpd_query_ptr++;
+            }
+            else {
+                cmpd_query_ptr[0] = '?';
+                cmpd_query_ptr++;
+            }
+
+            memcpy(cmpd_query_ptr, COMPOUND_MEMBER_QUERY, strlen(COMPOUND_MEMBER_QUERY));
+            cmpd_query_ptr += strlen(COMPOUND_MEMBER_QUERY);
+
+            for (size_t j = 0; j < num_cmpd_members; j++) {
+                if ((member_name = H5Tget_member_name(transfer_info[i].mem_type_id, (unsigned)j)) == NULL)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get name of compound member");
+
+                cmpd_query_len = cmpd_query_ptr - cmpd_query;
+
+                /*  URL encode the member name */
+                if ((url_encoded_member_name =
+                         curl_easy_escape(curl, member_name, (int)strlen(member_name))) == NULL)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTENCODE, FAIL,
+                                    "can't URL-encode compound member name");
+
+                if ((size_t)cmpd_query_len + strlen(url_encoded_member_name) + 1 > URL_MAX_LENGTH)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                                    "compound member names too long for URL");
+
+                /* Copy name to query string without null byte */
+                memcpy(cmpd_query_ptr, member_name, strlen(member_name));
+                cmpd_query_ptr += strlen(member_name);
+
+                /* If another member name will follow, add sepator */
+                if (j < num_cmpd_members - 1) {
+                    *cmpd_query_ptr = COMPOUND_MEMBER_SEPARATOR;
+                    cmpd_query_ptr++;
+                }
+
+                if (H5free_memory((void *)member_name) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTFREE, FAIL, "can't free dataset member name");
+
+                member_name = NULL;
+
+                curl_free(url_encoded_member_name);
+                url_encoded_member_name = NULL;
+            }
+
+            *cmpd_query_ptr = '\0';
+        }
+
+        if ((url_len = snprintf(transfer_info[i].request_url, URL_MAX_LENGTH, "%s/datasets/%s/value%s%s%s",
+                                transfer_info[i].dataset->domain->u.file.server_info.base_URL,
+                                transfer_info[i].dataset->URI, has_selection_body ? "?select=" : "",
+                                has_selection_body ? selection_body : "",
+                                is_compound_subset ? cmpd_query : "") < 0))
+
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
         if (url_len >= URL_MAX_LENGTH)
@@ -1237,11 +1362,21 @@ done:
 
         if (transfer_info[i].host_headers)
             RV_free(transfer_info[i].host_headers);
+
+        if (transfer_info[i].u.write_info.dense_cmpd_subset_dtype_id != H5I_INVALID_HID)
+            H5Tclose(transfer_info[i].u.write_info.dense_cmpd_subset_dtype_id);
     }
 
     curl_multi_cleanup(curl_multi_handle);
 
     RV_free(transfer_info);
+
+    if (url_encoded_member_name)
+        curl_free(url_encoded_member_name);
+
+    if (member_name)
+        if (H5free_memory((void *)member_name) < 0)
+            FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTFREE, FAIL, "can't free datatype member name");
 
     PRINT_ERROR_STACK;
 
@@ -4449,6 +4584,8 @@ RV_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
     RV_tconv_reuse_t reuse          = RV_TCONV_REUSE_NONE;
     hbool_t          fill_bkg       = FALSE;
 
+    RV_subset_t subset_type = H5T_SUBSET_BADVALUE;
+
     if (H5T_NO_CLASS == (dtype_class = H5Tget_class(mem_type_id)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
 
@@ -4499,10 +4636,26 @@ RV_dataset_read_cb(hid_t mem_type_id, hid_t mem_space_id, hid_t file_type_id, hi
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Beginning type conversion\n");
 #endif
-
             /* Initialize type conversion */
             RV_tconv_init(file_type_id, &file_type_size, mem_type_id, &mem_type_size,
                           (size_t)file_select_npoints, TRUE, FALSE, &tconv_buf, &bkg_buf, &reuse, &fill_bkg);
+
+            /* Handle compound subsetting */
+            if (RV_get_cmpd_subset_type(file_type_id, mem_type_id, &subset_type) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get compound type subset info");
+
+            if (subset_type < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
+                                "error while checking if types are compound subsets");
+
+            if (subset_type == H5T_SUBSET_DST) {
+                /* Populate background buffer with bytes from user input buffer */
+                if (!bkg_buf || !fill_bkg)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL,
+                                    "compound subset requires bkg buffer");
+
+                memcpy(bkg_buf, buf, file_type_size * (size_t)file_select_npoints);
+            }
 
             /* Perform type conversion on response values */
             if (reuse == RV_TCONV_REUSE_TCONV) {
@@ -4932,5 +5085,120 @@ RV_json_values_to_binary_recursive(yajl_val value_entry, hid_t dtype_id, void *v
     }
 
 done:
+    return ret_value;
+}
+
+/* Get the amount of compound type members in both destination and source type */
+herr_t
+RV_get_cmpd_subset_nmembers(hid_t src_type_id, hid_t dst_type_id, size_t *num_cmpd_members)
+{
+    herr_t      ret_value      = SUCCEED;
+    H5T_class_t dst_type_class = H5T_NO_CLASS, src_type_class = H5T_NO_CLASS;
+    hid_t       src_member_type = H5I_INVALID_HID, dst_member_type = H5I_INVALID_HID;
+    int         dst_nmembs = 0, src_nmembs = 0;
+    char       *src_member_name = NULL, *dst_member_name = NULL;
+    htri_t      types_same           = false;
+    bool        match_for_dst_member = false;
+    size_t      dst_member_offset = 0, src_member_offset = 0;
+    size_t      member_size = 0;
+
+    if (!num_cmpd_members)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "provided output pointer is NULL");
+
+    if (H5T_NO_CLASS == (src_type_class = H5Tget_class(src_type_id)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "source datatype is invalid");
+
+    if (H5T_NO_CLASS == (dst_type_class = H5Tget_class(dst_type_id)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "destination datatype is invalid");
+
+    if ((dst_type_class != H5T_COMPOUND) || (src_type_class != H5T_COMPOUND))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "datatypes must be compound to compare members");
+
+    if ((dst_nmembs = H5Tget_nmembers(dst_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of destination datatype");
+
+    if ((src_nmembs = H5Tget_nmembers(src_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of source datatype");
+
+    /* Iterate and check which members have matching name, type, and offset between the datatypes */
+    for (unsigned int dst_idx = 0; dst_idx < dst_nmembs; dst_idx++) {
+        match_for_dst_member = false;
+        src_member_offset    = 0;
+
+        if ((dst_member_name = H5Tget_member_name(dst_type_id, dst_idx)) == NULL)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get destination datatype member name");
+
+        if ((dst_member_type = H5Tget_member_type(dst_type_id, dst_idx)) == H5I_INVALID_HID)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get destination datatype member type");
+
+        for (unsigned int src_idx = 0; src_idx < src_nmembs; src_idx++) {
+            if ((src_member_name = H5Tget_member_name(src_type_id, src_idx)) == NULL)
+                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get source datatype member name");
+
+            if ((src_member_type = H5Tget_member_type(src_type_id, src_idx)) == H5I_INVALID_HID)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get source datatype member type");
+
+            src_member_offset = H5Tget_member_offset(src_type_id, src_idx);
+
+            if ((types_same = H5Tequal(src_member_type, dst_member_type)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL,
+                                "can't check if member datatypes are equal");
+
+            if (types_same && !strcmp(dst_member_name, src_member_name))
+                match_for_dst_member = true;
+
+            if (H5Tclose(src_member_type) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close datatype member");
+
+            src_member_type = H5I_INVALID_HID;
+
+            if (H5free_memory(src_member_name) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL,
+                                "can't free destination datatype member name");
+
+            src_member_name = NULL;
+
+            /* This dst member has a match - no need to look through other src members */
+            if (match_for_dst_member)
+                break;
+        }
+
+        if (match_for_dst_member)
+            (*num_cmpd_members)++;
+
+        if (H5Tclose(dst_member_type) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close destination datatype member");
+
+        dst_member_type = H5I_INVALID_HID;
+
+        if (H5free_memory(dst_member_name) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free member datatype name");
+
+        dst_member_name = NULL;
+    }
+
+done:
+    if (src_member_name) {
+        if (H5free_memory(src_member_name) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free member datatype name");
+
+        src_member_name = NULL;
+    }
+
+    if (dst_member_name) {
+        if (H5free_memory(dst_member_name) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTFREE, FAIL, "can't free destination datatype member name");
+
+        dst_member_name = NULL;
+    }
+
+    if (src_member_type > 0)
+        if (H5Tclose(src_member_type) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close source datatype member");
+
+    if (dst_member_type > 0)
+        if (H5Tclose(dst_member_type) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close destination datatype member");
+
     return ret_value;
 }
