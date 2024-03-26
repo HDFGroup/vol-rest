@@ -37,7 +37,7 @@ jobs:
 
     runs-on: ${{matrix.os}}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: 
           repository: HDFGroup/hdf5
           ref: ${{matrix.hdf5-branch}}
@@ -55,7 +55,7 @@ jobs:
           sudo apt install automake autoconf libtool libtool-bin
             
       - name: Get REST VOL
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: ${{github.workspace}}/vol-rest
 
@@ -85,13 +85,13 @@ jobs:
         shell: bash
         working-directory: ${{github.workspace}}/vol-rest/
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: HDFGroup/hsds
           path: ${{github.workspace}}/hsds
           
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           
@@ -155,7 +155,7 @@ jobs:
 
     runs-on: ${{matrix.os}}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: 
           repository: HDFGroup/hdf5
           ref: ${{matrix.hdf5-branch}}
@@ -168,7 +168,7 @@ jobs:
           sudo apt-get install libyajl-dev
               
       - name: Get REST VOL
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: ${{github.workspace}}/vol-rest
 
@@ -206,13 +206,13 @@ jobs:
         shell: bash
         working-directory: ${{github.workspace}}/vol-rest/build
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: HDFGroup/hsds
           path: ${{github.workspace}}/hsds
           
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           
