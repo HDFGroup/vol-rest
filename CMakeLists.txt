@@ -283,11 +283,7 @@ endmacro (HDF5_VOL_REST_SET_LIB_OPTIONS)
 
 #-------------------------------------------------------------------------------
 macro (RV_TARGET_C_PROPERTIES wintarget libtype addcompileflags addlinkflags)
-  if (MSVC)
-    TARGET_MSVC_PROPERTIES (${wintarget} ${libtype} "${addcompileflags} ${WIN_COMPILE_FLAGS}" "${addlinkflags} ${WIN_LINK_FLAGS}")
-  else ()
-    set_target_properties (${wintarget} PROPERTIES COMPILE_FLAGS "${addcompileflags}" LINK_FLAGS "${addlinkflags}")
-  endif ()
+  set_target_properties (${wintarget} PROPERTIES COMPILE_FLAGS "${addcompileflags}" LINK_FLAGS "${addlinkflags}")
 endmacro ()
 
 #-------------------------------------------------------------------------------
@@ -345,7 +341,7 @@ set (EXTERNAL_LIBRARYDLL_LIST "")
 #-----------------------------------------------------------------------------
 # Run all the CMake configuration tests for our build environment
 #-----------------------------------------------------------------------------
-#include (${HDF5_VOL_REST_RESOURCES_DIR}/ConfigureChecks.cmake)
+include (${HDF5_VOL_REST_RESOURCES_DIR}/ConfigureChecks.cmake)
 
 set (CMAKE_INCLUDE_CURRENT_DIR_IN_INTERFACE ON)
 

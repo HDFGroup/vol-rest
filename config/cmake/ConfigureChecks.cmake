@@ -2,7 +2,7 @@
 # Include all the necessary files for macros
 #-----------------------------------------------------------------------------
 set (HDF_PREFIX "H5")
-include (${HDF_RESOURCES_EXT_DIR}/ConfigureChecks.cmake)
+include(CheckFunctionExists)
 
 if (NOT DEFINED "H5_DEFAULT_PLUGINDIR")
   if (WINDOWS)
@@ -26,6 +26,21 @@ SET (H5_DEFAULT_VOL H5VL_NATIVE)
 # END of WINDOWS Hard code Values
 # ----------------------------------------------------------------------
 
+# Find the library containing clock_gettime()
+CHECK_FUNCTION_EXISTS (clock_gettime CLOCK_GETTIME_IN_LIBC)
+CHECK_LIBRARY_EXISTS (rt clock_gettime "" CLOCK_GETTIME_IN_LIBRT)
+CHECK_LIBRARY_EXISTS (posix4 clock_gettime "" CLOCK_GETTIME_IN_LIBPOSIX4)
+if (CLOCK_GETTIME_IN_LIBC)
+  set (RV_HAVE_CLOCK_GETTIME 1)
+elseif (CLOCK_GETTIME_IN_LIBRT)
+  set (RV_HAVE_CLOCK_GETTIME 1)
+  list (APPEND LINK_LIBS rt)
+elseif (CLOCK_GETTIME_IN_LIBPOSIX4)
+  set (RV_HAVE_CLOCK_GETTIME 1)
+  list (APPEND LINK_LIBS posix4)
+endif ()
+
+CHECK_FUNCTION_EXISTS (gettimeofday RV_HAVE_GETTIMEOFDAY)
 # -----------------------------------------------------------------------
 # wrapper script variables
 # 

@@ -18,6 +18,14 @@
 /* Define if the compiler understands the __func__ keyword */
 #cmakedefine RV_HAVE_C99_FUNC @RV_HAVE_C99_FUNC@
 
+/* Define to 1 if you have the `clock_gettime' function. */
+#cmakedefine RV_HAVE_CLOCK_GETTIME @RV_HAVE_CLOCK_GETTIME@
+
+/* Define to 1 if you have the `gettimeofday' function. */
+#cmakedefine RV_HAVE_GETTIMEOFDAY @RV_HAVE_GETTIMEOFDAY@
+
+#cmakedefine RV_TEST_VAR @RV_TEST_VAR@
+
 /* Define if Darwin or Mac OS X */
 #cmakedefine RV_HAVE_DARWIN @RV_HAVE_DARWIN@
 
