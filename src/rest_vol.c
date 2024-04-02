@@ -30,7 +30,7 @@
 #define DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE 256
 
 /* Defines for multi-curl settings */
-#define BACKOFF_INITIAL_DURATION 10000000 /* 10,000,000 ns -> 0.01 sec */
+#define BACKOFF_INITIAL_DURATION 10000 /* 10,000 microseconds -> 0.01 seconds */
 #define BACKOFF_SCALE_FACTOR     1.5
 #define BACKOFF_MAX_BEFORE_FAIL  3000000000 /* 30,000,000,000 ns -> 30 sec */
 
@@ -3732,12 +3732,7 @@ RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_i
                     /* Identify the handle by its original index */
                     failed_handles_to_retry[handle_index] = curl_multi_msg->easy_handle;
 
-                    struct timespec tms;
-
-                    clock_gettime(CLOCK_MONOTONIC, &tms);
-
-                    transfer_info[handle_index].time_of_fail =
-                        (size_t)tms.tv_sec * 1000 * 1000 * 1000 + (size_t)tms.tv_nsec;
+                    transfer_info[handle_index].time_of_fail = (size_t)RV_now_usec();
 
                     transfer_info[handle_index].current_backoff_duration =
                         (transfer_info[handle_index].current_backoff_duration == 0)
@@ -3877,12 +3872,10 @@ RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_i
 
         /* TODO: Replace with an epoll-like structure of some kind, manually iterating this will probably
          * be slow */
-        struct timespec curr_time;
-        clock_gettime(CLOCK_MONOTONIC, &curr_time);
-        size_t curr_time_ns = (size_t)curr_time.tv_sec * 1000 * 1000 * 1000 + (size_t)curr_time.tv_nsec;
+        size_t curr_time_us = (size_t)RV_now_usec();
 
         for (size_t i = 0; i < count; i++) {
-            if (failed_handles_to_retry[i] && ((curr_time_ns - transfer_info[i].time_of_fail) >=
+            if (failed_handles_to_retry[i] && ((curr_time_us - transfer_info[i].time_of_fail) >=
                                                transfer_info[i].current_backoff_duration)) {
                 if (CURLM_OK != curl_multi_add_handle(curl_multi_handle, failed_handles_to_retry[i]))
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "failed to re-add denied cURL handle");
@@ -4508,3 +4501,44 @@ done:
 
     return ret_value;
 } /* end RV_parse_domain_allocated_size_cb */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_now_usec
+ *
+ * Purpose:     Return the current time as microseconds after the UNIX epoch.
+ *
+ * Return:      Positive on success, negative on failure.
+ *
+ * Programmer:  Matthew Larson
+ *              April, 2024
+ */
+uint64_t
+RV_now_usec(void)
+{
+
+    uint64_t now;
+
+#ifdef RV_HAVE_CLOCKGETTIME
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+
+    /* Cast all values in this expression to uint64_t to ensure that all intermediate
+     * calculations are done in 64 bit, to prevent overflow */
+    now = ((uint64_t)ts.tv_sec * ((uint64_t)1000 * (uint64_t)1000)) + ((uint64_t)ts.tv_nsec / (uint64_t)1000);
+#elif RV_HAVE_GETTIMEOFDAY
+    struct timeval now_tv;
+
+    gettimeofday(&now_tv, NULL);
+
+    /* Cast all values in this expression to uint64_t to ensure that all intermediate
+     * calculations are done in 64 bit, to prevent overflow */
+    now = ((uint64_t)now_tv.tv_sec * ((uint64_t)1000 * (uint64_t)1000)) + (uint64_t)now_tv.tv_usec;
+#else
+    FUNC_GOTO_ERROR(H5E_FUNC, H5E_CANTGET, 0,
+                    "Platform does not have clock_gettime or gettimeofday available");
+#endif
+
+done:
+    return (now);
+}

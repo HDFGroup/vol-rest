@@ -812,6 +812,8 @@ herr_t RV_get_cmpd_subset_type(hid_t src_type_id, hid_t dst_type_id, RV_subset_t
 
 /* Helper to get information about members in dst that are included in src compound */
 herr_t RV_get_cmpd_subset_nmembers(hid_t src_type_id, hid_t dst_type_id, size_t *num_cmpd_members);
+/* Return the current time as microseconds after the UNIX epoch. */
+uint64_t RV_now_usec(void);
 
 #define SERVER_VERSION_MATCHES_OR_EXCEEDS(version, major_needed, minor_needed, patch_needed)                 \
     (version.major > major_needed) || (version.major == major_needed && version.minor > minor_needed) ||     \
