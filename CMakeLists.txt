@@ -2,7 +2,7 @@
 # CMake Build Script for the HDF5 REST VOL connector #
 #----------------------------------------------------#
 
-cmake_minimum_required (VERSION 3.10)
+cmake_minimum_required (VERSION 3.10...3.29)
 project (HDF5_VOL_REST C)
 
 # Setup CMake policies.

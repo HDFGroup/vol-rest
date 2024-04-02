@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.1.0)
+cmake_minimum_required (VERSION 3.1.0...3.29)
 
 macro (IDE_GENERATED_PROPERTIES SOURCE_PATH HEADERS SOURCES)
   #set(source_group_path "Source/AIM/${NAME}")
