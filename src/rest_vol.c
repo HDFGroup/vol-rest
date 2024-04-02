@@ -4521,7 +4521,7 @@ uint64_t
 RV_now_usec(void)
 {
 
-    uint64_t now;
+    uint64_t ret_value;
 
 #ifdef RV_HAVE_CLOCKGETTIME
     struct timespec ts;
@@ -4530,7 +4530,7 @@ RV_now_usec(void)
 
     /* Cast all values in this expression to uint64_t to ensure that all intermediate
      * calculations are done in 64 bit, to prevent overflow */
-    now = ((uint64_t)ts.tv_sec * ((uint64_t)1000 * (uint64_t)1000)) + ((uint64_t)ts.tv_nsec / (uint64_t)1000);
+    ret_value = ((uint64_t)ts.tv_sec * ((uint64_t)1000 * (uint64_t)1000)) + ((uint64_t)ts.tv_nsec / (uint64_t)1000);
 #elif RV_HAVE_GETTIMEOFDAY
     struct timeval now_tv;
 
@@ -4538,12 +4538,12 @@ RV_now_usec(void)
 
     /* Cast all values in this expression to uint64_t to ensure that all intermediate
      * calculations are done in 64 bit, to prevent overflow */
-    now = ((uint64_t)now_tv.tv_sec * ((uint64_t)1000 * (uint64_t)1000)) + (uint64_t)now_tv.tv_usec;
+    ret_value = ((uint64_t)now_tv.tv_sec * ((uint64_t)1000 * (uint64_t)1000)) + (uint64_t)now_tv.tv_usec;
 #else
     FUNC_GOTO_ERROR(H5E_FUNC, H5E_CANTGET, 0,
                     "Platform does not have clock_gettime or gettimeofday available");
 #endif
 
 done:
-    return (now);
+    return (ret_value);
 }
