@@ -4534,8 +4534,9 @@ RV_now_usec(void)
      * calculations are done in 64 bit, to prevent overflow */
     ret_value = ((uint64_t)now_tv.tv_sec * ((uint64_t)1000 * (uint64_t)1000)) + (uint64_t)now_tv.tv_usec;
 #else
-    FUNC_GOTO_ERROR(H5E_FUNC, H5E_CANTGET, 0,
-                    "Platform does not have clock_gettime or gettimeofday available");
+    /* Cast all values in this expression to uint64_t to ensure that all intermediate calculations
+     * are done in 64 bit, to prevent overflow */
+    ret_value       = ((uint64_t)time(NULL) * ((uint64_t)1000 * (uint64_t)1000));
 #endif
 
 done:

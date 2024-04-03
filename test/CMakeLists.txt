@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.1.0)
+cmake_minimum_required (VERSION 3.1.0...3.29)
 PROJECT (HDF5_VOL_REST_TEST C)
 
 #-----------------------------------------------------------------------------
