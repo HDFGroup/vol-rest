@@ -3457,8 +3457,8 @@ RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void 
     herr_t              ret_value      = SUCCEED;
     server_api_version *server_version = (server_api_version *)callback_data_out;
 
-    char *version_response = NULL;
-    char *version_field    = NULL;
+    char *version_response      = NULL;
+    char *version_field         = NULL;
     int   numeric_version_field = 0;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -4524,7 +4524,8 @@ RV_now_usec(void)
 
     /* Cast all values in this expression to uint64_t to ensure that all intermediate
      * calculations are done in 64 bit, to prevent overflow */
-    ret_value = ((uint64_t)ts.tv_sec * ((uint64_t)1000 * (uint64_t)1000)) + ((uint64_t)ts.tv_nsec / (uint64_t)1000);
+    ret_value =
+        ((uint64_t)ts.tv_sec * ((uint64_t)1000 * (uint64_t)1000)) + ((uint64_t)ts.tv_nsec / (uint64_t)1000);
 #elif RV_HAVE_GETTIMEOFDAY
     struct timeval now_tv;
 
@@ -4536,7 +4537,7 @@ RV_now_usec(void)
 #else
     /* Cast all values in this expression to uint64_t to ensure that all intermediate calculations
      * are done in 64 bit, to prevent overflow */
-    ret_value       = ((uint64_t)time(NULL) * ((uint64_t)1000 * (uint64_t)1000));
+    ret_value = ((uint64_t)time(NULL) * ((uint64_t)1000 * (uint64_t)1000));
 #endif
 
 done:
