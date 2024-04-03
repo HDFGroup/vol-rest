@@ -122,10 +122,15 @@ find_package (CURL 7.61 REQUIRED)
 if (CURL_FOUND)
   include_directories(${CURL_INCLUDE_DIRS})
   set (LINK_LIBS ${LINK_LIBS} CURL::libcurl)
+  set_target_properties(CURL::libcurl PROPERTIES
+    IMPORTED_LOCATION ${CURL_ROOT}/lib/libcurl.lib)
 else ()
   message (FATAL_ERROR "cURL not found; please check CURL_INCLUDE_DIR")
 endif ()
 
+if (WIN32)
+  set (LINK_LIBS ${LINK_LIBS} Ws2_32.lib)
+endif ()
 # Include custom module for finding YAJL
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${HDF5_VOL_REST_RESOURCES_MOD_DIR}")
 
