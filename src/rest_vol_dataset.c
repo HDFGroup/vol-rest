@@ -218,7 +218,7 @@ RV_dataset_create(void *obj, const H5VL_loc_params_t *loc_params, const char *na
                         "dataset create URL size exceeded maximum URL size");
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> Dataset creation request URL: %s\n\n", request_url);
+    printf("-> Dataset creation request endpoint: %s\n\n", request_endpoint);
 #endif
 
     http_response = RV_curl_post(curl, &new_dataset->domain->u.file.server_info, request_endpoint,
@@ -728,10 +728,6 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Reading dataset\n\n");
-
-    printf("   /***************************************\\\n");
-    printf("-> | Making GET/POST request to the server |\n");
-    printf("   \\***************************************/\n\n");
 #endif
 
     if (CURLM_OK != curl_multi_setopt(curl_multi_handle, CURLMOPT_MAX_HOST_CONNECTIONS, NUM_MAX_HOST_CONNS))
@@ -1319,10 +1315,6 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Writing dataset\n\n");
-
-    printf("   /**********************************\\\n");
-    printf("-> | Making PUT request to the server |\n");
-    printf("   \\**********************************/\n\n");
 #endif
 
     if (CURLM_OK != curl_multi_setopt(curl_multi_handle, CURLMOPT_MAX_HOST_CONNECTIONS, NUM_MAX_HOST_CONNS))
@@ -1830,12 +1822,13 @@ static herr_t
 RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *callback_data_in,
                                               void *callback_data_out)
 {
-    yajl_val      parse_tree         = NULL, creation_properties_obj, key_obj;
+    yajl_val      parse_tree = NULL, creation_properties_obj = NULL, key_obj = NULL, target_tree = NULL;
     hid_t        *DCPL               = (hid_t *)callback_data_out;
     hid_t         fill_type          = H5I_INVALID_HID;
     char         *encoded_fill_value = NULL;
     char         *decoded_fill_value = NULL;
     unsigned int *ud_parameters      = NULL;
+    const char   *path_name          = NULL;
     herr_t        ret_value          = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1850,9 +1843,27 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
     if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
+    target_tree = parse_tree;
+
+    /* If the response contains 'h5paths',
+     * it may describe multiple objects. Needs to be unwrapped first. */
+    if (NULL != yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)) {
+        if (NULL == (target_tree = yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)))
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
+
+        /* Access the first object under h5paths */
+        if (NULL == (path_name = target_tree->u.object.keys[0]))
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed path name was NULL");
+
+        const char *path_keys[] = {path_name, (const char *)0};
+
+        if (NULL == (target_tree = yajl_tree_get(target_tree, path_keys, yajl_t_object)))
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "unable to parse object under path key");
+    }
+
     /* Retrieve the creationProperties object */
     if (NULL ==
-        (creation_properties_obj = yajl_tree_get(parse_tree, creation_properties_keys, yajl_t_object)))
+        (creation_properties_obj = yajl_tree_get(target_tree, creation_properties_keys, yajl_t_object)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of creationProperties object failed");
 
     /********************************************************************************************

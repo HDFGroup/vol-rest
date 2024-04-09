@@ -1426,18 +1426,19 @@ done:
 static hid_t
 RV_convert_JSON_to_datatype(const char *type)
 {
-    yajl_val parse_tree = NULL, key_obj = NULL;
-    hsize_t *array_dims = NULL;
-    size_t   i;
-    hid_t    datatype                   = FAIL;
-    hid_t   *compound_member_type_array = NULL;
-    hid_t    enum_base_type             = FAIL;
-    char   **compound_member_names      = NULL;
-    char    *datatype_class             = NULL;
-    char    *array_base_type_substring  = NULL;
-    char    *tmp_cmpd_type_buffer       = NULL;
-    char    *tmp_enum_base_type_buffer  = NULL;
-    hid_t    ret_value                  = FAIL;
+    yajl_val    parse_tree = NULL, key_obj = NULL, target_tree = NULL;
+    hsize_t    *array_dims = NULL;
+    size_t      i;
+    hid_t       datatype                   = FAIL;
+    hid_t      *compound_member_type_array = NULL;
+    hid_t       enum_base_type             = FAIL;
+    char      **compound_member_names      = NULL;
+    char       *datatype_class             = NULL;
+    char       *array_base_type_substring  = NULL;
+    char       *tmp_cmpd_type_buffer       = NULL;
+    char       *tmp_enum_base_type_buffer  = NULL;
+    const char *path_name                  = NULL;
+    hid_t       ret_value                  = FAIL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting JSON buffer %s to hid_t\n", type);
@@ -1446,6 +1447,24 @@ RV_convert_JSON_to_datatype(const char *type)
     /* Retrieve the datatype class */
     if (NULL == (parse_tree = yajl_tree_parse(type, NULL, 0)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
+
+    target_tree = parse_tree;
+
+    /* If the response contains 'h5paths',
+     * it may describe multiple objects. Needs to be unwrapped first. */
+    if (NULL != yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)) {
+        if (NULL == (target_tree = yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)))
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
+
+        /* Access the first object under h5paths */
+        if (NULL == (path_name = target_tree->u.object.keys[0]))
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed path name was NULL");
+
+        const char *path_keys[] = {path_name, (const char *)0};
+
+        if (NULL == (target_tree = yajl_tree_get(target_tree, path_keys, yajl_t_object)))
+            FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "unable to parse object under path key");
+    }
 
     if (NULL == (key_obj = yajl_tree_get(parse_tree, type_class_keys, yajl_t_string)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't parse datatype from JSON representation");
