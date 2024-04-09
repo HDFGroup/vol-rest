@@ -830,8 +830,7 @@ herr_t RV_get_cmpd_subset_nmembers(hid_t src_type_id, hid_t dst_type_id, size_t 
 #define SERVER_VERSION_SUPPORTS_FIXED_LENGTH_UTF8(version)                                                   \
     (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 5))
 
-#define SERVER_VERSION_SUPPORTS_LONG_NAMES(version)                                                          \
-    (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 6))
+#define SERVER_VERSION_SUPPORTS_LONG_NAMES(version) (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 6))
 
 #define SERVER_VERSION_SUPPORTS_MEMBER_SELECTION(version)                                                    \
     (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 6))
