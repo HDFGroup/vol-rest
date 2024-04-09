@@ -410,6 +410,12 @@ extern const char *link_creation_time_keys[];
  */
 extern const char *link_collection_keys2[];
 
+/* JSON keys to retrieve objects accessed through path(s) */
+extern const char *h5paths_keys[];
+
+/* JSON keys to retrieve the path to a domain in HSDS */
+extern const char *domain_keys[];
+
 /* A global struct containing the buffer which cURL will write its
  * responses out to after making a call to the server. The buffer
  * in this struct is allocated upon connector initialization and is
@@ -806,6 +812,8 @@ herr_t RV_JSON_escape_string(const char *in, char *out, size_t *out_size);
 
 #define SERVER_VERSION_SUPPORTS_FIXED_LENGTH_UTF8(version)                                                   \
     (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 5))
+
+#define SERVER_VERSION_SUPPORTS_LONG_NAMES(version) (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 6))
 
 #ifdef __cplusplus
 }
