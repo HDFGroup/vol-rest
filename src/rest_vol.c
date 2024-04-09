@@ -2402,7 +2402,7 @@ done:
 
     /* Necessary to prevent curl from potentially accessing freed buffers in subsequent calls */
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_POST, 0))
-        FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't unset cURL HTTP POST request: %s", curl_err_buf);
+        FUNC_DONE_ERROR(H5E_LINK, H5E_CANTSET, FAIL, "can't unset cURL HTTP POST request: %s", curl_err_buf);
 
     if (external_file)
         if (RV_file_close(external_file, H5P_DEFAULT, NULL) < 0)
