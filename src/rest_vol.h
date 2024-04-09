@@ -440,9 +440,6 @@ typedef struct RV_type_info {
 #define H5I_MAX_NUM_TYPES TYPE_MASK
 extern RV_type_info *RV_type_info_array_g[];
 
-/* Enum values in RV_file_optional_args_t that specify certain operations */
-#define RV_FILE_GET_SIZE 8
-
 /**************************
  *                        *
  *        Typedefs        *

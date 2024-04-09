@@ -712,7 +712,7 @@ RV_file_optional(void *obj, H5VL_optional_args_t *args, hid_t dxpl_id, void **re
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Received file-optional call with following parameters:\n");
     printf("     - File-optional call type: %s\n",
-           file_optional_type_to_string(*((H5VL_optional_args_t *)args)));
+           file_optional_type_to_string(((H5VL_file_optional_t)args->op_type)));
     if (file) {
         printf("     - File's URI: %s\n", file->URI);
         printf("     - File's pathname: %s\n", file->domain->u.file.filepath_name);
@@ -722,7 +722,7 @@ RV_file_optional(void *obj, H5VL_optional_args_t *args, hid_t dxpl_id, void **re
 
     switch (args->op_type) {
         /* H5VL_FILE_GET_FILESIZE */
-        case (RV_FILE_GET_SIZE): {
+        case (H5VL_NATIVE_FILE_GET_SIZE): {
             RV_file_optional_args_t *opt_args = (RV_file_optional_args_t *)args->args;
             size_t                  *size_out = opt_args->get_size.size;
             /* Setup cURL to make GET request */

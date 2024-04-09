@@ -439,7 +439,7 @@ file_specific_type_to_string(H5VL_file_specific_t specific_type)
  * Function:    file_optional_type_to_string
  *
  * Purpose:     Helper function to convert each member of the
- *              H5VL_file_optional_t enum into its string representation
+ *              H5VL_native_file_optional_args_t enum into its string representation
  *
  * Return:      String representation of given object or '(unknown)' if
  *              the function can't determine the type of object it has
@@ -449,10 +449,10 @@ file_specific_type_to_string(H5VL_file_specific_t specific_type)
  *              January, 2024
  */
 const char *
-file_optional_type_to_string(H5VL_optional_args_t optional_type)
+file_optional_type_to_string(H5VL_file_optional_t optional_type)
 {
-    switch (optional_type.op_type) {
-        case RV_FILE_GET_SIZE:
+    switch (optional_type) {
+        case H5VL_NATIVE_FILE_GET_SIZE:
             return "RV_FILE_GET_FILESIZE";
         default:
             return "(unknown)";
