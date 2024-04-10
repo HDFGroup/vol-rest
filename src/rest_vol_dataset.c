@@ -1332,8 +1332,8 @@ RV_dataset_get(void *obj, H5VL_dataset_get_args_t *args, hid_t dxpl_id, void **r
                             dset->domain->u.file.filepath_name, CONTENT_TYPE_JSON) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get dataset");
 
-            if (RV_parse_allocated_size_callback(response_buffer.buffer, NULL,
-                                                 args->args.get_storage_size.storage_size) < 0)
+            if (RV_parse_allocated_size_cb(response_buffer.buffer, NULL,
+                                           args->args.get_storage_size.storage_size) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL,
                                 "can't get allocated size from server response");
 

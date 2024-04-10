@@ -757,9 +757,10 @@ size_t H5_rest_curl_write_data_callback_no_global(char *buffer, size_t size, siz
 /* Helper to turn an object type into a string for a server request */
 herr_t RV_set_object_type_header(H5I_type_t parent_obj_type, const char **parent_obj_type_header);
 
-/* Helper function to parse an object's allocated size from server response */
-herr_t RV_parse_allocated_size_callback(char *HTTP_response, const void *callback_data_in,
-                                        void *callback_data_out);
+/* Helper functions to parse an object's allocated size from server response */
+herr_t RV_parse_allocated_size_cb(char *HTTP_response, void *callback_data_in, void *callback_data_out);
+herr_t RV_parse_domain_allocated_size_cb(char *HTTP_response, const void *callback_data_in,
+                                         void *callback_data_out);
 
 void RV_free_visited_link_hash_table_key(rv_hash_table_key_t value);
 

@@ -32,6 +32,16 @@ struct get_obj_ids_udata_t {
     char  *local_filename;
 } typedef get_obj_ids_udata_t;
 
+/* Parameters for file 'optional' operations.
+   A subset of H5VL_native_file_optional_args_t */
+typedef union RV_file_optional_args_t {
+    /* H5VL_NATIVE_FILE_GET_SIZE */
+    struct {
+        hsize_t *size; /* Size of file (OUT) */
+    } get_size;
+
+} RV_file_optional_args_t;
+
 /*-------------------------------------------------------------------------
  * Function:    RV_file_create
  *
@@ -676,6 +686,128 @@ done:
 
     return ret_value;
 } /* end RV_file_specific() */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_file_optional
+ *
+ * Purpose:     Performs a connector-specific operation on an HDF5 file, such
+ *              as calling the H5Fget_filesize routine
+ *
+ * Return:      Non-negative on success/Negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              January, 2024
+ */
+herr_t
+RV_file_optional(void *obj, H5VL_optional_args_t *args, hid_t dxpl_id, void **req)
+{
+    RV_object_t *file            = (RV_object_t *)obj;
+    herr_t       ret_value       = SUCCEED;
+    size_t       host_header_len = 0;
+    char        *host_header     = NULL;
+    char         request_url[URL_MAX_LENGTH];
+    int          url_len       = 0;
+    long         http_response = 0;
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Received file-optional call with following parameters:\n");
+    printf("     - File-optional call type: %s\n",
+           file_optional_type_to_string(((H5VL_file_optional_t)args->op_type)));
+    if (file) {
+        printf("     - File's URI: %s\n", file->URI);
+        printf("     - File's pathname: %s\n", file->domain->u.file.filepath_name);
+    } /* end if */
+    printf("\n");
+#endif
+
+    switch (args->op_type) {
+        /* H5VL_FILE_GET_FILESIZE */
+        case (H5VL_NATIVE_FILE_GET_SIZE): {
+            RV_file_optional_args_t *opt_args = (RV_file_optional_args_t *)args->args;
+            size_t                  *size_out = opt_args->get_size.size;
+            /* Setup cURL to make GET request */
+
+            /* Assemble URL */
+            if ((url_len = snprintf(request_url, URL_MAX_LENGTH, "%s?verbose=1",
+                                    file->domain->u.file.server_info.base_URL)) < 0)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+            if (url_len >= URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_SYSERRSTR, FAIL,
+                                "H5Fget_filesize request URL size exceeded maximum URL size");
+
+            /* Setup the host header */
+            host_header_len = strlen(file->domain->u.file.filepath_name) + strlen(host_string) + 1;
+            if (NULL == (host_header = (char *)RV_malloc(host_header_len)))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
+                                "can't allocate space for request Host header");
+
+            strcpy(host_header, host_string);
+
+            curl_headers =
+                curl_slist_append(curl_headers, strncat(host_header, file->domain->u.file.filepath_name,
+                                                        host_header_len - strlen(host_string) - 1));
+
+            /* Disable use of Expect: 100 Continue HTTP response */
+            curl_headers = curl_slist_append(curl_headers, "Expect:");
+
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_USERNAME, file->domain->u.file.server_info.username))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL username: %s", curl_err_buf);
+            if (CURLE_OK !=
+                curl_easy_setopt(curl, CURLOPT_PASSWORD, file->domain->u.file.server_info.password))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL password: %s", curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPHEADER, curl_headers))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL HTTP headers: %s", curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_HTTPGET, 1))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set up cURL to make HTTP GET request: %s",
+                                curl_err_buf);
+            if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_URL, request_url))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL request URL: %s", curl_err_buf);
+
+#ifdef RV_CONNECTOR_DEBUG
+            printf("-> Checking allocated bytes for domain using URL: %s\n\n", request_url);
+
+            printf("   /**********************************\\\n");
+            printf("-> | Making GET request to the server |\n");
+            printf("   \\**********************************/\n\n");
+#endif
+
+            CURL_PERFORM_NO_ERR(curl, FAIL);
+
+            if (CURLE_OK != curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_response))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL, "can't get HTTP response code");
+
+            if (!(HTTP_SUCCESS(http_response)))
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTGET, FAIL,
+                                "request to server failed with HTTP response %ld", http_response);
+
+            /* Retrieve number of bytes allocated for file from response */
+            if (RV_parse_response(response_buffer.buffer, NULL, (void *)size_out,
+                                  RV_parse_domain_allocated_size_cb) < 0)
+                FUNC_GOTO_ERROR(H5E_FILE, H5E_PARSEERROR, FAIL,
+                                "can't parse allocated bytes from server response");
+        }
+
+        break;
+
+        default:
+            FUNC_GOTO_ERROR(H5E_FILE, H5E_UNSUPPORTED, FAIL, "unsupported optional file operation");
+            break;
+    }
+
+done:
+
+    if (host_header)
+        RV_free(host_header);
+
+    if (curl_headers) {
+        curl_slist_free_all(curl_headers);
+        curl_headers = NULL;
+    }
+
+    return (ret_value);
+} /* end RV_file_optional */
 
 /*-------------------------------------------------------------------------
  * Function:    RV_file_close
