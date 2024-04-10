@@ -1017,8 +1017,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                 dest_dtype_size = dense_dtype_size;
             }
             else {
-                dest_dtype      = transfer_info[i].mem_type_id;
-                dest_dtype_size = mem_type_size;
+                dest_dtype      = transfer_info[i].file_type_id;
+                dest_dtype_size = file_type_size;
             }
 
             /* Initialize type conversion */
