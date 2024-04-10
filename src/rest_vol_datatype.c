@@ -2668,7 +2668,8 @@ RV_get_cmpd_subset_type(hid_t src_type_id, hid_t dst_type_id, RV_subset_t *subse
                                     "can't get destination datatype member offset");
 
                 /* Compare member names and offsets */
-                if (!strcmp(src_member_name, dst_member_name) && (src_member_offset == dst_member_offset)) {
+                if (!strcmp(src_member_name, dst_member_name) && (src_member_offset == dst_member_offset) &&
+                    (H5Tequal(src_member_type, dst_member_type) > 0)) {
                     member_match = TRUE;
                 }
 
@@ -2728,7 +2729,8 @@ RV_get_cmpd_subset_type(hid_t src_type_id, hid_t dst_type_id, RV_subset_t *subse
                                     "can't get memory datatype member offset");
 
                 /* Compare member names and offsets */
-                if (!strcmp(dst_member_name, src_member_name) && (dst_member_offset == src_member_offset)) {
+                if (!strcmp(dst_member_name, src_member_name) && (dst_member_offset == src_member_offset) &&
+                    (H5Tequal(dst_member_type, src_member_type) > 0)) {
                     member_match = TRUE;
                 }
                 /* Clean up */
