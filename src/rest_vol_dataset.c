@@ -1172,11 +1172,15 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                                     "compound member names too long for URL");
 
                 /* Copy name to query string without null byte */
-                memcpy(cmpd_query_ptr, member_name, strlen(member_name));
-                cmpd_query_ptr += strlen(member_name);
+                memcpy(cmpd_query_ptr, url_encoded_member_name, strlen(url_encoded_member_name));
+                cmpd_query_ptr += strlen(url_encoded_member_name);
 
-                /* If another member name will follow, add sepator */
+                /* If another member name will follow, add separator */
                 if (j < num_cmpd_members - 1) {
+                    if ((size_t)(cmpd_query_ptr - cmpd_query) + 1 > URL_MAX_LENGTH)
+                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
+                                        "compound member names too long for URL");
+
                     *cmpd_query_ptr = COMPOUND_MEMBER_SEPARATOR;
                     cmpd_query_ptr++;
                 }
@@ -1189,6 +1193,9 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                 curl_free(url_encoded_member_name);
                 url_encoded_member_name = NULL;
             }
+
+            if ((size_t)(cmpd_query_ptr - cmpd_query) + 1 > URL_MAX_LENGTH)
+                FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "compound member names too long for URL");
 
             *cmpd_query_ptr = '\0';
         }
