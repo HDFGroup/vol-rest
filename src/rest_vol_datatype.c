@@ -2609,3 +2609,176 @@ done:
 
     return ret_value;
 } /* end RV_tconv_init() */
+
+/* Determine the subset relationsip (if any) between src and dst datatypes */
+herr_t
+RV_get_cmpd_subset_type(hid_t src_type_id, hid_t dst_type_id, RV_subset_t *subset)
+{
+    herr_t      ret_value      = SUCCEED;
+    H5T_class_t dst_type_class = H5T_NO_CLASS, src_type_class = H5T_NO_CLASS;
+    char       *src_member_name = NULL, *dst_member_name = NULL;
+    size_t      src_member_offset = 0, dst_member_offset = 0;
+    hid_t       src_member_type = H5I_INVALID_HID, dst_member_type = H5I_INVALID_HID;
+    int         dst_nmembs = 0, src_nmembs = 0;
+    hbool_t     member_match = FALSE;
+
+    if (H5T_NO_CLASS == (src_type_class = H5Tget_class(src_type_id)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "source datatype is invalid");
+
+    if (H5T_NO_CLASS == (dst_type_class = H5Tget_class(dst_type_id)))
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "destination datatype is invalid");
+
+    if ((dst_type_class != H5T_COMPOUND) || (src_type_class != H5T_COMPOUND)) {
+        *subset = H5T_SUBSET_FALSE;
+        FUNC_GOTO_DONE(SUCCEED);
+    }
+
+    if ((dst_nmembs = H5Tget_nmembers(dst_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of destination datatype");
+
+    if ((src_nmembs = H5Tget_nmembers(src_type_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get nmembers of source datatype");
+
+    /* Determine subset status by comparing members */
+    if (src_nmembs < dst_nmembs) {
+        for (unsigned src_idx = 0; src_idx < src_nmembs; src_idx++) {
+            member_match = FALSE;
+
+            if ((src_member_type = H5Tget_member_type(src_type_id, src_idx)) == H5I_INVALID_HID)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get memory datatype member type");
+
+            if ((src_member_name = H5Tget_member_name(src_type_id, src_idx)) == NULL)
+                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get memory datatype member name");
+
+            if ((src_member_offset = H5Tget_member_offset(src_type_id, src_idx)) < 0)
+                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get memory datatype member offset");
+
+            /* Search for match in dst compound */
+            for (unsigned dst_idx = 0; dst_idx < dst_nmembs; dst_idx++) {
+                if ((dst_member_type = H5Tget_member_type(dst_type_id, dst_idx)) == H5I_INVALID_HID)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                    "can't get destination datatype member type");
+
+                if ((dst_member_name = H5Tget_member_name(dst_type_id, dst_idx)) == NULL)
+                    FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                    "can't get destination datatype member name");
+
+                if ((dst_member_offset = H5Tget_member_offset(dst_type_id, dst_idx)) < 0)
+                    FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                    "can't get destination datatype member offset");
+
+                /* Compare member names and offsets */
+                if (!strcmp(src_member_name, dst_member_name) && (src_member_offset == dst_member_offset) &&
+                    (H5Tequal(src_member_type, dst_member_type) > 0)) {
+                    member_match = TRUE;
+                }
+
+                /* Clean up */
+                H5free_memory(dst_member_name);
+                dst_member_name = NULL;
+
+                if (H5Tclose(dst_member_type) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL,
+                                    "can't close destination datatype member type");
+                dst_member_type = H5T_NO_CLASS;
+
+                /* If no match exists for this source member, the src compound is not a subset */
+                if ((dst_idx == dst_nmembs - 1) && !member_match) {
+                    *subset = H5T_SUBSET_FALSE;
+                    FUNC_GOTO_DONE(SUCCEED);
+                }
+            }
+
+            /* Clean up */
+            H5free_memory(src_member_name);
+            src_member_name = NULL;
+
+            if (H5Tclose(src_member_type) < 0)
+                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close source datatype member");
+            src_member_type = H5T_NO_CLASS;
+
+            /* If a match was found for every member, src is a subset of dst */
+            *subset = H5T_SUBSET_SRC;
+        }
+    }
+    else if (dst_nmembs < src_nmembs) {
+        for (unsigned dst_idx = 0; dst_idx < dst_nmembs; dst_idx++) {
+            member_match = FALSE;
+            if ((dst_member_type = H5Tget_member_type(dst_type_id, dst_idx)) == H5I_INVALID_HID)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                "can't get destination datatype member type");
+
+            if ((dst_member_name = H5Tget_member_name(dst_type_id, dst_idx)) == NULL)
+                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                "can't get destination datatype member name");
+
+            if ((dst_member_offset = H5Tget_member_offset(dst_type_id, dst_idx)) < 0)
+                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                "can't get destination datatype member offset");
+
+            /* Search for match in src compound */
+            for (unsigned src_idx = 0; src_idx < src_nmembs; src_idx++) {
+                if ((src_member_type = H5Tget_member_type(src_type_id, src_idx)) == H5I_INVALID_HID)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get memory datatype member type");
+
+                if ((src_member_name = H5Tget_member_name(src_type_id, src_idx)) == NULL)
+                    FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get memory datatype member name");
+
+                if ((src_member_offset = H5Tget_member_offset(src_type_id, src_idx)) < 0)
+                    FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL,
+                                    "can't get memory datatype member offset");
+
+                /* Compare member names and offsets */
+                if (!strcmp(dst_member_name, src_member_name) && (dst_member_offset == src_member_offset) &&
+                    (H5Tequal(dst_member_type, src_member_type) > 0)) {
+                    member_match = TRUE;
+                }
+                /* Clean up */
+                H5free_memory(src_member_name);
+                src_member_name = NULL;
+
+                if (H5Tclose(src_member_type) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL,
+                                    "can't close memory datatype member type");
+                src_member_type = H5T_NO_CLASS;
+
+                /* If no match exists for this destination member, the dst compound is not a subset */
+                if ((src_idx == src_nmembs - 1) && !member_match) {
+                    *subset = H5T_SUBSET_FALSE;
+                    FUNC_GOTO_DONE(SUCCEED);
+                }
+            }
+
+            /* Clean up */
+            H5free_memory(dst_member_name);
+            dst_member_name = NULL;
+
+            if (H5Tclose(dst_member_type) < 0)
+                FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL,
+                                "can't close destination datatype member");
+            dst_member_type = H5T_NO_CLASS;
+
+            /* If a match was found for every member, dst is a subset of source */
+            *subset = H5T_SUBSET_DST;
+        }
+    }
+    else {
+        *subset = H5T_SUBSET_FALSE;
+    }
+
+done:
+    if (src_member_name)
+        H5free_memory(src_member_name);
+    if (dst_member_name)
+        H5free_memory(dst_member_name);
+
+    if (src_member_type > 0)
+        if (H5Tclose(src_member_type) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close source datatype member");
+
+    if (dst_member_type > 0)
+        if (H5Tclose(dst_member_type) < 0)
+            FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close destination datatype member");
+
+    return ret_value;
+}

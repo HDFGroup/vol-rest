@@ -446,6 +446,17 @@ extern RV_type_info *RV_type_info_array_g[];
  *                        *
  **************************/
 
+/* Values for the optimization of compound data reading and writing.  They indicate
+ * whether the fields of the source and destination are subset of each other
+ */
+typedef enum {
+    H5T_SUBSET_BADVALUE = -1, /* Invalid value */
+    H5T_SUBSET_FALSE    = 0,  /* Source and destination aren't subset of each other */
+    H5T_SUBSET_SRC,           /* Source is the subset of dest and no conversion is needed */
+    H5T_SUBSET_DST,           /* Dest is the subset of source and no conversion is needed */
+    H5T_SUBSET_CAP            /* Must be the last value */
+} RV_subset_t;
+
 /*
  * A struct which is used to return a link's name or the size of
  * a link's name when calling H5Lget_name_by_idx.
@@ -580,6 +591,10 @@ typedef struct dataset_write_info {
     curl_off_t  write_len;
     upload_info uinfo;
     const void *buf;
+
+    /* If writing using compound subsetting, this is a packed version of the
+     *  compound type containing only the selected members */
+    hid_t dense_cmpd_subset_dtype_id;
 } dataset_write_info;
 
 typedef struct dataset_read_info {
@@ -797,6 +812,12 @@ herr_t RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type
 /* Helper function to escape control characters for JSON strings */
 herr_t RV_JSON_escape_string(const char *in, char *out, size_t *out_size);
 
+/* Determine if a read from file to mem dtype is a compound subset read */
+herr_t RV_get_cmpd_subset_type(hid_t src_type_id, hid_t dst_type_id, RV_subset_t *subset_info);
+
+/* Helper to get information about members in dst that are included in src compound */
+herr_t RV_get_cmpd_subset_nmembers(hid_t src_type_id, hid_t dst_type_id, size_t *num_cmpd_members);
+
 #define SERVER_VERSION_MATCHES_OR_EXCEEDS(version, major_needed, minor_needed, patch_needed)                 \
     (version.major > major_needed) || (version.major == major_needed && version.minor > minor_needed) ||     \
         (version.major == major_needed && version.minor == minor_needed && version.patch >= patch_needed)
@@ -811,6 +832,9 @@ herr_t RV_JSON_escape_string(const char *in, char *out, size_t *out_size);
     (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 5))
 
 #define SERVER_VERSION_SUPPORTS_LONG_NAMES(version) (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 6))
+
+#define SERVER_VERSION_SUPPORTS_MEMBER_SELECTION(version)                                                    \
+    (SERVER_VERSION_MATCHES_OR_EXCEEDS(version, 0, 8, 6))
 
 #ifdef __cplusplus
 }
