@@ -21,7 +21,6 @@ env:
   HSDS_PASSWORD: test
   HSDS_PATH: /home/test_user1/
   HDF5_API_TEST_PATH_PREFIX: /home/test_user1/
-  HSDS_ENDPOINT: http+unix://%2Ftmp%2Fhs%2Fsn_1.sock
   HDF5_VOL_CONNECTOR: REST
   ROOT_DIR: ${{github.workspace}}/hsdsdata
   BUCKET_NAME: hsdstest
@@ -178,8 +177,8 @@ jobs:
               ROOT_DIR=${{github.workspace}}/hsdadata ./runall.sh --no-docker 1 &
               sleep 10
         working-directory: ${{github.workspace}}/hsds
-
-      - name: Test HSDS
+        
+      - name: Test HSDS + Setup Folders
         run: |
               python tests/integ/setup_test.py
         working-directory: ${{github.workspace}}/hsds
@@ -219,7 +218,8 @@ jobs:
         os: [windows-latest]
         python-version: ["3.10"]
         hdf5-branch: ["hdf5_1_14", "develop"] 
-
+    env:
+      HSDS_ENDPOINT: http://127.0.0.1:5101
     runs-on: ${{matrix.os}}
     steps:
       - name: Get HDF5
@@ -234,6 +234,47 @@ jobs:
         with:
           path: ${{github.workspace}}/vol-rest
       
+      - name: Get HSDS
+        uses: actions/checkout@v3
+        with:
+          repository: HDFGroup/hsds
+          path: ${{github.workspace}}/hsds
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          
+      - name: Install HSDS dependencies
+        working-directory: ${{github.workspace}}/hsds
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Install HSDS package
+        working-directory: ${{github.workspace}}/hsds
+        shell: bash
+        run: |
+          pip install -e .
+
+      - name: Start HSDS
+        shell: bash
+        working-directory: ${{github.workspace}}/hsds
+        run: |
+          mkdir data
+          mkdir data/hsdstest
+          cp admin/config/groups.default admin/config/groups.txt
+          cp admin/config/passwd.default admin/config/passwd.txt
+          hsds --root_dir data --host localhost --port 5101 --password_file admin/config/passwd.txt --logfile hs.log --loglevel DEBUG --config_dir=admin/config --count=4 &
+          sleep 10
+
+      - name: Test HSDS + Setup Folders
+        run: |
+          python tests/integ/setup_test.py
+        working-directory: ${{github.workspace}}/hsds
+
       - name: Get curl from source
         uses: actions/checkout@v4
         with:
@@ -296,16 +337,18 @@ jobs:
           -DCURL_ROOT=${{github.workspace}}/curl/install/ -DCMAKE_C_FLAGS="/DCURL_STATICLIB" `
           -DCURL_USE_STATIC_LIBRARIES=ON `
           -DYAJL_ROOT=${{github.workspace}}/yajl/install/ `
+          -DBUILD_STATIC_LIBS=OFF -DBUILD_SHARED_LIBS=ON `
           -DCMAKE_BUILD_TYPE=Release ..
           cmake --build . -j --config Release
           cmake --install . --config Release
 
-      - name: Set HDF5 Plugin path
-        run: |
-              echo "HDF5_PLUGIN_PATH=${{github.workspace}}/vol-rest/build/bin/" >> $GITHUB_ENV
-              echo "HDF5_VOL_CONNECTOR=REST" >> $GITHUB_ENV
-
       - name: Test REST VOL
-        working-directory: ${{github.workspace}}/vol-rest/install/bin/
+        working-directory: ${{github.workspace}}\vol-rest\build
+        env: 
+          HDF5_PLUGIN_PATH: ${{github.workspace}}\vol-rest\install\bin
+        # Manually append lib to PATH here, since env can change between steps on the runner
         run: |
-          test_rest_vol-shared.exe
+          $env:PATH="$env:PATH;${{github.workspace}}\vol-rest\install\bin;${{github.workspace}}\hdf5install\bin;${{github.workspace}}\yajl\install\lib"
+          ctest . -C Release -VV --output-on-failure
+
+      
