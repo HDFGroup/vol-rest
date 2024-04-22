@@ -659,8 +659,9 @@ done:
  * Purpose:     Given a datatype, this function creates a JSON-formatted
  *              string representation of the datatype.
  *
- *              Can be called recursively for the case of Array and
- *              Compound Datatypes. The parameter 'nested' should always be
+ *              Can be called recursively for the case of Array,
+ *              Compound, and Variable-length datatypes.
+ *              The parameter 'nested' should always be
  *              supplied as FALSE, as the function itself handles the
  *              correct passing of the parameter when processing nested
  *              datatypes (such as the base type for an Array datatype).
@@ -696,6 +697,7 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
     char       *array_base_type         = NULL;
     char      **compound_member_strings = NULL;
     char       *compound_member_name    = NULL;
+    char       *vlen_base_type          = NULL;
     char       *out_string              = NULL;
     char       *out_string_curr_pos; /* The "current position" pointer used to print to the appropriate place
                                       in the buffer and not overwrite important leading data */
@@ -1311,7 +1313,45 @@ RV_convert_datatype_to_JSON(hid_t type_id, char **type_body, size_t *type_body_l
         } /* H5T_REFERENCE */
 
         case H5T_VLEN: {
-            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_UNSUPPORTED, FAIL, "unsupported datatype - VLEN");
+            size_t            vlen_base_type_len = 0;
+            const char *const fmt_string         = "{"
+                                                   "\"class\": \"H5T_VLEN\","
+                                                   "\"base\": %s"
+                                                   "}";
+
+            /* Get the class and name of the base datatype */
+            if ((type_base_class = H5Tget_super(type_id)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTGET, FAIL, "can't get base datatype for vlen sequence");
+
+            if (RV_convert_datatype_to_JSON(type_base_class, &vlen_base_type, &vlen_base_type_len, true,
+                                            server_version) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTSERIALIZE, FAIL,
+                                "can't convert parent of vlen type to JSON");
+
+            /* Check whether the buffer needs to be grown */
+            bytes_to_print = vlen_base_type_len + (strlen(fmt_string) - 2) + 1;
+
+            buf_ptrdiff = out_string_curr_pos - out_string;
+
+            if (buf_ptrdiff < 0)
+                FUNC_GOTO_ERROR(
+                    H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                    "unsafe cast: datatype buffer pointer different was negative - this should not happen!");
+
+            CHECKED_REALLOC(out_string, out_string_len, (size_t)buf_ptrdiff + bytes_to_print,
+                            out_string_curr_pos, H5E_DATATYPE, FAIL);
+
+            /* Build datatype body by appending the base type */
+            if ((bytes_printed = snprintf(out_string_curr_pos, out_string_len - (size_t)buf_ptrdiff,
+                                          fmt_string, vlen_base_type)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL, "snprintf error");
+
+            if ((size_t)bytes_printed >= out_string_len - (size_t)buf_ptrdiff)
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_SYSERRSTR, FAIL,
+                                "vlen datatype string size exceeded allocated buffer size");
+
+            out_string_curr_pos += bytes_printed;
+
             break;
         } /* H5T_VLEN */
 
@@ -1371,6 +1411,8 @@ done:
         H5free_memory(enum_value_name);
     if (enum_mapping)
         RV_free(enum_mapping);
+    if (vlen_base_type)
+        RV_free(vlen_base_type);
 
     return ret_value;
 } /* end RV_convert_datatype_to_JSON() */
@@ -1432,13 +1474,15 @@ RV_convert_JSON_to_datatype(const char *type)
     hid_t       datatype                   = FAIL;
     hid_t      *compound_member_type_array = NULL;
     hid_t       enum_base_type             = FAIL;
+    hid_t       ret_value                  = FAIL;
+    hid_t    vlen_parent_type           = H5I_INVALID_HID;
+    const char *path_name                  = NULL;
     char      **compound_member_names      = NULL;
     char       *datatype_class             = NULL;
     char       *array_base_type_substring  = NULL;
     char       *tmp_cmpd_type_buffer       = NULL;
     char       *tmp_enum_base_type_buffer  = NULL;
-    const char *path_name                  = NULL;
-    hid_t       ret_value                  = FAIL;
+    char    *tmp_vlen_type_buffer       = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting JSON buffer %s to hid_t\n", type);
@@ -2068,6 +2112,76 @@ RV_convert_JSON_to_datatype(const char *type)
         else
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid reference type");
     } /* end if */
+    else if (!strcmp(datatype_class, "H5T_VLEN")) {
+        ptrdiff_t buf_ptrdiff;
+        char     *type_section_ptr = NULL;
+        char     *section_start, *section_end;
+        size_t    tmp_vlen_type_buffer_size = 0;
+
+#ifdef RV_CONNECTOR_DEBUG
+        printf("-> Variable-length Datatype\n");
+#endif
+
+        // allocate temporary buffer for parent substring
+        tmp_vlen_type_buffer_size = DATATYPE_BODY_DEFAULT_SIZE;
+
+        if (NULL == (tmp_vlen_type_buffer = (char *)RV_malloc(tmp_vlen_type_buffer_size)))
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
+                            "can't allocate temporary buffer for storing type information");
+
+        /* Locate the beginning and end of the parent type's "type" section and copy that substring into an
+         * hid_t and store it for later insertion once the Variable-Length Datatype has been created. */
+
+        /* Start the search from the "base" JSON key */
+        if (NULL == (type_section_ptr = strstr(type, "\"base\"")))
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "can't find \"base\" information section in datatype string");
+
+        /* Search for the initial '{' brace that begins the section */
+        if (NULL == (section_start = strstr(type_section_ptr, "{")))
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                            "can't find beginning '{' of \"base\" information section in datatype string "
+                            "- misformatted JSON likely");
+
+        /* Continue forward through the string buffer character-by-character until the end of this JSON
+         * object section is found.
+         */
+        FIND_JSON_SECTION_END(section_start, section_end, H5E_DATATYPE, FAIL);
+
+        /* Check if the temporary buffer needs to grow to accommodate this "type" substring */
+        buf_ptrdiff = section_end - type_section_ptr;
+        if (buf_ptrdiff < 0)
+            FUNC_GOTO_ERROR(
+                H5E_INTERNAL, H5E_BADVALUE, FAIL,
+                "unsafe cast: datatype buffer pointer difference was negative - this should not happen!");
+
+        CHECKED_REALLOC_NO_PTR(tmp_vlen_type_buffer, tmp_vlen_type_buffer_size, (size_t)buf_ptrdiff + 3,
+                               H5E_DATATYPE, FAIL);
+
+        /* Copy the "type" substring into the temporary buffer, wrapping it in enclosing braces to ensure
+         * that the string-to-datatype conversion function can correctly process the string
+         */
+        memcpy(tmp_vlen_type_buffer + 1, type_section_ptr, (size_t)buf_ptrdiff);
+        tmp_vlen_type_buffer[0]                       = '{';
+        tmp_vlen_type_buffer[(size_t)buf_ptrdiff + 1] = '}';
+        tmp_vlen_type_buffer[(size_t)buf_ptrdiff + 2] = '\0';
+
+        /* Modify top-level key from 'base' to 'type' for string-to-datatype conversion function */
+        memcpy(tmp_vlen_type_buffer + 2, type_class_keys[0], strlen(type_class_keys[0]));
+
+#ifdef RV_CONNECTOR_DEBUG
+        printf("-> Converting variable length datatype's parent type from JSON to hid_t\n", i);
+#endif
+
+        /* Recursively parse parent datatype from JSON */
+        if ((vlen_parent_type = RV_convert_JSON_to_datatype(tmp_vlen_type_buffer)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
+                            "can't convert vlen datatype parent from JSON representation");
+
+        /* Construct variable length type */
+        if ((datatype = H5Tvlen_create(vlen_parent_type)) < 0)
+            FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create variable-length datatype");
+    }
     else
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unknown datatype class");
 
@@ -2105,6 +2219,8 @@ done:
         RV_free(tmp_cmpd_type_buffer);
     if (tmp_enum_base_type_buffer)
         RV_free(tmp_enum_base_type_buffer);
+    if (tmp_vlen_type_buffer)
+        RV_free(tmp_vlen_type_buffer);
     if (FAIL != enum_base_type)
         if (H5Tclose(enum_base_type) < 0)
             FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close enum base datatype");
