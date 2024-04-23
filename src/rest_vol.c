@@ -3836,9 +3836,9 @@ RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_i
                             transfer_info[handle_index].u.write_info.base64_encoded_values = NULL;
                         }
 
-                        if (transfer_info[handle_index].u.write_info.selection_buf) {
-                            RV_free(transfer_info[handle_index].u.write_info.selection_buf);
-                            transfer_info[handle_index].u.write_info.selection_buf = NULL;
+                        if (transfer_info[handle_index].u.write_info.point_sel_buf) {
+                            RV_free(transfer_info[handle_index].u.write_info.point_sel_buf);
+                            transfer_info[handle_index].u.write_info.point_sel_buf = NULL;
                         }
                     }
 

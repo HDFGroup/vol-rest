@@ -590,9 +590,10 @@ typedef struct dataset_write_info {
     void       *gather_buf;
     void       *base64_encoded_values;
     void       *serialize_buf;
-    void       *selection_buf;
+    void       *point_sel_buf;
     void       *vlen_buf;
     upload_info uinfo;
+    /* Pointer to user-provided write buffer */
     const void *buf;
 
     /* If writing using compound subsetting, this is a packed version of the

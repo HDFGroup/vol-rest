@@ -1475,14 +1475,14 @@ RV_convert_JSON_to_datatype(const char *type)
     hid_t      *compound_member_type_array = NULL;
     hid_t       enum_base_type             = FAIL;
     hid_t       ret_value                  = FAIL;
-    hid_t    vlen_parent_type           = H5I_INVALID_HID;
+    hid_t       vlen_parent_type           = H5I_INVALID_HID;
     const char *path_name                  = NULL;
     char      **compound_member_names      = NULL;
     char       *datatype_class             = NULL;
     char       *array_base_type_substring  = NULL;
     char       *tmp_cmpd_type_buffer       = NULL;
     char       *tmp_enum_base_type_buffer  = NULL;
-    char    *tmp_vlen_type_buffer       = NULL;
+    char       *tmp_vlen_type_buffer       = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting JSON buffer %s to hid_t\n", type);

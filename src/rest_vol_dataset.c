@@ -784,7 +784,9 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
     hssize_t               offset              = 0;
     size_t                 host_header_len     = 0;
     size_t                 write_body_len      = 0;
+    size_t                 mem_data_size       = 0;
     size_t                 selection_body_len  = 0;
+    size_t                 dest_dtype_size     = 0;
     char                  *selection_body      = NULL;
     int                    url_len             = 0;
     herr_t                 ret_value           = SUCCEED;
@@ -865,7 +867,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         transfer_info[i].u.write_info.serialize_buf              = NULL;
         transfer_info[i].u.write_info.vlen_buf                   = NULL;
         transfer_info[i].u.write_info.base64_encoded_values      = NULL;
-        transfer_info[i].u.write_info.selection_buf              = NULL;
+        transfer_info[i].u.write_info.point_sel_buf              = NULL;
         transfer_info[i].u.write_info.uinfo.buffer               = (const void *)buf[i];
         transfer_info[i].u.write_info.uinfo.buffer_size          = 0;
         transfer_info[i].u.write_info.uinfo.bytes_sent           = 0;
@@ -892,7 +894,6 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
     /* Iterate over datasets to write to */
     for (size_t i = 0; i < count; i++) {
         hbool_t is_compound_subset = FALSE;
-        size_t  dense_dtype_size   = 0;
 
         /* Determine whether it's possible to send the data as a binary blob instead of as JSON */
         if (H5T_NO_CLASS == (dtype_class = H5Tget_class(transfer_info[i].mem_type_id)))
@@ -975,18 +976,18 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         if ((mem_type_size = H5Tget_size(transfer_info[i].mem_type_id)) == 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to get size of memory datatype");
 
-        write_body_len = (size_t)file_select_npoints * mem_type_size;
+        mem_data_size = (size_t)file_select_npoints * mem_type_size;
 
         if ((is_write_contiguous = RV_dataspace_selection_is_contiguous(transfer_info[i].mem_space_id)) < 0)
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL,
                             "Unable to determine if the dataspace selection is contiguous");
 
         if (!is_write_contiguous) {
-            if (NULL == (transfer_info[i].u.write_info.gather_buf = (char *)RV_malloc(write_body_len)))
+            if (NULL == (transfer_info[i].u.write_info.gather_buf = (char *)RV_malloc(mem_data_size)))
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
                                 "can't allocate space for the 'write_body' values");
             if (H5Dgather(transfer_info[i].mem_space_id, transfer_info[i].u.write_info.uinfo.buffer,
-                          transfer_info[i].mem_type_id, write_body_len,
+                          transfer_info[i].mem_type_id, mem_data_size,
                           transfer_info[i].u.write_info.gather_buf, NULL, NULL) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "can't gather data to write buffer");
             transfer_info[i].u.write_info.uinfo.buffer = transfer_info[i].u.write_info.gather_buf;
@@ -996,13 +997,14 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         if ((needs_tconv = RV_need_tconv(transfer_info[i].file_type_id, transfer_info[i].mem_type_id)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to check if datatypes need conversion");
 
+        dest_dtype_size = file_type_size;
+
         if (needs_tconv) {
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Beginning type conversion for write\n");
 #endif
-            RV_subset_t subset_type     = H5T_SUBSET_BADVALUE;
-            hid_t       dest_dtype      = H5I_INVALID_HID;
-            size_t      dest_dtype_size = 0;
+            RV_subset_t subset_type = H5T_SUBSET_BADVALUE;
+            hid_t       dest_dtype  = H5I_INVALID_HID;
 
             if ((file_type_size = H5Tget_size(transfer_info[i].file_type_id)) == 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to get size of file datatype");
@@ -1025,16 +1027,14 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                 if ((H5Tpack(transfer_info[i].u.write_info.dense_cmpd_subset_dtype_id)) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTPACK, FAIL, "can't pack compound datatype");
 
-                if ((dense_dtype_size =
+                if ((dest_dtype_size =
                          H5Tget_size(transfer_info[i].u.write_info.dense_cmpd_subset_dtype_id)) == 0)
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get dense dtype size");
 
-                dest_dtype      = transfer_info[i].u.write_info.dense_cmpd_subset_dtype_id;
-                dest_dtype_size = dense_dtype_size;
+                dest_dtype = transfer_info[i].u.write_info.dense_cmpd_subset_dtype_id;
             }
             else {
-                dest_dtype      = transfer_info[i].file_type_id;
-                dest_dtype_size = file_type_size;
+                dest_dtype = transfer_info[i].file_type_id;
             }
 
             /* Initialize type conversion */
@@ -1063,17 +1063,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
          * types like object references or variable length types)
          */
         if ((H5T_REFERENCE != dtype_class) && (H5T_VLEN != dtype_class) && !is_variable_str) {
-            size_t write_dtype_size = 0;
 
-            if (!is_compound_subset) {
-                if (0 == (write_dtype_size = H5Tget_size(transfer_info[i].file_type_id)))
-                    FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "file datatype is invalid");
-            }
-            else {
-                write_dtype_size = dense_dtype_size;
-            }
-
-            write_body_len = (size_t)file_select_npoints * write_dtype_size;
+            write_body_len = (size_t)file_select_npoints * dest_dtype_size;
             if ((is_write_contiguous = RV_dataspace_selection_is_contiguous(transfer_info[i].mem_space_id)) <
                 0)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL,
@@ -1087,7 +1078,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 
                 transfer_info[i].u.write_info.uinfo.buffer =
                     (const void *)((const char *)transfer_info[i].u.write_info.uinfo.buffer +
-                                   (size_t)offset * write_dtype_size);
+                                   (size_t)offset * dest_dtype_size);
             }
         } /* end if */
         else {
@@ -1259,15 +1250,15 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 #endif
             /* Copy encoded values into format string */
             write_body_len = (strlen(fmt_string) - 4) + selection_body_len + value_body_len;
-            if (NULL == (transfer_info[i].u.write_info.selection_buf = RV_malloc(write_body_len + 1)))
+            if (NULL == (transfer_info[i].u.write_info.point_sel_buf = RV_malloc(write_body_len + 1)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for write buffer");
 
             if ((bytes_printed =
-                     snprintf(transfer_info[i].u.write_info.selection_buf, write_body_len + 1, fmt_string,
+                     snprintf(transfer_info[i].u.write_info.point_sel_buf, write_body_len + 1, fmt_string,
                               selection_body, transfer_info[i].u.write_info.base64_encoded_values)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
-            transfer_info[i].u.write_info.uinfo.buffer = transfer_info[i].u.write_info.selection_buf;
+            transfer_info[i].u.write_info.uinfo.buffer = transfer_info[i].u.write_info.point_sel_buf;
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Write body: %s\n\n", transfer_info[i].u.write_info.selection_buf);
@@ -1389,8 +1380,8 @@ done:
         if (transfer_info[i].u.write_info.base64_encoded_values)
             RV_free(transfer_info[i].u.write_info.base64_encoded_values);
 
-        if (transfer_info[i].u.write_info.selection_buf)
-            RV_free(transfer_info[i].u.write_info.selection_buf);
+        if (transfer_info[i].u.write_info.point_sel_buf)
+            RV_free(transfer_info[i].u.write_info.point_sel_buf);
 
         RV_free(transfer_info[i].request_url);
         RV_free(transfer_info[i].resp_buffer.buffer);
