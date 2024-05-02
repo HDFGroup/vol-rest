@@ -610,7 +610,7 @@ AC_CACHE_SAVE
 
 ## ----------------------------------------------------------------------
 ## Check for functions.
-AC_CHECK_FUNCS([snprintf])
+AC_CHECK_FUNCS([snprintf strtok_r strtok_s])
 
 ## ----------------------------------------------------------------------
 ## Check compiler characteristics

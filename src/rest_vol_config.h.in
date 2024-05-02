@@ -30,9 +30,6 @@
 /* Define to 1 if you have the <mach/mach_time.h> header file. */
 #undef HAVE_MACH_MACH_TIME_H
 
-/* Define to 1 if you have the <memory.h> header file. */
-#undef HAVE_MEMORY_H
-
 /* Define to 1 if you have the <setjmp.h> header file. */
 #undef HAVE_SETJMP_H
 
@@ -48,6 +45,9 @@
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 
+/* Define to 1 if you have the <stdio.h> header file. */
+#undef HAVE_STDIO_H
+
 /* Define to 1 if you have the <stdlib.h> header file. */
 #undef HAVE_STDLIB_H
 
@@ -56,6 +56,12 @@
 
 /* Define to 1 if you have the <string.h> header file. */
 #undef HAVE_STRING_H
+
+/* Define to 1 if you have the `strtok_r' function. */
+#undef HAVE_STRTOK_R
+
+/* Define to 1 if you have the `strtok_s' function. */
+#undef HAVE_STRTOK_S
 
 /* Define to 1 if you have the <sys/file.h> header file. */
 #undef HAVE_SYS_FILE_H
@@ -111,10 +117,13 @@
 /* The size of `off_t', as computed by sizeof. */
 #undef SIZEOF_OFF_T
 
-/* Define to 1 if you have the ANSI C header files. */
+/* Define to 1 if all of the C90 standard headers exist (not just the ones
+   required in a freestanding environment). This macro is provided for
+   backward compatibility; new code need not use it. */
 #undef STDC_HEADERS
 
-/* Define to 1 if you can safely include both <sys/time.h> and <time.h>. */
+/* Define to 1 if you can safely include both <sys/time.h> and <time.h>. This
+   macro is obsolete. */
 #undef TIME_WITH_SYS_TIME
 
 /* Define to have the REST VOL track memory usage. */
