@@ -3457,8 +3457,9 @@ RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void 
     herr_t              ret_value      = SUCCEED;
     server_api_version *server_version = (server_api_version *)callback_data_out;
 
-    char *version_response      = NULL;
-    char *version_field         = NULL;
+    char *version_response = NULL;
+    char *version_field    = NULL;
+    char *saveptr;
     int   numeric_version_field = 0;
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -3485,7 +3486,7 @@ RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void 
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server version was NULL");
 
     /* Parse server version into struct */
-    if (NULL == (version_field = strtok(version_response, ".")))
+    if (NULL == (version_field = RV_strtok_r(version_response, ".", &saveptr)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server major version field was NULL");
 
     if ((numeric_version_field = (int)strtol(version_field, NULL, 10)) < 0)
@@ -3493,7 +3494,7 @@ RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void 
 
     server_version->major = (size_t)numeric_version_field;
 
-    if (NULL == (version_field = strtok(NULL, ".")))
+    if (NULL == (version_field = RV_strtok_r(NULL, ".", &saveptr)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server minor version field was NULL");
 
     if ((numeric_version_field = (int)strtol(version_field, NULL, 10)) < 0)
@@ -3501,7 +3502,7 @@ RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void 
 
     server_version->minor = (size_t)numeric_version_field;
 
-    if (NULL == (version_field = strtok(NULL, ".")))
+    if (NULL == (version_field = RV_strtok_r(NULL, ".", &saveptr)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server patch version field was NULL");
 
     if ((numeric_version_field = (int)strtol(version_field, NULL, 10)) < 0)
@@ -4542,4 +4543,26 @@ RV_now_usec(void)
 
 done:
     return (ret_value);
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_strtok_r
+ *
+ * Purpose:     Helper function to use strtok_r or strtok_r depending on current platform
+ *
+ * Return:      See strtok_r documentation
+ *
+ * Programmer:  Matthew Larson
+ *              May, 2024
+ */
+char *
+RV_strtok_r(char *str, const char *delim, char **saveptr)
+{
+#ifdef RV_HAVE_STRTOK_R
+    return strtok_r(str, delim, saveptr);
+#elif RV_HAVE_STRTOK_S
+    return strtok_s(str, delim, saveptr);
+#else
+    return NULL;
+#endif
 }

@@ -24,7 +24,11 @@
 /* Define to 1 if you have the `gettimeofday' function. */
 #cmakedefine RV_HAVE_GETTIMEOFDAY @RV_HAVE_GETTIMEOFDAY@
 
-#cmakedefine RV_TEST_VAR @RV_TEST_VAR@
+/* Define to 1 if you have the `strtok_r` function */
+#cmakedefine RV_HAVE_STRTOK_R @RV_HAVE_STRTOK_R@
+
+/* Define to 1 if you have the `strtok_s` function */
+#cmakedefine RV_HAVE_STRTOK_S @RV_HAVE_STRTOK_S@
 
 /* Define if Darwin or Mac OS X */
 #cmakedefine RV_HAVE_DARWIN @RV_HAVE_DARWIN@
