@@ -378,10 +378,6 @@ if (NOT BUILD_SHARED_LIBS)
 endif ()
 if (BUILD_SHARED_LIBS)
   set (HDF5_VOL_REST_LIBRARIES_TO_EXPORT ${HDF5_VOL_REST_LIBRARIES_TO_EXPORT} ${HDF5_VOL_REST_LIBSH_TARGET} CACHE INTERNAL "Store which libraries should be exported" FORCE)
-  # Value is not automatically inherited from cache on Windows
-  if (WIN32)
-    set (HDF5_VOL_REST_LIBRARIES_TO_EXPORT ${HDF5_VOL_REST_LIBRARIES_TO_EXPORT} ${HDF5_VOL_REST_LIBSH_TARGET})
-  endif()
 endif ()
 
 option (BUILD_STATIC_LIBS "Build Static Libraries" OFF)
