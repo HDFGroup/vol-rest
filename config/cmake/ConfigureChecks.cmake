@@ -29,6 +29,9 @@ SET (H5_DEFAULT_VOL H5VL_NATIVE)
 
 # Find the library containing clock_gettime()
 CHECK_FUNCTION_EXISTS (clock_gettime CLOCK_GETTIME_IN_LIBC)
+CHECK_FUNCTION_EXISTS (gettimeofday RV_HAVE_GETTIMEOFDAY)
+CHECK_FUNCTION_EXISTS(strtok_r RV_HAVE_STRTOK_R)
+CHECK_FUNCTION_EXISTS(strtok_s RV_HAVE_STRTOK_s)
 CHECK_LIBRARY_EXISTS (rt clock_gettime "" CLOCK_GETTIME_IN_LIBRT)
 CHECK_LIBRARY_EXISTS (posix4 clock_gettime "" CLOCK_GETTIME_IN_LIBPOSIX4)
 if (CLOCK_GETTIME_IN_LIBC)
@@ -41,7 +44,7 @@ elseif (CLOCK_GETTIME_IN_LIBPOSIX4)
   list (APPEND LINK_LIBS posix4)
 endif ()
 
-CHECK_FUNCTION_EXISTS (gettimeofday RV_HAVE_GETTIMEOFDAY)
+
 # -----------------------------------------------------------------------
 # wrapper script variables
 # 
