@@ -22,7 +22,7 @@ env:
   HSDS_PATH: /home/test_user1/
   HDF5_API_TEST_PATH_PREFIX: /home/test_user1/
   HDF5_VOL_CONNECTOR: REST
-  ROOT_DIR: ${{github.workspace}}/hsdsdata
+  ROOT_DIR: ${{github.workspace}}/hsds/data
   BUCKET_NAME: hsdstest
 
 jobs:
@@ -168,13 +168,11 @@ jobs:
       - name: Start HSDS
         run: | 
               cd ${{github.workspace}}/hsds
-              mkdir ${{github.workspace}}/hsdsdata &&
-              mkdir ${{github.workspace}}/hsdsdata/hsdstest &&
               cp admin/config/groups.default admin/config/groups.txt &&
               cp admin/config/passwd.default admin/config/passwd.txt &&
               cp admin/config/groups.default admin/config/groups.txt &&
               cp admin/config/passwd.default admin/config/passwd.txt
-              ROOT_DIR=${{github.workspace}}/hsdadata ./runall.sh --no-docker 1 &
+              ./runall.sh --no-docker 1 &
               sleep 10
         working-directory: ${{github.workspace}}/hsds
         
@@ -263,8 +261,6 @@ jobs:
         shell: bash
         working-directory: ${{github.workspace}}/hsds
         run: |
-          mkdir data
-          mkdir data/hsdstest
           cp admin/config/groups.default admin/config/groups.txt
           cp admin/config/passwd.default admin/config/passwd.txt
           hsds --root_dir data --host localhost --port 5101 --password_file admin/config/passwd.txt --logfile hs.log --loglevel DEBUG --config_dir=admin/config --count=4 &
