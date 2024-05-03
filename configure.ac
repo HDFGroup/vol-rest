@@ -610,7 +610,7 @@ AC_CACHE_SAVE
 
 ## ----------------------------------------------------------------------
 ## Check for functions.
-AC_CHECK_FUNCS([snprintf strtok_r strtok_s])
+AC_CHECK_FUNCS([snprintf strtok_r strtok_s clock_gettime gettimeofday])
 
 ## ----------------------------------------------------------------------
 ## Check compiler characteristics
