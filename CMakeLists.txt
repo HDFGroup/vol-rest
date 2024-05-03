@@ -14,7 +14,6 @@ foreach (policy
   endif ()
 endforeach ()
 
-
 #-----------------------------------------------------------------------------
 # Instructions for use : Normal Build
 #
@@ -119,23 +118,12 @@ endif ()
 
 set (CURL_TARGET_LIBTYPE shared)
 
+set(CURL_NO_CURL_CMAKE ON)
+find_package (CURL 7.61 MODULE REQUIRED)
 
-find_package (CURL 7.61 REQUIRED)
 if (CURL_FOUND)
-  # FindCURL module is not always found on windows; set paths manually
-  if (WIN32)
-    set (CURL_INCLUDE_DIRS "${CURL_ROOT}\\include")
-    set (LINK_LIBS ${LINK_LIBS} Ws2_32.lib Wldap32.lib)
-    
-    if (CURL_USE_STATIC_LIBRARIES)
-      set (CURL_LIBRARIES "${CURL_ROOT}\\lib\\libcurl.lib")
-    else ()
-      set (CURL_LIBRARIES "${CURL_ROOT}\\bin\\libcurl.dll")
-    endif()
-  endif()
-
   include_directories(${CURL_INCLUDE_DIRS})
-  set (LINK_LIBS ${LINK_LIBS} ${CURL_LIBRARIES})
+  set (LINK_LIBS ${LINK_LIBS} CURL::libcurl)
 else ()
   message (FATAL_ERROR "cURL not found; please check CURL_ROOT")
 endif ()
@@ -386,10 +374,6 @@ if (BUILD_STATIC_LIBS)
   set (HDF5_VOL_REST_ENABLE_STATIC_LIB YES)
   set (LINK_STATIC_LIBS ${LINK_LIBS})
   set (HDF5_VOL_REST_LIBRARIES_TO_EXPORT ${HDF5_VOL_REST_LIBRARIES_TO_EXPORT} ${HDF5_VOL_REST_LIB_TARGET} CACHE INTERNAL "Store which libraries should be exported" FORCE)
-  # Value is not automatically inherited from cache on Windows
-  # if (WIN32)
-  #  set (HDF5_VOL_REST_LIBRARIES_TO_EXPORT ${HDF5_VOL_REST_LIBRARIES_TO_EXPORT} ${HDF5_VOL_REST_LIB_TARGET})
-  # endif()
 endif ()
 
 set (CMAKE_POSITION_INDEPENDENT_CODE ON)
