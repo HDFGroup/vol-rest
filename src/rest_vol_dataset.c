@@ -1351,17 +1351,32 @@ done:
 
         if (transfer_info[i].tconv_buf) {
             /* Clean up memory allocated by type conversion of vlen types */
-            if ((dtype_class = H5Tget_class(transfer_info[i].mem_type_id)) == H5T_NO_CLASS)
-                FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get mem dtype class");
+            htri_t contains_vlen = FALSE;
 
-            if (dtype_class == H5T_VLEN) {
-                /* Type conversion buffer is packed, so free allocated buffers manually */
-                for (size_t j = 0; j < (size_t)file_select_npoints; j++) {
-                    hvl_t vl = ((hvl_t *)transfer_info[i].tconv_buf)[j];
+            if (contains_vlen = H5Tdetect_class(transfer_info[i].file_type_id, H5T_VLEN) < 0)
+                FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                                "can't determine if datatype contains Vlen type");
 
-                    if (vl.p)
-                        RV_free(vl.p);
-                }
+            if (contains_vlen > 0) {
+                hid_t type_conv_space = H5I_INVALID_HID;
+
+                /* Type conversion buffer is packed, so create a 1D dataspace to describe its layout */
+                if (mem_select_npoints = H5Sget_select_npoints(transfer_info[i].mem_space_id) < 0)
+                    FUNC_DONE_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL,
+                                    "can't get number of elements in file space");
+
+                if ((type_conv_space = H5Screate_simple(1, &mem_select_npoints, NULL)) < 0)
+                    FUNC_DONE_ERROR(H5E_DATASPACE, H5E_CANTCREATE, FAIL,
+                                    "can't create simple dataspace for type conversion buffer");
+
+                if ((H5Treclaim(transfer_info[i].mem_type_id, type_conv_space, H5P_DEFAULT,
+                                transfer_info[i].tconv_buf)) < 0)
+                    FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTFREE, FAIL,
+                                    "can't free type conversion buffer for vlen type");
+
+                if ((H5Sclose(type_conv_space)) < 0)
+                    FUNC_DONE_ERROR(H5E_DATASPACE, H5E_CANTCLOSEOBJ, FAIL,
+                                    "can't close dataspace for type conversion buffer");
             }
 
             RV_free(transfer_info[i].tconv_buf);
@@ -4753,15 +4768,26 @@ done:
         RV_free(obj_ref_buf);
 
     if (tconv_buf) {
-        if (H5T_VLEN == dtype_class && vlen_buf) {
-            /* Returned buffer is densely packed and not laid out according to the filespace; free vlen data
-             * through iteration */
-            for (size_t i = 0; i < file_select_npoints; i++) {
-                hvl_t vl = ((hvl_t *)vlen_buf)[i];
+        htri_t contains_vlen = FALSE;
 
-                if (vl.p)
-                    RV_free(vl.p);
-            }
+        if ((contains_vlen = H5Tdetect_class(mem_type_id, H5T_VLEN)) < 0)
+            FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't determine if datatype contains Vlen type");
+
+        if (contains_vlen > 0) {
+            hid_t type_conv_space = H5I_INVALID_HID;
+
+            /* Vlen buffer is packed, so create a 1D dataspace to describe its layout */
+            if ((type_conv_space = H5Screate_simple(1, &file_select_npoints, NULL)) < 0)
+                FUNC_DONE_ERROR(H5E_DATASPACE, H5E_CANTCREATE, FAIL,
+                                "can't create simple dataspace for unpacked vlen buffer");
+
+            if ((H5Treclaim(mem_type_id, type_conv_space, H5P_DEFAULT, vlen_buf)) < 0)
+                FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTFREE, FAIL,
+                                "can't free type conversion buffer for vlen type");
+
+            if (H5Sclose(type_conv_space) < 0)
+                FUNC_DONE_ERROR(H5E_DATASPACE, H5E_CANTCLOSEOBJ, FAIL,
+                                "can't close dataspace for type conversion buffer");
         }
         RV_free(tconv_buf);
     }

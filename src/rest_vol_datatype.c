@@ -2122,7 +2122,7 @@ RV_convert_JSON_to_datatype(const char *type)
         printf("-> Variable-length Datatype\n");
 #endif
 
-        // allocate temporary buffer for parent substring
+        /* Allocate temporary buffer for parent substring */
         tmp_vlen_type_buffer_size = DATATYPE_BODY_DEFAULT_SIZE;
 
         if (NULL == (tmp_vlen_type_buffer = (char *)RV_malloc(tmp_vlen_type_buffer_size)))
