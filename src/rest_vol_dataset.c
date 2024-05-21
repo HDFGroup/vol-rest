@@ -21,7 +21,7 @@
 /* Helpers to serialize vlen data for writes. */
 static herr_t RV_vlen_data_to_json(const void *in, size_t nelems, hid_t dtype_id, void **out,
                                    size_t *out_size);
-static herr_t RV_pack_vlen_data(const void *in, size_t nelems, hid_t dtype_id, void **out, size_t *out_size);
+static herr_t RV_pack_vlen_data(const hvl_t *in, size_t nelems, hid_t dtype_id, void **out, size_t *out_size);
 
 /* Set of callbacks for RV_parse_response() */
 static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *callback_data_in,
@@ -895,12 +895,12 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
     for (size_t i = 0; i < count; i++) {
         hbool_t is_compound_subset = FALSE;
 
-        /* Determine whether it's possible to send the data as a binary blob instead of as JSON */
         if (H5T_NO_CLASS == (dtype_class = H5Tget_class(transfer_info[i].mem_type_id)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "a given memory datatype is invalid");
 
         if ((is_variable_str = H5Tis_variable_str(transfer_info[i].mem_type_id)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "a given memory datatype is invalid");
+
         /* Only perform a binary transfer for fixed-length datatype datasets with an
          * All or Hyperslab selection. Point selections are dealt with by POSTing the
          * point list as JSON in the request body.
@@ -916,6 +916,11 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
              */
             transfer_info[i].mem_space_id = transfer_info[i].file_space_id =
                 transfer_info[i].dataset->u.dataset.space_id;
+
+            if (H5S_SEL_ERROR == (sel_type = H5Sget_select_type(transfer_info[i].file_space_id)))
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type");
+            is_transfer_binary = is_transfer_binary && (H5S_SEL_POINTS != sel_type);
+
             H5Sselect_all(transfer_info[i].file_space_id);
         } /* end if */
         else if (H5S_ALL == transfer_info[i].file_space_id) {
@@ -924,6 +929,11 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
              * is set to the "all" selection.
              */
             transfer_info[i].file_space_id = transfer_info[i].dataset->u.dataset.space_id;
+
+            if (H5S_SEL_ERROR == (sel_type = H5Sget_select_type(transfer_info[i].file_space_id)))
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type");
+            is_transfer_binary = is_transfer_binary && (H5S_SEL_POINTS != sel_type);
+
             H5Sselect_all(transfer_info[i].file_space_id);
         } /* end if */
         else {
@@ -942,14 +952,18 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                                     "can't copy selection from file space to memory space");
             } /* end if */
 
-            /* Since the selection in the dataset's file dataspace is not set
-             * to "all", convert the selection into JSON */
-
-            /* Retrieve the selection type here for later use */
+            /* Determine whether it's possible to send the data as a binary blob instead of as JSON */
             if (H5S_SEL_ERROR == (sel_type = H5Sget_select_type(transfer_info[i].file_space_id)))
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type");
+
+            /* Only perform a binary transfer for fixed-length datatype datasets with an
+             * All or Hyperslab selection. Point selections are dealt with by POSTing the
+             * point list as JSON in the request body.
+             */
             is_transfer_binary = is_transfer_binary && (H5S_SEL_POINTS != sel_type);
 
+            /* Since the selection in the dataset's file dataspace is not set
+             * to "all", convert the selection into a string */
             if (RV_convert_dataspace_selection_to_string(transfer_info[i].file_space_id, &selection_body,
                                                          &selection_body_len, is_transfer_binary) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL,
@@ -976,6 +990,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         if ((mem_type_size = H5Tget_size(transfer_info[i].mem_type_id)) == 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to get size of memory datatype");
 
+        /* TODO - Generalize this for vlen data */
         mem_data_size = (size_t)file_select_npoints * mem_type_size;
 
         if ((is_write_contiguous = RV_dataspace_selection_is_contiguous(transfer_info[i].mem_space_id)) < 0)
@@ -1084,11 +1099,13 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         else {
             if (H5T_VLEN == dtype_class) {
                 /* Pack vlen data into single buffer for server */
-                if (RV_pack_vlen_data(transfer_info[i].u.write_info.uinfo.buffer, (size_t)file_select_npoints,
-                                      mem_type_id[0], (void **)&transfer_info[i].u.write_info.vlen_buf,
-                                      &write_body_len) < 0)
+                if (RV_pack_vlen_data((const hvl_t *)transfer_info[i].u.write_info.uinfo.buffer,
+                                      (size_t)file_select_npoints, mem_type_id[0],
+                                      (void **)&transfer_info[i].u.write_info.vlen_buf, &write_body_len) < 0)
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
                                     "can't convert vlen data to a binary buffer");
+
+                printf("Write body length of packed vlen data = %zu\n", write_body_len);
 
                 transfer_info[i].u.write_info.uinfo.buffer = transfer_info[i].u.write_info.vlen_buf;
             }
@@ -5425,7 +5442,7 @@ RV_vlen_data_to_json(const void *_in, size_t nelems, hid_t dtype_id, void **out,
     if ((out_string = (char *)calloc(DATASET_VLEN_JSON_BODY_DEFAULT_SIZE, 1)) == NULL)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for vlen data JSON");
 
-    *out_size           = DATASET_CREATION_PROPERTIES_BODY_DEFAULT_SIZE;
+    *out_size           = DATASET_VLEN_JSON_BODY_DEFAULT_SIZE;
     out_string_curr_pos = out_string;
 
     /* Delineate start of list of sequences */
@@ -5567,11 +5584,12 @@ done:
  *              March, 2024
  */
 static herr_t
-RV_pack_vlen_data(const void *_in, size_t nelems, hid_t dtype_id, void **out, size_t *out_size)
+RV_pack_vlen_data(const hvl_t *_in, size_t nelems, hid_t dtype_id, void **out, size_t *out_size)
 {
     herr_t      ret_value          = SUCCEED;
     char       *out_buf            = NULL;
     char       *out_buf_curr_pos   = NULL;
+    size_t      buf_size           = 0;
     size_t      parent_dtype_size  = 0;
     size_t      target_size        = 0;
     hid_t       parent_dtype       = H5I_INVALID_HID;
@@ -5607,7 +5625,8 @@ RV_pack_vlen_data(const void *_in, size_t nelems, hid_t dtype_id, void **out, si
     if ((out_buf = calloc(DATASET_VLEN_JSON_BODY_DEFAULT_SIZE, 1)) == NULL)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for packed vlen data");
 
-    *out_size        = DATASET_CREATION_PROPERTIES_BODY_DEFAULT_SIZE;
+    *out_size        = DATASET_VLEN_JSON_BODY_DEFAULT_SIZE;
+    buf_size         = *out_size;
     out_buf_curr_pos = out_buf;
 
     /* Pack each variable length sequence into the buffer */
@@ -5619,7 +5638,7 @@ RV_pack_vlen_data(const void *_in, size_t nelems, hid_t dtype_id, void **out, si
 
         target_size = (size_t)curr_size + sizeof(uint32_t) + vl.len * parent_dtype_size;
 
-        CHECKED_REALLOC(out_buf, *out_size, target_size, out_buf_curr_pos, H5E_DATASET, FAIL);
+        CHECKED_REALLOC(out_buf, buf_size, target_size, out_buf_curr_pos, H5E_DATASET, FAIL);
 
         /* Copy sequence length and sequence contents into output buffer */
         len_bytes = vl.len * parent_dtype_size;
@@ -5633,6 +5652,7 @@ RV_pack_vlen_data(const void *_in, size_t nelems, hid_t dtype_id, void **out, si
 
         memcpy(out_buf_curr_pos, vl.p, vl.len * parent_dtype_size);
         out_buf_curr_pos += vl.len * parent_dtype_size;
+        *out_size = (size_t)(out_buf_curr_pos - out_buf);
     }
 
     *out = out_buf;

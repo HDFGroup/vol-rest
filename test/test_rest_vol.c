@@ -363,6 +363,9 @@ char filename[FILENAME_MAX_LENGTH];
 #define DATASET_PROPERTY_LIST_TEST_DSET_NAME3    "property_list_test_dataset3"
 #define DATASET_PROPERTY_LIST_TEST_DSET_NAME4    "property_list_test_dataset4"
 
+#define DATASET_VLEN_IO_TEST_EXTENT    30
+#define DATASET_VLEN_IO_TEST_DSET_NAME "vlen_io_test_dset"
+
 /*****************************************************
  *                                                   *
  *           Plugin Datatype test defines            *
@@ -674,6 +677,7 @@ static int test_write_dataset_data_verification(void);
 static int test_dataset_set_extent(void);
 static int test_unused_dataset_API_calls(void);
 static int test_dataset_property_lists(void);
+static int test_dataset_vlen_io(void);
 
 /* Committed Datatype interface tests */
 static int test_create_committed_datatype(void);
@@ -815,6 +819,7 @@ static int (*dataset_tests[])(void) = {test_create_dataset_under_root,
                                        test_dataset_set_extent,
                                        test_unused_dataset_API_calls,
                                        test_dataset_property_lists,
+                                       test_dataset_vlen_io,
                                        NULL};
 
 static int (*type_tests[])(void) = {test_create_committed_datatype,
@@ -5743,10 +5748,10 @@ test_create_dataset_predefined_types(void)
     hid_t  fspace_id                    = -1;
     hid_t  dset_id                      = -1;
     hid_t  predefined_type_test_table[] = {H5T_STD_U8LE,   H5T_STD_U8BE,   H5T_STD_I8LE,   H5T_STD_I8BE,
-                                          H5T_STD_U16LE,  H5T_STD_U16BE,  H5T_STD_I16LE,  H5T_STD_I16BE,
-                                          H5T_STD_U32LE,  H5T_STD_U32BE,  H5T_STD_I32LE,  H5T_STD_I32BE,
-                                          H5T_STD_U64LE,  H5T_STD_U64BE,  H5T_STD_I64LE,  H5T_STD_I64BE,
-                                          H5T_IEEE_F32LE, H5T_IEEE_F32BE, H5T_IEEE_F64LE, H5T_IEEE_F64BE};
+                                           H5T_STD_U16LE,  H5T_STD_U16BE,  H5T_STD_I16LE,  H5T_STD_I16BE,
+                                           H5T_STD_U32LE,  H5T_STD_U32BE,  H5T_STD_I32LE,  H5T_STD_I32BE,
+                                           H5T_STD_U64LE,  H5T_STD_U64BE,  H5T_STD_I64LE,  H5T_STD_I64BE,
+                                           H5T_IEEE_F32LE, H5T_IEEE_F32BE, H5T_IEEE_F64LE, H5T_IEEE_F64BE};
 
     TESTING("dataset creation w/ predefined datatypes")
 
@@ -9663,6 +9668,145 @@ error:
         H5Gclose(group_id);
         H5Gclose(container_group);
         H5Pclose(fapl_id);
+        H5Fclose(file_id);
+        H5rest_term();
+    }
+    H5E_END_TRY;
+
+    return 1;
+}
+
+static int
+test_dataset_vlen_io(void)
+{
+    hid_t file_id   = H5I_INVALID_HID;
+    hid_t dset_id   = H5I_INVALID_HID;
+    hid_t fapl_id   = H5I_INVALID_HID;
+    hid_t fspace_id = H5I_INVALID_HID;
+    hid_t dtype_id  = H5I_INVALID_HID;
+
+    hvl_t init[DATASET_VLEN_IO_TEST_EXTENT];
+    hvl_t wbuf[DATASET_VLEN_IO_TEST_EXTENT];
+    hvl_t rbuf[DATASET_VLEN_IO_TEST_EXTENT];
+
+    const hsize_t dims[] = {DATASET_VLEN_IO_TEST_EXTENT};
+
+    TESTING("Reading and writing variable-length data to a dataset");
+
+    if (H5rest_init() < 0)
+        TEST_ERROR
+
+    if ((fapl_id = H5Pcreate(H5P_FILE_ACCESS)) < 0)
+        TEST_ERROR
+    if (H5Pset_fapl_rest_vol(fapl_id) < 0)
+        TEST_ERROR
+
+    if ((file_id = H5Fopen(filename, H5F_ACC_RDWR, fapl_id)) < 0)
+        TEST_ERROR
+
+    if ((fspace_id = H5Screate_simple(1, dims, NULL)) < 0)
+        TEST_ERROR
+
+    if ((dtype_id = H5Tvlen_create(H5T_NATIVE_INT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create vlen datatype\n");
+        goto error;
+    }
+
+    if ((dset_id = H5Dcreate2(file_id, DATASET_VLEN_IO_TEST_DSET_NAME, dtype_id, fspace_id, H5P_DEFAULT,
+                              H5P_DEFAULT, H5P_DEFAULT)) < 0) {
+        H5_FAILED();
+        printf("    couldn't create vlen dataset\n");
+        goto error;
+    }
+
+    memset(wbuf, 0, sizeof(hvl_t) * DATASET_VLEN_IO_TEST_EXTENT);
+    memset(rbuf, 0, sizeof(hvl_t) * DATASET_VLEN_IO_TEST_EXTENT);
+    memset(init, 0, sizeof(hvl_t) * DATASET_VLEN_IO_TEST_EXTENT);
+
+    /* Test read and write to entire dataset with vlen data */
+
+    /* Generate data and allocate memory */
+    for (size_t i = 0; i < DATASET_VLEN_IO_TEST_EXTENT; i++) {
+        init[i].len = 0;
+        init[i].p   = NULL;
+
+        wbuf[i].len = i + 1;
+        wbuf[i].p   = calloc(i + 1, sizeof(int));
+
+        for (size_t j = 0; j < i + 1; j++) {
+            ((int *)wbuf[i].p)[j] = (int)((i)*1000 + j * 10);
+        }
+    }
+
+    if (H5Dwrite(dset_id, dtype_id, H5S_ALL, fspace_id, H5P_DEFAULT, (const void *)wbuf) < 0) {
+        H5_FAILED();
+        printf("    couldn't write to vlen dataset\n");
+        goto error;
+    }
+
+    /* Read back entire dataset */
+    if (H5Dread(dset_id, dtype_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, rbuf) < 0) {
+        H5_FAILED();
+        printf("    couldn't read from vlen dataset\n");
+        goto error;
+    }
+
+    /* Verify data */
+    for (size_t i = 0; i < DATASET_VLEN_IO_TEST_EXTENT; i++) {
+        if (rbuf[i].len != wbuf[i].len) {
+            H5_FAILED();
+            printf("    Wrong length! Seq #%zu expected len %zu, got len %zu\n", i, wbuf[i].len, rbuf[i].len);
+            goto error;
+        }
+
+        for (size_t j = 0; j < rbuf[i].len; j++) {
+            int actual   = ((int *)rbuf[i].p)[j];
+            int expected = ((int *)wbuf[i].p)[j];
+
+            if (actual != expected) {
+                H5_FAILED();
+                printf("    Wrong value! Seq %zu elem %zu expected %d but got %d\n", i, j, expected, actual);
+                goto error;
+            }
+        }
+    }
+
+    if (H5Treclaim(dtype_id, fspace_id, H5P_DEFAULT, rbuf) < 0)
+        TEST_ERROR
+    if (H5Treclaim(dtype_id, fspace_id, H5P_DEFAULT, wbuf) < 0)
+        TEST_ERROR
+
+    memset(wbuf, 0, sizeof(hvl_t) * DATASET_VLEN_IO_TEST_EXTENT);
+    memset(rbuf, 0, sizeof(hvl_t) * DATASET_VLEN_IO_TEST_EXTENT);
+    /* Test read and write to hyperslab selections with vlen data */
+
+    /* Test read and write to point selections with vlen data */
+
+    if (H5Sclose(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Dclose(dset_id) < 0)
+        TEST_ERROR
+    if (H5Pclose(fapl_id) < 0)
+        TEST_ERROR
+    if (H5Tclose(dtype_id) < 0)
+        TEST_ERROR
+    if (H5Fclose(file_id) < 0)
+        TEST_ERROR
+    if (H5rest_term() < 0)
+        TEST_ERROR
+
+    PASSED();
+
+    return 0;
+
+error:
+    H5E_BEGIN_TRY
+    {
+        H5Sclose(fspace_id);
+        H5Dclose(dset_id);
+        H5Pclose(fapl_id);
+        H5Tclose(dtype_id);
         H5Fclose(file_id);
         H5rest_term();
     }
