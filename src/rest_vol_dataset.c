@@ -1105,8 +1105,6 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                     FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL,
                                     "can't convert vlen data to a binary buffer");
 
-                printf("Write body length of packed vlen data = %zu\n", write_body_len);
-
                 transfer_info[i].u.write_info.uinfo.buffer = transfer_info[i].u.write_info.vlen_buf;
             }
 
