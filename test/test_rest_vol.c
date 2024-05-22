@@ -9693,6 +9693,12 @@ test_dataset_vlen_io(void)
     const hsize_t dims[]   = {DATASET_VLEN_IO_TEST_EXTENT};
     const hsize_t points[] = {2, 3, 4, 5};
 
+    /* Hyperslab specification for elements at indices 2-5 */
+    hssize_t start[1]  = {2};
+    hssize_t stride[1] = {2};
+    hssize_t block[1]  = {2};
+    hssize_t count[1]  = {2};
+
     TESTING("Reading and writing variable-length data to a dataset");
 
     if (H5rest_init() < 0)
@@ -9776,15 +9782,132 @@ test_dataset_vlen_io(void)
 
     if (H5Treclaim(dtype_id, fspace_id, H5P_DEFAULT, rbuf) < 0)
         TEST_ERROR
-    if (H5Treclaim(dtype_id, fspace_id, H5P_DEFAULT, wbuf) < 0)
-        TEST_ERROR
 
-    memset(wbuf, 0, sizeof(hvl_t) * DATASET_VLEN_IO_TEST_EXTENT);
     memset(rbuf, 0, sizeof(hvl_t) * DATASET_VLEN_IO_TEST_EXTENT);
 
     /* Test read and write to hyperslab selections with vlen data */
 
-    // TODO
+    /* Write to hyperslab, then read all */
+    /* Reset dataset */
+    if (H5Dwrite(dset_id, dtype_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, (const void *)init) < 0) {
+        H5_FAILED();
+        printf("    couldn't write to entire vlen dataset\n");
+        goto error;
+    }
+
+    if (H5Sselect_hyperslab(fspace_id, H5S_SELECT_SET, start, stride, count, block) < 0)
+        TEST_ERROR
+
+    if (H5Dwrite(dset_id, dtype_id, H5S_ALL, fspace_id, H5P_DEFAULT, (const void *)wbuf) < 0) {
+        H5_FAILED();
+        printf("    couldn't write to hyperslab selection in vlen dataset\n");
+        goto error;
+    }
+
+    if (H5Dread(dset_id, dtype_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, rbuf) < 0) {
+        H5_FAILED();
+        printf("    couldn't read from entire vlen dataset\n");
+        goto error;
+    }
+
+    for (size_t i = 0; i < DATASET_VLEN_IO_TEST_EXTENT; i++) {
+        if (i >= 2 && i <= 5) {
+            if (rbuf[i].len != wbuf[i].len) {
+                H5_FAILED();
+                printf("    Wrong length! Seq #%zu expected len %zu, got len %zu\n", i, wbuf[i].len,
+                       rbuf[i].len);
+                goto error;
+            }
+
+            for (size_t j = 0; j < rbuf[i].len; j++) {
+                int actual   = ((int *)rbuf[i].p)[j];
+                int expected = ((int *)wbuf[i].p)[j];
+
+                if (actual != expected) {
+                    H5_FAILED();
+                    printf("    Wrong value! Seq %zu elem %zu expected %d but got %d\n", i, j, expected,
+                           actual);
+                    goto error;
+                }
+            }
+        }
+        else {
+            if (rbuf[i].len != init[i].len) {
+                H5_FAILED();
+                printf("    Wrong length for unread slab element!");
+                goto error;
+            }
+            if (rbuf[i].p != init[i].p) {
+                H5_FAILED();
+                printf("    Wrong pointer (non-NULL) for unread slab element!");
+                goto error;
+            }
+        }
+    }
+
+    if (H5Sselect_all(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Treclaim(dtype_id, fspace_id, H5P_DEFAULT, rbuf) < 0)
+        TEST_ERROR
+    memset(rbuf, 0, sizeof(hvl_t) * DATASET_VLEN_IO_TEST_EXTENT);
+
+    /* Write to all, then read from hyperslab */
+
+    if (H5Dwrite(dset_id, dtype_id, H5S_ALL, H5S_ALL, H5P_DEFAULT, (const void *)wbuf) < 0) {
+        H5_FAILED();
+        printf("    couldn't write to entire vlen dataset\n");
+        goto error;
+    }
+
+    if (H5Sselect_hyperslab(fspace_id, H5S_SELECT_SET, start, stride, count, block) < 0)
+        TEST_ERROR
+
+    if (H5Dread(dset_id, dtype_id, H5S_ALL, fspace_id, H5P_DEFAULT, rbuf) < 0) {
+        H5_FAILED();
+        printf("    couldn't read from hyperslab selection in vlen dataset\n");
+        goto error;
+    }
+
+    for (size_t i = 0; i < DATASET_VLEN_IO_TEST_EXTENT; i++) {
+        if (i >= 2 && i <= 5) {
+            if (rbuf[i].len != wbuf[i].len) {
+                H5_FAILED();
+                printf("    Wrong length! Seq #%zu expected len %zu, got len %zu\n", i, wbuf[i].len,
+                       rbuf[i].len);
+                goto error;
+            }
+
+            for (size_t j = 0; j < rbuf[i].len; j++) {
+                int actual   = ((int *)rbuf[i].p)[j];
+                int expected = ((int *)wbuf[i].p)[j];
+
+                if (actual != expected) {
+                    H5_FAILED();
+                    printf("    Wrong value! Seq %zu elem %zu expected %d but got %d\n", i, j, expected,
+                           actual);
+                    goto error;
+                }
+            }
+        }
+        else {
+            if (rbuf[i].len != init[i].len) {
+                H5_FAILED();
+                printf("    Wrong length for unread slab element!");
+                goto error;
+            }
+            if (rbuf[i].p != init[i].p) {
+                H5_FAILED();
+                printf("    Wrong pointer (non-NULL) for unread slab element!");
+                goto error;
+            }
+        }
+    }
+
+    if (H5Sselect_all(fspace_id) < 0)
+        TEST_ERROR
+    if (H5Treclaim(dtype_id, fspace_id, H5P_DEFAULT, rbuf) < 0)
+        TEST_ERROR
+    memset(rbuf, 0, sizeof(hvl_t) * DATASET_VLEN_IO_TEST_EXTENT);
 
     /* Test read and write to point selections with vlen data */
 
@@ -9793,16 +9916,6 @@ test_dataset_vlen_io(void)
         H5_FAILED();
         printf("    couldn't write to entire vlen dataset\n");
         goto error;
-    }
-
-    /* Generate data and allocate memory */
-    for (size_t i = 0; i < DATASET_VLEN_IO_TEST_EXTENT; i++) {
-        wbuf[i].len = i + 1;
-        wbuf[i].p   = calloc(i + 1, sizeof(int));
-
-        for (size_t j = 0; j < i + 1; j++) {
-            ((int *)wbuf[i].p)[j] = (int)((i)*1000 + j * 10);
-        }
     }
 
     if (H5Sselect_elements(fspace_id, H5S_SELECT_SET, DATASET_VLEN_IO_TEST_NUM_POINTS, points) < 0)
