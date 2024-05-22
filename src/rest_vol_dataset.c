@@ -20,6 +20,7 @@
 
 /* Helpers to serialize vlen data for writes. */
 static herr_t RV_pack_vlen_data(const hvl_t *in, size_t nelems, hid_t dtype_id, void **out, size_t *out_size);
+static herr_t RV_convert_point_selection_to_binary(hid_t space_id, void **out_buf, size_t *out_buf_len);
 
 /* Set of callbacks for RV_parse_response() */
 static herr_t RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *callback_data_in,
@@ -453,6 +454,7 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
     herr_t                 ret_value           = SUCCEED;
     CURL                  *curl_multi_handle   = NULL;
     dataset_transfer_info *transfer_info       = NULL;
+    H5S_sel_type           sel_type            = H5S_SEL_ERROR;
 
     if ((transfer_info = RV_calloc(count * sizeof(dataset_transfer_info))) == NULL)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for dataset transfer info");
@@ -571,12 +573,24 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
             } /* end if */
 
             /* Since the selection in the dataset's file dataspace is not set
-             * to "all", convert the selection into JSON */
-            if (RV_convert_dataspace_selection_to_string(transfer_info[i].file_space_id,
-                                                         &(transfer_info[i].selection_body),
-                                                         &selection_body_len, is_transfer_binary) < 0)
-                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL,
-                                "can't convert dataspace selection to string representation");
+             * to "all", convert the selection into JSON or binary */
+            if ((sel_type = H5Sget_select_type(transfer_info[i].file_space_id)) < 0)
+                FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get dataspace selection type");
+
+            if (H5S_SEL_POINTS == sel_type) {
+                if (RV_convert_point_selection_to_binary(transfer_info[i].file_space_id,
+                                                         (void **)&(transfer_info[i].selection_body),
+                                                         &selection_body_len) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL,
+                                    "can't convert point selection to binary form");
+            }
+            else {
+                if (RV_convert_dataspace_selection_to_string(transfer_info[i].file_space_id,
+                                                             &(transfer_info[i].selection_body),
+                                                             &selection_body_len, is_transfer_binary) < 0)
+                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCONVERT, FAIL,
+                                    "can't convert dataspace selection to string representation");
+            }
         } /* end else */
 
         if (H5S_SEL_ERROR ==
@@ -791,7 +805,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
     size_t  mem_type_size  = 0;
     hbool_t fill_bkg       = FALSE;
 
-    hbool_t has_selection_body = FALSE;
+    hbool_t has_selection_in_url = FALSE;
     char    cmpd_query[URL_MAX_LENGTH];
     char   *member_name             = NULL;
     char   *url_encoded_member_name = NULL;
@@ -982,7 +996,6 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         if ((mem_type_size = H5Tget_size(transfer_info[i].mem_type_id)) == 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "unable to get size of memory datatype");
 
-        /* TODO - Generalize this for vlen data */
         mem_data_size = (size_t)file_select_npoints * mem_type_size;
 
         if ((is_write_contiguous = RV_dataspace_selection_is_contiguous(transfer_info[i].mem_space_id)) < 0)
@@ -1133,7 +1146,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
             transfer_info[i].curl_headers,
             is_transfer_binary ? "Content-Type: application/octet-stream" : "Content-Type: application/json");
 
-        has_selection_body = is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type);
+        has_selection_in_url = is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type);
 
         /* Redirect cURL from the base URL to "/datasets/<id>/value" to write the value out */
         if (is_compound_subset) {
@@ -1155,7 +1168,7 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 
             /* If using element selection and member selection, preface member query with '&' to join it to
                previous queries. Otherwise, it's the first query, so preface it with '?' */
-            if (has_selection_body) {
+            if (has_selection_in_url) {
                 cmpd_query_ptr[0] = '&';
                 cmpd_query_ptr++;
             }
@@ -1214,8 +1227,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 
         if ((url_len = snprintf(transfer_info[i].request_url, URL_MAX_LENGTH, "%s/datasets/%s/value%s%s%s",
                                 transfer_info[i].dataset->domain->u.file.server_info.base_URL,
-                                transfer_info[i].dataset->URI, has_selection_body ? "?select=" : "",
-                                has_selection_body ? selection_body : "",
+                                transfer_info[i].dataset->URI, has_selection_in_url ? "?select=" : "",
+                                has_selection_in_url ? selection_body : "",
                                 is_compound_subset ? cmpd_query : "") < 0))
 
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
@@ -3958,6 +3971,77 @@ done:
 } /* end RV_setup_dataset_create_request_body() */
 
 /*-------------------------------------------------------------------------
+ * Function:    RV_convert_point_selection_to_binary
+ *
+ * Purpose:     Given an HDF5 dataspace containin a point selection,
+ *              formats the selection within the
+ *              dataspace into either a binary representation.
+ *              This is currently used only for point reads.
+ *
+ *              The buffer handed back by this
+ *              function by the caller, else memory will be leaked.
+ *
+ * Return:      Non-negative on success, negative on failure
+ *
+ * Programmer:  Matthew Larson
+ *              May, 2024
+ */
+static herr_t
+RV_convert_point_selection_to_binary(hid_t space_id, void **out_buf, size_t *out_buf_len)
+{
+    hssize_t num_points;
+    hsize_t *point_list;
+    size_t   point_buf_size;
+    char    *out_buf_curr_pos;
+    int      ndims;
+    herr_t   ret_value = SUCCEED;
+
+#ifdef RV_CONNECTOR_DEBUG
+    printf("-> Converting selection within dataspace to JSON\n\n");
+#endif
+
+    if (!out_buf)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "dataspace output buffer was NULL");
+
+    if (H5I_DATASPACE != H5Iget_type(space_id))
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "not a dataspace");
+
+    if ((ndims = H5Sget_simple_extent_ndims(space_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve dataspace dimensionality");
+    if (!ndims)
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "0-dimension dataspace specified");
+
+    if (H5S_SEL_POINTS != H5Sget_select_type(space_id)) {
+        FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "cannot convert non-points selection to binary");
+    }
+
+    /* Format the point selection as a binary buffer containing each coordinate index */
+    if ((num_points = H5Sget_select_npoints(space_id)) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of selected points");
+
+    point_buf_size = (size_t)(ndims * num_points) * sizeof(hsize_t);
+
+    if ((point_list = (hsize_t *)RV_calloc(point_buf_size)) == NULL)
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL, "can't allocate space for binary point list");
+
+    if (H5Sget_select_elem_pointlist(space_id, 0, (hsize_t)num_points, point_list) < 0)
+        FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve point list");
+
+done:
+
+    if (ret_value >= 0) {
+        *out_buf     = (void *)point_list;
+        *out_buf_len = point_buf_size;
+    }
+    else {
+        if (point_list)
+            RV_free(point_list);
+    }
+
+    return ret_value;
+} /* end RV_convert_point_selection_to_binary*/
+
+/*-------------------------------------------------------------------------
  * Function:    RV_convert_dataspace_selection_to_string
  *
  * Purpose:     Given an HDF5 dataspace, formats the selection within the
@@ -3976,7 +4060,7 @@ done:
  *              since JSON can't be included in the request body in that
  *              case.
  *
- *              When req_param is specified as FALSE, the seleciton is
+ *              When req_param is specified as FALSE, the selection is
  *              formatted as JSON so that it can be included in the request
  *              body of a dataset read/write. This form is primarily used
  *              for point selections and hyperslab selections where the
@@ -4046,24 +4130,11 @@ RV_convert_dataspace_selection_to_string(hid_t space_id, char **selection_string
                 break;
 
             case H5S_SEL_POINTS:
-                hssize_t num_points;
-                size_t   point_buf_size;
-#ifdef RV_CONNECTOR_DEBUG
-                printf("-> Point selection\n\n");
-#endif
-                /* Format the point selection as a binary buffer containing each coordinate index as an
-                 * hsize_t */
-                if ((num_points = H5Sget_select_npoints(space_id)) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't get number of selected points");
+                /* This case is never used - point writes send selection in the body as JSON,
+                 * and point reads send selection in the body as binary */
 
-                point_buf_size = (size_t)(ndims * num_points) * sizeof(hsize_t);
-                CHECKED_REALLOC_NO_PTR(out_string, out_string_len, point_buf_size, H5E_DATASPACE, FAIL);
-
-                if (H5Sget_select_elem_pointlist(space_id, 0, (hsize_t)num_points, (hsize_t *)out_string) < 0)
-                    FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTGET, FAIL, "can't retrieve point list");
-
-                out_string_curr_pos = out_string + point_buf_size;
-                break;
+                FUNC_GOTO_ERROR(H5E_INTERNAL, H5E_UNSUPPORTED, FAIL,
+                                "point selection not currently supported as a request parameter");
 
             case H5S_SEL_HYPERSLABS: {
 #ifdef RV_CONNECTOR_DEBUG
