@@ -5203,7 +5203,7 @@ RV_pack_vlen_data(const hvl_t *in, size_t nelems, hid_t dtype_id, void **out, si
         len_bytes = vl.len * parent_dtype_size;
 
         /* Sequence length must fit into 4 bytes */
-        if (len_bytes > INT_MAX)
+        if (len_bytes > UINT32_MAX)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "sequence exceeded maximum size");
 
         memcpy(out_buf_curr_pos, (uint64_t *)&len_bytes, sizeof(uint32_t));
@@ -5296,13 +5296,13 @@ RV_unpack_vlen_data(char *in, hid_t vlen_dtype_id, size_t nelems, void **out)
 done:
 
     if (ret_value < 0 && out_buf) {
+        hvl_t tmp_vl;
         /* Free any memory allocated for individual sequences */
         for (size_t i = 0; i < nelems; i++) {
-            vl = ((hvl_t *)out_buf) + i;
+            memcpy(&tmp_vl, out_buf + i * sizeof(hvl_t), sizeof(hvl_t));
 
-            if (vl->len > 0 && vl->p) {
-                RV_free(vl->p);
-                vl->p = NULL;
+            if (tmp_vl.len > 0 && tmp_vl.p) {
+                RV_free(tmp_vl.p);
             }
         }
 
