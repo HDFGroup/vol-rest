@@ -19,8 +19,6 @@
 #include <math.h>
 
 /* Helpers to serialize vlen data for writes. */
-static herr_t RV_vlen_data_to_json(const void *in, size_t nelems, hid_t dtype_id, void **out,
-                                   size_t *out_size);
 static herr_t RV_pack_vlen_data(const hvl_t *in, size_t nelems, hid_t dtype_id, void **out, size_t *out_size);
 
 /* Set of callbacks for RV_parse_response() */
@@ -5131,187 +5129,6 @@ done:
 }
 
 /*-------------------------------------------------------------------------
- * Function:    RV_vlen_data_to_json
- *
- * Purpose:     Converts a buffer of hvl_t instances to a JSON value
- *              which may be sent to the server as part of a write.
- *
- *              Allocates memory under the *out pointer on success which must be
- *              freed by the calling function.
- *
- * Return:      Non-negative on success/Negative on failure
- *
- * Programmer:  Matthew Larson
- *              January, 2024
- */
-static herr_t
-RV_vlen_data_to_json(const void *_in, size_t nelems, hid_t dtype_id, void **out, size_t *out_size)
-{
-    herr_t       ret_value        = H5_ITER_CONT;
-    hid_t        parent_type      = H5I_INVALID_HID;
-    const hvl_t *in               = NULL;
-    H5T_class_t  parent_class     = H5T_NO_CLASS;
-    ptrdiff_t    elem_buf_ptrdiff = 0;
-
-    const char *const fmt_string          = "[%s]";
-    const char       *elem_fmt_string     = NULL;
-    char             *out_string          = NULL;
-    char             *out_string_curr_pos = NULL;
-    ptrdiff_t         out_diff            = 0;
-    int               bytes_printed       = 0;
-    size_t            tgt_out_size        = 0;
-    size_t            parent_dtype_size;
-
-    if (!out)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, H5_ITER_ERROR,
-                        "invalid NULL pointer provided for output of vlen to JSON conversion");
-
-    if (!_in)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, H5_ITER_ERROR,
-                        "invalid NULL pointer provided for input of vlen to JSON conversion");
-
-    in = (const hvl_t *)_in;
-
-    if ((parent_type = H5Tget_super(dtype_id)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "can't get base type of vlen type");
-
-    if ((parent_class = H5Tget_class(parent_type)) < 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get class of parent of vlen dtype");
-
-    if ((parent_dtype_size = H5Tget_size(parent_type)) == 0)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "can't get size of vlen seq base type");
-
-    if ((out_string = (char *)calloc(DATASET_VLEN_JSON_BODY_DEFAULT_SIZE, 1)) == NULL)
-        FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for vlen data JSON");
-
-    *out_size           = DATASET_VLEN_JSON_BODY_DEFAULT_SIZE;
-    out_string_curr_pos = out_string;
-
-    /* Delineate start of list of sequences */
-    out_diff     = out_string_curr_pos - out_string;
-    tgt_out_size = (size_t)out_diff;
-    CHECKED_REALLOC(out_string, *out_size, tgt_out_size, out_string_curr_pos, H5E_DATASET, FAIL);
-    out_string = strcat(out_string, "[");
-    out_string_curr_pos += 1;
-
-    /* The amount of space needed to serialize each element can't be known ahead of time, so serialize each
-     * element into a temporary fixed-size buffer before copying it to the output buffer . */
-    for (size_t i = 0; i < nelems; i++) {
-        hvl_t seq = in[i];
-
-        /* Delineate start of this sequence */
-        out_diff     = out_string_curr_pos - out_string;
-        tgt_out_size = (size_t)(out_diff) + 1;
-        CHECKED_REALLOC(out_string, *out_size, tgt_out_size, out_string_curr_pos, H5E_DATASET, FAIL);
-        out_string = strcat(out_string, "[");
-        out_string_curr_pos += 1;
-
-        /* Stringify each element in a second fixed-size buffer, then copy to sequence buffer */
-        for (size_t j = 0; j < seq.len; j++) {
-#define MAX_SEQ_ELEM_BUF_SIZE 128
-            char  seq_elem_buffer[MAX_SEQ_ELEM_BUF_SIZE];
-            char *seq_elem_buffer_ptr = seq_elem_buffer;
-
-            memset(seq_elem_buffer, 0, MAX_SEQ_ELEM_BUF_SIZE);
-
-            switch (parent_class) {
-                case (H5T_INTEGER):
-                    if ((bytes_printed = snprintf(seq_elem_buffer_ptr, MAX_SEQ_ELEM_BUF_SIZE, "%d",
-                                                  ((int *)seq.p)[j])) < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
-
-                    seq_elem_buffer_ptr += bytes_printed;
-                    break;
-                case (H5T_FLOAT):
-                    if ((bytes_printed = snprintf(seq_elem_buffer_ptr, MAX_SEQ_ELEM_BUF_SIZE, "%f",
-                                                  ((float *)seq.p)[j])) < 0)
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
-                    seq_elem_buffer_ptr += bytes_printed;
-                    break;
-                case (H5T_STRING):
-                    if (parent_dtype_size + 2 + 1 >= MAX_SEQ_ELEM_BUF_SIZE)
-                        FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
-                                        "size of string element in vlen seq exceeded buffer size");
-
-                    *seq_elem_buffer_ptr = '"';
-                    seq_elem_buffer_ptr += 1;
-
-                    memcpy(seq_elem_buffer_ptr, ((char *)seq.p) + j * parent_dtype_size, parent_dtype_size);
-                    bytes_printed = (int)parent_dtype_size;
-                    seq_elem_buffer_ptr += parent_dtype_size;
-
-                    *seq_elem_buffer_ptr = '"';
-                    seq_elem_buffer_ptr += 1;
-                    *seq_elem_buffer_ptr = '\0';
-
-                    break;
-                default:
-                    FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL, "unsupported vlen parent type");
-                    break;
-            }
-
-            /* Check if room for comma */
-            if (bytes_printed + 1 > MAX_SEQ_ELEM_BUF_SIZE)
-                FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "vlen seq elem JSON exceeded buffer size");
-
-            /* Add comma if needed */
-            if (j != seq.len - 1) {
-                *seq_elem_buffer_ptr = ',';
-                seq_elem_buffer_ptr += 1;
-                *seq_elem_buffer_ptr = '\0';
-            }
-
-            elem_buf_ptrdiff = seq_elem_buffer_ptr - seq_elem_buffer;
-
-            /* Check that there is room in sequence buffer for this element string*/
-            out_diff     = out_string_curr_pos - out_string;
-            tgt_out_size = (size_t)(out_diff) + (size_t)elem_buf_ptrdiff;
-            CHECKED_REALLOC(out_string, *out_size, tgt_out_size, out_string_curr_pos, H5E_DATASET, FAIL);
-
-            out_string = strcat(out_string, seq_elem_buffer);
-            out_string_curr_pos += (size_t)elem_buf_ptrdiff;
-        }
-
-        /* Make sure sequence buffer has room for sequence-ending bracket and potential comma */
-        out_diff     = out_string_curr_pos - out_string;
-        tgt_out_size = (size_t)out_diff + 2;
-        CHECKED_REALLOC(out_string, *out_size, tgt_out_size, out_string_curr_pos, H5E_DATASET, FAIL);
-
-        out_string = strcat(out_string, "]");
-        out_string_curr_pos += 1;
-
-        /* If not the final sequence, add comma before next sequence */
-        if (i != nelems - 1) {
-            out_string = strcat(out_string, ",");
-            out_string_curr_pos += 1;
-        }
-    }
-
-    /* Add closing bracket to all vlen data and terminating byte */
-    out_diff     = out_string_curr_pos - out_string;
-    tgt_out_size = (size_t)out_diff + 1 + 1;
-
-    CHECKED_REALLOC(out_string, *out_size, tgt_out_size, out_string_curr_pos, H5E_DATASET, FAIL);
-    out_string = strcat(out_string, "]");
-
-    /* Return length of actual string, not string buffer size */
-    *out_size = strlen(out_string);
-
-done:
-
-    if (ret_value >= 0) {
-        *out = out_string;
-    }
-    else {
-        if (out_string) {
-            RV_free(out_string);
-        }
-    }
-
-    return ret_value;
-} /* end RV_vlen_data_to_json */
-
-/*-------------------------------------------------------------------------
  * Function:    RV_pack_vlen_data
  *
  * Purpose:     Converts a buffer of hvl_t instances to a buffer containing
@@ -5326,7 +5143,7 @@ done:
  *              March, 2024
  */
 static herr_t
-RV_pack_vlen_data(const hvl_t *_in, size_t nelems, hid_t dtype_id, void **out, size_t *out_size)
+RV_pack_vlen_data(const hvl_t *in, size_t nelems, hid_t dtype_id, void **out, size_t *out_size)
 {
     herr_t      ret_value          = SUCCEED;
     char       *out_buf            = NULL;
@@ -5337,7 +5154,7 @@ RV_pack_vlen_data(const hvl_t *_in, size_t nelems, hid_t dtype_id, void **out, s
     hid_t       parent_dtype       = H5I_INVALID_HID;
     H5T_class_t parent_dtype_class = H5T_NO_CLASS;
 
-    if (!_in)
+    if (!in)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given input buffer was NULL");
 
     if (!out)
@@ -5375,7 +5192,7 @@ RV_pack_vlen_data(const hvl_t *_in, size_t nelems, hid_t dtype_id, void **out, s
     for (size_t i = 0; i < nelems; i++) {
         /* Make sure space exists for this sequence */
         ptrdiff_t curr_size = out_buf_curr_pos - out_buf;
-        hvl_t     vl        = ((const hvl_t *)_in)[i];
+        hvl_t     vl        = in[i];
         uint64_t  len_bytes = 0;
 
         target_size = (size_t)curr_size + sizeof(uint32_t) + vl.len * parent_dtype_size;
