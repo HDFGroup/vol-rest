@@ -3973,7 +3973,7 @@ done:
 /*-------------------------------------------------------------------------
  * Function:    RV_convert_point_selection_to_binary
  *
- * Purpose:     Given an HDF5 dataspace containin a point selection,
+ * Purpose:     Given an HDF5 dataspace containing a point selection,
  *              formats the selection within the
  *              dataspace into either a binary representation.
  *              This is currently used only for point reads.
