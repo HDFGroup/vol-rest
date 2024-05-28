@@ -119,7 +119,12 @@ jobs:
           sudo apt update
           sudo apt install valgrind
         working-directory: ${{ github.workspace }}
-            
+
+      # Requests 2.32.0 breaks requests-unixsocket, used by HSDS for socket connections
+      - name: Fix requests version
+        run: |
+          pip install requests==2.31.0
+
       - name: Start HSDS
         if: ${{ matrix.endpoint != 'http://127.0.0.1:5101'}}
         run: | 
@@ -133,7 +138,7 @@ jobs:
               ROOT_DIR=${{github.workspace}}/hsdadata ./runall.sh --no-docker 1 &
               sleep 10
         working-directory: ${{github.workspace}}/hsds
-        
+
       - name: Test HSDS
         if: ${{matrix.endpoint != 'http://127.0.0.1:5101'}}
         run: |
@@ -240,7 +245,12 @@ jobs:
           sudo apt update
           sudo apt install valgrind
         working-directory: ${{ github.workspace }}
-            
+
+        # Requests 2.32.0 breaks requests-unixsocket, used by HSDS for socket connections
+      - name: Fix requests version
+        run: |
+          pip install requests==2.31.0
+
       - name: Start HSDS
         if: ${{ matrix.endpoint != 'http://127.0.0.1:5101'}}
         run: | 
@@ -254,7 +264,7 @@ jobs:
             ROOT_DIR=${{github.workspace}}/hsdadata ./runall.sh --no-docker 1 &
             sleep 10
         working-directory: ${{github.workspace}}/hsds
-        
+
       - name: Test HSDS
         if: ${{matrix.endpoint != 'http://127.0.0.1:5101'}}
         run: |

@@ -3656,6 +3656,7 @@ RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_i
     int            maxfd      = -1;
     long           timeout_ms = 0;
     struct timeval timeout;
+    hid_t          vlen_buf_space = H5I_INVALID_HID;
 
     if ((failed_handles_to_retry = calloc(count, sizeof(CURL *))) == NULL)
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
@@ -3757,6 +3758,8 @@ RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_i
                     fail_count++;
                 }
                 else if (response_code == 200) {
+                    H5T_class_t dtype_class = H5T_NO_CLASS;
+
                     num_finished++;
                     succeed_count++;
 
@@ -3794,11 +3797,71 @@ RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_i
                     transfer_info[handle_index].curl_easy_handle = NULL;
 
                     if (transfer_info[handle_index].transfer_type == WRITE) {
-                        RV_free(transfer_info[handle_index].u.write_info.write_body);
-                        transfer_info[handle_index].u.write_info.write_body = NULL;
+                        if (transfer_info[handle_index].tconv_buf) {
+                            htri_t has_vlen = FALSE;
 
-                        RV_free(transfer_info[handle_index].u.write_info.base64_encoded_values);
-                        transfer_info[handle_index].u.write_info.base64_encoded_values = NULL;
+                            if ((has_vlen =
+                                     H5Tdetect_class(transfer_info[handle_index].mem_type_id, H5T_VLEN)) < 0)
+                                FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                                                "can't check if dtype contains vlen");
+
+                            /* Clean up memory allocated by type conversion of vlen types */
+                            if (has_vlen > 0) {
+                                /* Buffer was gathered before type conversion, so we can manually free vlen
+                                 * memory by iteration */
+                                hssize_t num_elems = 0;
+                                if ((num_elems = H5Sget_select_npoints(
+                                         transfer_info[handle_index].mem_space_id)) <= 0)
+                                    FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
+                                                    "can't get number of elements in dataspace");
+
+                                /* Vlen buffer is packed, so generate a 1D dataspace to describe its layout */
+                                if ((vlen_buf_space = H5Screate_simple(1, &num_elems, NULL)) < 0)
+                                    FUNC_DONE_ERROR(H5E_DATASPACE, H5E_CANTCREATE, FAIL,
+                                                    "can't create dataspace for vlen buffer");
+
+                                if ((H5Treclaim(transfer_info[handle_index].mem_type_id, vlen_buf_space,
+                                                H5P_DEFAULT, transfer_info[handle_index].tconv_buf)) < 0)
+                                    FUNC_DONE_ERROR(H5E_DATASET, H5E_CANTFREE, FAIL,
+                                                    "can't free vlen data from buffer");
+
+                                if (H5Sclose(vlen_buf_space) < 0)
+                                    FUNC_DONE_ERROR(H5E_DATASPACE, H5E_CANTCLOSEOBJ, FAIL,
+                                                    "can't close dataspace for vlen buffer");
+
+                                vlen_buf_space = H5I_INVALID_HID;
+                            }
+                        }
+
+                        if (transfer_info[handle_index].u.write_info.gather_buf) {
+                            RV_free(transfer_info[handle_index].u.write_info.gather_buf);
+                            transfer_info[handle_index].u.write_info.gather_buf = NULL;
+                        }
+
+                        if (transfer_info[handle_index].u.write_info.serialize_buf) {
+                            RV_free(transfer_info[handle_index].u.write_info.serialize_buf);
+                            transfer_info[handle_index].u.write_info.serialize_buf = NULL;
+                        }
+
+                        if (transfer_info[handle_index].u.write_info.base64_encoded_values) {
+                            RV_free(transfer_info[handle_index].u.write_info.base64_encoded_values);
+                            transfer_info[handle_index].u.write_info.base64_encoded_values = NULL;
+                        }
+
+                        if (transfer_info[handle_index].u.write_info.point_sel_buf) {
+                            RV_free(transfer_info[handle_index].u.write_info.point_sel_buf);
+                            transfer_info[handle_index].u.write_info.point_sel_buf = NULL;
+                        }
+                    }
+
+                    if (transfer_info[handle_index].tconv_buf) {
+                        RV_free(transfer_info[handle_index].tconv_buf);
+                        transfer_info[handle_index].tconv_buf = NULL;
+                    }
+
+                    if (transfer_info[handle_index].bkg_buf) {
+                        RV_free(transfer_info[handle_index].bkg_buf);
+                        transfer_info[handle_index].bkg_buf = NULL;
                     }
 
                     RV_free(transfer_info[handle_index].request_url);
@@ -3837,6 +3900,10 @@ RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_i
 
 done:
     RV_free(failed_handles_to_retry);
+
+    if (vlen_buf_space != H5I_INVALID_HID)
+        if (H5Sclose(vlen_buf_space) < 0)
+            FUNC_DONE_ERROR(H5E_DATASPACE, H5E_CANTCLOSEOBJ, FAIL, "can't close dataspace for vlen buffer");
 
     return ret_value;
 }

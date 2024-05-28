@@ -586,10 +586,14 @@ struct RV_object_t {
 
 /* Structures to hold information for cURL requests to read/write to datasets */
 typedef struct dataset_write_info {
-    char       *write_body;
-    char       *base64_encoded_values;
-    curl_off_t  write_len;
+    /* Dynamically allocated buffers for each step of the write pipeline */
+    void       *gather_buf;
+    void       *base64_encoded_values;
+    void       *serialize_buf;
+    void       *point_sel_buf;
+    void       *vlen_buf;
     upload_info uinfo;
+    /* Pointer to user-provided write buffer */
     const void *buf;
 
     /* If writing using compound subsetting, this is a packed version of the
