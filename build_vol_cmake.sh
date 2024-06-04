@@ -65,6 +65,8 @@ usage()
     echo "              library should be built with position independent"
     echo "              code option enabled."
     echo
+    echo "      -u      Make use of the static cURL library."
+    echo
     echo "      -G      Specify the CMake Generator to use for the build"
     echo "              files created. Default is 'Unix Makefiles'."
     echo
@@ -91,7 +93,7 @@ usage()
     echo
 }
 
-optspec=":hctdmstlG:H:C:Y:B:P:-"
+optspec=":hctdmstluG:H:C:Y:B:P:-"
 while getopts "$optspec" optchar; do
     case "${optchar}" in
     h)
@@ -119,7 +121,11 @@ while getopts "$optspec" optchar; do
         echo
         ;;
     t)  YAJL_LIB_OPT="-DYAJL_USE_STATIC_LIBRARIES=ON"
-        echo "Use the static YAJL library."
+        echo "Using the static YAJL library."
+        echo
+        ;;
+    c)  CMAKE_C_FLAGS="/DCURL_STATICLIB"
+        echo "Using the static cURL library."
         echo
         ;;
     G)
@@ -195,7 +201,7 @@ rm -f "${BUILD_DIR}/CMakeCache.txt"
 
 cd "${BUILD_DIR}"
 
-CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "${CMAKE_GENERATOR}" "-DHDF5_ROOT=${HDF5_INSTALL_DIR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${CURL_OPT}" "${YAJL_OPT}" "${YAJL_LIB_OPT}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}"
+CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "${CMAKE_GENERATOR}" "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}" "-DHDF5_ROOT=${HDF5_INSTALL_DIR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${CURL_OPT}" "${YAJL_OPT}" "${YAJL_LIB_OPT}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}"
 
 echo "Build files have been generated for CMake generator '${CMAKE_GENERATOR}'"
 
