@@ -326,15 +326,6 @@
  */
 #define UNUSED_VAR(arg) (void)arg;
 
-/* Macro to ensure H5_rest_id_g is initialized. */
-#define H5_REST_G_INIT(ERR)                                                                                  \
-    do {                                                                                                     \
-        if (H5_rest_id_g < 0)                                                                                \
-            if ((H5_rest_id_g = H5VLpeek_connector_id_by_value(HDF5_VOL_REST_CLS_VAL)) < 0)                  \
-                FUNC_GOTO_ERROR(H5E_ID, H5E_CANTGET, ERR,                                                    \
-                                "unable to get registered ID for REST VOL connector");                       \
-    } while (0)
-
 /* Capability flags for the VOL REST connector */
 #define H5VL_VOL_REST_CAP_FLAGS                                                                              \
     H5VL_CAP_FLAG_FILE_BASIC                                                                                 \
