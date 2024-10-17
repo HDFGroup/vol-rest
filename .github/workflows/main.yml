@@ -46,7 +46,7 @@ jobs:
       - name: Get REST VOL dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install libcurl4-openssl-dev
+          sudo apt-get install libcurl4-openssl-dev=7.81
           sudo apt-get install libyajl-dev
 
       - name: Get Autotools Dependencies
@@ -169,7 +169,7 @@ jobs:
       - name: Get REST VOL dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install libcurl4-openssl-dev
+          sudo apt-get install libcurl4-openssl-dev=7.81
           sudo apt-get install libyajl-dev
               
       - name: Get REST VOL

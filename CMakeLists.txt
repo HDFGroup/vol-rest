@@ -118,7 +118,7 @@ if (HDF5_ENABLE_THREADSAFE AND NOT Threads_FOUND)
   find_package(Threads)
 endif ()
 
-find_package (CURL 7.61 REQUIRED)
+find_package (CURL 7.61...<8.0.0 REQUIRED)
 if (CURL_FOUND)
   include_directories(${CURL_INCLUDE_DIRS})
   set (LINK_LIBS ${LINK_LIBS} CURL::libcurl)
