@@ -18281,6 +18281,10 @@ case_time:
                 goto case_vlen;
             case H5T_ARRAY:
                 goto case_array;
+#if HDF5_2
+            case H5T_COMPLEX:
+                goto case_complex;
+#endif
             default:
                 H5_FAILED();
                 printf("    invalid value for goto\n");
@@ -18365,6 +18369,10 @@ case_bitfield:
                 goto case_vlen;
             case H5T_ARRAY:
                 goto case_array;
+#if HDF5_2
+            case H5T_COMPLEX:
+                goto case_complex;
+#endif
             default:
                 H5_FAILED();
                 printf("    invalid value for goto\n");
@@ -18400,6 +18408,10 @@ case_opaque:
                 goto case_vlen;
             case H5T_ARRAY:
                 goto case_array;
+#if HDF5_2
+            case H5T_COMPLEX:
+                goto case_complex;
+#endif
             default:
                 H5_FAILED();
                 printf("    invalid value for goto\n");
@@ -18443,6 +18455,10 @@ case_compound:
                     goto case_vlen;
                 case H5T_ARRAY:
                     goto case_array;
+#if HDF5_2
+                case H5T_COMPLEX:
+                    goto case_complex;
+#endif
                 default:
                     H5_FAILED();
                     printf("    invalid value for goto\n");
@@ -18527,6 +18543,10 @@ case_reference:
                     goto case_vlen;
                 case H5T_ARRAY:
                     goto case_array;
+#if HDF5_2
+                case H5T_COMPLEX:
+                    goto case_complex;
+#endif
                 default:
                     H5_FAILED();
                     printf("    invalid value for goto\n");
@@ -18566,6 +18586,10 @@ case_reference:
                     goto case_vlen;
                 case H5T_ARRAY:
                     goto case_array;
+#if HDF5_2
+                case H5T_COMPLEX:
+                    goto case_complex;
+#endif
                 default:
                     H5_FAILED();
                     printf("    invalid value for goto\n");
@@ -18614,6 +18638,10 @@ case_enum:
                     goto case_vlen;
                 case H5T_ARRAY:
                     goto case_array;
+#if HDF5_2
+                case H5T_COMPLEX:
+                    goto case_complex;
+#endif
                 default:
                     H5_FAILED();
                     printf("    invalid value for goto\n");
@@ -18669,6 +18697,10 @@ case_vlen:
                 goto case_vlen;
             case H5T_ARRAY:
                 goto case_array;
+#if HDF5_2
+            case H5T_COMPLEX:
+                goto case_complex;
+#endif
             default:
                 H5_FAILED();
                 printf("    invalid value for goto\n");
@@ -18710,6 +18742,10 @@ case_array:
                     goto case_vlen;
                 case H5T_ARRAY:
                     goto case_array;
+#if HDF5_2
+                case H5T_COMPLEX:
+                    goto case_complex;
+#endif
                 default:
                     H5_FAILED();
                     printf("    invalid value for goto\n");
@@ -18739,6 +18775,44 @@ case_array:
 
         break;
     }
+#if HDF5_2
+case_complex:
+    case H5T_COMPLEX: {
+        /* Complex datatypes are unsupported, try again */
+        switch (rand() % H5T_NCLASSES) {
+            case H5T_INTEGER:
+                goto case_integer;
+            case H5T_FLOAT:
+                goto case_float;
+            case H5T_TIME:
+                goto case_time;
+            case H5T_STRING:
+                goto case_string;
+            case H5T_BITFIELD:
+                goto case_bitfield;
+            case H5T_OPAQUE:
+                goto case_opaque;
+            case H5T_COMPOUND:
+                goto case_compound;
+            case H5T_REFERENCE:
+                goto case_reference;
+            case H5T_ENUM:
+                goto case_enum;
+            case H5T_VLEN:
+                goto case_vlen;
+            case H5T_ARRAY:
+                goto case_array;
+            case H5T_COMPLEX:
+                goto case_complex;
+            default:
+                H5_FAILED();
+                printf("    invalid value for goto\n");
+                break;
+        }
+    
+        break;
+    }
+#endif
 
     default:
         H5_FAILED();
