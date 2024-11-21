@@ -96,8 +96,6 @@ and can directly be obtained from:
 
 `git clone https://github.com/HDFGroup/vol-rest`
 
-For building with the 1.12 or later version of the HDF5 library, use the hdf5_1_12_update branch of this repository. 
-
 A source distribution of the HDF5 library has been included in the REST VOL connector
 source in the `/src/hdf5` directory.
 
@@ -141,9 +139,6 @@ The following configuration options are available to all of the build scripts:
             mostly useful in helping to diagnose any possible memory leaks or other
             memory errors within the connector.
 
-    -g      Enables symbolic debugging of the REST VOL code. (Only available for
-            `build_vol_autotools.sh`)
-
     -P DIR  Specifies where the REST VOL connector should be installed. The default
             installation prefix is `rest_vol_build` inside the REST VOL connector source
             root directory.
@@ -158,7 +153,15 @@ The following configuration options are available to all of the build scripts:
     -Y DIR  Specifies the top-level directory where YAJL is installed. Used if YAJL is
             not installed to a system path or used to override
 
-Additionally, the CMake build scripts have the following configuration options:
+The following configuration options are specific to `build_vol_autotools.sh`:
+
+    -g      Enables symbolic debugging of the REST VOL code.
+
+The following configuration options are specific to the CMake build scripts:
+
+    -u      Specifies that a static cURL library should be used as a dependency.
+
+    -t      Specifies that a static YAJL library should be used as a dependency.
 
     -B DIR  Specifies the directory that CMake should use as the build tree location.
             The default build tree location is `rest_vol_cmake_build_files` inside the
@@ -291,7 +294,8 @@ components mentioned previously cannot be found within the system path.
   * `HDF5_VOL_REST_ENABLE_MEM_TRACKING` - Enables/Disables memory tracking within the REST VOL connector. This option is mostly useful in helping to diagnose any possible memory leaks or other memory errors within the connector. The default value is `OFF`.
   * `HDF5_VOL_REST_THREAD_SAFE` - Enables/Disables linking to HDF5 statically compiled with thread safe option. The default value is `OFF`.
   * `YAJL_USE_STATIC_LIBRARIES` - Indicate if the static YAJL libraries should be used for linking. The default value is `OFF`.
-  
+  * `CURL_USE_STATIC_LIBRARIES` - Indicate if the static CURL libraries should be used for linking. The default value is `OFF`.
+
 Note, when setting BUILD_SHARED_LIBS=ON and YAJL_USE_STATIC_LIBRARIES=ON, the static YAJL libraries have be build with the position independent code (PIC) option enabled. In the static YAJL build,
 this PIC option has been turned off by default.
 
@@ -301,7 +305,7 @@ It is also possible to build the REST VOL as part of the build process for the H
 
 ### II.B.v. Build Results
 
-If the build is successful, the following files will be written into the installation directory:
+If the build is successful, the following files will be written into the installation directory on a Linux or OSX machine:
 
 ```
 bin/
@@ -326,6 +330,8 @@ share/
             hdf5_vol_rest-targets.cmake
             hdf5_vol_rest-targets-<build mode>.cmake
 ```
+
+On a Windows system, the installation directory will have a few differences. If shared libraries are built, the resulting `hdf5_vol_rest.dll` will be found in the `bin` directory. If tests are enabled, `test_rest_vol(-shared).exe` will also be in the `bin` directory. If static libraries are built, `lib` will contain `libhdf5_vol_rest.lib`.
 
 If the REST VOL connector was built using one of the included build scripts, all of the usual files
 from an HDF5 source build should appear in the respective `bin`, `include`, `lib` and `share`
