@@ -311,7 +311,6 @@ macro (INSTALL_TARGET_PDB libtarget targetdestination targetcomponent)
   endif ()
 endmacro ()
 
-
 #-----------------------------------------------------------------------------
 # Setup output Directories
 #-----------------------------------------------------------------------------
@@ -581,7 +580,6 @@ if (BUILD_STATIC_LIBS)
     ${HDF5_C_LIBRARIES}
     ${HDF5_C_HL_LIBRARIES})
 endif()
-
 
 #-----------------------------------------------------------------------------
 # Build the REST VOL

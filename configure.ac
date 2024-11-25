@@ -1161,6 +1161,9 @@ else
   enable_static=no
 fi
 
+# Autotools build isn't supported by HDF5 >= 2.0.0, so assume HDF5 version is < 2.0.0
+AC_DEFINE([HDF5_2], [0], [Whether HDF5 version is at least 2.0.0])
+
 ## Expose things for *.in markup
 AC_SUBST([STATIC_SHARED])
 AC_SUBST([enable_shared])
