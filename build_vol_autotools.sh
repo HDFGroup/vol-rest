@@ -163,12 +163,6 @@ if [ "$NPROCS" -eq "0" ]; then
     fi
 fi
 
-# Ensure that the HDF5 and VOL tests submodules get checked out
-if [ -z "$(ls -A ${SCRIPT_DIR}/${HDF5_DIR})" ]; then
-    git submodule init
-    git submodule update
-fi
-
 # If the user hasn't already, first build HDF5
 if [ "$build_hdf5" = true ]; then
     echo "*****************"
