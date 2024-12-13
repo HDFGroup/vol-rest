@@ -1127,7 +1127,7 @@ RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, v
     obj_info->num_attrs = (hsize_t)YAJL_GET_INTEGER(key_obj);
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> Object had %llu attributes attached to it\n\n", obj_info->num_attrs);
+    printf("-> Object had %" PRIuHSIZE "attributes attached to it\n\n", obj_info->num_attrs);
 #endif
 
     /* Retrieve the object's class */

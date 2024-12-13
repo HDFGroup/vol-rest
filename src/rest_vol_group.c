@@ -729,7 +729,7 @@ RV_get_group_info_callback(char *HTTP_response, const void *callback_data_in, vo
     group_info->nlinks = (hsize_t)YAJL_GET_INTEGER(key_obj);
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> Group had %llu links in it\n\n", group_info->nlinks);
+    printf("-> Group had %" PRIuHSIZE "links in it\n\n", group_info->nlinks);
 #endif
 
 done:

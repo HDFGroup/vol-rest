@@ -1948,7 +1948,7 @@ RV_convert_JSON_to_datatype(const char *type)
         for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
             if (i > 0)
                 printf(", ");
-            printf("%llu", array_dims[i]);
+            printf("%" PRIuHSIZE, array_dims[i]);
         }
         printf("]\n");
 #endif
@@ -2170,7 +2170,7 @@ RV_convert_JSON_to_datatype(const char *type)
         memcpy(tmp_vlen_type_buffer + 2, type_class_keys[0], strlen(type_class_keys[0]));
 
 #ifdef RV_CONNECTOR_DEBUG
-        printf("-> Converting variable length datatype's parent type from JSON to hid_t\n", i);
+        printf("-> Converting variable length datatype's parent type from JSON to hid_t\n");
 #endif
 
         /* Recursively parse parent datatype from JSON */

@@ -80,7 +80,7 @@ jobs:
 
       - name: Build + Install REST VOL
         run: |
-          make
+          make -j
           make install
         shell: bash
         working-directory: ${{github.workspace}}/vol-rest/
@@ -212,7 +212,7 @@ jobs:
 
       - name: Build + Install REST VOL
         run: |
-          make
+          make -j
           make install
         shell: bash
         working-directory: ${{github.workspace}}/vol-rest/build

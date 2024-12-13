@@ -2965,7 +2965,7 @@ RV_parse_dataspace(char *space)
         for (i = 0; i < dims_obj->u.array.len; i++) {
             if (i > 0)
                 printf(", ");
-            printf("%llu", space_dims[i]);
+            printf("%" PRIuHSIZE, space_dims[i]);
         }
         printf(" ]\n\n");
         if (maxdims_specified) {
@@ -2973,7 +2973,7 @@ RV_parse_dataspace(char *space)
             for (i = 0; i < maxdims_obj->u.array.len; i++) {
                 if (i > 0)
                     printf(", ");
-                printf("%llu", space_maxdims[i]);
+                printf("%" PRIuHSIZE, space_maxdims[i]);
             }
             printf(" ]\n\n");
         }
@@ -4125,8 +4125,7 @@ RV_curl_delete(CURL *curl_handle, server_info_t *server_info, const char *reques
 
     strcpy(host_header, host_string);
 
-    curl_headers_local = curl_slist_append(
-        curl_headers_local, strncat(host_header, filename, host_header_len - strlen(host_string) - 1));
+    curl_headers_local = curl_slist_append(curl_headers_local, strcat(host_header, filename));
 
     /* Disable use of Expect: 100 Continue HTTP response */
     curl_headers_local = curl_slist_append(curl_headers_local, "Expect:");
@@ -4201,8 +4200,7 @@ RV_curl_put(CURL *curl_handle, server_info_t *server_info, const char *request_e
 
     strcpy(host_header, host_string);
 
-    curl_headers_local = curl_slist_append(
-        curl_headers_local, strncat(host_header, filename, host_header_len - strlen(host_string) - 1));
+    curl_headers_local = curl_slist_append(curl_headers_local, strcat(host_header, filename));
 
     /* Disable use of Expect: 100 Continue HTTP response */
     curl_headers_local = curl_slist_append(curl_headers_local, "Expect:");
@@ -4301,8 +4299,7 @@ RV_curl_get(CURL *curl_handle, server_info_t *server_info, const char *request_e
 
     strcpy(host_header, host_string);
 
-    curl_headers_local = curl_slist_append(
-        curl_headers_local, strncat(host_header, filename, host_header_len - strlen(host_string) - 1));
+    curl_headers_local = curl_slist_append(curl_headers_local, strcat(host_header, filename));
 
     /* Specify type of content being sent through cURL */
     switch (content_type) {
@@ -4387,8 +4384,7 @@ RV_curl_post(CURL *curl_handle, server_info_t *server_info, const char *request_
 
     strcpy(host_header, host_string);
 
-    curl_headers_local = curl_slist_append(
-        curl_headers_local, strncat(host_header, filename, host_header_len - strlen(host_string) - 1));
+    curl_headers_local = curl_slist_append(curl_headers_local, strcat(host_header, filename));
 
     /* Specify type of content being sent through cURL */
     switch (content_type) {
