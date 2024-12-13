@@ -150,6 +150,12 @@ jobs:
         run: |
               HDF5_PLUGIN_PATH=${{github.workspace}}/vol-rest/install/lib HDF5_VOL_CONNECTOR=REST ./test/test_rest_vol
 
+      - name: Show HSDS Logs on Fail
+        if: ${{failure()}}
+        working-directory: ${{github.workspace}}/hsds
+        run: |
+          cat hs.log
+
   build_and_test_with_cmake:
     strategy:
       fail-fast: false
@@ -280,6 +286,12 @@ jobs:
         working-directory: ${{github.workspace}}/vol-rest/build/
         run: |
               valgrind --leak-check=full -s ctest -R "test_rest_vol" -VV
+
+      - name: Show HSDS Logs on Fail
+        if: ${{failure()}}
+        working-directory: ${{github.workspace}}/hsds
+        run: |
+          cat hs.log
 
 #      TODO: Attribute, dataset, link, and testhdf5 tests currently fail
 #      - name: Test REST VOL with API
