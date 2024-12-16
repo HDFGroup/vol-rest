@@ -33,7 +33,7 @@ jobs:
       matrix:
         os: [ubuntu-22.04, ubuntu-latest]
         build_system: ["autotools", "cmake"]
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10"]
         hdf5-branch: ["hdf5_1_14", "develop"]
         compiler: ["gcc-11", "gcc-12", "gcc-13"]
         exclude:

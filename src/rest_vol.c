@@ -3164,10 +3164,9 @@ RV_convert_dataspace_shape_to_JSON(hid_t space_id, char **shape_body, char **max
                         strcat(maxdims_out_string_curr_pos++, "0");
                     } /* end if */
                     else {
-                        if ((bytes_printed =
-                                 snprintf(maxdims_out_string_curr_pos,
-                                          maxdims_out_string_new_len - (size_t)maxdims_out_string_curr_pos,
-                                          "%s%" PRIuHSIZE, i > 0 ? "," : "", maxdims[i])) < 0)
+                        if ((bytes_printed = snprintf(maxdims_out_string_curr_pos,
+                                                      maxdims_out_string_new_len - (size_t)buf_ptrdiff,
+                                                      "%s%" PRIuHSIZE, i > 0 ? "," : "", maxdims[i])) < 0)
                             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_SYSERRSTR, FAIL, "snprintf error");
                         maxdims_out_string_curr_pos += bytes_printed;
                     } /* end else */
