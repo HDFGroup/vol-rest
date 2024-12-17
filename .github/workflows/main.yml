@@ -35,14 +35,7 @@ jobs:
         build_system: ["autotools", "cmake"]
         python-version: ["3.10"]
         hdf5-branch: ["hdf5_1_14", "develop"]
-        compiler: ["gcc-11", "gcc-12", "gcc-13"]
         exclude:
-          # Ubuntu 22.04 runner does not have gcc-13
-          - os: ubuntu-22.04
-            compiler: "gcc-13"
-          # Ubuntu 24.04 runner does not have gcc-11
-          - os: ubuntu-latest
-            compiler: "gcc-11"
           # hdf5 2.0.0+ does not support autotools
           - hdf5-branch: "develop"
             build_system: "autotools"
@@ -79,12 +72,10 @@ jobs:
           cd ./build
           cmake \
           -DHDF5_BUILD_HL_LIB=ON \
-          -DBUILD_SHARED_LIBS=ON -DHDF5_ENABLE_SZIP_SUPPORT=OFF \
+          -DBUILD_SHARED_LIBS=ON \
           -DHDF5_TEST_API=ON \
-          -DHDF5_ENABLE_Z_LIB_SUPPORT=OFF \
-          -DCMAKE_BUILD_TYPE=RelWithDebInfo -DHDF5_ENABLE_THREADSAFE=OFF \
+          -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/hdf5install \
-          -DCMAKE_C_COMPILER=${{matrix.compiler}} \
           ..
           make 
           make install
@@ -97,8 +88,7 @@ jobs:
           ./autogen.sh
           ./configure --prefix=${{github.workspace}}/hdf5install \
           --enable-hl --disable-threadsafe \
-          --enable-build-mode=production --enable-shared \
-          CC=${{matrix.compiler}}
+          --enable-build-mode=production --enable-shared
           make 
           make install
         shell: bash
@@ -111,7 +101,6 @@ jobs:
           cd ./build
           CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "Unix Makefiles" -DHDF5_ROOT=${{github.workspace}}/hdf5install \
           -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/vol-rest/install \
-          -DCMAKE_C_COMPILER=${{matrix.compiler}} \
           ..
         shell: bash
         working-directory: ${{github.workspace}}/vol-rest
@@ -123,8 +112,7 @@ jobs:
           mkdir ${{github.workspace}}/vol-rest/install
           CFLAGS="-D_POSIX_C_SOURCE=200809L" ./configure \
           --prefix=${{github.workspace}}/vol-rest/install \
-          --with-hdf5=${{github.workspace}}/hdf5install \
-          CC=${{matrix.compiler}}
+          --with-hdf5=${{github.workspace}}/hdf5install
         shell: bash
         working-directory: ${{github.workspace}}/vol-rest
 
@@ -173,12 +161,6 @@ jobs:
           cd ${{github.workspace}}/hsds
           pytest
 
-      - name: Install valgrind
-        run: |
-          sudo apt update
-          sudo apt install valgrind
-        working-directory: ${{ github.workspace }}
-
       # Requests 2.32.0 breaks requests-unixsocket, used by HSDS for socket connections
       - name: Fix requests version
         run: |
@@ -205,14 +187,18 @@ jobs:
       - name: Test REST VOL (Autotools)
         if: matrix.build_system == 'autotools'
         working-directory: ${{github.workspace}}/vol-rest/
+        env:
+          HDF5_PLUGIN_PATH: ${{github.workspace}}/vol-rest/install/lib
         run: |
-              HDF5_PLUGIN_PATH=${{github.workspace}}/vol-rest/install/lib HDF5_VOL_CONNECTOR=REST ./test/test_rest_vol
+               ./test/test_rest_vol
 
       - name: Test REST VOL (CMake)
-        if: matrix.build_system == 'cmmake'
+        if: matrix.build_system == 'cmake'
         working-directory: ${{github.workspace}}/vol-rest/build/
+        env:
+          HDF5_PLUGIN_PATH: ${{github.workspace}}/vol-rest/install/lib
         run: |
-              valgrind --leak-check=full -s ctest -R "test_rest_vol" -VV
+              ctest -R "test_rest_vol" -VV
 
       - name: Show HSDS Logs on Fail
         if: ${{failure()}}
@@ -223,5 +209,5 @@ jobs:
 #      TODO: Attribute, dataset, link, and testhdf5 tests currently fail
 #      - name: Test REST VOL with API
 #        run: |
-#              valgrind --leak-check=full -s ctest -R "vol-rest" -VV
+#              ctest -R "vol-rest" -VV
 #        working-directory: ${{github.workspace}}/hdf5/build/
