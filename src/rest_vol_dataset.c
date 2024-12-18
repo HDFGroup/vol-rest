@@ -607,8 +607,8 @@ RV_dataset_read(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spac
                             "memory selection num points != file selection num points");
 
 #ifdef RV_CONNECTOR_DEBUG
-        printf("-> %lld points selected in file dataspace\n", file_select_npoints);
-        printf("-> %lld points selected in memory dataspace\n\n", mem_select_npoints);
+        printf("-> %" PRIuHSIZE "points selected in file dataspace\n", file_select_npoints);
+        printf("-> %" PRIuHSIZE "points selected in memory dataspace\n\n", mem_select_npoints);
 #endif
 
         /* Setup the host header */
@@ -986,8 +986,8 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                             "memory selection num points != file selection num points");
 
 #ifdef RV_CONNECTOR_DEBUG
-        printf("-> %lld points selected in file dataspace\n", file_select_npoints);
-        printf("-> %lld points selected in memory dataspace\n\n", mem_select_npoints);
+        printf("-> %" PRIuHSIZE "points selected in file dataspace\n", file_select_npoints);
+        printf("-> %" PRIuHSIZE "points selected in memory dataspace\n\n", mem_select_npoints);
 #endif
 
         if ((file_type_size = H5Tget_size(transfer_info[i].file_type_id)) == 0)
@@ -1266,23 +1266,19 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Base64-encoded data buffer for dataset %zu: %s\n\n", i,
-                   transfer_info[i].u.write_info.base64_encoded_values);
+                   (char *)transfer_info[i].u.write_info.base64_encoded_values);
 #endif
             /* Copy encoded values into format string */
             write_body_len = (strlen(fmt_string) - 4) + selection_body_len + value_body_len;
             if (NULL == (transfer_info[i].u.write_info.point_sel_buf = RV_malloc(write_body_len + 1)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL, "can't allocate space for write buffer");
 
-            if ((bytes_printed =
-                     snprintf(transfer_info[i].u.write_info.point_sel_buf, write_body_len + 1, fmt_string,
-                              selection_body, transfer_info[i].u.write_info.base64_encoded_values)) < 0)
+            if ((bytes_printed = snprintf(transfer_info[i].u.write_info.point_sel_buf, write_body_len + 1,
+                                          fmt_string, selection_body,
+                                          (char *)transfer_info[i].u.write_info.base64_encoded_values)) < 0)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL, "snprintf error");
 
             transfer_info[i].u.write_info.uinfo.buffer = transfer_info[i].u.write_info.point_sel_buf;
-
-#ifdef RV_CONNECTOR_DEBUG
-            printf("-> Write body: %s\n\n", transfer_info[i].u.write_info.selection_buf);
-#endif
 
             if (bytes_printed >= write_body_len + 1)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
@@ -2509,7 +2505,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
             for (i = 0; i < YAJL_GET_ARRAY(chunk_dims_obj)->len; i++) {
                 if (i > 0)
                     printf(", ");
-                printf("%llu", chunk_dims[i]);
+                printf("%" PRIuHSIZE, chunk_dims[i]);
             }
             printf(" ]\n");
 #endif
@@ -3498,8 +3494,7 @@ RV_convert_dataset_creation_properties_to_JSON(hid_t dcpl, char **creation_prope
                 const char *const external_file_str    = "%s{"
                                                          "\"name\": %s,"
                                                          "\"offset\": " OFF_T_SPECIFIER ","
-                                                         "\"size\": %llu"
-                                                         "}";
+                                                         "\"size\": " PRIuHSIZE "}";
 
                 /* Check whether the buffer needs to be grown */
                 bytes_to_print += strlen(external_storage_str);

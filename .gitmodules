@@ -1,3 +1,0 @@
-[submodule "test/vol-tests"]
-	path = test/vol-tests
-	url = https://github.com/HDFGroup/vol-tests

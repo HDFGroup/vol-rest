@@ -710,7 +710,7 @@ RV_attr_read(void *attr, hid_t dtype_id, void *buf, hid_t dxpl_id, void **req)
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> %lld points selected for attribute read\n", file_select_npoints);
+    printf("-> %" PRIuHSIZE "points selected for attribute read\n", file_select_npoints);
     printf("-> Attribute's datatype size: %zu\n\n", dtype_size);
 #endif
 
@@ -827,7 +827,7 @@ RV_attr_write(void *attr, hid_t dtype_id, const void *buf, hid_t dxpl_id, void *
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "memory datatype is invalid");
 
 #ifdef RV_CONNECTOR_DEBUG
-    printf("-> %lld points selected for attribute write\n", file_select_npoints);
+    printf("-> %" PRIuHSIZE "points selected for attribute write\n", file_select_npoints);
     printf("-> Attribute's datatype size: %zu\n\n", dtype_size);
 #endif
 
@@ -2525,7 +2525,7 @@ RV_traverse_attr_table(attr_table_entry *attr_table, size_t num_entries, const i
 #ifdef RV_CONNECTOR_DEBUG
                 printf("-> Attribute %zu name: %s\n", last_idx, attr_table[last_idx].attr_name);
                 printf("-> Attribute %zu creation time: %f\n", last_idx, attr_table[last_idx].crt_time);
-                printf("-> Attribute %zu data size: %llu\n\n", last_idx,
+                printf("-> Attribute %zu data size: %" PRIuHSIZE "\n\n", last_idx,
                        attr_table[last_idx].attr_info.data_size);
 
                 printf("-> Calling supplied callback function\n\n");
@@ -2556,7 +2556,7 @@ RV_traverse_attr_table(attr_table_entry *attr_table, size_t num_entries, const i
 #ifdef RV_CONNECTOR_DEBUG
                 printf("-> Attribute %zu name: %s\n", last_idx, attr_table[last_idx].attr_name);
                 printf("-> Attribute %zu creation time: %f\n", last_idx, attr_table[last_idx].crt_time);
-                printf("-> Attribute %zu data size: %llu\n\n", last_idx,
+                printf("-> Attribute %zu data size: %" PRIuHSIZE "\n\n", last_idx,
                        attr_table[last_idx].attr_info.data_size);
 
                 printf("-> Calling supplied callback function\n\n");

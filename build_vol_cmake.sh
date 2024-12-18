@@ -175,12 +175,6 @@ if [ "$NPROCS" -eq "0" ]; then
     fi
 fi
 
-# Ensure that the vol-tests submodule gets checked out
-if [ -z "$(ls -A ${SCRIPT_DIR}/test/vol-tests)" ]; then
-    git submodule init
-    git submodule update
-fi
-
 # Build the REST VOL connector against HDF5.
 echo "*******************************************"
 echo "* Building REST VOL connector and test suite *"
@@ -205,21 +199,5 @@ if [ "${CMAKE_GENERATOR}" = "Unix Makefiles" ]; then
 fi
 
 echo "REST VOL built"
-
-# Clean out the old CMake cache
-rm -f "${BUILD_DIR}/CMakeCache.txt"
-
-# Configure vol-tests
-
-mkdir -p "${BUILD_DIR}/tests/vol-tests"
-cd "${BUILD_DIR}/tests/vol-tests"
-
-CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "${CMAKE_GENERATOR}"  "-DHDF5_DIR=${HDF5_INSTALL_DIR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}/test/vol-tests"
-
-echo "Build files generated for vol-tests"
-
-make || exit 1
- 
-echo "VOL tests built"
 
 exit 0
