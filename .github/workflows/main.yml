@@ -20,9 +20,10 @@ env:
   HSDS_USERNAME: test_user1
   HSDS_PASSWORD: test
   HSDS_PATH: /home/test_user1/
+  HSDS_ENDPOINT: http+unix://%2Ftmp%2Fhs%2Fsn_1.sock
   HDF5_API_TEST_PATH_PREFIX: /home/test_user1/
   HDF5_VOL_CONNECTOR: REST
-  ROOT_DIR: ${{github.workspace}}/hsds/data
+  ROOT_DIR: ${{github.workspace}}/hsdsdata
   BUCKET_NAME: hsdstest
 
 jobs:
@@ -168,15 +169,17 @@ jobs:
       - name: Start HSDS
         run: | 
               cd ${{github.workspace}}/hsds
+              mkdir ${{github.workspace}}/hsdsdata &&
+              mkdir ${{github.workspace}}/hsdsdata/hsdstest &&
               cp admin/config/groups.default admin/config/groups.txt &&
               cp admin/config/passwd.default admin/config/passwd.txt &&
               cp admin/config/groups.default admin/config/groups.txt &&
               cp admin/config/passwd.default admin/config/passwd.txt
-              ./runall.sh --no-docker 1 &
+              ROOT_DIR=${{github.workspace}}/hsdadata ./runall.sh --no-docker 1 &
               sleep 10
         working-directory: ${{github.workspace}}/hsds
         
-      - name: Test HSDS + Setup Folders
+      - name: Test HSDS
         run: |
               python tests/integ/setup_test.py
         working-directory: ${{github.workspace}}/hsds
