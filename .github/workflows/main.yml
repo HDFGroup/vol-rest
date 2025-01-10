@@ -289,7 +289,8 @@ jobs:
           cmake -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/curl/install `
           -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC_LIBS=ON `
           -DBUILD_SHARED_LIBS=OFF -DCMAKE_C_FLAGS="/DCURL_STATICLIB" `
-          -DCURL_STATIC_CRT=ON -DBUILD_STATIC_CURL=ON ..  
+          -DCURL_STATIC_CRT=ON -DBUILD_STATIC_CURL=ON `
+          -DCURL_USE_LIBIDN2=OFF -DCURL_USE_LIBPSL=OFF ..
           cmake --build . --config Release
           cmake --install . --config Release
       
