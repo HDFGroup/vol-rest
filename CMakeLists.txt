@@ -118,7 +118,6 @@ endif ()
 
 set (CURL_TARGET_LIBTYPE shared)
 
-set(CURL_NO_CURL_CMAKE ON)
 find_package (CURL 7.61 MODULE REQUIRED)
 
 if (CURL_FOUND)
