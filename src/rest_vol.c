@@ -30,7 +30,7 @@
 #define DATASPACE_SHAPE_BUFFER_DEFAULT_SIZE 256
 
 /* Defines for multi-curl settings */
-#define BACKOFF_INITIAL_DURATION 10000000 /* 10,000,000 ns -> 0.01 sec */
+#define BACKOFF_INITIAL_DURATION 10000 /* 10,000 microseconds -> 0.01 seconds */
 #define BACKOFF_SCALE_FACTOR     1.5
 #define BACKOFF_MAX_BEFORE_FAIL  3000000000 /* 30,000,000,000 ns -> 30 sec */
 
@@ -3486,7 +3486,7 @@ RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void 
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server version was NULL");
 
     /* Parse server version into struct */
-    if (NULL == (version_field = strtok_r(version_response, ".", &saveptr)))
+    if (NULL == (version_field = RV_strtok_r(version_response, ".", &saveptr)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server major version field was NULL");
 
     if ((numeric_version_field = (int)strtol(version_field, NULL, 10)) < 0)
@@ -3494,7 +3494,7 @@ RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void 
 
     server_version->major = (size_t)numeric_version_field;
 
-    if (NULL == (version_field = strtok_r(NULL, ".", &saveptr)))
+    if (NULL == (version_field = RV_strtok_r(NULL, ".", &saveptr)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server minor version field was NULL");
 
     if ((numeric_version_field = (int)strtol(version_field, NULL, 10)) < 0)
@@ -3502,7 +3502,7 @@ RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void 
 
     server_version->minor = (size_t)numeric_version_field;
 
-    if (NULL == (version_field = strtok_r(NULL, ".", &saveptr)))
+    if (NULL == (version_field = RV_strtok_r(NULL, ".", &saveptr)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server patch version field was NULL");
 
     if ((numeric_version_field = (int)strtol(version_field, NULL, 10)) < 0)
@@ -3732,12 +3732,7 @@ RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_i
                     /* Identify the handle by its original index */
                     failed_handles_to_retry[handle_index] = curl_multi_msg->easy_handle;
 
-                    struct timespec tms;
-
-                    clock_gettime(CLOCK_MONOTONIC, &tms);
-
-                    transfer_info[handle_index].time_of_fail =
-                        (size_t)tms.tv_sec * 1000 * 1000 * 1000 + (size_t)tms.tv_nsec;
+                    transfer_info[handle_index].time_of_fail = (size_t)RV_now_usec();
 
                     transfer_info[handle_index].current_backoff_duration =
                         (transfer_info[handle_index].current_backoff_duration == 0)
@@ -3877,12 +3872,10 @@ RV_curl_multi_perform(CURL *curl_multi_handle, dataset_transfer_info *transfer_i
 
         /* TODO: Replace with an epoll-like structure of some kind, manually iterating this will probably
          * be slow */
-        struct timespec curr_time;
-        clock_gettime(CLOCK_MONOTONIC, &curr_time);
-        size_t curr_time_ns = (size_t)curr_time.tv_sec * 1000 * 1000 * 1000 + (size_t)curr_time.tv_nsec;
+        size_t curr_time_us = (size_t)RV_now_usec();
 
         for (size_t i = 0; i < count; i++) {
-            if (failed_handles_to_retry[i] && ((curr_time_ns - transfer_info[i].time_of_fail) >=
+            if (failed_handles_to_retry[i] && ((curr_time_us - transfer_info[i].time_of_fail) >=
                                                transfer_info[i].current_backoff_duration)) {
                 if (CURLM_OK != curl_multi_add_handle(curl_multi_handle, failed_handles_to_retry[i]))
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_WRITEERROR, FAIL, "failed to re-add denied cURL handle");
@@ -4508,3 +4501,68 @@ done:
 
     return ret_value;
 } /* end RV_parse_domain_allocated_size_cb */
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_now_usec
+ *
+ * Purpose:     Return the current time as microseconds after the UNIX epoch.
+ *
+ * Return:      Positive on success, negative on failure.
+ *
+ * Programmer:  Matthew Larson
+ *              April, 2024
+ */
+uint64_t
+RV_now_usec(void)
+{
+
+    uint64_t ret_value;
+
+#ifdef RV_HAVE_CLOCKGETTIME
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+
+    /* Cast all values in this expression to uint64_t to ensure that all intermediate
+     * calculations are done in 64 bit, to prevent overflow */
+    ret_value =
+        ((uint64_t)ts.tv_sec * ((uint64_t)1000 * (uint64_t)1000)) + ((uint64_t)ts.tv_nsec / (uint64_t)1000);
+#elif RV_HAVE_GETTIMEOFDAY
+    struct timeval now_tv;
+
+    gettimeofday(&now_tv, NULL);
+
+    /* Cast all values in this expression to uint64_t to ensure that all intermediate
+     * calculations are done in 64 bit, to prevent overflow */
+    ret_value = ((uint64_t)now_tv.tv_sec * ((uint64_t)1000 * (uint64_t)1000)) + (uint64_t)now_tv.tv_usec;
+#else
+    /* Cast all values in this expression to uint64_t to ensure that all intermediate calculations
+     * are done in 64 bit, to prevent overflow */
+    ret_value = ((uint64_t)time(NULL) * ((uint64_t)1000 * (uint64_t)1000));
+#endif
+
+done:
+    return (ret_value);
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_strtok_r
+ *
+ * Purpose:     Helper function to use strtok_r or strtok_r depending on current platform
+ *
+ * Return:      See strtok_r documentation
+ *
+ * Programmer:  Matthew Larson
+ *              May, 2024
+ */
+char *
+RV_strtok_r(char *str, const char *delim, char **saveptr)
+{
+#ifdef RV_HAVE_STRTOK_R
+    return strtok_r(str, delim, saveptr);
+#elif RV_HAVE_STRTOK_S
+    return strtok_s(str, delim, saveptr);
+#else
+    return NULL;
+#endif
+}

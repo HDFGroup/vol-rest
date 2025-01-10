@@ -2,7 +2,7 @@
 # CMake Build Script for the HDF5 REST VOL connector #
 #----------------------------------------------------#
 
-cmake_minimum_required (VERSION 3.10)
+cmake_minimum_required (VERSION 3.12)
 project (HDF5_VOL_REST C)
 
 # Setup CMake policies.
@@ -13,7 +13,6 @@ foreach (policy
     cmake_policy (SET ${policy} NEW)
   endif ()
 endforeach ()
-
 
 #-----------------------------------------------------------------------------
 # Instructions for use : Normal Build
@@ -87,7 +86,6 @@ set (HDF5_VOL_REST_LIBSH_TARGET        "${HDF5_VOL_REST_LIB_CORENAME}-shared")
 set (HDF5_VOL_REST_TEST_LIB_TARGET     "${HDF5_VOL_REST_TEST_LIB_CORENAME}-static")
 set (HDF5_VOL_REST_TEST_LIBSH_TARGET   "${HDF5_VOL_REST_TEST_LIB_CORENAME}-shared")
 
-
 #-----------------------------------------------------------------------------
 # Define some CMake variables for use later in the project
 #-----------------------------------------------------------------------------
@@ -118,12 +116,15 @@ if (HDF5_ENABLE_THREADSAFE AND NOT Threads_FOUND)
   find_package(Threads)
 endif ()
 
-find_package (CURL 7.61 REQUIRED)
+set (CURL_TARGET_LIBTYPE shared)
+
+find_package (CURL 7.61 MODULE REQUIRED)
+
 if (CURL_FOUND)
   include_directories(${CURL_INCLUDE_DIRS})
   set (LINK_LIBS ${LINK_LIBS} CURL::libcurl)
 else ()
-  message (FATAL_ERROR "cURL not found; please check CURL_INCLUDE_DIR")
+  message (FATAL_ERROR "cURL not found; please check CURL_ROOT")
 endif ()
 
 # Include custom module for finding YAJL
@@ -283,11 +284,7 @@ endmacro (HDF5_VOL_REST_SET_LIB_OPTIONS)
 
 #-------------------------------------------------------------------------------
 macro (RV_TARGET_C_PROPERTIES wintarget libtype addcompileflags addlinkflags)
-  if (MSVC)
-    TARGET_MSVC_PROPERTIES (${wintarget} ${libtype} "${addcompileflags} ${WIN_COMPILE_FLAGS}" "${addlinkflags} ${WIN_LINK_FLAGS}")
-  else ()
-    set_target_properties (${wintarget} PROPERTIES COMPILE_FLAGS "${addcompileflags}" LINK_FLAGS "${addlinkflags}")
-  endif ()
+  set_target_properties (${wintarget} PROPERTIES COMPILE_FLAGS "${addcompileflags}" LINK_FLAGS "${addlinkflags}")
 endmacro ()
 
 #-------------------------------------------------------------------------------
@@ -344,7 +341,7 @@ set (EXTERNAL_LIBRARYDLL_LIST "")
 #-----------------------------------------------------------------------------
 # Run all the CMake configuration tests for our build environment
 #-----------------------------------------------------------------------------
-#include (${HDF5_VOL_REST_RESOURCES_DIR}/ConfigureChecks.cmake)
+include (${HDF5_VOL_REST_RESOURCES_DIR}/ConfigureChecks.cmake)
 
 set (CMAKE_INCLUDE_CURRENT_DIR_IN_INTERFACE ON)
 
