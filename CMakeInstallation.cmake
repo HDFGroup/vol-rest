@@ -34,12 +34,14 @@ endif ()
 #)
 
 #-----------------------------------------------------------------------------
-# Export all exported targets to the build tree for use by parent project
+# If cross-compiling, export all exported targets to the build tree
 #-----------------------------------------------------------------------------
-export (
-    TARGETS ${HDF5_VOL_REST_LIBRARIES_TO_EXPORT} ${HDF5_VOL_REST_LIB_DEPENDENCIES}
-    FILE ${HDF5_VOL_REST_PACKAGE}${HDF5_VOL_REST_PACKAGE_EXT}-targets.cmake
-)
+if (CMAKE_CROSSCOMPILING)
+  export (
+      TARGETS ${HDF5_VOL_REST_LIBRARIES_TO_EXPORT} ${HDF5_VOL_REST_LIB_DEPENDENCIES}
+      FILE ${HDF5_VOL_REST_PACKAGE}${HDF5_VOL_REST_PACKAGE_EXT}-targets.cmake
+  )
+endif ()
 
 #-----------------------------------------------------------------------------
 # Set includes needed for build
