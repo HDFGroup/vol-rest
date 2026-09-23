@@ -50,6 +50,10 @@ const char *link_path_keys2[]   = {"h5path", (const char *)0};
 const char *link_domain_keys[]  = {"link", "h5domain", (const char *)0};
 const char *link_domain_keys2[] = {"h5domain", (const char *)0};
 
+/* HSDS 1.0 and later report an external link's target domain under "file" instead of "h5domain" */
+const char *link_file_keys[]  = {"link", "file", (const char *)0};
+const char *link_file_keys2[] = {"file", (const char *)0};
+
 /* JSON keys to retrieve the collection that a hard link belongs to
  * (the type of object it points to), "groups", "datasets" or "datatypes"
  */
@@ -1358,10 +1362,11 @@ RV_get_link_val_callback(char *HTTP_response, const void *callback_data_in, void
         yyjson_val *link_domain_obj;
         char       *link_domain;
 
-        if (NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_domain_keys, RV_JSON_STRING))) {
-            if (NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_domain_keys2, RV_JSON_STRING)))
-                FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of external link domain failed");
-        }
+        if (NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_domain_keys, RV_JSON_STRING)) &&
+            NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_domain_keys2, RV_JSON_STRING)) &&
+            NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_file_keys, RV_JSON_STRING)) &&
+            NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_file_keys2, RV_JSON_STRING)))
+            FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of external link domain failed");
 
         if (!RV_json_is_string(link_domain_obj))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned external link domain is not a string");

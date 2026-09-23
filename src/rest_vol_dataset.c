@@ -1141,10 +1141,13 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         /* Disable use of Expect: 100 Continue HTTP response */
         transfer_info[i].curl_headers = curl_slist_append(transfer_info[i].curl_headers, "Expect:");
 
-        /* Instruct cURL on which type of transfer to perform, binary or JSON */
-        transfer_info[i].curl_headers = curl_slist_append(
-            transfer_info[i].curl_headers,
-            is_transfer_binary ? "Content-Type: application/octet-stream" : "Content-Type: application/json");
+        /* Instruct cURL on which type of transfer to perform, binary or JSON. Point selections
+         * are always sent as a JSON body, so their Content-Type header is set below instead.
+         */
+        if (H5S_SEL_POINTS != sel_type)
+            transfer_info[i].curl_headers = curl_slist_append(
+                transfer_info[i].curl_headers, is_transfer_binary ? "Content-Type: application/octet-stream"
+                                                                  : "Content-Type: application/json");
 
         has_selection_in_url = is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type);
 
@@ -2469,7 +2472,11 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
      * Determine the layout information of the Dataset and set this on the DCPL *
      *                                                                          *
      ****************************************************************************/
-    if ((key_obj = RV_json_get(creation_properties_obj, layout_keys, RV_JSON_OBJECT))) {
+    /* HSDS 1.0 and later may return an empty layout object (e.g. for a dataset with a NULL
+     * dataspace). In that case, leave the DCPL's default layout in place.
+     */
+    if ((key_obj = RV_json_get(creation_properties_obj, layout_keys, RV_JSON_OBJECT)) &&
+        RV_json_get(key_obj, layout_class_keys, RV_JSON_STRING)) {
         yyjson_val *sub_obj;
         size_t      i;
         char       *layout_class;
