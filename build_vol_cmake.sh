@@ -25,7 +25,7 @@ BUILD_DIR="${SCRIPT_DIR}/rest_vol_cmake_build_files"
 CMAKE_GENERATOR="Unix Makefiles"
 
 # Determine the number of processors to use when
-# building in parallel with Autotools make
+# building in parallel
 NPROCS=0
 
 # Extra compiler options passed to the various steps, such as -Wall
@@ -199,7 +199,7 @@ CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "${CMAKE_GENERATOR}" "-DCMAKE_C_FLAG
 
 echo "Build files have been generated for CMake generator '${CMAKE_GENERATOR}'"
 
-# Build with autotools make by default
+# Build with make by default when using the Unix Makefiles generator
 if [ "${CMAKE_GENERATOR}" = "Unix Makefiles" ]; then
   make -j${NPROCS} && make install || exit 1
 fi

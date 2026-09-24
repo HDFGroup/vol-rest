@@ -1141,10 +1141,13 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         /* Disable use of Expect: 100 Continue HTTP response */
         transfer_info[i].curl_headers = curl_slist_append(transfer_info[i].curl_headers, "Expect:");
 
-        /* Instruct cURL on which type of transfer to perform, binary or JSON */
-        transfer_info[i].curl_headers = curl_slist_append(
-            transfer_info[i].curl_headers,
-            is_transfer_binary ? "Content-Type: application/octet-stream" : "Content-Type: application/json");
+        /* Instruct cURL on which type of transfer to perform, binary or JSON. Point selections
+         * are always sent as a JSON body, so their Content-Type header is set below instead.
+         */
+        if (H5S_SEL_POINTS != sel_type)
+            transfer_info[i].curl_headers = curl_slist_append(
+                transfer_info[i].curl_headers, is_transfer_binary ? "Content-Type: application/octet-stream"
+                                                                  : "Content-Type: application/json");
 
         has_selection_in_url = is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type);
 
@@ -1893,7 +1896,8 @@ static herr_t
 RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *callback_data_in,
                                               void *callback_data_out)
 {
-    yajl_val      parse_tree = NULL, creation_properties_obj = NULL, key_obj = NULL, target_tree = NULL;
+    yyjson_val   *parse_tree = NULL, *creation_properties_obj = NULL, *key_obj = NULL, *target_tree = NULL;
+    yyjson_doc   *parse_tree_doc     = NULL;
     hid_t        *DCPL               = (hid_t *)callback_data_out;
     hid_t         fill_type          = H5I_INVALID_HID;
     char         *encoded_fill_value = NULL;
@@ -1911,30 +1915,30 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
     if (!DCPL)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "DCPL pointer was NULL");
 
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
     target_tree = parse_tree;
 
     /* If the response contains 'h5paths',
      * it may describe multiple objects. Needs to be unwrapped first. */
-    if (NULL != yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)) {
-        if (NULL == (target_tree = yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)))
+    if (NULL != RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)) {
+        if (NULL == (target_tree = RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
 
         /* Access the first object under h5paths */
-        if (NULL == (path_name = target_tree->u.object.keys[0]))
+        if (NULL == (path_name = RV_json_obj_key_at(target_tree, 0)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed path name was NULL");
 
         const char *path_keys[] = {path_name, (const char *)0};
 
-        if (NULL == (target_tree = yajl_tree_get(target_tree, path_keys, yajl_t_object)))
+        if (NULL == (target_tree = RV_json_get(target_tree, path_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "unable to parse object under path key");
     }
 
     /* Retrieve the creationProperties object */
     if (NULL ==
-        (creation_properties_obj = yajl_tree_get(target_tree, creation_properties_keys, yajl_t_object)))
+        (creation_properties_obj = RV_json_get(target_tree, creation_properties_keys, RV_JSON_OBJECT)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of creationProperties object failed");
 
     /********************************************************************************************
@@ -1945,11 +1949,11 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
      * and set this on the DCPL                                                                 *
      *                                                                                          *
      ********************************************************************************************/
-    if ((key_obj = yajl_tree_get(creation_properties_obj, alloc_time_keys, yajl_t_string))) {
+    if ((key_obj = RV_json_get(creation_properties_obj, alloc_time_keys, RV_JSON_STRING))) {
         H5D_alloc_time_t alloc_time;
         char            *alloc_time_string;
 
-        if (NULL == (alloc_time_string = YAJL_GET_STRING(key_obj)))
+        if (NULL == (alloc_time_string = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "space allocation time string was NULL");
 
         if (!strcmp(alloc_time_string, "H5D_ALLOC_TIME_EARLY")) {
@@ -1993,11 +1997,11 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
      * and set this on the DCPL                                                                 *
      *                                                                                          *
      ********************************************************************************************/
-    if ((key_obj = yajl_tree_get(creation_properties_obj, creation_order_keys, yajl_t_string))) {
+    if ((key_obj = RV_json_get(creation_properties_obj, creation_order_keys, RV_JSON_STRING))) {
         unsigned crt_order_flags = 0x0;
         char    *crt_order_string;
 
-        if (NULL == (crt_order_string = YAJL_GET_STRING(key_obj)))
+        if (NULL == (crt_order_string = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "attribute creation order string was NULL");
 
         if (!strcmp(crt_order_string, "H5P_CRT_ORDER_INDEXED")) {
@@ -2029,32 +2033,32 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
      * the DCPL                                                                 *
      *                                                                          *
      ****************************************************************************/
-    if ((key_obj = yajl_tree_get(creation_properties_obj, attribute_phase_change_keys, yajl_t_object))) {
-        unsigned minDense   = DATASET_CREATE_MIN_DENSE_ATTRIBUTES_DEFAULT;
-        unsigned maxCompact = DATASET_CREATE_MAX_COMPACT_ATTRIBUTES_DEFAULT;
-        yajl_val sub_obj;
+    if ((key_obj = RV_json_get(creation_properties_obj, attribute_phase_change_keys, RV_JSON_OBJECT))) {
+        unsigned    minDense   = DATASET_CREATE_MIN_DENSE_ATTRIBUTES_DEFAULT;
+        unsigned    maxCompact = DATASET_CREATE_MAX_COMPACT_ATTRIBUTES_DEFAULT;
+        yyjson_val *sub_obj;
 
-        if (NULL == (sub_obj = yajl_tree_get(key_obj, max_compact_keys, yajl_t_number)))
+        if (NULL == (sub_obj = RV_json_get(key_obj, max_compact_keys, RV_JSON_NUMBER)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
                             "retrieval of maxCompact attribute phase change value failed");
 
-        if (!YAJL_IS_INTEGER(sub_obj))
+        if (!RV_json_is_integer(sub_obj))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
                             "return maxCompact attribute phase change value is not an integer");
 
-        if (YAJL_GET_INTEGER(sub_obj) >= 0)
-            maxCompact = (unsigned)YAJL_GET_INTEGER(sub_obj);
+        if (RV_json_get_integer(sub_obj) >= 0)
+            maxCompact = (unsigned)RV_json_get_integer(sub_obj);
 
-        if (NULL == (sub_obj = yajl_tree_get(key_obj, min_dense_keys, yajl_t_number)))
+        if (NULL == (sub_obj = RV_json_get(key_obj, min_dense_keys, RV_JSON_NUMBER)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
                             "retrieval of minDense attribute phase change value failed");
 
-        if (!YAJL_IS_INTEGER(sub_obj))
+        if (!RV_json_is_integer(sub_obj))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
                             "returned minDense attribute phase change value is not an integer");
 
-        if (YAJL_GET_INTEGER(sub_obj) >= 0)
-            minDense = (unsigned)YAJL_GET_INTEGER(sub_obj);
+        if (RV_json_get_integer(sub_obj) >= 0)
+            minDense = (unsigned)RV_json_get_integer(sub_obj);
 
         if (minDense != DATASET_CREATE_MIN_DENSE_ATTRIBUTES_DEFAULT ||
             maxCompact != DATASET_CREATE_MAX_COMPACT_ATTRIBUTES_DEFAULT) {
@@ -2076,11 +2080,11 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
      * Determine the fill time value and set this on the DCPL *
      *                                                        *
      **********************************************************/
-    if ((key_obj = yajl_tree_get(creation_properties_obj, fill_time_keys, yajl_t_string))) {
+    if ((key_obj = RV_json_get(creation_properties_obj, fill_time_keys, RV_JSON_STRING))) {
         H5D_fill_time_t fill_time;
         char           *fill_time_str;
 
-        if (NULL == (fill_time_str = YAJL_GET_STRING(key_obj)))
+        if (NULL == (fill_time_str = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "fill time string was NULL");
 
         if (!strcmp(fill_time_str, "H5D_FILL_TIME_ALLOC")) {
@@ -2116,15 +2120,15 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
      * Determine the fill value status for the Dataset and set this on the DCPL   *
      *                                                                            *
      ******************************************************************************/
-    if ((key_obj = yajl_tree_get(creation_properties_obj, fill_value_keys, yajl_t_any))) {
+    if ((key_obj = RV_json_get(creation_properties_obj, fill_value_keys, RV_JSON_ANY))) {
         size_t encoded_fill_value_size = 0;
         size_t decoded_fill_value_size = 0;
 
         /* Decode from base64 */
-        if (!YAJL_IS_STRING(key_obj))
+        if (!RV_json_is_string(key_obj))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "base64-encoded fill value was not a string");
 
-        if ((encoded_fill_value = YAJL_GET_STRING(key_obj)) == NULL)
+        if ((encoded_fill_value = RV_json_get_string(key_obj)) == NULL)
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "failed to parse encoded fill value");
 
         encoded_fill_value_size = strlen(encoded_fill_value);
@@ -2149,29 +2153,29 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
      * and set this on the DCPL                                    *
      *                                                             *
      ***************************************************************/
-    if ((key_obj = yajl_tree_get(creation_properties_obj, filters_keys, yajl_t_array))) {
+    if ((key_obj = RV_json_get(creation_properties_obj, filters_keys, RV_JSON_ARRAY))) {
         size_t i;
 
         /* Grab the relevant information from each filter and set them on the DCPL in turn. */
-        for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
-            yajl_val  filter_obj = YAJL_GET_ARRAY(key_obj)->values[i];
-            yajl_val  filter_field;
-            char     *filter_class;
-            long long filter_ID;
+        for (i = 0; i < yyjson_arr_size(key_obj); i++) {
+            yyjson_val *filter_obj = yyjson_arr_get(key_obj, i);
+            yyjson_val *filter_field;
+            char       *filter_class;
+            long long   filter_ID;
 
-            if (NULL == (filter_field = yajl_tree_get(filter_obj, filter_class_keys, yajl_t_string)))
+            if (NULL == (filter_field = RV_json_get(filter_obj, filter_class_keys, RV_JSON_STRING)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of filter class failed");
 
-            if (NULL == (filter_class = YAJL_GET_STRING(filter_field)))
+            if (NULL == (filter_class = RV_json_get_string(filter_field)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "filter class string was NULL");
 
-            if (NULL == (filter_field = yajl_tree_get(filter_obj, filter_ID_keys, yajl_t_number)))
+            if (NULL == (filter_field = RV_json_get(filter_obj, filter_ID_keys, RV_JSON_NUMBER)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of filter ID failed");
 
-            if (!YAJL_IS_INTEGER(filter_field))
+            if (!RV_json_is_integer(filter_field))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "returned filter ID is not an integer");
 
-            filter_ID = YAJL_GET_INTEGER(filter_field);
+            filter_ID = RV_json_get_integer(filter_field);
 
             switch (filter_ID) {
                 case H5Z_FILTER_DEFLATE: {
@@ -2192,15 +2196,15 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
                                         filter_class);
 
                     /* Grab the level of compression */
-                    if (NULL == (filter_field = yajl_tree_get(filter_obj, deflate_level_keys, yajl_t_number)))
+                    if (NULL == (filter_field = RV_json_get(filter_obj, deflate_level_keys, RV_JSON_NUMBER)))
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
                                         "retrieval of deflate filter compression level value failed");
 
-                    if (!YAJL_IS_INTEGER(filter_field))
+                    if (!RV_json_is_integer(filter_field))
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
                                         "returned deflate filter compression level is not an integer");
 
-                    deflate_level = YAJL_GET_INTEGER(filter_field);
+                    deflate_level = RV_json_get_integer(filter_field);
                     if (deflate_level < 0)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
                                         "deflate filter compression level invalid (level < 0)");
@@ -2273,11 +2277,11 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
 
                     /* Retrieve the value of the SZIP option mask */
                     if (NULL ==
-                        (filter_field = yajl_tree_get(filter_obj, szip_option_mask_keys, yajl_t_string)))
+                        (filter_field = RV_json_get(filter_obj, szip_option_mask_keys, RV_JSON_STRING)))
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
                                         "retrieval of SZIP option mask failed");
 
-                    if (NULL == (szip_option_mask = YAJL_GET_STRING(filter_field)))
+                    if (NULL == (szip_option_mask = RV_json_get_string(filter_field)))
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "SZIP option mask string was NULL");
 
                     if (strcmp(szip_option_mask, "H5_SZIP_EC_OPTION_MASK") &&
@@ -2289,15 +2293,15 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
                     }
 
                     /* Retrieve the value of the SZIP "pixels per block" option */
-                    if (NULL == (filter_field = yajl_tree_get(filter_obj, szip_ppb_keys, yajl_t_number)))
+                    if (NULL == (filter_field = RV_json_get(filter_obj, szip_ppb_keys, RV_JSON_NUMBER)))
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
                                         "retrieval of SZIP pixels per block option failed");
 
-                    if (!YAJL_IS_INTEGER(filter_field))
+                    if (!RV_json_is_integer(filter_field))
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
                                         "returned SZIP pixels per block option value is not an integer");
 
-                    szip_ppb = YAJL_GET_INTEGER(filter_field);
+                    szip_ppb = RV_json_get_integer(filter_field);
                     if (szip_ppb < 0)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
                                         "invalid SZIP pixels per block option value (PPB < 0)");
@@ -2353,10 +2357,10 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
                                         filter_class);
 
                     /* Retrieve the scale type */
-                    if (NULL == (filter_field = yajl_tree_get(filter_obj, scale_type_keys, yajl_t_string)))
+                    if (NULL == (filter_field = RV_json_get(filter_obj, scale_type_keys, RV_JSON_STRING)))
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of scale type failed");
 
-                    if (NULL == (scale_type_str = YAJL_GET_STRING(filter_field)))
+                    if (NULL == (scale_type_str = RV_json_get_string(filter_field)))
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "scale type string was NULL");
 
                     if (!strcmp(scale_type_str, "H5Z_SO_FLOAT_DSCALE"))
@@ -2372,15 +2376,15 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
                     }
 
                     /* Retrieve the scale offset value */
-                    if (NULL == (filter_field = yajl_tree_get(filter_obj, scale_offset_keys, yajl_t_number)))
+                    if (NULL == (filter_field = RV_json_get(filter_obj, scale_offset_keys, RV_JSON_NUMBER)))
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
                                         "retrieval of scale offset value failed");
 
-                    if (!YAJL_IS_INTEGER(filter_field))
+                    if (!RV_json_is_integer(filter_field))
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
                                         "returned scale offset value is not an integer");
 
-                    scale_offset = YAJL_GET_INTEGER(filter_field);
+                    scale_offset = RV_json_get_integer(filter_field);
 
                     if (H5Pset_scaleoffset(*DCPL, scale_type, (int)scale_offset) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL,
@@ -2422,20 +2426,20 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
                     /* Parse user-defined filter from JSON */
                     const char *ud_parameter_keys[] = {"parameters", (const char *)0};
 
-                    yajl_val params_array = NULL;
+                    yyjson_val *params_array = NULL;
 
-                    if (NULL == (params_array = yajl_tree_get(filter_obj, ud_parameter_keys, yajl_t_array)))
+                    if (NULL == (params_array = RV_json_get(filter_obj, ud_parameter_keys, RV_JSON_ARRAY)))
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
                                         "retrieval of user-defined filter parameters failed");
 
                     if (NULL ==
-                        (ud_parameters = RV_calloc(sizeof(unsigned int) * YAJL_GET_ARRAY(params_array)->len)))
+                        (ud_parameters = RV_calloc(sizeof(unsigned int) * yyjson_arr_size(params_array))))
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTALLOC, FAIL,
                                         "can't allocate memory for user-defined filter parameters");
 
-                    for (size_t j = 0; j < YAJL_GET_ARRAY(params_array)->len; j++) {
+                    for (size_t j = 0; j < yyjson_arr_size(params_array); j++) {
                         /* Get each integer parameter */
-                        long long int val = YAJL_GET_INTEGER(YAJL_GET_ARRAY(params_array)->values[j]);
+                        long long int val = RV_json_get_integer(yyjson_arr_get(params_array, j));
 
                         if (val < 0)
                             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL,
@@ -2445,7 +2449,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
                     }
 
                     if (H5Pset_filter(*DCPL, (H5Z_filter_t)filter_ID, H5Z_FLAG_OPTIONAL,
-                                      YAJL_GET_ARRAY(params_array)->len, ud_parameters) < 0)
+                                      yyjson_arr_size(params_array), ud_parameters) < 0)
                         FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTSET, FAIL,
                                         "can't set user-defined filter on DCPL");
 
@@ -2467,32 +2471,36 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
      * Determine the layout information of the Dataset and set this on the DCPL *
      *                                                                          *
      ****************************************************************************/
-    if ((key_obj = yajl_tree_get(creation_properties_obj, layout_keys, yajl_t_object))) {
-        yajl_val sub_obj;
-        size_t   i;
-        char    *layout_class;
+    /* HSDS 1.0 and later may return an empty layout object (e.g. for a dataset with a NULL
+     * dataspace). In that case, leave the DCPL's default layout in place.
+     */
+    if ((key_obj = RV_json_get(creation_properties_obj, layout_keys, RV_JSON_OBJECT)) &&
+        RV_json_get(key_obj, layout_class_keys, RV_JSON_STRING)) {
+        yyjson_val *sub_obj;
+        size_t      i;
+        char       *layout_class;
 
-        if (NULL == (sub_obj = yajl_tree_get(key_obj, layout_class_keys, yajl_t_string)))
+        if (NULL == (sub_obj = RV_json_get(key_obj, layout_class_keys, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of layout class property failed");
 
-        if (NULL == (layout_class = YAJL_GET_STRING(sub_obj)))
+        if (NULL == (layout_class = RV_json_get_string(sub_obj)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "layout class string was NULL");
 
         if (!strcmp(layout_class, "H5D_CHUNKED")) {
-            yajl_val chunk_dims_obj;
-            hsize_t  chunk_dims[DATASPACE_MAX_RANK];
+            yyjson_val *chunk_dims_obj;
+            hsize_t     chunk_dims[DATASPACE_MAX_RANK];
 
-            if (NULL == (chunk_dims_obj = yajl_tree_get(key_obj, chunk_dims_keys, yajl_t_array)))
+            if (NULL == (chunk_dims_obj = RV_json_get(key_obj, chunk_dims_keys, RV_JSON_ARRAY)))
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_CANTGET, FAIL, "retrieval of chunk dimensionality failed");
 
-            for (i = 0; i < YAJL_GET_ARRAY(chunk_dims_obj)->len; i++) {
+            for (i = 0; i < yyjson_arr_size(chunk_dims_obj); i++) {
                 long long val;
 
-                if (!YAJL_IS_INTEGER(YAJL_GET_ARRAY(chunk_dims_obj)->values[i]))
+                if (!RV_json_is_integer(yyjson_arr_get(chunk_dims_obj, i)))
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
                                     "one of the chunk dimension sizes was not an integer");
 
-                if ((val = YAJL_GET_INTEGER(YAJL_GET_ARRAY(chunk_dims_obj)->values[i])) < 0)
+                if ((val = RV_json_get_integer(yyjson_arr_get(chunk_dims_obj, i))) < 0)
                     FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL,
                                     "one of the chunk dimension sizes was negative");
 
@@ -2502,7 +2510,7 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Setting chunked layout on DCPL\n");
             printf("-> Chunk dims: [ ");
-            for (i = 0; i < YAJL_GET_ARRAY(chunk_dims_obj)->len; i++) {
+            for (i = 0; i < yyjson_arr_size(chunk_dims_obj); i++) {
                 if (i > 0)
                     printf(", ");
                 printf("%" PRIuHSIZE, chunk_dims[i]);
@@ -2510,12 +2518,12 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
             printf(" ]\n");
 #endif
 
-            if (H5Pset_chunk(*DCPL, (int)YAJL_GET_ARRAY(chunk_dims_obj)->len, chunk_dims) < 0)
+            if (H5Pset_chunk(*DCPL, (int)yyjson_arr_size(chunk_dims_obj), chunk_dims) < 0)
                 FUNC_GOTO_ERROR(H5E_PLIST, H5E_CANTSET, FAIL, "can't set chunked storage layout on DCPL");
         } /* end if */
         else if (!strcmp(layout_class, "H5D_CONTIGUOUS")) {
             /* Check to see if there is any external storage information */
-            if (yajl_tree_get(key_obj, external_storage_keys, yajl_t_array)) {
+            if (RV_json_get(key_obj, external_storage_keys, RV_JSON_ARRAY)) {
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_UNSUPPORTED, FAIL,
                                 "dataset external file storage is unsupported");
             } /* end if */
@@ -2544,11 +2552,11 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
      * Determine the status of object time tracking and set this on the DCPL *
      *                                                                       *
      *************************************************************************/
-    if ((key_obj = yajl_tree_get(creation_properties_obj, track_times_keys, yajl_t_string))) {
+    if ((key_obj = RV_json_get(creation_properties_obj, track_times_keys, RV_JSON_STRING))) {
         hbool_t track_times = false;
         char   *track_times_str;
 
-        if (NULL == (track_times_str = YAJL_GET_STRING(key_obj)))
+        if (NULL == (track_times_str = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_DATASET, H5E_BADVALUE, FAIL, "track times string was NULL");
 
         track_times = !strcmp(track_times_str, "true");
@@ -2567,7 +2575,7 @@ done:
 #endif
 
     if (parse_tree)
-        yajl_tree_free(parse_tree);
+        yyjson_doc_free(parse_tree_doc);
 
     if (decoded_fill_value)
         RV_free(decoded_fill_value);

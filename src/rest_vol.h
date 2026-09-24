@@ -26,7 +26,54 @@
 #include <time.h>
 
 #include <curl/curl.h>
-#include <yajl/yajl_tree.h>
+#include <yyjson.h>
+
+/*-------------------------------------------------------------------------
+ * JSON parsing helpers (yyjson-backed)
+ *
+ * The REST VOL parses HSDS's JSON responses through the small set of helpers
+ * below, which wrap the vendored yyjson library. yyjson values (yyjson_val *)
+ * are used directly as JSON nodes. An immutable document (yyjson_doc *) owns
+ * the memory for a parsed tree and must be freed with yyjson_doc_free().
+ *-------------------------------------------------------------------------*/
+
+/* JSON node type tags used to filter results in RV_json_get() */
+typedef enum {
+    RV_JSON_ANY = 0,
+    RV_JSON_STRING,
+    RV_JSON_NUMBER,
+    RV_JSON_OBJECT,
+    RV_JSON_ARRAY
+} rv_json_type_t;
+
+/* Parse a NUL-terminated JSON string into an immutable document. On success,
+ * returns the document's root value and stores the owning document in
+ * *out_doc. It must be freed with yyjson_doc_free(). Returns NULL on error. */
+yyjson_val *RV_json_parse(const char *text, yyjson_doc **out_doc);
+
+/* Navigate 'obj' following 'path', a NULL-terminated array of object keys.
+ * If 'type' is not RV_JSON_ANY, the located node must be of that type or
+ * NULL is returned. Returns the located node, or NULL if any key is missing
+ * or the type does not match. */
+yyjson_val *RV_json_get(yyjson_val *obj, const char **path, rv_json_type_t type);
+
+/* Positional access to an object's members (equivalents for the former
+ * val->u.object.keys[i] and val->u.object.values[i]). 'idx' is 0-based in
+ * object insertion order. Return NULL if 'obj' is not an object or 'idx' is
+ * out of range. */
+const char *RV_json_obj_key_at(yyjson_val *obj, size_t idx);
+yyjson_val *RV_json_obj_val_at(yyjson_val *obj, size_t idx);
+
+/* Value accessors. */
+#define RV_json_get_string(val)  ((char *)yyjson_get_str(val))
+#define RV_json_get_integer(val) yyjson_get_sint(val)
+#define RV_json_get_double(val)  yyjson_get_num(val)
+#define RV_json_is_string(val)   yyjson_is_str(val)
+#define RV_json_is_integer(val)  yyjson_is_int(val)
+#define RV_json_is_double(val)   yyjson_is_real(val)
+#define RV_json_is_number(val)   yyjson_is_num(val)
+#define RV_json_is_object(val)   yyjson_is_obj(val)
+#define RV_json_is_array(val)    yyjson_is_arr(val)
 
 /* Includes for HDF5 */
 #include "hdf5.h"

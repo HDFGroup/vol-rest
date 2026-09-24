@@ -1042,7 +1042,8 @@ static herr_t
 RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
     H5O_info2_t *obj_info   = (H5O_info2_t *)callback_data_out;
-    yajl_val     parse_tree = NULL, key_obj = NULL, target_tree = NULL;
+    yyjson_val  *parse_tree = NULL, *key_obj = NULL, *target_tree = NULL;
+    yyjson_doc  *parse_tree_doc = NULL;
     size_t       i;
     char        *object_id = NULL, *domain_path = NULL;
     const char  *path_name = NULL;
@@ -1059,24 +1060,24 @@ RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, v
 
     memset(obj_info, 0, sizeof(*obj_info));
 
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
     target_tree = parse_tree;
 
     /* If the response contains 'h5paths',
      * it may describe multiple objects. Needs to be unwrapped first. */
-    if (NULL != yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)) {
-        if (NULL == (target_tree = yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)))
+    if (NULL != RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)) {
+        if (NULL == (target_tree = RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
 
         /* Access the first object under h5paths */
-        if (NULL == (path_name = target_tree->u.object.keys[0]))
+        if (NULL == (path_name = RV_json_obj_key_at(target_tree, 0)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed path name was NULL");
 
         const char *path_keys[] = {path_name, (const char *)0};
 
-        if (NULL == (target_tree = yajl_tree_get(target_tree, path_keys, yajl_t_object)))
+        if (NULL == (target_tree = RV_json_get(target_tree, path_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "unable to parse object under path key");
     }
 
@@ -1086,13 +1087,13 @@ RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, v
      * and converted to an unsigned long for the fileno field and the object's UUID string
      * is hashed to an haddr_t for the addr field.
      */
-    if (NULL == (key_obj = yajl_tree_get(target_tree, domain_keys, yajl_t_string)))
+    if (NULL == (key_obj = RV_json_get(target_tree, domain_keys, RV_JSON_STRING)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't get domain from response");
 
-    if (!YAJL_IS_STRING(key_obj))
+    if (!RV_json_is_string(key_obj))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "retrieved domain was not a valid string");
 
-    if (NULL == (domain_path = YAJL_GET_STRING(key_obj)))
+    if (NULL == (domain_path = RV_json_get_string(key_obj)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "retrieved domain was NULL");
 
     obj_info->fileno = (unsigned long)rv_hash_string(domain_path);
@@ -1101,10 +1102,10 @@ RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, v
     printf("-> Object's file number: %lu\n", (unsigned long)obj_info->fileno);
 #endif
 
-    if (NULL == (key_obj = yajl_tree_get(target_tree, object_id_keys, yajl_t_string)))
+    if (NULL == (key_obj = RV_json_get(target_tree, object_id_keys, RV_JSON_STRING)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "retrieval of object ID failed");
 
-    if (NULL == (object_id = YAJL_GET_STRING(key_obj)))
+    if (NULL == (object_id = RV_json_get_string(key_obj)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "object ID string was NULL");
 
     /* TODO */
@@ -1115,16 +1116,16 @@ RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, v
 #endif
 
     /* Retrieve the object's attribute count */
-    if (NULL == (key_obj = yajl_tree_get(target_tree, attribute_count_keys, yajl_t_number)))
+    if (NULL == (key_obj = RV_json_get(target_tree, attribute_count_keys, RV_JSON_NUMBER)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "retrieval of object attribute count failed");
 
-    if (!YAJL_IS_INTEGER(key_obj))
+    if (!RV_json_is_integer(key_obj))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned object attribute count is not an integer");
 
-    if (YAJL_GET_INTEGER(key_obj) < 0)
+    if (RV_json_get_integer(key_obj) < 0)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned object attribute count was negative");
 
-    obj_info->num_attrs = (hsize_t)YAJL_GET_INTEGER(key_obj);
+    obj_info->num_attrs = (hsize_t)RV_json_get_integer(key_obj);
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Object had %" PRIuHSIZE "attributes attached to it\n\n", obj_info->num_attrs);
@@ -1147,7 +1148,7 @@ RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, v
     }
 done:
     if (parse_tree)
-        yajl_tree_free(parse_tree);
+        yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_get_object_info_callback() */
@@ -1322,9 +1323,10 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
                       object_table_entry **object_table, size_t *num_entries,
                       const iter_data *object_iter_data, rv_hash_table_t *visited_link_table)
 {
-    object_table_entry *table      = NULL;
-    yajl_val            parse_tree = NULL, key_obj;
-    yajl_val            link_obj, link_field_obj;
+    object_table_entry *table          = NULL;
+    yyjson_val         *parse_tree     = NULL, *key_obj;
+    yyjson_doc         *parse_tree_doc = NULL;
+    yyjson_val         *link_obj, *link_field_obj;
     size_t              i, num_links;
     char               *HTTP_buffer  = HTTP_response;
     char               *visit_buffer = NULL;
@@ -1367,13 +1369,13 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
         HTTP_buffer = visit_buffer;
     } /* end if */
 
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_buffer, NULL, 0)))
+    if (NULL == (parse_tree = RV_json_parse(HTTP_buffer, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, links_keys, yajl_t_array)))
+    if (NULL == (key_obj = RV_json_get(parse_tree, links_keys, RV_JSON_ARRAY)))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of links object failed");
 
-    num_links = YAJL_GET_ARRAY(key_obj)->len;
+    num_links = yyjson_arr_size(key_obj);
     if (num_links < 0)
         FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "number of links in group was negative");
 
@@ -1401,13 +1403,13 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
     for (i = 0; i < num_links; i++) {
         char *link_name;
 
-        link_obj = YAJL_GET_ARRAY(key_obj)->values[i];
+        link_obj = yyjson_arr_get(key_obj, i);
 
         /* Get the current link's name */
-        if (NULL == (link_field_obj = yajl_tree_get(link_obj, link_title_keys, yajl_t_string)))
+        if (NULL == (link_field_obj = RV_json_get(link_obj, link_title_keys, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link name failed");
 
-        if (NULL == (link_name = YAJL_GET_STRING(link_field_obj)))
+        if (NULL == (link_name = RV_json_get_string(link_field_obj)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link name was NULL");
 
         if (strlen(link_name) + 1 > LINK_NAME_MAX_LENGTH)
@@ -1427,13 +1429,13 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
         }
 
         /* Get the current link's creation time */
-        if (NULL == (link_field_obj = yajl_tree_get(link_obj, link_creation_time_keys, yajl_t_number)))
+        if (NULL == (link_field_obj = RV_json_get(link_obj, link_creation_time_keys, RV_JSON_NUMBER)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link creation time failed");
 
-        if (!YAJL_IS_DOUBLE(link_field_obj))
+        if (!RV_json_is_double(link_field_obj))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link creation time is not a double");
 
-        table[i].crt_time = YAJL_GET_DOUBLE(link_field_obj);
+        table[i].crt_time = RV_json_get_double(link_field_obj);
 
         /* Process the JSON for the current link and fill out a H5L_info2_t struct for it */
 
@@ -1470,11 +1472,11 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
                 char  *object_URI = NULL;
                 size_t id_len     = 0;
 
-                if (NULL == (link_field_obj = yajl_tree_get(link_obj, object_id_keys, yajl_t_string)))
+                if (NULL == (link_field_obj = RV_json_get(link_obj, object_id_keys, RV_JSON_STRING)))
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL,
                                     "failed to parse object URI from hard link");
 
-                if (NULL == (object_URI = YAJL_GET_STRING(link_field_obj)))
+                if (NULL == (object_URI = RV_json_get_string(link_field_obj)))
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL,
                                     "object URI parsed from hard link was NULL");
 
@@ -1509,20 +1511,20 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
         if (is_recursive && (H5L_TYPE_HARD == table[i].link_info.type)) {
             char *link_collection;
 
-            if (NULL == (link_field_obj = yajl_tree_get(link_obj, link_collection_keys2, yajl_t_string)))
+            if (NULL == (link_field_obj = RV_json_get(link_obj, link_collection_keys2, RV_JSON_STRING)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link collection failed");
 
-            if (NULL == (link_collection = YAJL_GET_STRING(link_field_obj)))
+            if (NULL == (link_collection = RV_json_get_string(link_field_obj)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link collection was NULL");
 
             if (!strcmp(link_collection, "groups")) {
                 char *link_id;
 
                 /* Retrieve the ID of the current link */
-                if (NULL == (link_field_obj = yajl_tree_get(link_obj, object_id_keys, yajl_t_string)))
+                if (NULL == (link_field_obj = RV_json_get(link_obj, object_id_keys, RV_JSON_STRING)))
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link ID failed");
 
-                if (NULL == (link_id = YAJL_GET_STRING(link_field_obj)))
+                if (NULL == (link_id = RV_json_get_string(link_field_obj)))
                     FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "returned link ID was NULL");
 
                 /* Check if this link has been visited already before processing it */
@@ -1550,7 +1552,7 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
                      */
 
                     if (NULL == (url_encoded_link_name = curl_easy_escape(
-                                     curl, H5_rest_basename(YAJL_GET_STRING(link_field_obj)), 0)))
+                                     curl, H5_rest_basename(RV_json_get_string(link_field_obj)), 0)))
                         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTENCODE, FAIL, "can't URL-encode link name");
 
                     if ((url_len = snprintf(request_endpoint, URL_MAX_LENGTH, "/groups/%s/links",
@@ -1644,7 +1646,7 @@ done:
     if (url_encoded_link_name)
         curl_free(url_encoded_link_name);
     if (parse_tree)
-        yajl_tree_free(parse_tree);
+        yyjson_doc_free(parse_tree_doc);
     if (visit_buffer)
         RV_free(visit_buffer);
 
