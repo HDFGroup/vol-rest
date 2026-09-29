@@ -416,7 +416,7 @@ RV_json_get(yyjson_val *obj, const char **path, rv_json_type_t type)
  *              (0-based, in insertion order), or NULL if 'obj' is not an
  *              object or 'idx' is out of range.
  *
- *              NOTE: This is linear-time with respect to the number of
+ *              WARNING: This is linear-time with respect to the number of
  *              object members. See rest_vol.h.
  *-------------------------------------------------------------------------
  */
@@ -2820,7 +2820,7 @@ RV_copy_link_name_by_index(char *HTTP_response, const void *callback_data_in, vo
 
     switch (idx_params->order) {
         case (H5_ITER_DEC):
-            if (NULL == (link_obj = yyjson_arr_get(key_obj, yyjson_obj_size(key_obj) - 1 - index)))
+            if (NULL == (link_obj = yyjson_arr_get(key_obj, yyjson_arr_size(key_obj) - 1 - index)))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected link was NULL");
             break;
 
