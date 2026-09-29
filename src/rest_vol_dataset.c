@@ -2151,11 +2151,12 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
      *                                                             *
      ***************************************************************/
     if ((key_obj = RV_json_get(creation_properties_obj, filters_keys, RV_JSON_ARRAY))) {
-        size_t i;
+        yyjson_arr_iter filter_iter = yyjson_arr_iter_with(key_obj);
+        size_t          i;
 
         /* Grab the relevant information from each filter and set them on the DCPL in turn. */
         for (i = 0; i < yyjson_arr_size(key_obj); i++) {
-            yyjson_val *filter_obj = yyjson_arr_get(key_obj, i);
+            yyjson_val *filter_obj = yyjson_arr_iter_next(&filter_iter);
             yyjson_val *filter_field;
             char       *filter_class;
             long long   filter_ID;

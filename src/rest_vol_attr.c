@@ -2382,6 +2382,7 @@ RV_build_attr_table(char *HTTP_response, hbool_t sort, int (*sort_func)(const vo
     yyjson_val       *parse_tree_root = NULL, *key_obj;
     yyjson_doc       *parse_tree_doc  = NULL;
     yyjson_val       *attr_obj, *attr_field_obj;
+    yyjson_arr_iter   attr_iter;
     size_t            i, num_attributes;
     char             *attribute_section_start, *attribute_section_end;
     herr_t            ret_value = SUCCEED;
@@ -2424,10 +2425,11 @@ RV_build_attr_table(char *HTTP_response, hbool_t sort, int (*sort_func)(const vo
      * subsection, and pass it to the "get attribute info" callback function in order to fill
      * out a H5A_info_t struct for the attribute.
      */
+    attr_iter = yyjson_arr_iter_with(key_obj);
     for (i = 0; i < num_attributes; i++) {
         char *attr_name;
 
-        attr_obj = yyjson_arr_get(key_obj, i);
+        attr_obj = yyjson_arr_iter_next(&attr_iter);
 
         /* Get the current attribute's name */
         if (NULL == (attr_field_obj = RV_json_get(attr_obj, attr_name_keys, RV_JSON_STRING)))

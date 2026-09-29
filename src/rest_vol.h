@@ -57,12 +57,15 @@ yyjson_val *RV_json_parse(const char *text, yyjson_doc **out_doc);
  * or the type does not match. */
 yyjson_val *RV_json_get(yyjson_val *obj, const char **path, rv_json_type_t type);
 
-/* Positional access to an object's members (equivalents for the former
- * val->u.object.keys[i] and val->u.object.values[i]). 'idx' is 0-based in
- * object insertion order. Return NULL if 'obj' is not an object or 'idx' is
- * out of range. */
+/* Positional access to an object's keys (equivalent to the former
+ * val->u.object.keys[i]). 'idx' is 0-based in object insertion order. Returns
+ * NULL if 'obj' is not an object or 'idx' is out of range.
+ *
+ * WARNING: This is O(n) in the number of object members. Try to avoid calling
+ * it inside a loop over an object's members, as it then becomes quadratic.
+ * When possible, use yyjson_obj_foreach() or a yyjson_obj_iter instead, or
+ * yyjson_obj_get() / RV_json_get() to look up a member by key. */
 const char *RV_json_obj_key_at(yyjson_val *obj, size_t idx);
-yyjson_val *RV_json_obj_val_at(yyjson_val *obj, size_t idx);
 
 /* Value accessors. */
 #define RV_json_get_string(val)  ((char *)yyjson_get_str(val))

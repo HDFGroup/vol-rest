@@ -1326,6 +1326,7 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
     yyjson_val         *parse_tree_root = NULL, *key_obj;
     yyjson_doc         *parse_tree_doc  = NULL;
     yyjson_val         *link_obj, *link_field_obj;
+    yyjson_arr_iter     link_iter;
     size_t              i, num_links;
     char               *HTTP_buffer  = HTTP_response;
     char               *visit_buffer = NULL;
@@ -1399,10 +1400,11 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
      * out a H5L_info2_t struct for the link. Then perform a get request to the server
      * to populate an H5O_info2_t struct for the object the link points to.
      */
+    link_iter = yyjson_arr_iter_with(key_obj);
     for (i = 0; i < num_links; i++) {
         char *link_name;
 
-        link_obj = yyjson_arr_get(key_obj, i);
+        link_obj = yyjson_arr_iter_next(&link_iter);
 
         /* Get the current link's name */
         if (NULL == (link_field_obj = RV_json_get(link_obj, link_title_keys, RV_JSON_STRING)))

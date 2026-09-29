@@ -415,6 +415,9 @@ RV_json_get(yyjson_val *obj, const char **path, rv_json_type_t type)
  * Purpose:     Return the key string of the object member at position 'idx'
  *              (0-based, in insertion order), or NULL if 'obj' is not an
  *              object or 'idx' is out of range.
+ *
+ *              NOTE: This is linear-time with respect to the number of
+ *              object members. See rest_vol.h.
  *-------------------------------------------------------------------------
  */
 const char *
@@ -431,33 +434,6 @@ RV_json_obj_key_at(yyjson_val *obj, size_t idx)
     while ((key = yyjson_obj_iter_next(&iter))) {
         if (i++ == idx)
             return yyjson_get_str(key);
-    }
-
-    return NULL;
-}
-
-/*-------------------------------------------------------------------------
- * Function:    RV_json_obj_val_at
- *
- * Purpose:     Return the value of the object member at position 'idx'
- *              (0-based, in insertion order), or NULL if 'obj' is not an
- *              object or 'idx' is out of range.
- *-------------------------------------------------------------------------
- */
-yyjson_val *
-RV_json_obj_val_at(yyjson_val *obj, size_t idx)
-{
-    yyjson_obj_iter iter;
-    yyjson_val     *key;
-    size_t          i = 0;
-
-    if (!yyjson_is_obj(obj))
-        return NULL;
-
-    yyjson_obj_iter_init(obj, &iter);
-    while ((key = yyjson_obj_iter_next(&iter))) {
-        if (i++ == idx)
-            return yyjson_obj_iter_get_val(key);
     }
 
     return NULL;
@@ -2817,7 +2793,6 @@ RV_copy_link_name_by_index(char *HTTP_response, const void *callback_data_in, vo
     const H5VL_loc_by_idx_t *idx_params         = (const H5VL_loc_by_idx_t *)callback_data_in;
     hsize_t                  index              = 0;
     char                   **link_name          = (char **)callback_data_out;
-    const char              *curr_key           = NULL;
     herr_t                   ret_value          = SUCCEED;
 
     if (!idx_params)
@@ -2862,15 +2837,9 @@ RV_copy_link_name_by_index(char *HTTP_response, const void *callback_data_in, vo
         }
     }
 
-    /* Iterate through key/value pairs in link response to find name */
-    for (size_t i = 0; i < yyjson_obj_size(link_obj); i++) {
-        curr_key = RV_json_obj_key_at(link_obj, i);
-        if (!strcmp(curr_key, "title"))
-            if (NULL == (parsed_link_name = RV_json_get_string(RV_json_obj_val_at(link_obj, i))))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to get link name");
-    }
-
-    if (NULL == parsed_link_name)
+    /* Retrieve the link's name */
+    if (NULL ==
+        (parsed_link_name = RV_json_get_string(RV_json_get(link_obj, link_title_keys, RV_JSON_STRING))))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "server response didn't contain link name");
 
     if (NULL == (parsed_link_buffer = RV_malloc(strlen(parsed_link_name) + 1)))

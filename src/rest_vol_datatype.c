@@ -37,7 +37,8 @@ const char *str_charset_keys[] = {"type", "charSet", (const char *)0};
 const char *str_pad_keys[]     = {"type", "strPad", (const char *)0};
 
 /* JSON keys to retrieve information about a compound datatype */
-const char *compound_field_keys[] = {"type", "fields", (const char *)0};
+const char *compound_field_keys[]      = {"type", "fields", (const char *)0};
+const char *compound_field_name_keys[] = {"name", (const char *)0};
 
 /* JSON keys to retrieve information about an array datatype */
 const char *array_dims_keys[] = {"type", "dims", (const char *)0};
@@ -1468,22 +1469,24 @@ done:
 static hid_t
 RV_convert_JSON_to_datatype(const char *type)
 {
-    yyjson_val *parse_tree_root = NULL, *key_obj = NULL, *target_tree = NULL;
-    yyjson_doc *parse_tree_doc = NULL;
-    hsize_t    *array_dims     = NULL;
-    size_t      i;
-    hid_t       datatype                   = FAIL;
-    hid_t      *compound_member_type_array = NULL;
-    hid_t       enum_base_type             = FAIL;
-    hid_t       ret_value                  = FAIL;
-    hid_t       vlen_parent_type           = H5I_INVALID_HID;
-    const char *path_name                  = NULL;
-    char      **compound_member_names      = NULL;
-    char       *datatype_class             = NULL;
-    char       *array_base_type_substring  = NULL;
-    char       *tmp_cmpd_type_buffer       = NULL;
-    char       *tmp_enum_base_type_buffer  = NULL;
-    char       *tmp_vlen_type_buffer       = NULL;
+    yyjson_val     *parse_tree_root = NULL, *key_obj = NULL, *target_tree = NULL;
+    yyjson_doc     *parse_tree_doc = NULL;
+    yyjson_arr_iter compound_member_iter;
+    yyjson_obj_iter enum_mapping_iter;
+    hsize_t        *array_dims = NULL;
+    size_t          i;
+    hid_t           datatype                   = FAIL;
+    hid_t          *compound_member_type_array = NULL;
+    hid_t           enum_base_type             = FAIL;
+    hid_t           ret_value                  = FAIL;
+    hid_t           vlen_parent_type           = H5I_INVALID_HID;
+    const char     *path_name                  = NULL;
+    char          **compound_member_names      = NULL;
+    char           *datatype_class             = NULL;
+    char           *array_base_type_substring  = NULL;
+    char           *tmp_cmpd_type_buffer       = NULL;
+    char           *tmp_enum_base_type_buffer  = NULL;
+    char           *tmp_vlen_type_buffer       = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting JSON buffer %s to hid_t\n", type);
@@ -1828,23 +1831,21 @@ RV_convert_JSON_to_datatype(const char *type)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
                             "can't allocate temporary buffer for storing type information");
 
-        /* Retrieve the names of all of the members of the Compound Datatype */
+        /* Retrieve the names of all of the members of the Compound Datatype. Use an iterator rather
+         * than yyjson_arr_get(), which is linear-time on arrays of objects. */
+        compound_member_iter = yyjson_arr_iter_with(key_obj);
         for (i = 0; i < yyjson_arr_size(key_obj); i++) {
             yyjson_val *compound_member_field;
-            size_t      j;
 
-            if (NULL == (compound_member_field = yyjson_arr_get(key_obj, i)))
+            if (NULL == (compound_member_field = yyjson_arr_iter_next(&compound_member_iter)))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
                                 "can't get compound field member %zu information", i);
 
-            for (j = 0; j < yyjson_obj_size(compound_member_field); j++) {
-                if (!strcmp(RV_json_obj_key_at(compound_member_field, j), "name"))
-                    if (NULL == (compound_member_names[i] =
-                                     RV_json_get_string(RV_json_obj_val_at(compound_member_field, j))))
-                        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
-                                        "can't get compound field member %zu name", j);
-            } /* end for */
-        }     /* end for */
+            if (NULL == (compound_member_names[i] = RV_json_get_string(
+                             RV_json_get(compound_member_field, compound_field_name_keys, RV_JSON_STRING))))
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                                "can't get compound field member %zu name", i);
+        } /* end for */
 
         /* For each field in the Compound Datatype's string representation, locate the beginning and end of
          * its "type" section and copy that substring into the temporary buffer. Then, convert that substring
@@ -2063,21 +2064,24 @@ RV_convert_JSON_to_datatype(const char *type)
                             "can't retrieve enum mapping from enum JSON representation");
 
         /* Retrieve the name and value of each member in the enum mapping, inserting them into the enum type
-         * as new members */
+         * as new members. Use an iterator rather than positional access, which is linear-time. */
+        enum_mapping_iter = yyjson_obj_iter_with(key_obj);
         for (i = 0; i < yyjson_obj_size(key_obj); i++) {
-            long long val;
+            yyjson_val *enum_member_key = yyjson_obj_iter_next(&enum_mapping_iter);
+            yyjson_val *enum_member_val = yyjson_obj_iter_get_val(enum_member_key);
+            long long   val;
 
-            if (!RV_json_is_integer(RV_json_obj_val_at(key_obj, i)))
+            if (!RV_json_is_integer(enum_member_val))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "enum member %zu value is not an integer",
                                 i);
 
-            val = RV_json_get_integer(RV_json_obj_val_at(key_obj, i));
+            val = RV_json_get_integer(enum_member_val);
 
             /* Convert the value from its JSON integer representation to the base type of the enum datatype */
             if (H5Tconvert(H5T_NATIVE_LLONG, enum_base_type, 1, &val, NULL, H5P_DEFAULT) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert enum value to base type");
 
-            if (H5Tenum_insert(datatype, RV_json_obj_key_at(key_obj, i), (void *)&val) < 0)
+            if (H5Tenum_insert(datatype, yyjson_get_str(enum_member_key), (void *)&val) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTINSERT, FAIL, "can't insert member into enum datatype");
         } /* end for */
     }     /* end if */
