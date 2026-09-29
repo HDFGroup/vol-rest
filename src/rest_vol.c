@@ -334,7 +334,7 @@ static const H5VL_class_t H5VL_rest_g = {
  * Purpose:     Parse a NUL-terminated JSON string into an immutable yyjson
  *              document. On success, returns the document's root value and
  *              stores the owning document in *out_doc, which the caller must
- *              free with yyjson_doc_free().
+ *              free with yyjson_doc_free(). 'out_doc' must not be NULL.
  *
  * Return:      Root value on success/NULL on failure
  *-------------------------------------------------------------------------
@@ -342,21 +342,18 @@ static const H5VL_class_t H5VL_rest_g = {
 yyjson_val *
 RV_json_parse(const char *text, yyjson_doc **out_doc)
 {
-    yyjson_doc *doc = NULL;
+    if (!out_doc)
+        return NULL;
 
-    if (out_doc)
-        *out_doc = NULL;
+    *out_doc = NULL;
 
     if (!text)
         return NULL;
 
-    if (NULL == (doc = yyjson_read(text, strlen(text), 0)))
+    if (NULL == (*out_doc = yyjson_read(text, strlen(text), 0)))
         return NULL;
 
-    if (out_doc)
-        *out_doc = doc;
-
-    return yyjson_doc_get_root(doc);
+    return yyjson_doc_get_root(*out_doc);
 }
 
 /*-------------------------------------------------------------------------
