@@ -41,8 +41,7 @@ set CURL_DEBUG_OPT=
 set MEM_TRACK_OPT=
 set THREAD_SAFE_OPT=
 set CURL_OPT=
-set YAJL_OPT=
-set YAJL_LIB_OPT=
+set YYJSON_OPT=
 set CMAKE_C_FLAGS=
 rem On Windows, build type will default to Debug if not specified
 set CMAKE_BUILD_TYPE=Release
@@ -82,7 +81,7 @@ del /q %BUILD_DIR%\CMakeCache.txt > nul 2>&1
 cd %BUILD_DIR%
 
 echo Configuring build...
-cmake -G %CMAKE_GENERATOR% -DBUILD_SHARED_LIBS=ON -DBUILD_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=%CMAKE_BUILD_TYPE% -DCMAKE_C_FLAGS=%CMAKE_C_FLAGS% -DHDF5_ROOT=%HDF5_INSTALL_DIR% -DCMAKE_INSTALL_PREFIX=%INSTALL_DIR% %CURL_OPT% %CURL_LIB_OPT% %YAJL_OPT% %YAJL_LIB_OPT% %CONNECTOR_DEBUG_OPT% %CURL_DEBUG_OPT% %MEM_TRACK_OPT% %THREAD_SAFE_OPT% %SCRIPT_DIR%
+cmake -G %CMAKE_GENERATOR% -DBUILD_SHARED_LIBS=ON -DBUILD_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=%CMAKE_BUILD_TYPE% -DCMAKE_C_FLAGS=%CMAKE_C_FLAGS% -DHDF5_ROOT=%HDF5_INSTALL_DIR% -DCMAKE_INSTALL_PREFIX=%INSTALL_DIR% %CURL_OPT% %CURL_LIB_OPT% %YYJSON_OPT% %CONNECTOR_DEBUG_OPT% %CURL_DEBUG_OPT% %MEM_TRACK_OPT% %THREAD_SAFE_OPT% %SCRIPT_DIR%
 
 echo Build files generated for CMake generator %CMAKE_GENERATOR%
 
@@ -139,10 +138,6 @@ if "%optchar%"=="-h" (
     set THREAD_SAFE_OPT=-DHDF5_VOL_REST_THREAD_SAFE=ON
     echo Enabled connector memory tracking
     echo.
-) else if "%optchar%"=="-t" (
-    set YAJL_LIB_OPT=-DYAJL_USE_STATIC_LIBRARIES=ON
-    echo Using the static YAJL library
-    echo.
 ) else if "%optchar%"=="-u" (
     set CMAKE_C_FLAGS=/DCURL_STATICLIB
     set CURL_LIB_OPT=-DCURL_USE_STATIC_LIBRARIES=ON
@@ -175,9 +170,9 @@ if "%optchar%"=="-h" (
     echo Set CURL_ROOT
     echo.
 ) else if "%optchar%"=="-Y" (
-    set YAJL_OPT=-DYAJL_ROOT=%1
+    set YYJSON_OPT=-Dyyjson_ROOT=%1
     shift
-    echo Set YAJL_ROOT
+    echo Set yyjson_ROOT
     echo.
 ) else (
     echo ERROR: non-option argument: '%optchar%' >&2
@@ -199,10 +194,6 @@ echo.
 echo       -m      Enable memory tracking in the REST VOL.
 echo.
 echo       -s      Enable linking to thread safe static hdf5 library.
-echo.
-echo       -t      Make use of the static YAJL library. Be aware the
-echo               library should be built with position independent
-echo               code option enabled.
 echo.
 echo       -u      Make use of the static cURL library.
 echo.
@@ -226,8 +217,9 @@ echo       -C DIR  To specify the top-level directory where cURL is
 echo               installed, if cURL was not installed to a system
 echo               directory. Similar to '-DCURL_ROOT=DIR'.
 echo.
-echo       -Y DIR  To specify the top-level directory where YAJL is
-echo               installed, if YAJL was not installed to a system
-echo               directory. Similar to '-DYAJL_ROOT=DIR'.
+echo       -Y DIR  To specify the top-level directory where yyjson is
+echo               installed, if yyjson was not installed to a system
+echo               directory. Similar to '-Dyyjson_ROOT=DIR'. If yyjson
+echo               is not found, it is fetched and built automatically.
 echo.
 EXIT /B 0

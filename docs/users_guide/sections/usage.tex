@@ -127,7 +127,7 @@ To link in the required libraries, the compiler will likely require the
 additional linker flags:
 
 \begin{verbatim}
--lhdf5_vol_rest -lcurl -lyajl
+-lhdf5_vol_rest -lcurl
 \end{verbatim}
 
 However, these flags may vary depending on platform, compiler and installation
@@ -138,7 +138,7 @@ pkg-config, as these will manage linking with the \acrshort{hdf5} library.
 The above notice about additional library linking applies to usage of
 \texttt{h5cc/h5pcc}. For example:
 \begin{verbatim}
-h5cc -lhdf5_vol_rest -lcurl -lyajl my_application.c -o my_application
+h5cc -lhdf5_vol_rest -lcurl my_application.c -o my_application
 \end{verbatim}
 
 \subsection{Running HDF5 REST VOL connector applications}
