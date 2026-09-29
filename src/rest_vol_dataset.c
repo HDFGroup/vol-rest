@@ -1893,15 +1893,15 @@ static herr_t
 RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *callback_data_in,
                                               void *callback_data_out)
 {
-    yyjson_val   *parse_tree = NULL, *creation_properties_obj = NULL, *key_obj = NULL, *target_tree = NULL;
-    yyjson_doc   *parse_tree_doc     = NULL;
-    hid_t        *DCPL               = (hid_t *)callback_data_out;
-    hid_t         fill_type          = H5I_INVALID_HID;
-    char         *encoded_fill_value = NULL;
-    char         *decoded_fill_value = NULL;
-    unsigned int *ud_parameters      = NULL;
-    const char   *path_name          = NULL;
-    herr_t        ret_value          = SUCCEED;
+    yyjson_val *parse_tree_root = NULL, *creation_properties_obj = NULL, *key_obj = NULL, *target_tree = NULL;
+    yyjson_doc *parse_tree_doc     = NULL;
+    hid_t      *DCPL               = (hid_t *)callback_data_out;
+    hid_t       fill_type          = H5I_INVALID_HID;
+    char       *encoded_fill_value = NULL;
+    char       *decoded_fill_value = NULL;
+    unsigned int *ud_parameters    = NULL;
+    const char   *path_name        = NULL;
+    herr_t        ret_value        = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving dataset's creation properties from server's HTTP response\n\n");
@@ -1912,15 +1912,15 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
     if (!DCPL)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "DCPL pointer was NULL");
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_DATASET, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    target_tree = parse_tree;
+    target_tree = parse_tree_root;
 
     /* If the response contains 'h5paths',
      * it may describe multiple objects. Needs to be unwrapped first. */
-    if (NULL != RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)) {
-        if (NULL == (target_tree = RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)))
+    if (NULL != RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)) {
+        if (NULL == (target_tree = RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
 
         /* Access the first object under h5paths */
@@ -2567,8 +2567,7 @@ done:
     printf("\n");
 #endif
 
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     if (decoded_fill_value)
         RV_free(decoded_fill_value);

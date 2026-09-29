@@ -1180,9 +1180,9 @@ done:
 herr_t
 RV_get_link_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    H5L_info2_t *link_info      = (H5L_info2_t *)callback_data_out;
-    yyjson_val  *parse_tree     = NULL, *key_obj;
-    yyjson_doc  *parse_tree_doc = NULL;
+    H5L_info2_t *link_info       = (H5L_info2_t *)callback_data_out;
+    yyjson_val  *parse_tree_root = NULL, *key_obj;
+    yyjson_doc  *parse_tree_doc  = NULL;
     char        *parsed_string;
     herr_t       ret_value = SUCCEED;
 
@@ -1197,12 +1197,12 @@ RV_get_link_info_callback(char *HTTP_response, const void *callback_data_in, voi
 
     memset(link_info, 0, sizeof(H5L_info2_t));
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
     /* Retrieve the link's class */
-    if (NULL == (key_obj = RV_json_get(parse_tree, link_class_keys, RV_JSON_STRING))) {
-        if (NULL == (key_obj = RV_json_get(parse_tree, link_class_keys2, RV_JSON_STRING)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, link_class_keys, RV_JSON_STRING))) {
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, link_class_keys2, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of object parent collection failed");
     }
 
@@ -1246,8 +1246,7 @@ RV_get_link_info_callback(char *HTTP_response, const void *callback_data_in, voi
     }
 
 done:
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_get_link_info_callback() */
@@ -1283,7 +1282,7 @@ done:
 herr_t
 RV_get_link_val_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yyjson_val       *parse_tree        = NULL, *key_obj;
+    yyjson_val       *parse_tree_root   = NULL, *key_obj;
     yyjson_doc       *parse_tree_doc    = NULL;
     get_link_val_out *get_link_val_args = (get_link_val_out *)callback_data_out;
     size_t           *in_buf_size       = get_link_val_args->in_buf_size;
@@ -1301,12 +1300,12 @@ RV_get_link_val_callback(char *HTTP_response, const void *callback_data_in, void
     if (!in_buf_size)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "buffer size pointer was NULL");
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
     /* Retrieve the link's class */
-    if (NULL == (key_obj = RV_json_get(parse_tree, link_class_keys, RV_JSON_STRING))) {
-        if (NULL == (key_obj = RV_json_get(parse_tree, link_class_keys2, RV_JSON_STRING)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, link_class_keys, RV_JSON_STRING))) {
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, link_class_keys2, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link class failed");
     }
 
@@ -1320,8 +1319,8 @@ RV_get_link_val_callback(char *HTTP_response, const void *callback_data_in, void
         FUNC_GOTO_ERROR(H5E_LINK, H5E_BADVALUE, FAIL, "H5Lget_val should not be called for hard links");
 
     /* Retrieve the link's value */
-    if (NULL == (key_obj = RV_json_get(parse_tree, link_path_keys, RV_JSON_STRING))) {
-        if (NULL == (key_obj = RV_json_get(parse_tree, link_path_keys2, RV_JSON_STRING)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, link_path_keys, RV_JSON_STRING))) {
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, link_path_keys2, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of link value failed");
     }
 
@@ -1359,8 +1358,8 @@ RV_get_link_val_callback(char *HTTP_response, const void *callback_data_in, void
         yyjson_val *link_domain_obj;
         char       *link_domain;
 
-        if (NULL == (link_domain_obj = RV_json_get(parse_tree, link_domain_keys, RV_JSON_STRING))) {
-            if (NULL == (link_domain_obj = RV_json_get(parse_tree, link_domain_keys2, RV_JSON_STRING)))
+        if (NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_domain_keys, RV_JSON_STRING))) {
+            if (NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_domain_keys2, RV_JSON_STRING)))
                 FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of external link domain failed");
         }
 
@@ -1410,8 +1409,7 @@ RV_get_link_val_callback(char *HTTP_response, const void *callback_data_in, void
     }         /* end else */
 
 done:
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_get_link_val_callback() */
@@ -1434,9 +1432,9 @@ done:
 herr_t
 RV_get_link_obj_type_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    H5I_type_t *obj_type       = (H5I_type_t *)callback_data_out;
-    yyjson_val *parse_tree     = NULL, *key_obj;
-    yyjson_doc *parse_tree_doc = NULL;
+    H5I_type_t *obj_type        = (H5I_type_t *)callback_data_out;
+    yyjson_val *parse_tree_root = NULL, *key_obj;
+    yyjson_doc *parse_tree_doc  = NULL;
     char       *parsed_string;
     herr_t      ret_value = SUCCEED;
 
@@ -1449,14 +1447,14 @@ RV_get_link_obj_type_callback(char *HTTP_response, const void *callback_data_in,
     if (!obj_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "object type pointer was NULL");
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
     /* To handle the awkward case of soft and external links, which do not have the link
      * collection element, first check for the link class field and short circuit if it
      * is found not to be equal to "H5L_TYPE_HARD"
      */
-    if (NULL != (key_obj = RV_json_get(parse_tree, link_class_keys, RV_JSON_STRING))) {
+    if (NULL != (key_obj = RV_json_get(parse_tree_root, link_class_keys, RV_JSON_STRING))) {
         char *link_type;
 
         if (NULL == (link_type = RV_json_get_string(key_obj)))
@@ -1467,7 +1465,7 @@ RV_get_link_obj_type_callback(char *HTTP_response, const void *callback_data_in,
     } /* end if */
 
     /* Retrieve the object's type */
-    if (NULL == (key_obj = RV_json_get(parse_tree, link_collection_keys, RV_JSON_STRING)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, link_collection_keys, RV_JSON_STRING)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "retrieval of object parent collection failed");
 
     if (!RV_json_is_string(key_obj))
@@ -1490,8 +1488,7 @@ RV_get_link_obj_type_callback(char *HTTP_response, const void *callback_data_in,
 #endif
 
 done:
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_get_link_obj_type_callback() */
@@ -1734,9 +1731,9 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(
                     link_table_entry **link_table, size_t *num_entries, rv_hash_table_t *visited_link_table,
                     RV_object_t *loc_obj)
 {
-    link_table_entry *table          = NULL;
-    yyjson_val       *parse_tree     = NULL, *key_obj;
-    yyjson_doc       *parse_tree_doc = NULL;
+    link_table_entry *table           = NULL;
+    yyjson_val       *parse_tree_root = NULL, *key_obj;
+    yyjson_doc       *parse_tree_doc  = NULL;
     yyjson_val       *link_obj, *link_field_obj;
     size_t            i, num_links;
     char             *HTTP_buffer  = HTTP_response;
@@ -1776,10 +1773,10 @@ RV_build_link_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func)(
         HTTP_buffer = visit_buffer;
     } /* end if */
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_buffer, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_buffer, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    if (NULL == (key_obj = RV_json_get(parse_tree, links_keys, RV_JSON_ARRAY)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, links_keys, RV_JSON_ARRAY)))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of links object failed");
 
     num_links = yyjson_arr_size(key_obj);
@@ -1956,8 +1953,7 @@ done:
 
     if (url_encoded_link_name)
         curl_free(url_encoded_link_name);
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
     if (visit_buffer)
         RV_free(visit_buffer);
 

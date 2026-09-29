@@ -2378,9 +2378,9 @@ static herr_t
 RV_build_attr_table(char *HTTP_response, hbool_t sort, int (*sort_func)(const void *, const void *),
                     attr_table_entry **attr_table, size_t *num_entries)
 {
-    attr_table_entry *table          = NULL;
-    yyjson_val       *parse_tree     = NULL, *key_obj;
-    yyjson_doc       *parse_tree_doc = NULL;
+    attr_table_entry *table           = NULL;
+    yyjson_val       *parse_tree_root = NULL, *key_obj;
+    yyjson_doc       *parse_tree_doc  = NULL;
     yyjson_val       *attr_obj, *attr_field_obj;
     size_t            i, num_attributes;
     char             *attribute_section_start, *attribute_section_end;
@@ -2397,10 +2397,10 @@ RV_build_attr_table(char *HTTP_response, hbool_t sort, int (*sort_func)(const vo
     printf("-> Building table of attributes\n\n");
 #endif
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    if (NULL == (key_obj = RV_json_get(parse_tree, attributes_keys, RV_JSON_ARRAY)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, attributes_keys, RV_JSON_ARRAY)))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "retrieval of attributes object failed");
 
     num_attributes = yyjson_arr_size(key_obj);
@@ -2490,8 +2490,7 @@ done:
             *num_entries = num_attributes;
     } /* end if */
 
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_build_attr_table() */

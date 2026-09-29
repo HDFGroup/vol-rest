@@ -1041,8 +1041,8 @@ done:
 static herr_t
 RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    H5O_info2_t *obj_info   = (H5O_info2_t *)callback_data_out;
-    yyjson_val  *parse_tree = NULL, *key_obj = NULL, *target_tree = NULL;
+    H5O_info2_t *obj_info        = (H5O_info2_t *)callback_data_out;
+    yyjson_val  *parse_tree_root = NULL, *key_obj = NULL, *target_tree = NULL;
     yyjson_doc  *parse_tree_doc = NULL;
     size_t       i;
     char        *object_id = NULL, *domain_path = NULL;
@@ -1060,15 +1060,15 @@ RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, v
 
     memset(obj_info, 0, sizeof(*obj_info));
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    target_tree = parse_tree;
+    target_tree = parse_tree_root;
 
     /* If the response contains 'h5paths',
      * it may describe multiple objects. Needs to be unwrapped first. */
-    if (NULL != RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)) {
-        if (NULL == (target_tree = RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)))
+    if (NULL != RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)) {
+        if (NULL == (target_tree = RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
 
         /* Access the first object under h5paths */
@@ -1147,8 +1147,7 @@ RV_get_object_info_callback(char *HTTP_response, const void *callback_data_in, v
             break;
     }
 done:
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_get_object_info_callback() */
@@ -1323,9 +1322,9 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
                       object_table_entry **object_table, size_t *num_entries,
                       const iter_data *object_iter_data, rv_hash_table_t *visited_link_table)
 {
-    object_table_entry *table          = NULL;
-    yyjson_val         *parse_tree     = NULL, *key_obj;
-    yyjson_doc         *parse_tree_doc = NULL;
+    object_table_entry *table           = NULL;
+    yyjson_val         *parse_tree_root = NULL, *key_obj;
+    yyjson_doc         *parse_tree_doc  = NULL;
     yyjson_val         *link_obj, *link_field_obj;
     size_t              i, num_links;
     char               *HTTP_buffer  = HTTP_response;
@@ -1369,10 +1368,10 @@ RV_build_object_table(char *HTTP_response, hbool_t is_recursive, int (*sort_func
         HTTP_buffer = visit_buffer;
     } /* end if */
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_buffer, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_buffer, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    if (NULL == (key_obj = RV_json_get(parse_tree, links_keys, RV_JSON_ARRAY)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, links_keys, RV_JSON_ARRAY)))
         FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of links object failed");
 
     num_links = yyjson_arr_size(key_obj);
@@ -1645,8 +1644,7 @@ done:
         RV_group_close(subgroup, H5P_DEFAULT, NULL);
     if (url_encoded_link_name)
         curl_free(url_encoded_link_name);
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
     if (visit_buffer)
         RV_free(visit_buffer);
 

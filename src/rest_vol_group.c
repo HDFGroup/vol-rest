@@ -698,10 +698,10 @@ done:
 static herr_t
 RV_get_group_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    H5G_info_t *group_info     = (H5G_info_t *)callback_data_out;
-    yyjson_val *parse_tree     = NULL, *key_obj;
-    yyjson_doc *parse_tree_doc = NULL;
-    herr_t      ret_value      = SUCCEED;
+    H5G_info_t *group_info      = (H5G_info_t *)callback_data_out;
+    yyjson_val *parse_tree_root = NULL, *key_obj;
+    yyjson_doc *parse_tree_doc  = NULL;
+    herr_t      ret_value       = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving group's info from server's HTTP response\n\n");
@@ -714,11 +714,11 @@ RV_get_group_info_callback(char *HTTP_response, const void *callback_data_in, vo
 
     memset(group_info, 0, sizeof(*group_info));
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
     /* Retrieve the group's link count */
-    if (NULL == (key_obj = RV_json_get(parse_tree, group_link_count_keys, RV_JSON_NUMBER)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, group_link_count_keys, RV_JSON_NUMBER)))
         FUNC_GOTO_ERROR(H5E_SYM, H5E_CANTGET, FAIL, "retrieval of group link count failed");
 
     if (!RV_json_is_integer(key_obj))
@@ -734,8 +734,7 @@ RV_get_group_info_callback(char *HTTP_response, const void *callback_data_in, vo
 #endif
 
 done:
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_get_group_info_callback() */

@@ -182,7 +182,7 @@ static char *H5_rest_url_encode_path(const char *path);
 herr_t RV_parse_object_class(char *HTTP_response, const void *callback_data_in, void *callback_data_out);
 
 /* Helper function to parse an object's creation properties from server response */
-herr_t RV_parse_creation_properties_callback(yyjson_val *parse_tree, char **GCPL_buf);
+herr_t RV_parse_creation_properties_callback(yyjson_val *parse_tree_root, char **GCPL_buf);
 
 /* Return the index of the curl handle into the array of handles */
 herr_t RV_get_index_of_matching_handle(dataset_transfer_info *transfer_info, size_t count, CURL *handle,
@@ -1097,7 +1097,7 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
     const char *refresh_token_key[] = {"refresh_token", (const char *)0};
     const char *expires_in_key[]    = {"expires_in", (const char *)0};
     const char *token_cfg_file_name = ".hstokencfg";
-    yyjson_val *parse_tree = NULL, *key_obj = NULL;
+    yyjson_val *parse_tree_root = NULL, *key_obj = NULL;
     yyjson_doc *parse_tree_doc              = NULL;
     size_t      token_cfg_file_pathname_len = 0;
     FILE       *token_cfg_file              = NULL;
@@ -1199,11 +1199,11 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
 #endif
 
         /* Parse token config file */
-        if (NULL == (parse_tree = RV_json_parse(cfg_json, &parse_tree_doc)))
+        if (NULL == (parse_tree_root = RV_json_parse(cfg_json, &parse_tree_doc)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "Failed to parse token config JSON");
 
         /* Get access token for the HSDS endpoint */
-        if (NULL == (key_obj = RV_json_get(parse_tree, cfg_access_token, RV_JSON_STRING)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, cfg_access_token, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token");
         if (NULL == (access_token = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token's value");
@@ -1212,7 +1212,7 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
 #endif
 
         /* Get refresh token for the HSDS endpoint */
-        if (NULL == (key_obj = RV_json_get(parse_tree, cfg_refresh_token, RV_JSON_STRING)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, cfg_refresh_token, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve refresh token");
         if (NULL == (refresh_token = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve refresh token's value");
@@ -1221,7 +1221,7 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
 #endif
 
         /* Get token expiration for the HSDS endpoint */
-        if (NULL == (key_obj = RV_json_get(parse_tree, cfg_token_expires, RV_JSON_NUMBER)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, cfg_token_expires, RV_JSON_NUMBER)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve token expiration");
         if (!RV_json_is_number(key_obj))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "token expiration's value is not a number");
@@ -1321,11 +1321,11 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Authentication server response:\n-> \"%s\"\n", response_buffer.buffer);
 #endif
-            if (NULL == (parse_tree = RV_json_parse(response_buffer.buffer, &parse_tree_doc)))
+            if (NULL == (parse_tree_root = RV_json_parse(response_buffer.buffer, &parse_tree_doc)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
 
             /* Retrieve the authentication message */
-            if (NULL == (key_obj = RV_json_get(parse_tree, ad_auth_message_keys, RV_JSON_STRING)))
+            if (NULL == (key_obj = RV_json_get(parse_tree_root, ad_auth_message_keys, RV_JSON_STRING)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL,
                                 "can't retrieve authentication instructions message");
             if (NULL == (instruction_string = RV_json_get_string(key_obj)))
@@ -1338,7 +1338,7 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
 
             /* Assume that the user has now properly signed in - attempt to retrieve token */
 
-            if (NULL == (key_obj = RV_json_get(parse_tree, device_code_keys, RV_JSON_STRING)))
+            if (NULL == (key_obj = RV_json_get(parse_tree_root, device_code_keys, RV_JSON_STRING)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve authentication device code");
 
             if (NULL == (device_code = RV_json_get_string(key_obj)))
@@ -1380,12 +1380,12 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
 
         /* Parse response JSON */
         yyjson_doc_free(parse_tree_doc);
-        parse_tree = NULL;
-        if (NULL == (parse_tree = RV_json_parse(response_buffer.buffer, &parse_tree_doc)))
+        parse_tree_doc = NULL;
+        if (NULL == (parse_tree_root = RV_json_parse(response_buffer.buffer, &parse_tree_doc)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
 
         /* Get access token */
-        if (NULL == (key_obj = RV_json_get(parse_tree, access_token_key, RV_JSON_STRING)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, access_token_key, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token");
         if (NULL == (access_token = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token string");
@@ -1394,7 +1394,7 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
 #endif
 
         /* Get access token's validity period */
-        if (NULL == (key_obj = RV_json_get(parse_tree, expires_in_key, RV_JSON_NUMBER)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, expires_in_key, RV_JSON_NUMBER)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve expires_in key");
         if (!RV_json_is_integer(key_obj))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned expires_in value is not an integer");
@@ -1406,7 +1406,7 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
         token_expires = time(NULL) + token_expires - 1;
 
         /* Get refresh token (optional) */
-        if (NULL != (key_obj = RV_json_get(parse_tree, refresh_token_key, RV_JSON_STRING))) {
+        if (NULL != (key_obj = RV_json_get(parse_tree_root, refresh_token_key, RV_JSON_STRING))) {
             if (NULL == (refresh_token = RV_json_get_string(key_obj)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve refresh token's string value");
 #ifdef RV_CONNECTOR_DEBUG
@@ -1440,8 +1440,7 @@ done:
         curl_headers = NULL;
     } /* end if */
 
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     /* Clear out memory */
     memset(data_string, 0, sizeof(data_string));
@@ -1827,7 +1826,7 @@ done:
 herr_t
 RV_parse_object_class(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yyjson_val *parse_tree = NULL, *key_obj = NULL, *class_obj = NULL, *target_tree = NULL;
+    yyjson_val *parse_tree_root = NULL, *key_obj = NULL, *class_obj = NULL, *target_tree = NULL;
     yyjson_doc *parse_tree_doc = NULL;
     char       *parsed_object_string;
     const char *object_class_keys[] = {"class", (const char *)0};
@@ -1844,15 +1843,15 @@ RV_parse_object_class(char *HTTP_response, const void *callback_data_in, void *c
     if (!object_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL");
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    target_tree = parse_tree;
+    target_tree = parse_tree_root;
 
     /* If the response contains 'h5paths',
      * it may describe multiple objects. Needs to be unwrapped first. */
-    if (NULL != RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)) {
-        if (NULL == (key_obj = RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)))
+    if (NULL != RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)) {
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
 
         /* Access the first object under h5paths */
@@ -1889,8 +1888,7 @@ RV_parse_object_class(char *HTTP_response, const void *callback_data_in, void *c
     }
 
 done:
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_parse_object_class */
@@ -2017,7 +2015,7 @@ done:
 herr_t
 RV_copy_object_URI_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yyjson_val *parse_tree = NULL, *key_obj = NULL, *single_obj = NULL, *target_tree = NULL;
+    yyjson_val *parse_tree_root = NULL, *key_obj = NULL, *single_obj = NULL, *target_tree = NULL;
     yyjson_doc *parse_tree_doc = NULL;
     char       *parsed_string;
     char       *buf_out   = (char *)callback_data_out;
@@ -2033,15 +2031,15 @@ RV_copy_object_URI_callback(char *HTTP_response, const void *callback_data_in, v
     if (!buf_out)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL");
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    target_tree = parse_tree;
+    target_tree = parse_tree_root;
 
     /* If the response contains 'h5paths',
      * it may describe multiple objects. Needs to be unwrapped first. */
-    if (NULL != RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)) {
-        if (NULL == (target_tree = RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)))
+    if (NULL != RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)) {
+        if (NULL == (target_tree = RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
 
         /* Access the first object under h5paths */
@@ -2135,8 +2133,7 @@ RV_copy_object_URI_callback(char *HTTP_response, const void *callback_data_in, v
     strncpy(buf_out, parsed_string, URI_MAX_LENGTH);
 
 done:
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_copy_object_URI_parse_callback() */
@@ -2575,7 +2572,7 @@ done:
  *              May, 2023
  */
 herr_t
-RV_parse_creation_properties_callback(yyjson_val *parse_tree, char **GCPL_buf_out)
+RV_parse_creation_properties_callback(yyjson_val *parse_tree_root, char **GCPL_buf_out)
 {
     herr_t      ret_value      = SUCCEED;
     yyjson_val *key_obj        = NULL;
@@ -2584,10 +2581,10 @@ RV_parse_creation_properties_callback(yyjson_val *parse_tree, char **GCPL_buf_ou
 
     if (!GCPL_buf_out)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given GCPL buffer was NULL");
-    if (!parse_tree)
+    if (!parse_tree_root)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parse tree was NULL");
 
-    if (NULL == (key_obj = RV_json_get(parse_tree, object_creation_properties_keys, RV_JSON_STRING)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, object_creation_properties_keys, RV_JSON_STRING)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse creationProperties");
 
     if (!RV_json_is_string(key_obj))
@@ -2631,7 +2628,7 @@ done:
 herr_t
 RV_copy_object_loc_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yyjson_val          *parse_tree = NULL, *key_obj = NULL, *target_tree = NULL;
+    yyjson_val          *parse_tree_root = NULL, *key_obj = NULL, *target_tree = NULL;
     yyjson_doc          *parse_tree_doc = NULL;
     char                *parsed_string  = NULL;
     const char          *path_name      = NULL;
@@ -2657,15 +2654,15 @@ RV_copy_object_loc_info_callback(char *HTTP_response, const void *callback_data_
     if (!server_info)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "server info was NULL");
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    target_tree = parse_tree;
+    target_tree = parse_tree_root;
 
     /* If the response contains 'h5paths',
      * it may describe multiple objects. Needs to be unwrapped first. */
-    if (NULL != RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)) {
-        if (NULL == (target_tree = RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)))
+    if (NULL != RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)) {
+        if (NULL == (target_tree = RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
 
         /* Access the first object under h5paths */
@@ -2778,8 +2775,7 @@ RV_copy_object_loc_info_callback(char *HTTP_response, const void *callback_data_
     /* URI */
     ret_value = RV_copy_object_URI_callback(HTTP_response, NULL, loc_info_out->URI);
 done:
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     if ((ret_value < 0) && GCPL_buf) {
         RV_free(GCPL_buf);
@@ -2814,7 +2810,7 @@ done:
 herr_t
 RV_copy_link_name_by_index(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yyjson_val              *parse_tree = NULL, *key_obj = NULL, *link_obj = NULL;
+    yyjson_val              *parse_tree_root = NULL, *key_obj = NULL, *link_obj = NULL;
     yyjson_doc              *parse_tree_doc     = NULL;
     const char              *parsed_link_name   = NULL;
     char                    *parsed_link_buffer = NULL;
@@ -2835,10 +2831,10 @@ RV_copy_link_name_by_index(char *HTTP_response, const void *callback_data_in, vo
 
     index = idx_params->n;
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    if (NULL == (key_obj = RV_json_get(parse_tree, links_keys, RV_JSON_ARRAY)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, links_keys, RV_JSON_ARRAY)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to parse links");
 
     if (yyjson_arr_size(key_obj) == 0)
@@ -2885,8 +2881,7 @@ RV_copy_link_name_by_index(char *HTTP_response, const void *callback_data_in, vo
     *link_name = parsed_link_buffer;
 
 done:
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     if (ret_value < 0) {
         RV_free(parsed_link_buffer);
@@ -2911,7 +2906,7 @@ done:
 herr_t
 RV_copy_attribute_name_by_index(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yyjson_val              *parse_tree           = NULL, *key_obj;
+    yyjson_val              *parse_tree_root      = NULL, *key_obj;
     yyjson_doc              *parse_tree_doc       = NULL;
     const char              *parsed_string        = NULL;
     char                    *parsed_string_buffer = NULL;
@@ -2929,10 +2924,10 @@ RV_copy_attribute_name_by_index(char *HTTP_response, const void *callback_data_i
     if (!idx_params)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given index params ptr was NULL");
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    if (NULL == (key_obj = RV_json_get(parse_tree, attributes_keys, RV_JSON_OBJECT)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, attributes_keys, RV_JSON_OBJECT)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to parse attributes");
 
     if (yyjson_obj_size(key_obj) == 0)
@@ -2972,8 +2967,7 @@ RV_copy_attribute_name_by_index(char *HTTP_response, const void *callback_data_i
 
     *attr_name = parsed_string_buffer;
 done:
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     if (ret_value < 0) {
         RV_free(parsed_string_buffer);
@@ -2998,7 +2992,7 @@ done:
 hid_t
 RV_parse_dataspace(char *space)
 {
-    yyjson_val *parse_tree = NULL, *key_obj = NULL, *target_tree = NULL;
+    yyjson_val *parse_tree_root = NULL, *key_obj = NULL, *target_tree = NULL;
     yyjson_doc *parse_tree_doc = NULL;
     hsize_t    *space_dims     = NULL;
     hsize_t    *space_maxdims  = NULL;
@@ -3014,15 +3008,15 @@ RV_parse_dataspace(char *space)
     if (!space)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "dataspace string buffer was NULL");
 
-    if (NULL == (parse_tree = RV_json_parse(space, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(space, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
 
-    target_tree = parse_tree;
+    target_tree = parse_tree_root;
 
     /* If the response contains 'h5paths',
      * it may describe multiple objects. Needs to be unwrapped first. */
-    if (NULL != RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)) {
-        if (NULL == (key_obj = RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)))
+    if (NULL != RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)) {
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
 
         /* Access the first object under h5paths */
@@ -3136,8 +3130,7 @@ done:
     if (space_maxdims)
         RV_free(space_maxdims);
 
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_parse_dataspace() */
@@ -3598,10 +3591,10 @@ done:
 herr_t
 RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yyjson_val         *parse_tree     = NULL, *key_obj;
-    yyjson_doc         *parse_tree_doc = NULL;
-    herr_t              ret_value      = SUCCEED;
-    server_api_version *server_version = (server_api_version *)callback_data_out;
+    yyjson_val         *parse_tree_root = NULL, *key_obj;
+    yyjson_doc         *parse_tree_doc  = NULL;
+    herr_t              ret_value       = SUCCEED;
+    server_api_version *server_version  = (server_api_version *)callback_data_out;
 
     char *version_response = NULL;
     char *version_field    = NULL;
@@ -3618,11 +3611,11 @@ RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void 
     if (!server_version)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "server version buffer was NULL");
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
     /* Retrieve version */
-    if (NULL == (key_obj = RV_json_get(parse_tree, server_version_keys, RV_JSON_STRING)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, server_version_keys, RV_JSON_STRING)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse server version");
 
     if (!RV_json_is_string(key_obj))
@@ -3657,8 +3650,7 @@ RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void 
     server_version->patch = (size_t)numeric_version_field;
 
 done:
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 }
@@ -3667,7 +3659,7 @@ done:
 herr_t
 RV_parse_allocated_size_cb(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
-    yyjson_val *parse_tree = NULL, *key_obj = NULL;
+    yyjson_val *parse_tree_root = NULL, *key_obj = NULL;
     yyjson_doc *parse_tree_doc = NULL;
     herr_t      ret_value      = SUCCEED;
     size_t     *allocated_size = (size_t *)callback_data_out;
@@ -3682,11 +3674,11 @@ RV_parse_allocated_size_cb(char *HTTP_response, void *callback_data_in, void *ca
     if (!allocated_size)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "allocated size pointer was NULL");
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
     /* Retrieve size */
-    if (NULL == (key_obj = RV_json_get(parse_tree, allocated_size_keys, RV_JSON_NUMBER)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, allocated_size_keys, RV_JSON_NUMBER)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to parse allocated size");
 
     if (!RV_json_is_integer(key_obj))
@@ -3697,8 +3689,7 @@ RV_parse_allocated_size_cb(char *HTTP_response, void *callback_data_in, void *ca
 
     *allocated_size = (size_t)RV_json_get_integer(key_obj);
 done:
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 }
@@ -4613,8 +4604,8 @@ done:
 herr_t
 RV_parse_domain_allocated_size_cb(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yyjson_val *parse_tree     = NULL, *key_obj;
-    yyjson_doc *parse_tree_doc = NULL;
+    yyjson_val *parse_tree_root = NULL, *key_obj;
+    yyjson_doc *parse_tree_doc  = NULL;
     char       *parsed_object_string;
     size_t     *filesize  = (size_t *)callback_data_out;
     herr_t      ret_value = SUCCEED;
@@ -4628,10 +4619,10 @@ RV_parse_domain_allocated_size_cb(char *HTTP_response, const void *callback_data
     if (!filesize)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output pointer was NULL");
 
-    if (NULL == (parse_tree = RV_json_parse(HTTP_response, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    if (NULL == (key_obj = RV_json_get(parse_tree, scan_info_keys, RV_JSON_OBJECT)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, scan_info_keys, RV_JSON_OBJECT)))
         FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_PARSEERROR, FAIL, "couldn't get scan info");
 
     if (NULL == (key_obj = RV_json_get(key_obj, allocated_bytes_keys, RV_JSON_NUMBER))) {
@@ -4644,8 +4635,7 @@ RV_parse_domain_allocated_size_cb(char *HTTP_response, const void *callback_data
     *filesize = (size_t)RV_json_get_integer(key_obj);
 
 done:
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_parse_domain_allocated_size_cb */

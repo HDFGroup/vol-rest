@@ -1468,7 +1468,7 @@ done:
 static hid_t
 RV_convert_JSON_to_datatype(const char *type)
 {
-    yyjson_val *parse_tree = NULL, *key_obj = NULL, *target_tree = NULL;
+    yyjson_val *parse_tree_root = NULL, *key_obj = NULL, *target_tree = NULL;
     yyjson_doc *parse_tree_doc = NULL;
     hsize_t    *array_dims     = NULL;
     size_t      i;
@@ -1490,15 +1490,15 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
     /* Retrieve the datatype class */
-    if (NULL == (parse_tree = RV_json_parse(type, &parse_tree_doc)))
+    if (NULL == (parse_tree_root = RV_json_parse(type, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
 
-    target_tree = parse_tree;
+    target_tree = parse_tree_root;
 
     /* If the response contains 'h5paths',
      * it may describe multiple objects. Needs to be unwrapped first. */
-    if (NULL != RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)) {
-        if (NULL == (target_tree = RV_json_get(parse_tree, h5paths_keys, RV_JSON_OBJECT)))
+    if (NULL != RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)) {
+        if (NULL == (target_tree = RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
 
         /* Access the first object under h5paths */
@@ -1511,7 +1511,7 @@ RV_convert_JSON_to_datatype(const char *type)
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "unable to parse object under path key");
     }
 
-    if (NULL == (key_obj = RV_json_get(parse_tree, type_class_keys, RV_JSON_STRING)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, type_class_keys, RV_JSON_STRING)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't parse datatype from JSON representation");
 
     if (NULL == (datatype_class = RV_json_get_string(key_obj)))
@@ -1522,7 +1522,7 @@ RV_convert_JSON_to_datatype(const char *type)
         hbool_t is_predefined = TRUE;
         char   *type_base     = NULL;
 
-        if (NULL == (key_obj = RV_json_get(parse_tree, type_base_keys, RV_JSON_STRING)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, type_base_keys, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type");
 
         if (NULL == (type_base = RV_json_get_string(key_obj)))
@@ -1653,7 +1653,7 @@ RV_convert_JSON_to_datatype(const char *type)
         hid_t   predefined_type = FAIL;
         char   *type_base       = NULL;
 
-        if (NULL == (key_obj = RV_json_get(parse_tree, type_base_keys, RV_JSON_STRING)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, type_base_keys, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type");
 
         if (NULL == (type_base = RV_json_get_string(key_obj)))
@@ -1715,7 +1715,7 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
         /* Retrieve the string datatype's length and check if it's a variable-length string */
-        if (NULL == (key_obj = RV_json_get(parse_tree, str_length_keys, RV_JSON_ANY)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, str_length_keys, RV_JSON_ANY)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's length");
 
         is_variable_str = RV_json_is_string(key_obj);
@@ -1725,7 +1725,7 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
         /* Retrieve and check the string datatype's character set */
-        if (NULL == (key_obj = RV_json_get(parse_tree, str_charset_keys, RV_JSON_STRING)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, str_charset_keys, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
                             "can't retrieve string datatype's character set");
 
@@ -1743,7 +1743,7 @@ RV_convert_JSON_to_datatype(const char *type)
                             "unsupported character set for string datatype");
 
         /* Retrieve and check the string datatype's string padding */
-        if (NULL == (key_obj = RV_json_get(parse_tree, str_pad_keys, RV_JSON_STRING)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, str_pad_keys, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
                             "can't retrieve string datatype's padding type");
 
@@ -1762,7 +1762,7 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
         /* Retrieve the length if the datatype is a fixed-length string */
-        if (NULL == (key_obj = RV_json_get(parse_tree, str_length_keys, RV_JSON_ANY)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, str_length_keys, RV_JSON_ANY)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's length");
 
         if (!is_variable_str)
@@ -1800,7 +1800,7 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
         /* Retrieve the compound member fields array */
-        if (NULL == (key_obj = RV_json_get(parse_tree, compound_field_keys, RV_JSON_ARRAY)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, compound_field_keys, RV_JSON_ARRAY)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
                             "can't retrieve compound datatype's members array");
 
@@ -1930,7 +1930,7 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
         /* Retrieve the array dimensions */
-        if (NULL == (key_obj = RV_json_get(parse_tree, array_dims_keys, RV_JSON_ARRAY)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, array_dims_keys, RV_JSON_ARRAY)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve array datatype's dimensions");
 
         if (!yyjson_arr_size(key_obj))
@@ -2058,7 +2058,7 @@ RV_convert_JSON_to_datatype(const char *type)
         if ((datatype = H5Tenum_create(enum_base_type)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create enum datatype");
 
-        if (NULL == (key_obj = RV_json_get(parse_tree, enum_mapping_keys, RV_JSON_OBJECT)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, enum_mapping_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
                             "can't retrieve enum mapping from enum JSON representation");
 
@@ -2088,7 +2088,7 @@ RV_convert_JSON_to_datatype(const char *type)
         printf("-> Reference datatype\n");
 #endif
 
-        if (NULL == (key_obj = RV_json_get(parse_tree, type_base_keys, RV_JSON_STRING)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, type_base_keys, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type");
 
         if (NULL == (type_base = RV_json_get_string(key_obj)))
@@ -2226,8 +2226,7 @@ done:
         if (H5Tclose(enum_base_type) < 0)
             FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close enum base datatype");
 
-    if (parse_tree)
-        yyjson_doc_free(parse_tree_doc);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_convert_JSON_to_datatype() */
