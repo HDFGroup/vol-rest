@@ -32,13 +32,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, ubuntu-latest]
-        build_system: ["autotools", "cmake"]
-        python-version: ["3.10"]
+        python-version: ["3.12"]
         hdf5-branch: ["hdf5_1_14", "develop"]
-        exclude:
-          # hdf5 2.0.0+ does not support autotools
-          - hdf5-branch: "develop"
-            build_system: "autotools"
 
     runs-on: ${{matrix.os}}
     steps:
@@ -52,21 +47,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install libcurl4-openssl-dev
-          sudo apt-get install libyajl-dev
 
-      - name: Get Autotools Dependencies
-        if: matrix.build_system == 'autotools'
-        run: |
-          sudo apt update
-          sudo apt install automake autoconf libtool libtool-bin
-            
       - name: Get REST VOL
         uses: actions/checkout@v4
         with:
           path: ${{github.workspace}}/vol-rest
 
-      - name: CMake Configure + Build HDF5
-        if: matrix.build_system == 'cmake'
+      - name: Configure + Build HDF5
         run: |
           mkdir ${{github.workspace}}/hdf5/build
           cd ./build
@@ -77,25 +64,12 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/hdf5install \
           ..
-          make 
+          make
           make install
         shell: bash
         working-directory: ${{github.workspace}}/hdf5
 
-      - name: Autotools Configure + Build HDF5  
-        if: matrix.build_system == 'autotools'      
-        run: |
-          ./autogen.sh
-          ./configure --prefix=${{github.workspace}}/hdf5install \
-          --enable-hl --disable-threadsafe \
-          --enable-build-mode=production --enable-shared
-          make 
-          make install
-        shell: bash
-        working-directory: ${{github.workspace}}/hdf5
-
-      - name: CMake Configure REST VOL
-        if: matrix.build_system == 'cmake'
+      - name: Configure REST VOL
         run: |
           mkdir ./build
           cd ./build
@@ -105,27 +79,7 @@ jobs:
         shell: bash
         working-directory: ${{github.workspace}}/vol-rest
 
-      - name: Autotools Configure REST VOL
-        if: matrix.build_system == 'autotools'
-        run: |
-          ./autogen.sh
-          mkdir ${{github.workspace}}/vol-rest/install
-          CFLAGS="-D_POSIX_C_SOURCE=200809L" ./configure \
-          --prefix=${{github.workspace}}/vol-rest/install \
-          --with-hdf5=${{github.workspace}}/hdf5install
-        shell: bash
-        working-directory: ${{github.workspace}}/vol-rest
-
-      - name: Build + Install REST VOL (Autotools)
-        if: matrix.build_system == 'autotools'
-        run: |
-          make -j
-          make install
-        shell: bash
-        working-directory: ${{github.workspace}}/vol-rest/
-
-      - name: Build + Install REST VOL (CMake)
-        if: matrix.build_system == 'cmake'
+      - name: Build + Install REST VOL
         run: |
           make -j
           make install
@@ -184,16 +138,7 @@ jobs:
               python tests/integ/setup_test.py
         working-directory: ${{github.workspace}}/hsds
 
-      - name: Test REST VOL (Autotools)
-        if: matrix.build_system == 'autotools'
-        working-directory: ${{github.workspace}}/vol-rest/
-        env:
-          HDF5_PLUGIN_PATH: ${{github.workspace}}/vol-rest/install/lib
-        run: |
-               ./test/test_rest_vol
-
-      - name: Test REST VOL (CMake)
-        if: matrix.build_system == 'cmake'
+      - name: Test REST VOL
         working-directory: ${{github.workspace}}/vol-rest/build/
         env:
           HDF5_PLUGIN_PATH: ${{github.workspace}}/vol-rest/install/lib
@@ -217,7 +162,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-latest]
-        python-version: ["3.10"]
+        python-version: ["3.12"]
         hdf5-branch: ["hdf5_1_14", "develop"] 
     env:
       HSDS_ENDPOINT: http://127.0.0.1:5101
@@ -294,23 +239,6 @@ jobs:
           cmake --build . --config Release
           cmake --install . --config Release
       
-      - name: Get yajl from source
-        uses: actions/checkout@v4
-        with:
-          repository: lloyd/yajl
-          path: ${{github.workspace}}/yajl
-      
-      - name: Install yajl
-        working-directory: ${{github.workspace}}/yajl
-        run: |
-          mkdir build
-          mkdir install
-          cd build
-          cmake -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/yajl/install `
-          -DCMAKE_BUILD_TYPE=Release ..
-          cmake --build . --config Release
-          cmake --install . --config Release
-  
       - name: CMake Configure + Build HDF5
         run: |
           mkdir build
@@ -336,7 +264,6 @@ jobs:
           -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/vol-rest/install `
           -DCURL_ROOT=${{github.workspace}}/curl/install/ -DCMAKE_C_FLAGS="/DCURL_STATICLIB" `
           -DCURL_USE_STATIC_LIBS=ON `
-          -DYAJL_ROOT=${{github.workspace}}/yajl/install/ `
           -DBUILD_STATIC_LIBS=OFF -DBUILD_SHARED_LIBS=ON `
           -DCMAKE_BUILD_TYPE=Release ..
           cmake --build . -j --config Release
@@ -348,7 +275,7 @@ jobs:
           HDF5_PLUGIN_PATH: ${{github.workspace}}\vol-rest\install\bin
         # Manually append lib to PATH here, since env can change between steps on the runner
         run: |
-          $env:PATH="$env:PATH;${{github.workspace}}\vol-rest\install\bin;${{github.workspace}}\hdf5install\bin;${{github.workspace}}\yajl\install\lib"
+          $env:PATH="$env:PATH;${{github.workspace}}\vol-rest\install\bin;${{github.workspace}}\hdf5install\bin"
           ctest . -C Release -VV --output-on-failure
 
       

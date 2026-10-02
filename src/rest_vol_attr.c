@@ -2378,9 +2378,11 @@ static herr_t
 RV_build_attr_table(char *HTTP_response, hbool_t sort, int (*sort_func)(const void *, const void *),
                     attr_table_entry **attr_table, size_t *num_entries)
 {
-    attr_table_entry *table      = NULL;
-    yajl_val          parse_tree = NULL, key_obj;
-    yajl_val          attr_obj, attr_field_obj;
+    attr_table_entry *table           = NULL;
+    yyjson_val       *parse_tree_root = NULL, *key_obj;
+    yyjson_doc       *parse_tree_doc  = NULL;
+    yyjson_val       *attr_obj, *attr_field_obj;
+    yyjson_arr_iter   attr_iter;
     size_t            i, num_attributes;
     char             *attribute_section_start, *attribute_section_end;
     herr_t            ret_value = SUCCEED;
@@ -2396,13 +2398,13 @@ RV_build_attr_table(char *HTTP_response, hbool_t sort, int (*sort_func)(const vo
     printf("-> Building table of attributes\n\n");
 #endif
 
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, attributes_keys, yajl_t_array)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, attributes_keys, RV_JSON_ARRAY)))
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "retrieval of attributes object failed");
 
-    num_attributes = YAJL_GET_ARRAY(key_obj)->len;
+    num_attributes = yyjson_arr_size(key_obj);
     if (num_attributes < 0)
         FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "number of attributes attached to object was negative");
 
@@ -2423,28 +2425,29 @@ RV_build_attr_table(char *HTTP_response, hbool_t sort, int (*sort_func)(const vo
      * subsection, and pass it to the "get attribute info" callback function in order to fill
      * out a H5A_info_t struct for the attribute.
      */
+    attr_iter = yyjson_arr_iter_with(key_obj);
     for (i = 0; i < num_attributes; i++) {
         char *attr_name;
 
-        attr_obj = YAJL_GET_ARRAY(key_obj)->values[i];
+        attr_obj = yyjson_arr_iter_next(&attr_iter);
 
         /* Get the current attribute's name */
-        if (NULL == (attr_field_obj = yajl_tree_get(attr_obj, attr_name_keys, yajl_t_string)))
+        if (NULL == (attr_field_obj = RV_json_get(attr_obj, attr_name_keys, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "retrieval of attribute name failed");
 
-        if (NULL == (attr_name = YAJL_GET_STRING(attr_field_obj)))
+        if (NULL == (attr_name = RV_json_get_string(attr_field_obj)))
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "returned attribute name was NULL");
 
         strncpy(table[i].attr_name, attr_name, ATTRIBUTE_NAME_MAX_LENGTH);
 
         /* Get the current attribute's creation time */
-        if (NULL == (attr_field_obj = yajl_tree_get(attr_obj, attr_creation_time_keys, yajl_t_number)))
+        if (NULL == (attr_field_obj = RV_json_get(attr_obj, attr_creation_time_keys, RV_JSON_NUMBER)))
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_CANTGET, FAIL, "retrieval of attribute creation time failed");
 
-        if (!YAJL_IS_DOUBLE(attr_field_obj))
+        if (!RV_json_is_double(attr_field_obj))
             FUNC_GOTO_ERROR(H5E_ATTR, H5E_BADVALUE, FAIL, "returned attribute creation time is not a double");
 
-        table[i].crt_time = YAJL_GET_DOUBLE(attr_field_obj);
+        table[i].crt_time = RV_json_get_double(attr_field_obj);
 
         /* Process the JSON for the current attribute and fill out a H5A_info_t struct for it */
 
@@ -2489,8 +2492,7 @@ done:
             *num_entries = num_attributes;
     } /* end if */
 
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_build_attr_table() */

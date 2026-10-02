@@ -37,7 +37,8 @@ const char *str_charset_keys[] = {"type", "charSet", (const char *)0};
 const char *str_pad_keys[]     = {"type", "strPad", (const char *)0};
 
 /* JSON keys to retrieve information about a compound datatype */
-const char *compound_field_keys[] = {"type", "fields", (const char *)0};
+const char *compound_field_keys[]      = {"type", "fields", (const char *)0};
+const char *compound_field_name_keys[] = {"name", (const char *)0};
 
 /* JSON keys to retrieve information about an array datatype */
 const char *array_dims_keys[] = {"type", "dims", (const char *)0};
@@ -1468,52 +1469,55 @@ done:
 static hid_t
 RV_convert_JSON_to_datatype(const char *type)
 {
-    yajl_val    parse_tree = NULL, key_obj = NULL, target_tree = NULL;
-    hsize_t    *array_dims = NULL;
-    size_t      i;
-    hid_t       datatype                   = FAIL;
-    hid_t      *compound_member_type_array = NULL;
-    hid_t       enum_base_type             = FAIL;
-    hid_t       ret_value                  = FAIL;
-    hid_t       vlen_parent_type           = H5I_INVALID_HID;
-    const char *path_name                  = NULL;
-    char      **compound_member_names      = NULL;
-    char       *datatype_class             = NULL;
-    char       *array_base_type_substring  = NULL;
-    char       *tmp_cmpd_type_buffer       = NULL;
-    char       *tmp_enum_base_type_buffer  = NULL;
-    char       *tmp_vlen_type_buffer       = NULL;
+    yyjson_val     *parse_tree_root = NULL, *key_obj = NULL, *target_tree = NULL;
+    yyjson_doc     *parse_tree_doc = NULL;
+    yyjson_arr_iter compound_member_iter;
+    yyjson_obj_iter enum_mapping_iter;
+    hsize_t        *array_dims = NULL;
+    size_t          i;
+    hid_t           datatype                   = FAIL;
+    hid_t          *compound_member_type_array = NULL;
+    hid_t           enum_base_type             = FAIL;
+    hid_t           ret_value                  = FAIL;
+    hid_t           vlen_parent_type           = H5I_INVALID_HID;
+    const char     *path_name                  = NULL;
+    char          **compound_member_names      = NULL;
+    char           *datatype_class             = NULL;
+    char           *array_base_type_substring  = NULL;
+    char           *tmp_cmpd_type_buffer       = NULL;
+    char           *tmp_enum_base_type_buffer  = NULL;
+    char           *tmp_vlen_type_buffer       = NULL;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Converting JSON buffer %s to hid_t\n", type);
 #endif
 
     /* Retrieve the datatype class */
-    if (NULL == (parse_tree = yajl_tree_parse(type, NULL, 0)))
+    if (NULL == (parse_tree_root = RV_json_parse(type, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
 
-    target_tree = parse_tree;
+    target_tree = parse_tree_root;
 
     /* If the response contains 'h5paths',
      * it may describe multiple objects. Needs to be unwrapped first. */
-    if (NULL != yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)) {
-        if (NULL == (target_tree = yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)))
+    if (NULL != RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)) {
+        if (NULL == (target_tree = RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
 
         /* Access the first object under h5paths */
-        if (NULL == (path_name = target_tree->u.object.keys[0]))
+        if (NULL == (path_name = RV_json_obj_key_at(target_tree, 0)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed path name was NULL");
 
         const char *path_keys[] = {path_name, (const char *)0};
 
-        if (NULL == (target_tree = yajl_tree_get(target_tree, path_keys, yajl_t_object)))
+        if (NULL == (target_tree = RV_json_get(target_tree, path_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "unable to parse object under path key");
     }
 
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, type_class_keys, yajl_t_string)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, type_class_keys, RV_JSON_STRING)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't parse datatype from JSON representation");
 
-    if (NULL == (datatype_class = YAJL_GET_STRING(key_obj)))
+    if (NULL == (datatype_class = RV_json_get_string(key_obj)))
         FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't parse datatype from JSON representation");
 
     /* Create the appropriate datatype or copy an existing one */
@@ -1521,10 +1525,10 @@ RV_convert_JSON_to_datatype(const char *type)
         hbool_t is_predefined = TRUE;
         char   *type_base     = NULL;
 
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, type_base_keys, yajl_t_string)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, type_base_keys, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type");
 
-        if (NULL == (type_base = YAJL_GET_STRING(key_obj)))
+        if (NULL == (type_base = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type");
 
         if (is_predefined) {
@@ -1652,10 +1656,10 @@ RV_convert_JSON_to_datatype(const char *type)
         hid_t   predefined_type = FAIL;
         char   *type_base       = NULL;
 
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, type_base_keys, yajl_t_string)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, type_base_keys, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type");
 
-        if (NULL == (type_base = YAJL_GET_STRING(key_obj)))
+        if (NULL == (type_base = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type");
 
         if (is_predefined) {
@@ -1714,21 +1718,21 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
         /* Retrieve the string datatype's length and check if it's a variable-length string */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, str_length_keys, yajl_t_any)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, str_length_keys, RV_JSON_ANY)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's length");
 
-        is_variable_str = YAJL_IS_STRING(key_obj);
+        is_variable_str = RV_json_is_string(key_obj);
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> %s string\n", is_variable_str ? "Variable-length" : "Fixed-length");
 #endif
 
         /* Retrieve and check the string datatype's character set */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, str_charset_keys, yajl_t_string)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, str_charset_keys, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
                             "can't retrieve string datatype's character set");
 
-        if (NULL == (charSet = YAJL_GET_STRING(key_obj)))
+        if (NULL == (charSet = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
                             "can't retrieve string datatype's character set");
 
@@ -1742,11 +1746,11 @@ RV_convert_JSON_to_datatype(const char *type)
                             "unsupported character set for string datatype");
 
         /* Retrieve and check the string datatype's string padding */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, str_pad_keys, yajl_t_string)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, str_pad_keys, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
                             "can't retrieve string datatype's padding type");
 
-        if (NULL == (strPad = YAJL_GET_STRING(key_obj)))
+        if (NULL == (strPad = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
                             "can't retrieve string datatype's padding type");
 
@@ -1761,11 +1765,11 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
         /* Retrieve the length if the datatype is a fixed-length string */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, str_length_keys, yajl_t_any)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, str_length_keys, RV_JSON_ANY)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve string datatype's length");
 
         if (!is_variable_str)
-            fixed_length = YAJL_GET_INTEGER(key_obj);
+            fixed_length = RV_json_get_integer(key_obj);
         if (fixed_length < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "invalid datatype length");
 
@@ -1799,24 +1803,24 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
         /* Retrieve the compound member fields array */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, compound_field_keys, yajl_t_array)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, compound_field_keys, RV_JSON_ARRAY)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
                             "can't retrieve compound datatype's members array");
 
-        if (!YAJL_GET_ARRAY(key_obj)->len)
+        if (!yyjson_arr_size(key_obj))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "0-sized compound datatype members array");
 
-        if (NULL == (compound_member_type_array = (hid_t *)RV_malloc(YAJL_GET_ARRAY(key_obj)->len *
-                                                                     sizeof(*compound_member_type_array))))
+        if (NULL == (compound_member_type_array =
+                         (hid_t *)RV_malloc(yyjson_arr_size(key_obj) * sizeof(*compound_member_type_array))))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate compound datatype");
-        for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++)
+        for (i = 0; i < yyjson_arr_size(key_obj); i++)
             compound_member_type_array[i] = FAIL;
 
         if (NULL == (compound_member_names =
-                         (char **)RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*compound_member_names))))
+                         (char **)RV_malloc(yyjson_arr_size(key_obj) * sizeof(*compound_member_names))))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
                             "can't allocate compound datatype member names array");
-        for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++)
+        for (i = 0; i < yyjson_arr_size(key_obj); i++)
             compound_member_names[i] = NULL;
 
         /* Allocate space for a temporary buffer used to extract and process the substring corresponding to
@@ -1827,23 +1831,21 @@ RV_convert_JSON_to_datatype(const char *type)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL,
                             "can't allocate temporary buffer for storing type information");
 
-        /* Retrieve the names of all of the members of the Compound Datatype */
-        for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
-            yajl_val compound_member_field;
-            size_t   j;
+        /* Retrieve the names of all of the members of the Compound Datatype. Use an iterator rather
+         * than yyjson_arr_get(), which is linear-time on arrays of objects. */
+        compound_member_iter = yyjson_arr_iter_with(key_obj);
+        for (i = 0; i < yyjson_arr_size(key_obj); i++) {
+            yyjson_val *compound_member_field;
 
-            if (NULL == (compound_member_field = YAJL_GET_ARRAY(key_obj)->values[i]))
+            if (NULL == (compound_member_field = yyjson_arr_iter_next(&compound_member_iter)))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
                                 "can't get compound field member %zu information", i);
 
-            for (j = 0; j < YAJL_GET_OBJECT(compound_member_field)->len; j++) {
-                if (!strcmp(YAJL_GET_OBJECT(compound_member_field)->keys[j], "name"))
-                    if (NULL == (compound_member_names[i] =
-                                     YAJL_GET_STRING(YAJL_GET_OBJECT(compound_member_field)->values[j])))
-                        FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
-                                        "can't get compound field member %zu name", j);
-            } /* end for */
-        }     /* end for */
+            if (NULL == (compound_member_names[i] = RV_json_get_string(
+                             RV_json_get(compound_member_field, compound_field_name_keys, RV_JSON_STRING))))
+                FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
+                                "can't get compound field member %zu name", i);
+        } /* end for */
 
         /* For each field in the Compound Datatype's string representation, locate the beginning and end of
          * its "type" section and copy that substring into the temporary buffer. Then, convert that substring
@@ -1855,7 +1857,7 @@ RV_convert_JSON_to_datatype(const char *type)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
                             "can't find \"fields\" information section in datatype string");
 
-        for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
+        for (i = 0; i < yyjson_arr_size(key_obj); i++) {
             /* Find the beginning of the "type" section for this Compound Datatype member */
             if (NULL == (type_section_ptr = strstr(type_section_ptr, "\"type\"")))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
@@ -1909,7 +1911,7 @@ RV_convert_JSON_to_datatype(const char *type)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create compound datatype");
 
         /* Insert all fields into the Compound Datatype */
-        for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
+        for (i = 0; i < yyjson_arr_size(key_obj); i++) {
             if (H5Tinsert(datatype, compound_member_names[i], current_offset, compound_member_type_array[i]) <
                 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTINSERT, FAIL, "can't insert compound datatype member");
@@ -1929,23 +1931,23 @@ RV_convert_JSON_to_datatype(const char *type)
 #endif
 
         /* Retrieve the array dimensions */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, array_dims_keys, yajl_t_array)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, array_dims_keys, RV_JSON_ARRAY)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve array datatype's dimensions");
 
-        if (!YAJL_GET_ARRAY(key_obj)->len)
+        if (!yyjson_arr_size(key_obj))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "0-sized array");
 
-        if (NULL == (array_dims = (hsize_t *)RV_malloc(YAJL_GET_ARRAY(key_obj)->len * sizeof(*array_dims))))
+        if (NULL == (array_dims = (hsize_t *)RV_malloc(yyjson_arr_size(key_obj) * sizeof(*array_dims))))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTALLOC, FAIL, "can't allocate space for array dimensions");
 
-        for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
-            if (YAJL_IS_INTEGER(YAJL_GET_ARRAY(key_obj)->values[i]))
-                array_dims[i] = (hsize_t)YAJL_GET_INTEGER(YAJL_GET_ARRAY(key_obj)->values[i]);
+        for (i = 0; i < yyjson_arr_size(key_obj); i++) {
+            if (RV_json_is_integer(yyjson_arr_get(key_obj, i)))
+                array_dims[i] = (hsize_t)RV_json_get_integer(yyjson_arr_get(key_obj, i));
         } /* end for */
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Array datatype dimensions: [");
-        for (i = 0; i < YAJL_GET_ARRAY(key_obj)->len; i++) {
+        for (i = 0; i < yyjson_arr_size(key_obj); i++) {
             if (i > 0)
                 printf(", ");
             printf("%" PRIuHSIZE, array_dims[i]);
@@ -2057,26 +2059,29 @@ RV_convert_JSON_to_datatype(const char *type)
         if ((datatype = H5Tenum_create(enum_base_type)) < 0)
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCREATE, FAIL, "can't create enum datatype");
 
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, enum_mapping_keys, yajl_t_object)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, enum_mapping_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL,
                             "can't retrieve enum mapping from enum JSON representation");
 
         /* Retrieve the name and value of each member in the enum mapping, inserting them into the enum type
-         * as new members */
-        for (i = 0; i < YAJL_GET_OBJECT(key_obj)->len; i++) {
-            long long val;
+         * as new members. Use an iterator rather than positional access, which is linear-time. */
+        enum_mapping_iter = yyjson_obj_iter_with(key_obj);
+        for (i = 0; i < yyjson_obj_size(key_obj); i++) {
+            yyjson_val *enum_member_key = yyjson_obj_iter_next(&enum_mapping_iter);
+            yyjson_val *enum_member_val = yyjson_obj_iter_get_val(enum_member_key);
+            long long   val;
 
-            if (!YAJL_IS_INTEGER(YAJL_GET_OBJECT(key_obj)->values[i]))
+            if (!RV_json_is_integer(enum_member_val))
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_BADVALUE, FAIL, "enum member %zu value is not an integer",
                                 i);
 
-            val = YAJL_GET_INTEGER(YAJL_GET_OBJECT(key_obj)->values[i]);
+            val = RV_json_get_integer(enum_member_val);
 
-            /* Convert the value from YAJL's integer representation to the base type of the enum datatype */
+            /* Convert the value from its JSON integer representation to the base type of the enum datatype */
             if (H5Tconvert(H5T_NATIVE_LLONG, enum_base_type, 1, &val, NULL, H5P_DEFAULT) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTCONVERT, FAIL, "can't convert enum value to base type");
 
-            if (H5Tenum_insert(datatype, YAJL_GET_OBJECT(key_obj)->keys[i], (void *)&val) < 0)
+            if (H5Tenum_insert(datatype, yyjson_get_str(enum_member_key), (void *)&val) < 0)
                 FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_CANTINSERT, FAIL, "can't insert member into enum datatype");
         } /* end for */
     }     /* end if */
@@ -2087,10 +2092,10 @@ RV_convert_JSON_to_datatype(const char *type)
         printf("-> Reference datatype\n");
 #endif
 
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, type_base_keys, yajl_t_string)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, type_base_keys, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type");
 
-        if (NULL == (type_base = YAJL_GET_STRING(key_obj)))
+        if (NULL == (type_base = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_DATATYPE, H5E_PARSEERROR, FAIL, "can't retrieve datatype's base type");
 
         if (!strcmp(type_base, "H5T_STD_REF_OBJ")) {
@@ -2225,8 +2230,7 @@ done:
         if (H5Tclose(enum_base_type) < 0)
             FUNC_DONE_ERROR(H5E_DATATYPE, H5E_CANTCLOSEOBJ, FAIL, "can't close enum base datatype");
 
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_convert_JSON_to_datatype() */

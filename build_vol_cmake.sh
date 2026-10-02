@@ -25,7 +25,7 @@ BUILD_DIR="${SCRIPT_DIR}/rest_vol_cmake_build_files"
 CMAKE_GENERATOR="Unix Makefiles"
 
 # Determine the number of processors to use when
-# building in parallel with Autotools make
+# building in parallel
 NPROCS=0
 
 # Extra compiler options passed to the various steps, such as -Wall
@@ -38,8 +38,7 @@ MEM_TRACK_OPT=
 THREAD_SAFE_OPT=
 HDF5_INSTALL_DIR=
 CURL_OPT=
-YAJL_OPT=
-YAJL_LIB_OPT=
+YYJSON_OPT=
 
 echo
 echo "*************************"
@@ -60,10 +59,6 @@ usage()
     echo "      -m      Enable memory tracking in the REST VOL."
     echo
     echo "      -s      Enable linking to thread safe static hdf5 library."
-    echo
-    echo "      -t      Make use of the static YAJL library. Be aware the"
-    echo "              library should be built with position independent"
-    echo "              code option enabled."
     echo
     echo "      -u      Make use of the static cURL library."
     echo
@@ -87,13 +82,14 @@ usage()
     echo "              installed, if cURL was not installed to a system"
     echo "              directory. Similar to '-DCURL_ROOT=DIR'."
     echo
-    echo "      -Y DIR  To specify the top-level directory where YAJL is"
-    echo "              installed, if YAJL was not installed to a system"
-    echo "              directory. Similar to '-DYAJL_ROOT=DIR'."
+    echo "      -Y DIR  To specify the top-level directory where yyjson is"
+    echo "              installed, if yyjson was not installed to a system"
+    echo "              directory. Similar to '-Dyyjson_ROOT=DIR'. If yyjson"
+    echo "              is not found, it is fetched and built automatically."
     echo
 }
 
-optspec=":hctdmstluG:H:C:Y:B:P:-"
+optspec=":hcdmsluG:H:C:Y:B:P:-"
 while getopts "$optspec" optchar; do
     case "${optchar}" in
     h)
@@ -118,10 +114,6 @@ while getopts "$optspec" optchar; do
     s)
         THREAD_SAFE_OPT="-DHDF5_VOL_REST_THREAD_SAFE=ON"
         echo "Enabled linking to static thread safe hdf5 library"
-        echo
-        ;;
-    t)  YAJL_LIB_OPT="-DYAJL_USE_STATIC_LIBRARIES=ON"
-        echo "Using the static YAJL library."
         echo
         ;;
     u)  CURL_LIB_OPT="-DCURL_STATICLIB"
@@ -154,8 +146,8 @@ while getopts "$optspec" optchar; do
         echo
         ;;
     Y)
-        YAJL_OPT="-DYAJL_ROOT=$OPTARG"
-        echo "YAJL_ROOT set to: ${OPTARG}"
+        YYJSON_OPT="-Dyyjson_ROOT=$OPTARG"
+        echo "yyjson_ROOT set to: ${OPTARG}"
         echo
         ;;
     *)
@@ -195,11 +187,11 @@ rm -f "${BUILD_DIR}/CMakeCache.txt"
 
 cd "${BUILD_DIR}"
 
-CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "${CMAKE_GENERATOR}" "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}" "-DHDF5_ROOT=${HDF5_INSTALL_DIR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${CURL_OPT}" "${CURL_LIB_OPT}" "${YAJL_OPT}" "${YAJL_LIB_OPT}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}"
+CFLAGS="-D_POSIX_C_SOURCE=200809L" cmake -G "${CMAKE_GENERATOR}" "-DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}" "-DHDF5_ROOT=${HDF5_INSTALL_DIR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" "${CURL_OPT}" "${CURL_LIB_OPT}" "${YYJSON_OPT}" "${CONNECTOR_DEBUG_OPT}" "${CURL_DEBUG_OPT}" "${MEM_TRACK_OPT}" "${THREAD_SAFE_OPT}" "${SCRIPT_DIR}"
 
 echo "Build files have been generated for CMake generator '${CMAKE_GENERATOR}'"
 
-# Build with autotools make by default
+# Build with make by default when using the Unix Makefiles generator
 if [ "${CMAKE_GENERATOR}" = "Unix Makefiles" ]; then
   make -j${NPROCS} && make install || exit 1
 fi

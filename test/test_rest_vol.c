@@ -5950,7 +5950,7 @@ test_create_dataset_string_types(void)
 
     if ((dset_id_variable = H5Dopen2(group_id, DATASET_STRING_TYPE_TEST_DSET_NAME2, H5P_DEFAULT)) < 0) {
         H5_FAILED();
-        printf("    failed to opend dataset\n");
+        printf("    failed to open dataset\n");
         goto error;
     }
 

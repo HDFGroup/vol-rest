@@ -182,7 +182,7 @@ static char *H5_rest_url_encode_path(const char *path);
 herr_t RV_parse_object_class(char *HTTP_response, const void *callback_data_in, void *callback_data_out);
 
 /* Helper function to parse an object's creation properties from server response */
-herr_t RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf);
+herr_t RV_parse_creation_properties_callback(yyjson_val *parse_tree_root, char **GCPL_buf);
 
 /* Return the index of the curl handle into the array of handles */
 herr_t RV_get_index_of_matching_handle(dataset_transfer_info *transfer_info, size_t count, CURL *handle,
@@ -327,6 +327,117 @@ static const H5VL_class_t H5VL_rest_g = {
 
     NULL, /* Connector 'catch-all' function         */
 };
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_json_parse
+ *
+ * Purpose:     Parse a NUL-terminated JSON string into an immutable yyjson
+ *              document. On success, returns the document's root value and
+ *              stores the owning document in *out_doc, which the caller must
+ *              free with yyjson_doc_free(). 'out_doc' must not be NULL.
+ *
+ * Return:      Root value on success/NULL on failure
+ *-------------------------------------------------------------------------
+ */
+yyjson_val *
+RV_json_parse(const char *text, yyjson_doc **out_doc)
+{
+    if (!out_doc)
+        return NULL;
+
+    *out_doc = NULL;
+
+    if (!text)
+        return NULL;
+
+    if (NULL == (*out_doc = yyjson_read(text, strlen(text), 0)))
+        return NULL;
+
+    return yyjson_doc_get_root(*out_doc);
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_json_get
+ *
+ * Purpose:     Navigate 'obj' by following 'path', a NULL-terminated array of
+ *              object keys (like the former RV_json_get() path argument).
+ *              If 'type' is not RV_JSON_ANY, the located node must be of that
+ *              type.
+ *
+ * Return:      Located node on success/NULL if a key is missing or the type
+ *              does not match
+ *-------------------------------------------------------------------------
+ */
+yyjson_val *
+RV_json_get(yyjson_val *obj, const char **path, rv_json_type_t type)
+{
+    yyjson_val *cur = obj;
+    size_t      i;
+
+    if (!cur || !path)
+        return NULL;
+
+    for (i = 0; path[i] != NULL; i++) {
+        if (!yyjson_is_obj(cur))
+            return NULL;
+        if (NULL == (cur = yyjson_obj_get(cur, path[i])))
+            return NULL;
+    }
+
+    switch (type) {
+        case RV_JSON_STRING:
+            if (!yyjson_is_str(cur))
+                return NULL;
+            break;
+        case RV_JSON_NUMBER:
+            if (!yyjson_is_num(cur))
+                return NULL;
+            break;
+        case RV_JSON_OBJECT:
+            if (!yyjson_is_obj(cur))
+                return NULL;
+            break;
+        case RV_JSON_ARRAY:
+            if (!yyjson_is_arr(cur))
+                return NULL;
+            break;
+        case RV_JSON_ANY:
+        default:
+            break;
+    }
+
+    return cur;
+}
+
+/*-------------------------------------------------------------------------
+ * Function:    RV_json_obj_key_at
+ *
+ * Purpose:     Return the key string of the object member at position 'idx'
+ *              (0-based, in insertion order), or NULL if 'obj' is not an
+ *              object or 'idx' is out of range.
+ *
+ *              WARNING: This is linear-time with respect to the number of
+ *              object members. See rest_vol.h.
+ *-------------------------------------------------------------------------
+ */
+const char *
+RV_json_obj_key_at(yyjson_val *obj, size_t idx)
+{
+    yyjson_obj_iter iter;
+    yyjson_val     *key;
+    size_t          i = 0;
+
+    if (!yyjson_is_obj(obj))
+        return NULL;
+
+    yyjson_obj_iter_init(obj, &iter);
+    while ((key = yyjson_obj_iter_next(&iter))) {
+        if (i++ == idx)
+            return yyjson_get_str(key);
+    }
+
+    return NULL;
+}
 
 /*-------------------------------------------------------------------------
  * Function:    H5rest_init
@@ -962,7 +1073,8 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
     const char *refresh_token_key[] = {"refresh_token", (const char *)0};
     const char *expires_in_key[]    = {"expires_in", (const char *)0};
     const char *token_cfg_file_name = ".hstokencfg";
-    yajl_val    parse_tree = NULL, key_obj = NULL;
+    yyjson_val *parse_tree_root = NULL, *key_obj = NULL;
+    yyjson_doc *parse_tree_doc              = NULL;
     size_t      token_cfg_file_pathname_len = 0;
     FILE       *token_cfg_file              = NULL;
     char       *token_cfg_file_pathname     = NULL;
@@ -1063,33 +1175,36 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
 #endif
 
         /* Parse token config file */
-        if (NULL == (parse_tree = yajl_tree_parse(cfg_json, NULL, 0)))
+        if (NULL == (parse_tree_root = RV_json_parse(cfg_json, &parse_tree_doc)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "Failed to parse token config JSON");
 
         /* Get access token for the HSDS endpoint */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, cfg_access_token, yajl_t_string)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, cfg_access_token, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token");
-        if (NULL == (access_token = YAJL_GET_STRING(key_obj)))
+        if (NULL == (access_token = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token's value");
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Access token:\n-> \"%s\"\n", access_token);
 #endif
 
         /* Get refresh token for the HSDS endpoint */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, cfg_refresh_token, yajl_t_string)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, cfg_refresh_token, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve refresh token");
-        if (NULL == (refresh_token = YAJL_GET_STRING(key_obj)))
+        if (NULL == (refresh_token = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve refresh token's value");
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Refresh token:\n-> \"%s\"\n", refresh_token);
 #endif
 
         /* Get token expiration for the HSDS endpoint */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, cfg_token_expires, yajl_t_number)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, cfg_token_expires, RV_JSON_NUMBER)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve token expiration");
-        if (!YAJL_IS_NUMBER(key_obj))
+        if (!RV_json_is_number(key_obj))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "token expiration's value is not a number");
-        token_expires = (time_t)YAJL_GET_DOUBLE(key_obj);
+        {
+            double expires_seconds = RV_json_get_double(key_obj);
+            token_expires          = (time_t)expires_seconds;
+        }
         if (time(NULL) > token_expires)
             FUNC_GOTO_ERROR(H5E_VOL, H5E_BADVALUE, FAIL, "Access token expired");
 #ifdef RV_CONNECTOR_DEBUG
@@ -1182,14 +1297,14 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Authentication server response:\n-> \"%s\"\n", response_buffer.buffer);
 #endif
-            if (NULL == (parse_tree = yajl_tree_parse(response_buffer.buffer, NULL, 0)))
+            if (NULL == (parse_tree_root = RV_json_parse(response_buffer.buffer, &parse_tree_doc)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
 
             /* Retrieve the authentication message */
-            if (NULL == (key_obj = yajl_tree_get(parse_tree, ad_auth_message_keys, yajl_t_string)))
+            if (NULL == (key_obj = RV_json_get(parse_tree_root, ad_auth_message_keys, RV_JSON_STRING)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL,
                                 "can't retrieve authentication instructions message");
-            if (NULL == (instruction_string = YAJL_GET_STRING(key_obj)))
+            if (NULL == (instruction_string = RV_json_get_string(key_obj)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL,
                                 "can't retrieve authentication instructions message");
 
@@ -1199,10 +1314,10 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
 
             /* Assume that the user has now properly signed in - attempt to retrieve token */
 
-            if (NULL == (key_obj = yajl_tree_get(parse_tree, device_code_keys, yajl_t_string)))
+            if (NULL == (key_obj = RV_json_get(parse_tree_root, device_code_keys, RV_JSON_STRING)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve authentication device code");
 
-            if (NULL == (device_code = YAJL_GET_STRING(key_obj)))
+            if (NULL == (device_code = RV_json_get_string(key_obj)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve authentication device code");
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Device code: \"%s\"\n", device_code);
@@ -1240,26 +1355,26 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
         } /* end else */
 
         /* Parse response JSON */
-        yajl_tree_free(parse_tree);
-        parse_tree = NULL;
-        if (NULL == (parse_tree = yajl_tree_parse(response_buffer.buffer, NULL, 0)))
+        yyjson_doc_free(parse_tree_doc);
+        parse_tree_doc = NULL;
+        if (NULL == (parse_tree_root = RV_json_parse(response_buffer.buffer, &parse_tree_doc)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
 
         /* Get access token */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, access_token_key, yajl_t_string)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, access_token_key, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token");
-        if (NULL == (access_token = YAJL_GET_STRING(key_obj)))
+        if (NULL == (access_token = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve access token string");
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Access token:\n-> \"%s\"\n", access_token);
 #endif
 
         /* Get access token's validity period */
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, expires_in_key, yajl_t_number)))
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, expires_in_key, RV_JSON_NUMBER)))
             FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve expires_in key");
-        if (!YAJL_IS_INTEGER(key_obj))
+        if (!RV_json_is_integer(key_obj))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned expires_in value is not an integer");
-        token_expires = YAJL_GET_INTEGER(key_obj);
+        token_expires = RV_json_get_integer(key_obj);
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Access token expires after %ld (duration: %ld seconds)\n", time(NULL) + token_expires,
                token_expires);
@@ -1267,8 +1382,8 @@ H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL)
         token_expires = time(NULL) + token_expires - 1;
 
         /* Get refresh token (optional) */
-        if (NULL != (key_obj = yajl_tree_get(parse_tree, refresh_token_key, yajl_t_string))) {
-            if (NULL == (refresh_token = YAJL_GET_STRING(key_obj)))
+        if (NULL != (key_obj = RV_json_get(parse_tree_root, refresh_token_key, RV_JSON_STRING))) {
+            if (NULL == (refresh_token = RV_json_get_string(key_obj)))
                 FUNC_GOTO_ERROR(H5E_VOL, H5E_PARSEERROR, FAIL, "can't retrieve refresh token's string value");
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Refresh token:\n-> \"%s\"\n", refresh_token);
@@ -1301,8 +1416,7 @@ done:
         curl_headers = NULL;
     } /* end if */
 
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
+    yyjson_doc_free(parse_tree_doc);
 
     /* Clear out memory */
     memset(data_string, 0, sizeof(data_string));
@@ -1688,7 +1802,8 @@ done:
 herr_t
 RV_parse_object_class(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val    parse_tree = NULL, key_obj = NULL, class_obj = NULL, target_tree = NULL;
+    yyjson_val *parse_tree_root = NULL, *key_obj = NULL, *class_obj = NULL, *target_tree = NULL;
+    yyjson_doc *parse_tree_doc = NULL;
     char       *parsed_object_string;
     const char *object_class_keys[] = {"class", (const char *)0};
     const char *path_name           = NULL;
@@ -1704,35 +1819,35 @@ RV_parse_object_class(char *HTTP_response, const void *callback_data_in, void *c
     if (!object_type)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL");
 
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    target_tree = parse_tree;
+    target_tree = parse_tree_root;
 
     /* If the response contains 'h5paths',
      * it may describe multiple objects. Needs to be unwrapped first. */
-    if (NULL != yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)) {
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)))
+    if (NULL != RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)) {
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
 
         /* Access the first object under h5paths */
-        if (NULL == (path_name = key_obj->u.object.keys[0]))
+        if (NULL == (path_name = RV_json_obj_key_at(key_obj, 0)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed path name was NULL");
 
         const char *path_keys[] = {path_name, (const char *)0};
 
-        if (NULL == (target_tree = yajl_tree_get(key_obj, path_keys, yajl_t_object)))
+        if (NULL == (target_tree = RV_json_get(key_obj, path_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "unable to parse object under path key");
     }
 
-    if (NULL == (key_obj = yajl_tree_get(target_tree, object_class_keys, yajl_t_string))) {
+    if (NULL == (key_obj = RV_json_get(target_tree, object_class_keys, RV_JSON_STRING))) {
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "couldn't parse object class");
     }
 
-    if (!YAJL_IS_STRING(key_obj))
+    if (!RV_json_is_string(key_obj))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed object class is not a string");
 
-    if (NULL == (parsed_object_string = YAJL_GET_STRING(key_obj)))
+    if (NULL == (parsed_object_string = RV_json_get_string(key_obj)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed object class is NULL");
 
     if (!strcmp(parsed_object_string, "group")) {
@@ -1749,8 +1864,7 @@ RV_parse_object_class(char *HTTP_response, const void *callback_data_in, void *c
     }
 
 done:
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_parse_object_class */
@@ -1877,7 +1991,8 @@ done:
 herr_t
 RV_copy_object_URI_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val    parse_tree = NULL, key_obj = NULL, single_obj = NULL, target_tree = NULL;
+    yyjson_val *parse_tree_root = NULL, *key_obj = NULL, *single_obj = NULL, *target_tree = NULL;
+    yyjson_doc *parse_tree_doc = NULL;
     char       *parsed_string;
     char       *buf_out   = (char *)callback_data_out;
     const char *path_name = NULL;
@@ -1892,24 +2007,24 @@ RV_copy_object_URI_callback(char *HTTP_response, const void *callback_data_in, v
     if (!buf_out)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output buffer was NULL");
 
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    target_tree = parse_tree;
+    target_tree = parse_tree_root;
 
     /* If the response contains 'h5paths',
      * it may describe multiple objects. Needs to be unwrapped first. */
-    if (NULL != yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)) {
-        if (NULL == (target_tree = yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)))
+    if (NULL != RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)) {
+        if (NULL == (target_tree = RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
 
         /* Access the first object under h5paths */
-        if (NULL == (path_name = target_tree->u.object.keys[0]))
+        if (NULL == (path_name = RV_json_obj_key_at(target_tree, 0)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed path name was NULL");
 
         const char *path_keys[] = {path_name, (const char *)0};
 
-        if (NULL == (target_tree = yajl_tree_get(target_tree, path_keys, yajl_t_object)))
+        if (NULL == (target_tree = RV_json_get(target_tree, path_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "unable to parse object under path key");
     }
 
@@ -1917,10 +2032,10 @@ RV_copy_object_URI_callback(char *HTTP_response, const void *callback_data_in, v
      * first check for the link class field and short circuit if it is found to be
      * equal to "H5L_TYPE_SOFT"
      */
-    if (NULL != (key_obj = yajl_tree_get(target_tree, link_class_keys, yajl_t_string))) {
+    if (NULL != (key_obj = RV_json_get(target_tree, link_class_keys, RV_JSON_STRING))) {
         char *link_type;
 
-        if (NULL == (link_type = YAJL_GET_STRING(key_obj)))
+        if (NULL == (link_type = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "link type string was NULL");
 
         if (!strcmp(link_type, "H5L_TYPE_SOFT") || !strcmp(link_type, "H5L_TYPE_EXTERNAL") ||
@@ -1931,12 +2046,12 @@ RV_copy_object_URI_callback(char *HTTP_response, const void *callback_data_in, v
     /* First attempt to retrieve the URI of the object by using the JSON key sequence
      * "link" -> "id", which is returned when making a GET Link request.
      */
-    key_obj = yajl_tree_get(target_tree, link_id_keys, yajl_t_string);
+    key_obj = RV_json_get(target_tree, link_id_keys, RV_JSON_STRING);
     if (key_obj) {
-        if (!YAJL_IS_STRING(key_obj))
+        if (!RV_json_is_string(key_obj))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned URI is not a string");
 
-        if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
+        if (NULL == (parsed_string = RV_json_get_string(key_obj)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "URI was NULL");
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1953,12 +2068,12 @@ RV_copy_object_URI_callback(char *HTTP_response, const void *callback_data_in, v
          * for just the JSON key "id", which would generally correspond to trying to
          * retrieve the URI of a newly-created or opened object that isn't a file.
          */
-        key_obj = yajl_tree_get(target_tree, object_id_keys, yajl_t_string);
+        key_obj = RV_json_get(target_tree, object_id_keys, RV_JSON_STRING);
         if (key_obj) {
-            if (!YAJL_IS_STRING(key_obj))
+            if (!RV_json_is_string(key_obj))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned URI is not a string");
 
-            if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
+            if (NULL == (parsed_string = RV_json_get_string(key_obj)))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "URI was NULL");
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1976,13 +2091,13 @@ RV_copy_object_URI_callback(char *HTTP_response, const void *callback_data_in, v
              * retrieve the URI of a newly-created or opened file, or to a search for
              * the root group of a file.
              */
-            if (NULL == (key_obj = yajl_tree_get(target_tree, root_id_keys, yajl_t_string)))
+            if (NULL == (key_obj = RV_json_get(target_tree, root_id_keys, RV_JSON_STRING)))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_CANTGET, FAIL, "retrieval of URI failed");
 
-            if (!YAJL_IS_STRING(key_obj))
+            if (!RV_json_is_string(key_obj))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned URI is not a string");
 
-            if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
+            if (NULL == (parsed_string = RV_json_get_string(key_obj)))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "URI was NULL");
 
 #ifdef RV_CONNECTOR_DEBUG
@@ -1994,8 +2109,7 @@ RV_copy_object_URI_callback(char *HTTP_response, const void *callback_data_in, v
     strncpy(buf_out, parsed_string, URI_MAX_LENGTH);
 
 done:
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_copy_object_URI_parse_callback() */
@@ -2434,25 +2548,25 @@ done:
  *              May, 2023
  */
 herr_t
-RV_parse_creation_properties_callback(yajl_val parse_tree, char **GCPL_buf_out)
+RV_parse_creation_properties_callback(yyjson_val *parse_tree_root, char **GCPL_buf_out)
 {
-    herr_t   ret_value      = SUCCEED;
-    yajl_val key_obj        = NULL;
-    char    *parsed_string  = NULL;
-    char    *GCPL_buf_local = NULL;
+    herr_t      ret_value      = SUCCEED;
+    yyjson_val *key_obj        = NULL;
+    char       *parsed_string  = NULL;
+    char       *GCPL_buf_local = NULL;
 
     if (!GCPL_buf_out)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given GCPL buffer was NULL");
-    if (!parse_tree)
+    if (!parse_tree_root)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "parse tree was NULL");
 
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, object_creation_properties_keys, yajl_t_string)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, object_creation_properties_keys, RV_JSON_STRING)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse creationProperties");
 
-    if (!YAJL_IS_STRING(key_obj))
+    if (!RV_json_is_string(key_obj))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned creationProperties is not a string");
 
-    if (NULL == (parsed_string = YAJL_GET_STRING(key_obj)))
+    if (NULL == (parsed_string = RV_json_get_string(key_obj)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "creationProperties was NULL");
 
     if (NULL == (GCPL_buf_local = RV_malloc(strlen(parsed_string) + 1)))
@@ -2490,12 +2604,13 @@ done:
 herr_t
 RV_copy_object_loc_info_callback(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val             parse_tree = NULL, key_obj = NULL, target_tree = NULL;
-    char                *parsed_string = NULL;
-    const char          *path_name     = NULL;
-    loc_info            *loc_info_out  = (loc_info *)callback_data_out;
-    const server_info_t *server_info   = (const server_info_t *)callback_data_in;
-    herr_t               ret_value     = SUCCEED;
+    yyjson_val          *parse_tree_root = NULL, *key_obj = NULL, *target_tree = NULL;
+    yyjson_doc          *parse_tree_doc = NULL;
+    char                *parsed_string  = NULL;
+    const char          *path_name      = NULL;
+    loc_info            *loc_info_out   = (loc_info *)callback_data_out;
+    const server_info_t *server_info    = (const server_info_t *)callback_data_in;
+    herr_t               ret_value      = SUCCEED;
 
     char *GCPL_buf = NULL;
 
@@ -2515,24 +2630,24 @@ RV_copy_object_loc_info_callback(char *HTTP_response, const void *callback_data_
     if (!server_info)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "server info was NULL");
 
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    target_tree = parse_tree;
+    target_tree = parse_tree_root;
 
     /* If the response contains 'h5paths',
      * it may describe multiple objects. Needs to be unwrapped first. */
-    if (NULL != yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)) {
-        if (NULL == (target_tree = yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)))
+    if (NULL != RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)) {
+        if (NULL == (target_tree = RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
 
         /* Access the first object under h5paths */
-        if (NULL == (path_name = target_tree->u.object.keys[0]))
+        if (NULL == (path_name = RV_json_obj_key_at(target_tree, 0)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed path name was NULL");
 
         const char *path_keys[] = {path_name, (const char *)0};
 
-        if (NULL == (target_tree = yajl_tree_get(target_tree, path_keys, yajl_t_object)))
+        if (NULL == (target_tree = RV_json_get(target_tree, path_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "unable to parse object under path key");
     }
     /* Not all objects have a creationProperties field, so fail this gracefully */
@@ -2547,23 +2662,23 @@ RV_copy_object_loc_info_callback(char *HTTP_response, const void *callback_data_
     }
 
     /* Retrieve domain path */
-    if (NULL == (key_obj = yajl_tree_get(target_tree, domain_keys, yajl_t_string)))
+    if (NULL == (key_obj = RV_json_get(target_tree, domain_keys, RV_JSON_STRING)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse domain");
 
-    if (!YAJL_IS_STRING(key_obj))
+    if (!RV_json_is_string(key_obj))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain is not a string");
 
-    if (NULL == (found_domain.u.file.filepath_name = YAJL_GET_STRING(key_obj)))
+    if (NULL == (found_domain.u.file.filepath_name = RV_json_get_string(key_obj)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "domain was NULL");
 
     /* Retrieve domain id */
-    if (NULL == (key_obj = yajl_tree_get(target_tree, root_id_keys, yajl_t_string)))
+    if (NULL == (key_obj = RV_json_get(target_tree, root_id_keys, RV_JSON_STRING)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse domain id");
 
-    if (!YAJL_IS_STRING(key_obj))
+    if (!RV_json_is_string(key_obj))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain id is not a string");
 
-    if (NULL == (parsed_id_string = YAJL_GET_STRING(key_obj)))
+    if (NULL == (parsed_id_string = RV_json_get_string(key_obj)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "returned domain id is NULL");
 
     if (strlen(parsed_id_string) > URI_MAX_LENGTH)
@@ -2636,8 +2751,7 @@ RV_copy_object_loc_info_callback(char *HTTP_response, const void *callback_data_
     /* URI */
     ret_value = RV_copy_object_URI_callback(HTTP_response, NULL, loc_info_out->URI);
 done:
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
+    yyjson_doc_free(parse_tree_doc);
 
     if ((ret_value < 0) && GCPL_buf) {
         RV_free(GCPL_buf);
@@ -2672,13 +2786,13 @@ done:
 herr_t
 RV_copy_link_name_by_index(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val                 parse_tree = NULL, key_obj = NULL, link_obj = NULL;
+    yyjson_val              *parse_tree_root = NULL, *key_obj = NULL, *link_obj = NULL;
+    yyjson_doc              *parse_tree_doc     = NULL;
     const char              *parsed_link_name   = NULL;
     char                    *parsed_link_buffer = NULL;
     const H5VL_loc_by_idx_t *idx_params         = (const H5VL_loc_by_idx_t *)callback_data_in;
     hsize_t                  index              = 0;
     char                   **link_name          = (char **)callback_data_out;
-    const char              *curr_key           = NULL;
     herr_t                   ret_value          = SUCCEED;
 
     if (!idx_params)
@@ -2692,27 +2806,27 @@ RV_copy_link_name_by_index(char *HTTP_response, const void *callback_data_in, vo
 
     index = idx_params->n;
 
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, links_keys, yajl_t_array)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, links_keys, RV_JSON_ARRAY)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to parse links");
 
-    if (key_obj->u.array.len == 0)
+    if (yyjson_arr_size(key_obj) == 0)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed link array was empty");
 
-    if (index >= key_obj->u.array.len)
+    if (index >= yyjson_arr_size(key_obj))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "requested link index was out of bounds");
 
     switch (idx_params->order) {
         case (H5_ITER_DEC):
-            if (NULL == (link_obj = key_obj->u.array.values[key_obj->u.object.len - 1 - index]))
+            if (NULL == (link_obj = yyjson_arr_get(key_obj, yyjson_arr_size(key_obj) - 1 - index)))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected link was NULL");
             break;
 
         case (H5_ITER_NATIVE):
         case (H5_ITER_INC):
-            if (NULL == (link_obj = key_obj->u.array.values[index]))
+            if (NULL == (link_obj = yyjson_arr_get(key_obj, index)))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected link was NULL");
             break;
         case (H5_ITER_N):
@@ -2723,15 +2837,9 @@ RV_copy_link_name_by_index(char *HTTP_response, const void *callback_data_in, vo
         }
     }
 
-    /* Iterate through key/value pairs in link response to find name */
-    for (size_t i = 0; i < link_obj->u.object.len; i++) {
-        curr_key = link_obj->u.object.keys[i];
-        if (!strcmp(curr_key, "title"))
-            if (NULL == (parsed_link_name = YAJL_GET_STRING(link_obj->u.object.values[i])))
-                FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to get link name");
-    }
-
-    if (NULL == parsed_link_name)
+    /* Retrieve the link's name */
+    if (NULL ==
+        (parsed_link_name = RV_json_get_string(RV_json_get(link_obj, link_title_keys, RV_JSON_STRING))))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "server response didn't contain link name");
 
     if (NULL == (parsed_link_buffer = RV_malloc(strlen(parsed_link_name) + 1)))
@@ -2742,8 +2850,7 @@ RV_copy_link_name_by_index(char *HTTP_response, const void *callback_data_in, vo
     *link_name = parsed_link_buffer;
 
 done:
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
+    yyjson_doc_free(parse_tree_doc);
 
     if (ret_value < 0) {
         RV_free(parsed_link_buffer);
@@ -2768,7 +2875,8 @@ done:
 herr_t
 RV_copy_attribute_name_by_index(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val                 parse_tree           = NULL, key_obj;
+    yyjson_val              *parse_tree_root      = NULL, *key_obj;
+    yyjson_doc              *parse_tree_doc       = NULL;
     const char              *parsed_string        = NULL;
     char                    *parsed_string_buffer = NULL;
     const H5VL_loc_by_idx_t *idx_params           = (const H5VL_loc_by_idx_t *)callback_data_in;
@@ -2785,16 +2893,16 @@ RV_copy_attribute_name_by_index(char *HTTP_response, const void *callback_data_i
     if (!idx_params)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "given index params ptr was NULL");
 
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, attributes_keys, yajl_t_object)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, attributes_keys, RV_JSON_OBJECT)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to parse attributes");
 
-    if (key_obj->u.object.len == 0)
+    if (yyjson_obj_size(key_obj) == 0)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed attribute array was empty");
 
-    if (index >= key_obj->u.object.len)
+    if (index >= yyjson_obj_size(key_obj))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "requested attribute index was out of bounds");
 
     index = idx_params->n;
@@ -2802,13 +2910,13 @@ RV_copy_attribute_name_by_index(char *HTTP_response, const void *callback_data_i
     switch (idx_params->order) {
 
         case (H5_ITER_DEC):
-            if (NULL == (parsed_string = key_obj->u.object.keys[key_obj->u.object.len - 1 - index]))
+            if (NULL == (parsed_string = RV_json_obj_key_at(key_obj, yyjson_obj_size(key_obj) - 1 - index)))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected attribute had NULL name");
             break;
 
         case (H5_ITER_NATIVE):
         case (H5_ITER_INC): {
-            if (NULL == (parsed_string = key_obj->u.object.keys[index]))
+            if (NULL == (parsed_string = RV_json_obj_key_at(key_obj, index)))
                 FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "selected attribute had NULL name");
             break;
         }
@@ -2828,8 +2936,7 @@ RV_copy_attribute_name_by_index(char *HTTP_response, const void *callback_data_i
 
     *attr_name = parsed_string_buffer;
 done:
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
+    yyjson_doc_free(parse_tree_doc);
 
     if (ret_value < 0) {
         RV_free(parsed_string_buffer);
@@ -2854,7 +2961,8 @@ done:
 hid_t
 RV_parse_dataspace(char *space)
 {
-    yajl_val    parse_tree = NULL, key_obj = NULL, target_tree = NULL;
+    yyjson_val *parse_tree_root = NULL, *key_obj = NULL, *target_tree = NULL;
+    yyjson_doc *parse_tree_doc = NULL;
     hsize_t    *space_dims     = NULL;
     hsize_t    *space_maxdims  = NULL;
     hid_t       dataspace      = FAIL;
@@ -2869,34 +2977,34 @@ RV_parse_dataspace(char *space)
     if (!space)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "dataspace string buffer was NULL");
 
-    if (NULL == (parse_tree = yajl_tree_parse(space, NULL, 0)))
+    if (NULL == (parse_tree_root = RV_json_parse(space, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_PARSEERROR, FAIL, "JSON parse tree creation failed");
 
-    target_tree = parse_tree;
+    target_tree = parse_tree_root;
 
     /* If the response contains 'h5paths',
      * it may describe multiple objects. Needs to be unwrapped first. */
-    if (NULL != yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)) {
-        if (NULL == (key_obj = yajl_tree_get(parse_tree, h5paths_keys, yajl_t_object)))
+    if (NULL != RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)) {
+        if (NULL == (key_obj = RV_json_get(parse_tree_root, h5paths_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "can't parse h5paths object");
 
         /* Access the first object under h5paths */
-        if (NULL == (path_name = key_obj->u.object.keys[0]))
+        if (NULL == (path_name = RV_json_obj_key_at(key_obj, 0)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsed path name was NULL");
 
         const char *path_keys[] = {path_name, (const char *)0};
 
-        if (NULL == (key_obj = yajl_tree_get(key_obj, path_keys, yajl_t_object)))
+        if (NULL == (key_obj = RV_json_get(key_obj, path_keys, RV_JSON_OBJECT)))
             FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "unable to parse object under path key");
 
         target_tree = key_obj;
     }
 
     /* Retrieve the Dataspace type */
-    if (NULL == (key_obj = yajl_tree_get(target_tree, dataspace_class_keys, yajl_t_string)))
+    if (NULL == (key_obj = RV_json_get(target_tree, dataspace_class_keys, RV_JSON_STRING)))
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_PARSEERROR, FAIL, "can't retrieve dataspace class");
 
-    if (NULL == (dataspace_type = YAJL_GET_STRING(key_obj)))
+    if (NULL == (dataspace_type = RV_json_get_string(key_obj)))
         FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_PARSEERROR, FAIL, "can't retrieve dataspace class");
 
     /* Create the appropriate type of Dataspace */
@@ -2917,43 +3025,43 @@ RV_parse_dataspace(char *space)
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCREATE, FAIL, "can't create scalar dataspace");
     } /* end if */
     else if (!strcmp(dataspace_type, "H5S_SIMPLE")) {
-        yajl_val dims_obj = NULL, maxdims_obj = NULL;
-        hbool_t  maxdims_specified = TRUE;
-        size_t   i;
+        yyjson_val *dims_obj = NULL, *maxdims_obj = NULL;
+        hbool_t     maxdims_specified = TRUE;
+        size_t      i;
 
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> SIMPLE dataspace\n\n");
 #endif
 
-        if (NULL == (dims_obj = yajl_tree_get(target_tree, dataspace_dims_keys, yajl_t_array)))
+        if (NULL == (dims_obj = RV_json_get(target_tree, dataspace_dims_keys, RV_JSON_ARRAY)))
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_PARSEERROR, FAIL, "can't retrieve dataspace dims");
 
         /* Check to see whether the maximum dimension size is specified as part of the
          * dataspace's JSON representation
          */
-        if (NULL == (maxdims_obj = yajl_tree_get(target_tree, dataspace_max_dims_keys, yajl_t_array)))
+        if (NULL == (maxdims_obj = RV_json_get(target_tree, dataspace_max_dims_keys, RV_JSON_ARRAY)))
             maxdims_specified = FALSE;
 
-        if (!YAJL_GET_ARRAY(dims_obj)->len)
+        if (!yyjson_arr_size(dims_obj))
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_BADVALUE, FAIL, "0-sized dataspace dimensionality array");
 
-        if (NULL == (space_dims = (hsize_t *)RV_malloc(YAJL_GET_ARRAY(dims_obj)->len * sizeof(*space_dims))))
+        if (NULL == (space_dims = (hsize_t *)RV_malloc(yyjson_arr_size(dims_obj) * sizeof(*space_dims))))
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
                             "can't allocate space for dataspace dimensionality array");
 
         if (maxdims_specified)
-            if (NULL == (space_maxdims =
-                             (hsize_t *)RV_malloc(YAJL_GET_ARRAY(maxdims_obj)->len * sizeof(*space_maxdims))))
+            if (NULL ==
+                (space_maxdims = (hsize_t *)RV_malloc(yyjson_arr_size(maxdims_obj) * sizeof(*space_maxdims))))
                 FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTALLOC, FAIL,
                                 "can't allocate space for dataspace maximum dimensionality array");
 
-        for (i = 0; i < dims_obj->u.array.len; i++) {
-            long long val = YAJL_GET_INTEGER(dims_obj->u.array.values[i]);
+        for (i = 0; i < yyjson_arr_size(dims_obj); i++) {
+            long long val = RV_json_get_integer(yyjson_arr_get(dims_obj, i));
 
             space_dims[i] = (hsize_t)val;
 
             if (maxdims_specified) {
-                val = YAJL_GET_INTEGER(maxdims_obj->u.array.values[i]);
+                val = RV_json_get_integer(yyjson_arr_get(maxdims_obj, i));
 
                 space_maxdims[i] = (val == 0) ? H5S_UNLIMITED : (hsize_t)val;
             } /* end if */
@@ -2962,7 +3070,7 @@ RV_parse_dataspace(char *space)
 #ifdef RV_CONNECTOR_DEBUG
         printf("-> Creating simple dataspace\n");
         printf("-> Dims: [ ");
-        for (i = 0; i < dims_obj->u.array.len; i++) {
+        for (i = 0; i < yyjson_arr_size(dims_obj); i++) {
             if (i > 0)
                 printf(", ");
             printf("%" PRIuHSIZE, space_dims[i]);
@@ -2970,7 +3078,7 @@ RV_parse_dataspace(char *space)
         printf(" ]\n\n");
         if (maxdims_specified) {
             printf("-> MaxDims: [ ");
-            for (i = 0; i < maxdims_obj->u.array.len; i++) {
+            for (i = 0; i < yyjson_arr_size(maxdims_obj); i++) {
                 if (i > 0)
                     printf(", ");
                 printf("%" PRIuHSIZE, space_maxdims[i]);
@@ -2979,7 +3087,7 @@ RV_parse_dataspace(char *space)
         }
 #endif
 
-        if ((dataspace = H5Screate_simple((int)dims_obj->u.array.len, space_dims, space_maxdims)) < 0)
+        if ((dataspace = H5Screate_simple((int)yyjson_arr_size(dims_obj), space_dims, space_maxdims)) < 0)
             FUNC_GOTO_ERROR(H5E_DATASPACE, H5E_CANTCREATE, FAIL, "can't create simple dataspace");
     } /* end if */
 
@@ -2991,8 +3099,7 @@ done:
     if (space_maxdims)
         RV_free(space_maxdims);
 
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_parse_dataspace() */
@@ -3453,9 +3560,10 @@ done:
 herr_t
 RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val            parse_tree     = NULL, key_obj;
-    herr_t              ret_value      = SUCCEED;
-    server_api_version *server_version = (server_api_version *)callback_data_out;
+    yyjson_val         *parse_tree_root = NULL, *key_obj;
+    yyjson_doc         *parse_tree_doc  = NULL;
+    herr_t              ret_value       = SUCCEED;
+    server_api_version *server_version  = (server_api_version *)callback_data_out;
 
     char *version_response = NULL;
     char *version_field    = NULL;
@@ -3472,17 +3580,17 @@ RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void 
     if (!server_version)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "server version buffer was NULL");
 
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
     /* Retrieve version */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, server_version_keys, yajl_t_string)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, server_version_keys, RV_JSON_STRING)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "failed to parse server version");
 
-    if (!YAJL_IS_STRING(key_obj))
+    if (!RV_json_is_string(key_obj))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "parsed server version is not a string");
 
-    if (NULL == (version_response = YAJL_GET_STRING(key_obj)))
+    if (NULL == (version_response = RV_json_get_string(key_obj)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "server version was NULL");
 
     /* Parse server version into struct */
@@ -3511,8 +3619,7 @@ RV_parse_server_version(char *HTTP_response, const void *callback_data_in, void 
     server_version->patch = (size_t)numeric_version_field;
 
 done:
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 }
@@ -3521,9 +3628,10 @@ done:
 herr_t
 RV_parse_allocated_size_cb(char *HTTP_response, void *callback_data_in, void *callback_data_out)
 {
-    yajl_val parse_tree = NULL, key_obj = NULL;
-    herr_t   ret_value      = SUCCEED;
-    size_t  *allocated_size = (size_t *)callback_data_out;
+    yyjson_val *parse_tree_root = NULL, *key_obj = NULL;
+    yyjson_doc *parse_tree_doc = NULL;
+    herr_t      ret_value      = SUCCEED;
+    size_t     *allocated_size = (size_t *)callback_data_out;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving allocated size from server's HTTP response\n\n");
@@ -3535,23 +3643,22 @@ RV_parse_allocated_size_cb(char *HTTP_response, void *callback_data_in, void *ca
     if (!allocated_size)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "allocated size pointer was NULL");
 
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
     /* Retrieve size */
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, allocated_size_keys, yajl_t_number)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, allocated_size_keys, RV_JSON_NUMBER)))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_PARSEERROR, FAIL, "failed to parse allocated size");
 
-    if (!YAJL_IS_INTEGER(key_obj))
+    if (!RV_json_is_integer(key_obj))
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "parsed allocated size is not an integer");
 
-    if (YAJL_GET_INTEGER(key_obj) < 0)
+    if (RV_json_get_integer(key_obj) < 0)
         FUNC_GOTO_ERROR(H5E_OBJECT, H5E_BADVALUE, FAIL, "parsed allocated size was negative");
 
-    *allocated_size = (size_t)YAJL_GET_INTEGER(key_obj);
+    *allocated_size = (size_t)RV_json_get_integer(key_obj);
 done:
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 }
@@ -4466,10 +4573,11 @@ done:
 herr_t
 RV_parse_domain_allocated_size_cb(char *HTTP_response, const void *callback_data_in, void *callback_data_out)
 {
-    yajl_val parse_tree = NULL, key_obj;
-    char    *parsed_object_string;
-    size_t  *filesize  = (size_t *)callback_data_out;
-    herr_t   ret_value = SUCCEED;
+    yyjson_val *parse_tree_root = NULL, *key_obj;
+    yyjson_doc *parse_tree_doc  = NULL;
+    char       *parsed_object_string;
+    size_t     *filesize  = (size_t *)callback_data_out;
+    herr_t      ret_value = SUCCEED;
 
 #ifdef RV_CONNECTOR_DEBUG
     printf("-> Retrieving filesize from server's HTTP response\n\n");
@@ -4480,24 +4588,23 @@ RV_parse_domain_allocated_size_cb(char *HTTP_response, const void *callback_data
     if (!filesize)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "output pointer was NULL");
 
-    if (NULL == (parse_tree = yajl_tree_parse(HTTP_response, NULL, 0)))
+    if (NULL == (parse_tree_root = RV_json_parse(HTTP_response, &parse_tree_doc)))
         FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_PARSEERROR, FAIL, "parsing JSON failed");
 
-    if (NULL == (key_obj = yajl_tree_get(parse_tree, scan_info_keys, yajl_t_object)))
+    if (NULL == (key_obj = RV_json_get(parse_tree_root, scan_info_keys, RV_JSON_OBJECT)))
         FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_PARSEERROR, FAIL, "couldn't get scan info");
 
-    if (NULL == (key_obj = yajl_tree_get(key_obj, allocated_bytes_keys, yajl_t_number))) {
+    if (NULL == (key_obj = RV_json_get(key_obj, allocated_bytes_keys, RV_JSON_NUMBER))) {
         FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_PARSEERROR, FAIL, "couldn't parse allocated bytes");
     }
 
-    if (YAJL_GET_INTEGER(key_obj) < 0)
+    if (RV_json_get_integer(key_obj) < 0)
         FUNC_GOTO_ERROR(H5E_CALLBACK, H5E_PARSEERROR, FAIL, "parsed filesize is negative");
 
-    *filesize = (size_t)YAJL_GET_INTEGER(key_obj);
+    *filesize = (size_t)RV_json_get_integer(key_obj);
 
 done:
-    if (parse_tree)
-        yajl_tree_free(parse_tree);
+    yyjson_doc_free(parse_tree_doc);
 
     return ret_value;
 } /* end RV_parse_domain_allocated_size_cb */
