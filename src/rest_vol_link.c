@@ -1362,10 +1362,11 @@ RV_get_link_val_callback(char *HTTP_response, const void *callback_data_in, void
         yyjson_val *link_domain_obj;
         char       *link_domain;
 
-        if (NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_domain_keys, RV_JSON_STRING)) &&
-            NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_domain_keys2, RV_JSON_STRING)) &&
-            NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_file_keys, RV_JSON_STRING)) &&
-            NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_file_keys2, RV_JSON_STRING)))
+        /* Prefer HSDS 1.0's "file", falling back to "h5domain" for older servers */
+        if (NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_file_keys, RV_JSON_STRING)) &&
+            NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_file_keys2, RV_JSON_STRING)) &&
+            NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_domain_keys, RV_JSON_STRING)) &&
+            NULL == (link_domain_obj = RV_json_get(parse_tree_root, link_domain_keys2, RV_JSON_STRING)))
             FUNC_GOTO_ERROR(H5E_LINK, H5E_CANTGET, FAIL, "retrieval of external link domain failed");
 
         if (!RV_json_is_string(link_domain_obj))
