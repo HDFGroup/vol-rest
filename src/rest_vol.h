@@ -116,7 +116,9 @@ const char *RV_json_obj_key_at(yyjson_val *obj, size_t idx);
 
 #define HDF5_VOL_REST_NAME "REST"
 
-#define UNIX_SOCKET_PREFIX "http+unix"
+/* Scheme of an endpoint that reaches the server through a UNIX domain socket,
+ * e.g. "http+unix://%2Ftmp%2Fhs%2Fsn_1.sock". The socket path is percent-encoded. */
+#define UNIX_SOCKET_PREFIX "http+unix://"
 
 /* Defines for the use of HTTP status codes */
 #define HTTP_INFORMATIONAL_MIN 100 /* Minimum and maximum values for the 100 class of */

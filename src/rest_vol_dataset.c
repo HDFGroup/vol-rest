@@ -1284,9 +1284,6 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
                                 "point selection write buffer exceeded allocated buffer size");
 
-            transfer_info[i].curl_headers =
-                curl_slist_append(transfer_info[i].curl_headers, "Content-Type: application/json");
-
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Setup cURL to POST point list for dataset write\n\n");
 #endif
@@ -2469,7 +2466,11 @@ RV_parse_dataset_creation_properties_callback(char *HTTP_response, const void *c
      * Determine the layout information of the Dataset and set this on the DCPL *
      *                                                                          *
      ****************************************************************************/
-    if ((key_obj = RV_json_get(creation_properties_obj, layout_keys, RV_JSON_OBJECT))) {
+    /* HSDS 1.0 and later may return an empty layout object (e.g. for a dataset with a NULL
+     * dataspace). In that case, leave the DCPL's default layout in place.
+     */
+    if ((key_obj = RV_json_get(creation_properties_obj, layout_keys, RV_JSON_OBJECT)) &&
+        RV_json_get(key_obj, layout_class_keys, RV_JSON_STRING)) {
         yyjson_val *sub_obj;
         size_t      i;
         char       *layout_class;

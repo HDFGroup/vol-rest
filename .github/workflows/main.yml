@@ -86,9 +86,21 @@ jobs:
         shell: bash
         working-directory: ${{github.workspace}}/vol-rest/build/
 
+      - name: Get latest HSDS release tag
+        id: hsds-release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view --repo HDFGroup/hsds --json tagName --jq .tagName)
+          test -n "$tag"
+          echo "Using HSDS release $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
         with:
           repository: HDFGroup/hsds
+          ref: ${{ steps.hsds-release.outputs.tag }}
           path: ${{github.workspace}}/hsds
           
       - name: Set up Python ${{ matrix.python-version }}
@@ -114,11 +126,6 @@ jobs:
         run: |
           cd ${{github.workspace}}/hsds
           pytest
-
-      # Requests 2.32.0 breaks requests-unixsocket, used by HSDS for socket connections
-      - name: Fix requests version
-        run: |
-          pip install requests==2.31.0
 
       - name: Start HSDS
         run: | 
@@ -180,10 +187,22 @@ jobs:
         with:
           path: ${{github.workspace}}/vol-rest
       
+      - name: Get latest HSDS release tag
+        id: hsds-release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view --repo HDFGroup/hsds --json tagName --jq .tagName)
+          test -n "$tag"
+          echo "Using HSDS release $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Get HSDS
         uses: actions/checkout@v3
         with:
           repository: HDFGroup/hsds
+          ref: ${{ steps.hsds-release.outputs.tag }}
           path: ${{github.workspace}}/hsds
 
       - name: Set up Python ${{ matrix.python-version }}

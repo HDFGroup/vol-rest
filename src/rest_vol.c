@@ -156,14 +156,16 @@ const char *h5paths_keys[] = {"h5paths", (const char *)0};
 /* JSON key to retrieve the version of server from a request to a file. */
 const char *server_version_keys[] = {"version", (const char *)0};
 
-/* Used for cURL's base URL if the connection is through a local socket */
-const char *socket_base_url = "0";
+/* Base URL for requests made through a UNIX domain socket. cURL connects to the
+ * socket rather than resolving this host, so the host only fills the Host header. */
+static const char *socket_base_url = "http://localhost";
 
 /* Internal initialization/termination functions which are called by
  * the public functions H5rest_init() and H5rest_term() */
 static herr_t H5_rest_init(hid_t vipl_id);
 static herr_t H5_rest_term(void);
 
+static herr_t H5_rest_parse_endpoint(const char *endpoint, const char **base_URL, char **socket_path);
 static herr_t H5_rest_authenticate_with_AD(H5_rest_ad_info_t *ad_info, const char *base_URL);
 
 /* Introspection callbacks */
@@ -563,16 +565,6 @@ H5_rest_init(hid_t vipl_id)
     if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent))
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "error while setting CURL option (CURLOPT_USERAGENT)");
 
-    const char *URL = getenv("HSDS_ENDPOINT");
-
-    if (URL && !strncmp(URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
-        const char *socket_path = "/tmp/hs/sn_1.sock";
-
-        if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UNIX_SOCKET_PATH, socket_path))
-            FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTSET, FAIL, "can't set cURL socket path header: %s",
-                            curl_err_buf);
-    }
-
 #ifdef RV_CURL_DEBUG
     /* Enable cURL debugging output if desired */
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
@@ -843,9 +835,12 @@ H5_rest_set_connection_information(server_info_t *server_info)
     FILE             *config_file = NULL;
     herr_t            ret_value   = SUCCEED;
 
-    const char *username = NULL;
-    const char *password = NULL;
-    const char *base_URL = NULL;
+    const char *username      = NULL;
+    const char *password      = NULL;
+    const char *endpoint      = NULL;
+    const char *base_URL      = NULL;
+    char       *endpoint_copy = NULL;
+    char       *socket_path   = NULL;
 
     memset(&ad_info, 0, sizeof(ad_info));
 
@@ -854,14 +849,13 @@ H5_rest_set_connection_information(server_info_t *server_info)
      * the environment.
      */
 
-    if (base_URL = getenv("HSDS_ENDPOINT")) {
+    if ((endpoint = getenv("HSDS_ENDPOINT"))) {
 
         username = getenv("HSDS_USERNAME");
         password = getenv("HSDS_PASSWORD");
 
-        if (!strncmp(base_URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
-            base_URL = socket_base_url;
-        }
+        if (H5_rest_parse_endpoint(endpoint, &base_URL, &socket_path) < 0)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "invalid HSDS_ENDPOINT '%s'", endpoint);
 
         if (!username && !password) {
             const char *clientID      = getenv("HSDS_AD_CLIENT_ID");
@@ -955,14 +949,20 @@ H5_rest_set_connection_information(server_info_t *server_info)
             key = strtok(file_line, " =\n");
             val = strtok(NULL, " =\n");
 
+            /* Skip lines with no key, such as blank lines */
+            if (!key)
+                continue;
+
             if (!strcmp(key, "hs_endpoint")) {
                 if (val) {
-                    if (!strncmp(base_URL, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX))) {
-                        base_URL = socket_base_url;
-                    }
-                    else {
-                        base_URL = val;
-                    }
+                    /* file_line is overwritten by each fgets call, so keep a copy */
+                    RV_free(endpoint_copy);
+
+                    if (NULL == (endpoint_copy = RV_malloc(strlen(val) + 1)))
+                        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTALLOC, FAIL,
+                                        "can't allocate space for config file endpoint");
+
+                    strcpy(endpoint_copy, val);
                 } /* end if */
             }     /* end if */
             else if (!strcmp(key, "hs_ad_app_id")) {
@@ -984,6 +984,10 @@ H5_rest_set_connection_information(server_info_t *server_info)
                 } /* end if */
             }     /* end else if */
         }         /* end while */
+
+        if (endpoint_copy && H5_rest_parse_endpoint(endpoint_copy, &base_URL, &socket_path) < 0)
+            FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTINIT, FAIL, "invalid hs_endpoint '%s' in config file",
+                            endpoint_copy);
 
         /* Attempt authentication with Active Directory if ID values are present */
         if (ad_info.clientID[0] != '\0' && ad_info.tenantID[0] != '\0' && ad_info.resourceID[0] != '\0')
@@ -1020,6 +1024,11 @@ H5_rest_set_connection_information(server_info_t *server_info)
         }
     }
 
+    /* Connect through the endpoint's UNIX domain socket, if it has one. Setting a NULL
+     * path also clears a socket left on the global handle by an earlier connection. */
+    if (CURLE_OK != curl_easy_setopt(curl, CURLOPT_UNIX_SOCKET_PATH, socket_path))
+        FUNC_GOTO_ERROR(H5E_VOL, H5E_CANTSET, FAIL, "can't set cURL UNIX socket path: %s", curl_err_buf);
+
     /* TODO - Global curl handle is only used for dataset read/writes right now.
      * Once that is removed, this will be unnecessary. */
     if (username && password) {
@@ -1032,6 +1041,9 @@ H5_rest_set_connection_information(server_info_t *server_info)
 done:
     if (config_file)
         fclose(config_file);
+
+    curl_free(socket_path);
+    RV_free(endpoint_copy);
 
     if (ret_value < 0 && server_info) {
         RV_free(server_info->username);
@@ -1048,6 +1060,67 @@ done:
 
     return ret_value;
 } /* end H5_rest_set_connection_information() */
+
+/*-------------------------------------------------------------------------
+ * Function:    H5_rest_parse_endpoint
+ *
+ * Purpose:     Splits a server endpoint into the base URL that requests
+ *              are made against and, for an endpoint of the form
+ *              "http+unix://<percent-encoded socket path>", the path of
+ *              the UNIX domain socket to connect through.
+ *
+ *              *base_URL either points into endpoint or is a static
+ *              string. *socket_path is NULL for a TCP endpoint and must
+ *              otherwise be freed with curl_free().
+ *
+ * Return:      Non-negative on success/Negative on failure
+ */
+static herr_t
+H5_rest_parse_endpoint(const char *endpoint, const char **base_URL, char **socket_path)
+{
+    const char *encoded_path;
+    size_t      encoded_path_len;
+    int         socket_path_len = 0;
+    herr_t      ret_value       = SUCCEED;
+
+    *base_URL    = endpoint;
+    *socket_path = NULL;
+
+    if (strncmp(endpoint, UNIX_SOCKET_PREFIX, strlen(UNIX_SOCKET_PREFIX)))
+        FUNC_GOTO_DONE(SUCCEED);
+
+    /* The socket path takes the place of the host, so it must be percent-encoded and
+     * can only be followed by an optional trailing slash */
+    encoded_path     = endpoint + strlen(UNIX_SOCKET_PREFIX);
+    encoded_path_len = strcspn(encoded_path, "/");
+
+    if (encoded_path_len == 0 ||
+        (encoded_path[encoded_path_len] != '\0' && strcmp(encoded_path + encoded_path_len, "/")))
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL,
+                        "UNIX socket endpoint must be '%s' followed by the percent-encoded socket path, "
+                        "e.g. '%s%%2Ftmp%%2Fhs%%2Fsn_1.sock'",
+                        UNIX_SOCKET_PREFIX, UNIX_SOCKET_PREFIX);
+
+    if (encoded_path_len > INT_MAX)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "UNIX socket path is too long");
+
+    if (NULL ==
+        (*socket_path = curl_easy_unescape(curl, encoded_path, (int)encoded_path_len, &socket_path_len)))
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_CANTDECODE, FAIL, "can't decode UNIX socket path");
+
+    if (strlen(*socket_path) != (size_t)socket_path_len)
+        FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, FAIL, "UNIX socket path contains a null byte");
+
+    *base_URL = socket_base_url;
+
+done:
+    if (ret_value < 0) {
+        curl_free(*socket_path);
+        *socket_path = NULL;
+    }
+
+    return ret_value;
+} /* end H5_rest_parse_endpoint() */
 
 /*-------------------------------------------------------------------------
  * Function:    H5_rest_authenticate_with_AD

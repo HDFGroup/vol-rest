@@ -161,7 +161,9 @@ information needed. This can be accomplished in one of the following ways:
 \begin{itemize}
   \item \texttt{HSDS\_USERNAME} - (optional) The username to use for authentication
   \item \texttt{HSDS\_PASSWORD} - (optional) The password to use for authentication
-  \item \texttt{HSDS\_ENDPOINT} - The base URL of the HDF Kita instance (e.g. http://hsdshdflab.hdfgroup.org)
+  \item \texttt{HSDS\_ENDPOINT} - The base URL of the HDF Kita instance (e.g. http://hsdshdflab.hdfgroup.org).
+    To connect through a UNIX domain socket, use \texttt{http+unix://} followed by the
+    percent-encoded path of the socket (e.g. \texttt{http+unix://\%2Ftmp\%2Fhs\%2Fsn\_1.sock}).
 \end{itemize}
 
 \textbf{Configuration File}
