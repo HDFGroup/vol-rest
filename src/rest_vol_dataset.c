@@ -1141,13 +1141,10 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
         /* Disable use of Expect: 100 Continue HTTP response */
         transfer_info[i].curl_headers = curl_slist_append(transfer_info[i].curl_headers, "Expect:");
 
-        /* Instruct cURL on which type of transfer to perform, binary or JSON. Point selections
-         * are always sent as a JSON body, so their Content-Type header is set below instead.
-         */
-        if (H5S_SEL_POINTS != sel_type)
-            transfer_info[i].curl_headers = curl_slist_append(
-                transfer_info[i].curl_headers, is_transfer_binary ? "Content-Type: application/octet-stream"
-                                                                  : "Content-Type: application/json");
+        /* Instruct cURL on which type of transfer to perform, binary or JSON */
+        transfer_info[i].curl_headers = curl_slist_append(
+            transfer_info[i].curl_headers,
+            is_transfer_binary ? "Content-Type: application/octet-stream" : "Content-Type: application/json");
 
         has_selection_in_url = is_transfer_binary && selection_body && (H5S_SEL_POINTS != sel_type);
 
@@ -1286,9 +1283,6 @@ RV_dataset_write(size_t count, void *dset[], hid_t mem_type_id[], hid_t _mem_spa
             if (bytes_printed >= write_body_len + 1)
                 FUNC_GOTO_ERROR(H5E_DATASET, H5E_SYSERRSTR, FAIL,
                                 "point selection write buffer exceeded allocated buffer size");
-
-            transfer_info[i].curl_headers =
-                curl_slist_append(transfer_info[i].curl_headers, "Content-Type: application/json");
 
 #ifdef RV_CONNECTOR_DEBUG
             printf("-> Setup cURL to POST point list for dataset write\n\n");
