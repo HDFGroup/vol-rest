@@ -29,7 +29,7 @@ void *RV_realloc_debug(void *mem, size_t size);
 void *RV_free_debug(void *mem);
 
 #define RV_malloc(size)       RV_malloc_debug(size)
-#define RV_calloc(size)       RV_malloc_debug(size)
+#define RV_calloc(size)       RV_calloc_debug(size)
 #define RV_realloc(mem, size) RV_realloc_debug(mem, size)
 #define RV_free(mem)          RV_free_debug(mem)
 #else

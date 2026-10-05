@@ -1707,23 +1707,28 @@ RV_attr_specific(void *obj, const H5VL_loc_params_t *loc_params, H5VL_attr_speci
                             strncpy(attr_iter_obj->u.file.filepath_name, loc_obj->u.file.filepath_name,
                                     strlen(loc_obj->u.file.filepath_name) + 1);
 
-                            if ((attr_iter_obj->u.file.server_info.username =
-                                     RV_malloc(strlen(loc_obj->u.file.server_info.username) + 1)) == NULL)
-                                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
-                                                "can't allocate space for copied username");
+                            /* Not set when connecting without credentials */
+                            if (loc_obj->u.file.server_info.username) {
+                                if ((attr_iter_obj->u.file.server_info.username =
+                                         RV_malloc(strlen(loc_obj->u.file.server_info.username) + 1)) == NULL)
+                                    FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
+                                                    "can't allocate space for copied username");
 
-                            strncpy(attr_iter_obj->u.file.server_info.username,
-                                    loc_obj->u.file.server_info.username,
-                                    strlen(loc_obj->u.file.server_info.username) + 1);
+                                strncpy(attr_iter_obj->u.file.server_info.username,
+                                        loc_obj->u.file.server_info.username,
+                                        strlen(loc_obj->u.file.server_info.username) + 1);
+                            }
 
-                            if ((attr_iter_obj->u.file.server_info.password =
-                                     RV_malloc(strlen(loc_obj->u.file.server_info.password) + 1)) == NULL)
-                                FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
-                                                "can't allocate space for copied password");
+                            if (loc_obj->u.file.server_info.password) {
+                                if ((attr_iter_obj->u.file.server_info.password =
+                                         RV_malloc(strlen(loc_obj->u.file.server_info.password) + 1)) == NULL)
+                                    FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, FAIL,
+                                                    "can't allocate space for copied password");
 
-                            strncpy(attr_iter_obj->u.file.server_info.password,
-                                    loc_obj->u.file.server_info.password,
-                                    strlen(loc_obj->u.file.server_info.password) + 1);
+                                strncpy(attr_iter_obj->u.file.server_info.password,
+                                        loc_obj->u.file.server_info.password,
+                                        strlen(loc_obj->u.file.server_info.password) + 1);
+                            }
 
                             if ((attr_iter_obj->u.file.server_info.base_URL =
                                      RV_malloc(strlen(loc_obj->u.file.server_info.base_URL) + 1)) == NULL)

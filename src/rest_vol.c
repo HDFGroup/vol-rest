@@ -949,6 +949,10 @@ H5_rest_set_connection_information(server_info_t *server_info)
             key = strtok(file_line, " =\n");
             val = strtok(NULL, " =\n");
 
+            /* Skip lines with no key, such as blank lines */
+            if (!key)
+                continue;
+
             if (!strcmp(key, "hs_endpoint")) {
                 if (val) {
                     /* file_line is overwritten by each fgets call, so keep a copy */

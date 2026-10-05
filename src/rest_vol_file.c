@@ -83,12 +83,11 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
     if (fapl_id == H5I_INVALID_HID)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid FAPL");
 
-    /* Allocate and setup internal File struct */
-    if (NULL == (new_file = (RV_object_t *)RV_malloc(sizeof(*new_file))))
+    /* Allocate and setup internal File struct. Zero it so that fields which may never be
+     * set (e.g. a username when connecting without credentials) are safe for RV_file_close
+     * to free, and set up everything RV_file_close needs before anything can fail */
+    if (NULL == (new_file = (RV_object_t *)RV_calloc(sizeof(*new_file))))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for file object");
-
-    if (H5_rest_set_connection_information(&new_file->u.file.server_info) < 0)
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
 
     new_file->URI[0]               = '\0';
     new_file->obj_type             = H5I_FILE;
@@ -97,6 +96,9 @@ RV_file_create(const char *name, unsigned flags, hid_t fcpl_id, hid_t fapl_id, h
     new_file->u.file.fapl_id       = FAIL;
     new_file->u.file.fcpl_id       = FAIL;
     new_file->u.file.ref_count     = 1;
+
+    if (H5_rest_set_connection_information(&new_file->u.file.server_info) < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
 
     /* Allocate root "path" on heap for consistency with other RV_object_t types */
     if ((new_file->handle_path = RV_malloc(2)) == NULL)
@@ -279,12 +281,11 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     if (fapl_id == H5I_INVALID_HID)
         FUNC_GOTO_ERROR(H5E_ARGS, H5E_BADVALUE, NULL, "invalid FAPL");
 
-    /* Allocate and setup internal File struct */
-    if (NULL == (file = (RV_object_t *)RV_malloc(sizeof(*file))))
+    /* Allocate and setup internal File struct. Zero it so that fields which may never be
+     * set (e.g. a username when connecting without credentials) are safe for RV_file_close
+     * to free, and set up everything RV_file_close needs before anything can fail */
+    if (NULL == (file = (RV_object_t *)RV_calloc(sizeof(*file))))
         FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTALLOC, NULL, "can't allocate space for file object");
-
-    if (H5_rest_set_connection_information(&file->u.file.server_info) < 0)
-        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
 
     file->URI[0]               = '\0';
     file->obj_type             = H5I_FILE;
@@ -293,6 +294,9 @@ RV_file_open(const char *name, unsigned flags, hid_t fapl_id, hid_t dxpl_id, voi
     file->u.file.fapl_id       = FAIL;
     file->u.file.fcpl_id       = FAIL;
     file->u.file.ref_count     = 1;
+
+    if (H5_rest_set_connection_information(&file->u.file.server_info) < 0)
+        FUNC_GOTO_ERROR(H5E_FILE, H5E_CANTINIT, NULL, "can't set REST VOL connector connection information");
 
     /* Allocate root "path" on heap for consistency with other RV_object_t types */
     if ((file->handle_path = RV_malloc(2)) == NULL)
